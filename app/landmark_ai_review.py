@@ -1,0 +1,98 @@
+"""Persistent finite review sessions for successful Landmark prediction batches."""
+from __future__ import annotations
+from datetime import datetime, timezone
+
+_STATE_KEY="landmark_prediction_review_sessions"
+def _now(): return datetime.now(timezone.utc).isoformat()
+def _load(project):
+ value=project.get_ui_state(_STATE_KEY,{}) or {}
+ return value if isinstance(value,dict) else {"format_version":1,"sessions":[]}
+def _save(project,value): project.set_ui_state(_STATE_KEY,value)
+def successful_prediction_ids(batch):
+ runs=set((batch or {}).get("prediction_runs",{}))
+ return tuple(str(item["image_id"]) for item in (batch or {}).get("selected_images",()) if str(item.get("image_id")) in runs)
+def _session(doc,batch_id): return next((item for item in doc.get("sessions",()) if item.get("batch_id")==str(batch_id)),None)
+def create_review_session(project,batch, *, kind="prediction_batch"):
+ ids=successful_prediction_ids(batch)
+ if not ids: raise ValueError("prediction batch has no successful images to review")
+ doc=_load(project);session=_session(doc,batch["batch_id"])
+ if session is None:
+  session={"kind":kind,"batch_id":str(batch["batch_id"]),"image_ids":list(ids),"current_position":0,"current_image_id":ids[0],"complete":False,"active":False,"created_at":_now()};doc.setdefault("sessions",[]).append(session)
+ _save(project,doc);return dict(session)
+def create_review_session_for_ids(project, session_id, image_ids, *, kind="review_worst", metadata=None):
+ ids=tuple(str(image_id) for image_id in image_ids)
+ if not ids: raise ValueError("AI review has no pending images")
+ review_meta={str(key):dict(value) for key,value in (metadata or {}).items() if str(key) in ids}
+ doc=_load(project);session=_session(doc,session_id)
+ if session is None:
+  session={"kind":kind,"batch_id":str(session_id),"image_ids":list(ids),"current_position":0,"current_image_id":ids[0],"complete":False,"active":False,"created_at":_now(),"review_meta":review_meta};doc.setdefault("sessions",[]).append(session)
+ else:
+  session["kind"]=kind
+  if review_meta:session["review_meta"]=review_meta
+ _save(project,doc);return dict(session)
+def pending_review_session(project):
+ doc=_load(project)
+ return next((dict(item) for item in doc.get("sessions",()) if not item.get("complete")),None)
+def active_review_session(project):
+ doc=_load(project)
+ return next((dict(item) for item in doc.get("sessions",()) if item.get("active") and not item.get("complete")),None)
+def activate_review_session(project,batch_id=None):
+ doc=_load(project);session=_session(doc,batch_id) if batch_id else next((item for item in doc.get("sessions",()) if not item.get("complete")),None)
+ if session is None:return None
+ for item in doc.get("sessions",()):item["active"]=False
+ session["active"]=True
+ ids=list(session.get("image_ids",()))
+ if not ids:return None
+ position=max(0,min(int(session.get("current_position",0)),len(ids)-1))
+ # A reopened review always resumes an unconfirmed exact batch member.  Membership
+ # is persistent batch data; confirmation is authoritative Project state.
+ if project.landmark_ai_review_ready(ids[position]):
+  position=next((index for index,image_id in enumerate(ids) if not project.landmark_ai_review_ready(image_id)),position)
+ session["current_position"]=position;session["current_image_id"]=ids[position]
+ _save(project,doc);return dict(session)
+def review_summary(project,session=None,current_id=None):
+ session=session or active_review_session(project)
+ if not session:return None
+ ids=tuple(map(str,session.get("image_ids",())))
+ current=str(current_id or session.get("current_image_id") or "")
+ done=tuple(image_id for image_id in ids if project.landmark_ai_review_ready(image_id))
+ position=ids.index(current)+1 if current in ids else 0
+ return {"batch_id":session["batch_id"],"image_ids":ids,"position":position,"total":len(ids),"remaining":sum(image_id not in done for image_id in ids),"confirmed_ids":done,"complete":bool(session.get("complete"))}
+def move_review_position(project,batch_id,current_id,step):
+ doc=_load(project);session=_session(doc,batch_id)
+ if session is None or session.get("complete"):return None
+ ids=list(session.get("image_ids",()))
+ if str(current_id) not in ids:return None
+ target=max(0,min(len(ids)-1,ids.index(str(current_id))+int(step)))
+ session["current_position"]=target;session["current_image_id"]=ids[target];_save(project,doc);return dict(session)
+def complete_or_advance_review(project,batch_id,current_id):
+ doc=_load(project);session=_session(doc,batch_id)
+ if session is None:return None,False
+ ids=list(session.get("image_ids",()))
+ position=ids.index(str(current_id))
+ target=position+1
+ if target>=len(ids):
+  session["complete"]=True;session["active"]=False;session["current_position"]=position;session["current_image_id"]=str(current_id);_save(project,doc);return dict(session),True
+ session["current_position"]=target;session["current_image_id"]=ids[target];_save(project,doc);return dict(session),False
+
+def remove_image_from_reviews(project,image_id):
+ """Remove an excluded image from every unfinished Landmark AI review session."""
+ image_id=str(image_id);doc=_load(project);active_target=None
+ for session in doc.get("sessions",()):
+  if session.get("complete"):continue
+  ids=[str(value) for value in session.get("image_ids",())]
+  if image_id not in ids:continue
+  old_position=max(0,min(int(session.get("current_position",0)),max(0,len(ids)-1)))
+  was_active=bool(session.get("active"))
+  kept=[value for value in ids if value!=image_id]
+  meta=dict(session.get("review_meta") or {});meta.pop(image_id,None);session["review_meta"]=meta
+  if not kept:
+   session.update({"image_ids":[],"current_position":0,"current_image_id":None,"complete":True,"active":False})
+   continue
+  removed_before=sum(1 for value in ids[:old_position] if value==image_id)
+  position=min(max(0,old_position-removed_before),len(kept)-1)
+  session.update({"image_ids":kept,"current_position":position,"current_image_id":kept[position]})
+  if was_active:active_target=kept[position]
+ _save(project,doc)
+ return active_target
+

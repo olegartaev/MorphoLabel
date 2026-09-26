@@ -1,0 +1,79 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Python environments and local tooling
+.venv/
+venv/
+env/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.vscode/
+.idea/
+*.code-workspace
+
+# Scientific projects, databases, source photographs, and derived images
+project.sqlite
+*.sqlite
+*.db
+project.yaml
+projects/
+project_data/
+data/
+orig_photos/
+images/
+*.nef
+*.NEF
+*.raw
+*.RAW
+*.tif
+*.tiff
+cache/
+work/
+generated/
+predictions/
+exports/
+reports/
+
+# Models and AI artifacts
+models/
+ai/
+ai_runtime/vendor/
+*.pth
+*.pt
+*.onnx
+*.ckpt
+*.safetensors
+
+# Logs and diagnostics
+*.log
+*.jsonl
+diagnostics/
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# Credentials and machine-local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+secrets.json
+local_settings.*
+
+# Local planning/state snapshots
+PROGRESS.md
+RESUME.md
+CURRENT_STATE*.md
+PROJECT_STATE.md
+START_CODEX.txt
+
+# Keep only the tracked RTMPose runner source in the optional runtime folder.
+ai_runtime/*
+!ai_runtime/
+!ai_runtime/rtmpose_runner.py

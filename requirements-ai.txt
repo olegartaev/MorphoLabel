@@ -1,0 +1,7 @@
+# Optional local AI training/inference stack. Versions may need to match the
+# installed CUDA/PyTorch build; do not install this file for the base GUI.
+torch>=2.1
+torchvision>=0.16
+mmengine>=0.10
+mmcv>=2.1
+mmpose>=1.3

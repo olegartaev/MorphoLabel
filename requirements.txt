@@ -1,0 +1,4 @@
+# Core MorphoLabel GUI, image handling, and deterministic non-GPU tests.
+Pillow>=10.0
+numpy>=1.26
+opencv-python>=4.8

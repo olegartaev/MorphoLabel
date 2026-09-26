@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  core:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install core dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Compile Python sources
+        shell: pwsh
+        run: Get-ChildItem app,tools -Recurse -Filter *.py | % { python -m py_compile $_.FullName }
+      - name: Focused UI contract test
+        run: python -m unittest tests/test_morpholabel_ui_contract.py
+      - name: Canonical launcher provenance smoke test
+        run: python tools/canonical_exec.py provenance

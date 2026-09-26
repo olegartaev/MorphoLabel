@@ -1,0 +1,103 @@
+"""Read-only landmark-derived measurements and portable CSV export."""
+from __future__ import annotations
+import csv, io, os, tempfile
+from pathlib import Path
+from .transforms import Transform
+
+FIELDS=("Use","Abbr","Name","Point1","Point2","Point1Abbr","Point2Abbr")
+
+def schema_path(project): return Path(project.root)/"measurement_schema.csv"
+def _atomic(path,text):
+ path.parent.mkdir(parents=True,exist_ok=True)
+ with tempfile.NamedTemporaryFile("w",encoding="utf-8",newline="",dir=path.parent,delete=False) as f:
+  f.write(text); tmp=Path(f.name)
+ os.replace(tmp,path)
+def ensure_schema(project):
+ path=schema_path(project)
+ if not path.exists(): _atomic(path,",".join(FIELDS)+"\n")
+ return path
+def _used(value): return str(value).strip().lower() in {"1","true","yes","y","on"}
+def load_measurements(project):
+ path=ensure_schema(project)
+ with path.open(encoding="utf-8-sig",newline="") as f:
+  result=[]
+  for row in csv.DictReader(f):
+   if not any(row.values()): continue
+   # New files persist scientific endpoints by abbreviation. Legacy numeric
+   # endpoints resolve only through the persisted old project schema.
+   a=(row.get("Point1Abbr") or "").strip() or project.historical_abbr_for_numeric(row.get("Point1",0) or 0)
+   b=(row.get("Point2Abbr") or "").strip() or project.historical_abbr_for_numeric(row.get("Point2",0) or 0)
+   p1,p2=project.active_landmark_id_for_abbr(a),project.active_landmark_id_for_abbr(b)
+   if p1 is None or p2 is None: continue
+   result.append({"use":_used(row.get("Use","")),"abbr":row.get("Abbr","").strip(),"name":row.get("Name","").strip(),"point1":p1,"point2":p2,"point1_abbr":a,"point2_abbr":b})
+ return result
+def validate_measurement(value, schema, existing=(), editing_index=None):
+ abbr=str(value.get("abbr","")).strip(); name=str(value.get("name","")).strip()
+ if not abbr: raise ValueError("Abbr is required.")
+ if not name: raise ValueError("Name is required.")
+ try:p1,p2=int(value["point1"]),int(value["point2"])
+ except (KeyError,TypeError,ValueError):raise ValueError("Choose two landmark IDs.")
+ if p1==p2:raise ValueError("Point 1 and Point 2 must be different.")
+ ids={int(x.get("id",x.get("landmark_id"))) for x in schema}
+ if p1 not in ids or p2 not in ids:raise ValueError("Both points must exist in the landmark schema.")
+ for index,row in enumerate(existing):
+  if index!=editing_index and row["abbr"].casefold()==abbr.casefold():raise ValueError("Abbr must be unique.")
+ return {"use":bool(value.get("use",True)),"abbr":abbr,"name":name,"point1":p1,"point2":p2,"point1_abbr":next(x["abbr"] for x in schema if int(x.get("id",x.get("landmark_id")))==p1),"point2_abbr":next(x["abbr"] for x in schema if int(x.get("id",x.get("landmark_id")))==p2)}
+def save_measurements(project, values):
+ rows=[validate_measurement(v,project.schema,values,index) for index,v in enumerate(values)]
+ out=io.StringIO(newline=""); w=csv.DictWriter(out,fieldnames=FIELDS,lineterminator="\n");w.writeheader()
+ for row in rows:w.writerow({"Use":"1" if row["use"] else "0","Abbr":row["abbr"],"Name":row["name"],"Point1":row["point1"],"Point2":row["point2"],"Point1Abbr":row["point1_abbr"],"Point2Abbr":row["point2_abbr"]})
+ _atomic(schema_path(project),out.getvalue()); return rows
+def active_measurements(project):return [x for x in load_measurements(project) if x["use"]]
+def _mm_per_pixel(project, locality):
+ cal=project.locality_calibration(locality)
+ if not cal:return None
+ data=cal.get("calibration_data") or {}
+ if isinstance(data,str):
+  import json
+  try:data=json.loads(data)
+  except json.JSONDecodeError:data={}
+ value=data.get("mm_per_pixel")
+ if value is None: value=1/float(cal["scale"]) if cal.get("scale") else None
+ try:return float(value) if value and float(value)>0 else None
+ except (TypeError,ValueError):return None
+def _points(project,image_id):
+ """Return original-frame coordinates; skipped crop uses a non-persisted identity transform."""
+ crop=project.crop_record(image_id) or {}; raw=crop.get("transform_json")
+ if raw:
+  try:transform=Transform(**raw)
+  except (TypeError,ValueError):return {},None
+ else:
+  from PIL import Image
+  target=project.cache_root/"developed"/f"{image_id}.png"
+  if not target.is_file():return {},None
+  try:
+   with Image.open(target) as image: width,height=image.size
+   transform=Transform(width,height,0.0,width/2,height/2,0,0,width,height)
+  except Exception:return {},None
+ output={}
+ for ident,p in project.load_landmarks(image_id).items():
+  if p.get("state")!="missing" and p.get("x_standardized") is not None and p.get("y_standardized") is not None:
+   output[int(ident)]=transform.standardized_to_original(float(p["x_standardized"]),float(p["y_standardized"]))
+ return output,transform
+def values_for_image(project,row,definitions=None):
+ definitions=active_measurements(project) if definitions is None else definitions; points,_=_points(project,row["image_id"]); mpp=_mm_per_pixel(project,row.get("locality") or row.get("sample_id")); output={}
+ for item in definitions:
+  a,b=points.get(item["point1"]),points.get(item["point2"])
+  output[item["abbr"]]="NA" if not a or not b or mpp is None else ((a[0]-b[0])**2+(a[1]-b[1])**2)**.5*mpp
+ return output,mpp
+def measurement_summary(project):
+ definitions=active_measurements(project); rows=[r for r in project.catalog_rows() if not r.get("excluded")]; complete=na=0; calibrated=set()
+ for row in rows:
+  values,mpp=values_for_image(project,row,definitions); locality=row.get("locality") or row.get("sample_id") or ""; calibrated.add(locality) if mpp is not None else None
+  complete_here=bool(definitions) and all(v!="NA" for v in values.values()); complete+=int(complete_here);na+=int(not complete_here)
+ return {"rows":len(rows),"measurements":len(definitions),"calibrated_samples":len(calibrated),"samples":len({r.get("locality") or r.get("sample_id") or "" for r in rows}),"complete":complete,"na":na}
+def export_measurements(project,target=None,delimiter=","):
+ definitions=active_measurements(project); rows=[r for r in project.catalog_rows() if not r.get("excluded")]
+ fields=["image_id","locality","filename","source_relative_path","mm_per_pixel",*[f'{d["abbr"]}_mm' for d in definitions]]; out=io.StringIO(newline=""); w=csv.DictWriter(out,fieldnames=fields,delimiter=delimiter,lineterminator="\n");w.writeheader(); complete=na=0; calibrated=set()
+ for row in rows:
+  values,mpp=values_for_image(project,row,definitions); locality=row.get("locality") or row.get("sample_id") or ""; calibrated.add(locality) if mpp is not None else None
+  complete_here=bool(definitions) and all(v!="NA" for v in values.values()); complete+=int(complete_here);na+=int(not complete_here)
+  w.writerow({"image_id":row["image_id"],"locality":locality,"filename":row.get("original_name","") or row.get("filename","") ,"source_relative_path":row.get("relative_path","") ,"mm_per_pixel":"NA" if mpp is None else f"{mpp:.12g}",**{f'{k}_mm':v if v=="NA" else f"{v:.12g}" for k,v in values.items()}})
+ target=Path(target) if target else Path(project.root)/"measurements.csv";_atomic(target,out.getvalue())
+ summary=measurement_summary(project);summary["path"]=target;return summary

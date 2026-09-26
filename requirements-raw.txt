@@ -1,0 +1,2 @@
+# Optional RAW-photo decoding. Install only when RAW/NEF input is needed.
+rawpy>=0.21

@@ -1,0 +1,26 @@
+id,abbr,name,role
+1,SnT,Snout tip,BOTH
+2,NarP,Posterior nare margin,BOTH
+3,OrbD,Dorsal orbit,BOTH
+4,OrbP,Posterior orbit,BOTH
+5,OrbV,Ventral orbit,BOTH
+6,OrbA,Anterior orbit,BOTH
+7,JawP,Posterior jaw,BOTH
+8,SOccP,Posterior supraoccipital,BOTH
+9,OpD,Dorsal operculum,BOTH
+10,OpP,Posterior operculum,BOTH
+11,OpV,Ventral operculum,BOTH
+12,PecO,Pectoral origin,BOTH
+13,DorO,Dorsal origin,BOTH
+14,DorI,Dorsal insertion,BOTH
+15,PelO,Pelvic origin,BOTH
+16,AnO,Anal origin,BOTH
+17,AnI,Anal insertion,BOTH
+18,CPminD,Dorsal caudal-peduncle minimum,BOTH
+19,CPminV,Ventral caudal-peduncle minimum,BOTH
+20,VCend,Posterior hypural margin,BOTH
+21,PecTip,Pectoral tip,CLASSICAL
+22,PelTip,Pelvic tip,CLASSICAL
+23,DorHtTip,Dorsal height tip,CLASSICAL
+24,AnHtTip,Anal height tip,CLASSICAL
+25,CauUTip,Upper caudal tip,CLASSICAL
