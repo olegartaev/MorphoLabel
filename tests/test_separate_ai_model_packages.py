@@ -23,9 +23,20 @@ class SeparateModelPackageTests(unittest.TestCase):
         (self.crop / "model_manifest.json").write_text(json.dumps({"backend":"numpy_ridge_image_regression","metrics":{"validation_iou":0.8}}), encoding="utf-8")
         self.project.register_model("crop_model_v001", "crop", path=self.crop.relative_to(self.project.data_root).as_posix(), metrics={"backend":"numpy_ridge_image_regression", "training_examples":9}, active=True)
         self.landmark = self.project.models_root / "rtmpose_v001"; self.landmark.mkdir()
-        (self.landmark / "checkpoint.pth").write_bytes(b"checkpoint")
-        (self.landmark / "model.json").write_text("{}", encoding="utf-8")
-        self.project.register_model("rtmpose_v001", "landmark", path=self.landmark.relative_to(self.project.data_root).as_posix(), metrics={"backend":"rtmpose", "training_examples":9}, active=True)
+        (self.landmark / "best_engineering_validation.pth").write_bytes(b"checkpoint")
+        (self.landmark / "inference_config.py").write_text("default_scope='mmpose'\n", encoding="utf-8")
+        current_schema = __import__("app.project_storage", fromlist=["schema_hash"]).schema_hash(self.project.schema_path)
+        (self.landmark / "model.json").write_text(json.dumps({
+            "model_id":"rtmpose_v001",
+            "backend":"rtmpose",
+            "schema_sha256":current_schema,
+            "input_size":[512,256],
+            "result":{
+                "checkpoint_path":"best_engineering_validation.pth",
+                "inference_config":"inference_config.py"
+            }
+        }), encoding="utf-8")
+        self.project.register_model("rtmpose_v001", "landmark", path=self.landmark.relative_to(self.project.data_root).as_posix(), metrics={"backend":"rtmpose", "training_examples":9}, schema_digest=current_schema, active=True)
 
     def tearDown(self): shutil.rmtree(self.temp, ignore_errors=True)
 
