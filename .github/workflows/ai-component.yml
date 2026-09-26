@@ -7,6 +7,9 @@ on:
       - "ai_runtime/windows-cu121-component.json"
       - "ai_runtime/rtmpose_runner.py"
       - "tools/build_ai_component.py"
+      - "app/self_test.py"
+      - "app/rtmpose_dataset.py"
+      - "app/landmark_bootstrap.py"
       - ".github/workflows/ai-component.yml"
 
 permissions:
@@ -39,6 +42,19 @@ jobs:
           python -c "from app.ai_component import install_component_archive; from app.landmark_bootstrap import resolve_landmark_bootstrap; import sys; runtime=install_component_archive(sys.argv[1]); bootstrap=resolve_landmark_bootstrap(None); assert bootstrap.runtime_python.resolve()==runtime.resolve(); assert bootstrap.config_path.is_file(); assert bootstrap.checkpoint_path.is_file(); print('MANAGED_AI_INSTALL_PASS', runtime)" $zip.FullName
           if (-not (Test-Path "$env:LOCALAPPDATA\MorphoLabel\components\ai\active.json")) { throw "Managed AI active record missing" }
 
+      - name: End-to-end managed inference and training smoke
+        shell: pwsh
+        run: |
+          python -m pip install -r requirements.txt
+          $report = "dist\ai-component\AI_SELF_TEST.json"
+          python -m app --ai-self-test --include-training --diagnostic-report $report
+          if (-not (Test-Path $report)) { throw "AI self-test report missing" }
+          $data = Get-Content $report -Raw | ConvertFrom-Json
+          if ($data.status -ne "PASS") { throw "AI self-test did not pass" }
+          if ($data.training_smoke.status -ne "trained") { throw "AI training smoke did not produce a checkpoint" }
+          if (-not $data.training_smoke.checkpoint_sha256) { throw "AI training smoke checkpoint SHA256 missing" }
+          Write-Host "MANAGED_AI_INFERENCE_TRAINING_PASS"
+
       - name: Reclaim smoke space and build split public delivery assets
         shell: pwsh
         run: |
@@ -61,6 +77,7 @@ jobs:
             dist/ai-component/release-assets/*
             dist/ai-component/SHA256SUMS.txt
             dist/ai-component/AI_BUILD_INFO.json
+            dist/ai-component/AI_SELF_TEST.json
 
       - name: Attach managed AI assets for tags
         if: github.ref_type == 'tag'
