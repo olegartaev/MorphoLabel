@@ -1,0 +1,40 @@
+MorphoLabel Windows distribution diagnostics
+Date: 2026-09-26
+
+SOURCE
+Requested exact source HEAD: be2b4365e1291b70495029122594ebea6254e269
+Verification checkout: D:\MorphoLabel_verify_be2b4365
+Primary D:\MorphoLabel: branch feature/extension-architecture-v1; HEAD ab36357728d7f208214e7e5bf3b95136c4d413bd; initial and final tracked worktree clean.
+
+PRIMARY AI SNAPSHOT
+ai_runtime\Scripts\python.exe: MISSING; SHA256 and runtime library/CUDA queries unavailable.
+ai_runtime\rtmpose_runner.py: SHA256 7E5FF8893C2078AD7CB55293804ABE5205AF4A718782057A7075F58A6B9D79F7.
+Python 3.11: unavailable. Command: py -3.11 -m venv D:\MorphoLabel_verify_env_be2b4365; exit 103; no suitable Python runtime found. Installed launchers enumerate 3.14, 3.12, 3.10.
+Torch/torchvision/mmengine/mmcv/mmpose versions: UNAVAILABLE (requested interpreter absent).
+torch.version.cuda / torch.cuda.is_available() / torch GPU name: UNAVAILABLE (requested interpreter absent).
+nvidia-smi: NVIDIA GeForce RTX 3060; driver 616.56; VRAM 12288 MiB; used at snapshot 2573 MiB.
+Candidate MMPose config ai_runtime\vendor\mmpose\configs\animal_2d_keypoint\rtmpose\ap10k\rtmpose-m_8xb64-210e_ap10k-256x256.py: MISSING.
+ai_runtime\assets: MISSING; bootstrap rtmpose-m_ap10k_*.pth: none. Config/checkpoint SHA256: N/A.
+No files in ai_runtime were installed or updated.
+
+VERIFICATION ENVIRONMENT
+Required Python 3.11 venv creation: FAIL, exit 103 (exact command above).
+Fallback isolated Python 3.12 venv used only to continue requested checks. Installed requirements.txt and requirements-build.txt only; dependency install PASS.
+
+CHECKS
+PY_COMPILE: PASS under Python 3.12 fallback. Command: python -m py_compile app\runtime_paths.py app\self_test.py app\__main__.py app\ai_runtime_resolver.py app\ui\preferences.py app\ai_hardware.py tools\build_third_party_notices.py tools\build_brand_assets.py; 8 files.
+FOCUSED TESTS: PASS under Python 3.12 fallback. Command: python -m unittest tests.test_distribution_contract tests.test_user_state_migration tests.test_third_party_notice_build tests.test_windows_brand_build tests.test_ai_runtime_resolver tests.test_ai_hardware tests.test_morpholabel_ui_contract; 31 tests, 0.610 s.
+THIRD-PARTY NOTICES: PASS. Command: python tools\build_third_party_notices.py build\third_party.
+BRAND ASSETS: FAIL, exit 1. Command: python tools\build_brand_assets.py build\brand. Relevant traceback: tools\build_brand_assets.py line 7 imports app.identity; ModuleNotFoundError: No module named 'app'.
+PYINSTALLER: FAIL, exit 1. Command: python -m PyInstaller --clean --noconfirm packaging\morpholabel.spec. Relevant error: FileNotFoundError: Icon input file D:\MorphoLabel_verify_be2b4365\build\brand\MorphoLabel.ico not found (packaging\morpholabel.spec line 20).
+EXE --version: FAIL, exit 1; command D:\MorphoLabel_verify_be2b4365\dist\MorphoLabel\MorphoLabel.exe --version; executable absent.
+EXE --self-test: FAIL, exit 1; command D:\MorphoLabel_verify_be2b4365\dist\MorphoLabel\MorphoLabel.exe --self-test; executable absent.
+INNO SETUP: Inno Setup 6.7.3 installed via official winget package JRSoftware.InnoSetup, user scope; PATH not changed. Compile FAIL, exit 2. Command: ISCC.exe /DMyAppVersion=0.5.0-beta.2-dev packaging\windows\MorphoLabel.iss (ISCC invoked by full installed path). Exact relevant output: Error on line 11 in packaging\windows\MorphoLabel.iss: Системе не удается найти указанный путь. SetupIconFile references the absent build\brand\MorphoLabel.ico.
+Expected setup: MorphoLabel-0.5.0-beta.2-dev-Setup-x64.exe; absent; size/hash N/A.
+INSTALL SMOKE: NOT RUN; exact setup executable absent. Disposable target D:\MorphoLabel_verify_install_be2b4365 absent. No real scientific projects touched.
+Installed self-test: NOT RUN (no installation/executable).
+GUI START: NOT RUN (no executable); no MorphoLabel process was present in process check.
+UNINSTALL: NOT RUN (no installation/uninstaller).
+Installed size: N/A.
+
+OVERALL: FAIL (Python 3.11 and runtime snapshot unavailable; brand asset generation failed, preventing app and installer build and downstream smoke checks). No failures repaired. No production/source files intentionally edited.

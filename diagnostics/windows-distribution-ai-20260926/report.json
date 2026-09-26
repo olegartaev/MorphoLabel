@@ -1,0 +1,68 @@
+{
+  "date": "2026-09-26",
+  "source": {
+    "expected_head": "be2b4365e1291b70495029122594ebea6254e269",
+    "verification_checkout": "D:\\MorphoLabel_verify_be2b4365",
+    "primary_repo": "D:\\MorphoLabel",
+    "primary_branch": "feature/extension-architecture-v1",
+    "primary_head": "ab36357728d7f208214e7e5bf3b95136c4d413bd",
+    "primary_tracked_worktree_clean": true
+  },
+  "ai_runtime": {
+    "python_path": "D:\\MorphoLabel\\ai_runtime\\Scripts\\python.exe",
+    "python_exists": false,
+    "python_sha256": null,
+    "runner_path": "D:\\MorphoLabel\\ai_runtime\\rtmpose_runner.py",
+    "runner_sha256": "7E5FF8893C2078AD7CB55293804ABE5205AF4A718782057A7075F58A6B9D79F7",
+    "python_311_available": false,
+    "python_311_venv_command": "py -3.11 -m venv D:\\MorphoLabel_verify_env_be2b4365",
+    "python_311_venv_exit_code": 103,
+    "available_python_versions": ["3.14", "3.12", "3.10"],
+    "packages": {"torch": null, "torchvision": null, "mmengine": null, "mmcv": null, "mmpose": null},
+    "torch_cuda_version": null,
+    "torch_cuda_available": null,
+    "torch_gpu_name": null,
+    "unavailable_reason": "ai_runtime interpreter is absent; Python 3.11 unavailable",
+    "nvidia_smi": {
+      "gpu": "NVIDIA GeForce RTX 3060",
+      "driver": "616.56",
+      "vram_mib": 12288,
+      "used_mib_at_snapshot": 2573
+    },
+    "mmpose_config": {
+      "path": "ai_runtime/vendor/mmpose/configs/animal_2d_keypoint/rtmpose/ap10k/rtmpose-m_8xb64-210e_ap10k-256x256.py",
+      "exists": false,
+      "sha256": null
+    },
+    "assets_dir_exists": false,
+    "bootstrap_checkpoint_glob": "ai_runtime/assets/rtmpose-m_ap10k_*.pth",
+    "bootstrap_checkpoints": [],
+    "ai_runtime_modified": false
+  },
+  "verification_environment": {
+    "python_311_venv": "FAIL: exit 103, no suitable runtime",
+    "fallback_python": "3.12",
+    "requirements_txt_installed": true,
+    "requirements_build_txt_installed": true,
+    "scope": "isolated verification venv"
+  },
+  "checks": {
+    "py_compile": {"status": "PASS", "python": "3.12 fallback", "files": 8},
+    "focused_tests": {"status": "PASS", "python": "3.12 fallback", "test_cases": 31, "duration_seconds": 0.610},
+    "third_party_notices": {"status": "PASS"},
+    "brand_assets": {"status": "FAIL", "exit_code": 1, "command": "python tools\\build_brand_assets.py build\\brand", "error": "ModuleNotFoundError: No module named 'app'", "location": "tools/build_brand_assets.py:7"},
+    "pyinstaller": {"status": "FAIL", "exit_code": 1, "command": "python -m PyInstaller --clean --noconfirm packaging\\morpholabel.spec", "error": "FileNotFoundError: build/brand/MorphoLabel.ico not found", "location": "packaging/morpholabel.spec:20"},
+    "exe_version": {"status": "FAIL", "exit_code": 1, "error": "Executable absent"},
+    "exe_self_test": {"status": "FAIL", "exit_code": 1, "error": "Executable absent"},
+    "inno_setup": {"compiler_installed": true, "version": "6.7.3", "installation": "official JRSoftware.InnoSetup winget, user scope; PATH unchanged", "compile_status": "FAIL", "exit_code": 2, "command": "ISCC.exe /DMyAppVersion=0.5.0-beta.2-dev packaging\\windows\\MorphoLabel.iss", "error": "Error on line 11 in packaging/windows/MorphoLabel.iss: Системе не удается найти указанный путь.", "setup_icon_missing": "build/brand/MorphoLabel.ico"},
+    "setup": {"filename": "MorphoLabel-0.5.0-beta.2-dev-Setup-x64.exe", "exists": false, "size_bytes": null, "sha256": null},
+    "install_smoke": {"status": "NOT RUN", "reason": "Setup executable absent", "disposable_target_exists": false},
+    "installed_self_test": {"status": "NOT RUN", "reason": "No installation"},
+    "gui_start": {"status": "NOT RUN", "reason": "Application executable absent", "morpholabel_process_present": false},
+    "uninstall": {"status": "NOT RUN", "reason": "No installation/uninstaller"},
+    "installed_size_bytes": null,
+    "scientific_project_data_touched": false,
+    "failures_repaired": false
+  },
+  "overall": "FAIL"
+}
