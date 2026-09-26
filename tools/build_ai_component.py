@@ -101,6 +101,12 @@ def main():
 
     checkpoint_rel = Path(spec["bootstrap"]["checkpoint_relative_path"])
     checkpoint = download(spec["bootstrap"]["checkpoint_url"], runtime / checkpoint_rel)
+    checkpoint_sha256 = checkpoint_sha256
+    expected_checkpoint_sha256 = str(spec["bootstrap"]["checkpoint_sha256"]).lower()
+    if checkpoint_sha256 != expected_checkpoint_sha256:
+        raise RuntimeError(
+            f"bootstrap checkpoint SHA256 mismatch: {checkpoint_sha256} != {expected_checkpoint_sha256}"
+        )
     config_rel = Path(spec["bootstrap"]["config_relative_path"])
     if not (runtime / config_rel).is_file():
         raise RuntimeError("official AP-10K RTMPose config is missing from pinned MMPose source")
@@ -113,7 +119,7 @@ def main():
         f"MMPose source commit: {spec['mmpose_source']['commit']}\n"
         f"Bootstrap config: {config_rel.as_posix()}\n"
         f"Checkpoint URL: {spec['bootstrap']['checkpoint_url']}\n"
-        f"Checkpoint SHA256: {sha256(checkpoint)}\n\n"
+        f"Checkpoint SHA256: {checkpoint_sha256}\n\n"
         "The checkpoint is an upstream OpenMMLab MMPose model trained using AP-10K and pretraining sources named by the upstream artifact. "
         "Dataset/model terms remain those of their respective upstream sources.\n",
         encoding="utf-8",
@@ -129,7 +135,8 @@ def main():
         "python_relative_path": "python.exe",
         "bootstrap_config": config_rel.as_posix(),
         "bootstrap_checkpoint": checkpoint_rel.as_posix(),
-        "bootstrap_checkpoint_sha256": sha256(checkpoint),
+        "bootstrap_checkpoint_url": spec["bootstrap"]["checkpoint_url"],
+        "bootstrap_checkpoint_sha256": checkpoint_sha256,
         "mmpose_source": "vendor/mmpose",
         "mmpose_source_commit": spec["mmpose_source"]["commit"],
         "packages": freeze,
@@ -185,6 +192,13 @@ def main():
         if not all(math.isfinite(float(point[key])) for key in ("x", "y", "confidence")):
             raise RuntimeError("bootstrap inference returned non-finite landmark output")
     print("BOOTSTRAP_INFERENCE_PASS")
+
+    # The upstream bootstrap checkpoint is verified above but is intentionally
+    # not redistributed inside MorphoLabel. Tagged installations fetch it
+    # directly from OpenMMLab on first bootstrap use and verify this pinned SHA.
+    checkpoint.unlink()
+    if checkpoint.exists():
+        raise RuntimeError("bootstrap checkpoint could not be removed before redistribution")
 
     for key, expected in {
         "torch": packages["torch"], "torchvision": packages["torchvision"],

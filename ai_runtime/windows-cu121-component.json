@@ -1,6 +1,6 @@
 {
   "component_format": 1,
-  "component_version": "1.0.0-dev5",
+  "component_version": "1.0.0-dev6",
   "platform": "windows-x64",
   "python": {
     "version": "3.11.9",
@@ -29,6 +29,7 @@
   "bootstrap": {
     "config_relative_path": "vendor/mmpose/configs/animal_2d_keypoint/rtmpose/ap10k/rtmpose-m_8xb64-210e_ap10k-256x256.py",
     "checkpoint_relative_path": "assets/rtmpose-m_ap10k_7a041aa1.pth",
-    "checkpoint_url": "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/rtmpose-m_simcc-ap10k_pt-aic-coco_210e-256x256-7a041aa1_20230206.pth"
+    "checkpoint_url": "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/rtmpose-m_simcc-ap10k_pt-aic-coco_210e-256x256-7a041aa1_20230206.pth",
+    "checkpoint_sha256": "896e3665d849ef7eb9b6ec0995955796cc9810f024fa0aa0bdc18acb0d68bf52"
   }
 }

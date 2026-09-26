@@ -23,6 +23,7 @@ class AIComponentContractTests(unittest.TestCase):
         self.assertEqual("5408bc76f5b848cf925a0d1857899011d8c5b497",spec["mmpose_source"]["commit"])
         self.assertEqual("https://github.com/open-mmlab/mmpose.git",spec["mmpose_source"]["repo_url"])
         self.assertIn("rtmpose-m_simcc-ap10k",spec["bootstrap"]["checkpoint_url"])
+        self.assertEqual("896e3665d849ef7eb9b6ec0995955796cc9810f024fa0aa0bdc18acb0d68bf52",spec["bootstrap"]["checkpoint_sha256"])
 
     def test_workflow_builds_real_component_and_uploads_zip(self):
         text=(ROOT/".github"/"workflows"/"ai-component.yml").read_text(encoding="utf-8")
@@ -55,6 +56,8 @@ class AIComponentContractTests(unittest.TestCase):
         self.assertIn("mmdet.__version__",builder)
         self.assertIn("THIRD_PARTY_NOTICES.txt",builder)
         self.assertIn("MODEL_PROVENANCE.txt",builder)
+        self.assertIn("checkpoint.unlink()",builder)
+        self.assertIn('"bootstrap_checkpoint_url"',builder)
         self.assertIn('"installed_bytes": runtime_bytes',builder)
         self.assertIn('"installed_file_count": len(runtime_files)',builder)
         self.assertIn("BOOTSTRAP_INFERENCE_PASS",builder)
@@ -78,6 +81,7 @@ class AIComponentContractTests(unittest.TestCase):
                 "python_relative_path":"python.exe","bootstrap_config":"vendor/mmpose/configs/bootstrap.py",
                 "bootstrap_checkpoint":"assets/bootstrap.pth",
                 "bootstrap_checkpoint_sha256":hashlib.sha256(b"weights").hexdigest(),
+                "bootstrap_checkpoint_url":"https://download.openmmlab.com/test/bootstrap.pth",
                 "mmpose_source":"vendor/mmpose"}
             (component/"component.json").write_text(json.dumps(manifest),encoding="utf-8")
             archive=root/"component.zip"

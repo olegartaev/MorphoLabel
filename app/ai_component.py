@@ -105,12 +105,15 @@ def _validate_tree(component_dir: Path, manifest, *, run_runtime_check=True):
         raise AIComponentError("AI component Python runtime is missing")
     if not config.is_file():
         raise AIComponentError("AI component RTMPose bootstrap config is missing")
-    if not checkpoint.is_file():
-        raise AIComponentError("AI component RTMPose bootstrap checkpoint is missing")
     if not (source / "tools" / "train.py").is_file():
         raise AIComponentError("AI component MMPose training source is missing")
     expected = str(manifest.get("bootstrap_checkpoint_sha256") or "").lower()
-    if expected:
+    url = str(manifest.get("bootstrap_checkpoint_url") or "")
+    if not expected or len(expected) != 64 or any(ch not in "0123456789abcdef" for ch in expected):
+        raise AIComponentError("AI component bootstrap checkpoint SHA256 is missing or invalid")
+    if not url.startswith("https://download.openmmlab.com/"):
+        raise AIComponentError("AI component bootstrap checkpoint URL is missing or untrusted")
+    if checkpoint.is_file():
         actual = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
         if actual != expected:
             raise AIComponentError("AI component bootstrap checkpoint checksum mismatch")

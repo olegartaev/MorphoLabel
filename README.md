@@ -58,7 +58,7 @@ The application starts in the MorphoLabel Module Hub. Keep project data outside 
 
 ## AI and hardware requirements
 
-The base application runs without cloud services or Ollama. Tagged Windows releases use a versioned managed AI component containing the pinned Python/PyTorch/OpenMMLab runtime and bootstrap assets; users do not install Python packages manually. GPU acceleration is used when the managed PyTorch runtime and local NVIDIA driver report CUDA availability, with CPU fallback retained.
+The base application runs without cloud services or Ollama. Tagged Windows releases use a versioned managed AI component containing the pinned Python/PyTorch/OpenMMLab runtime and RTMPose configuration; users do not install Python packages manually. The upstream AP-10K bootstrap checkpoint is not redistributed by MorphoLabel: on first bootstrap use it is downloaded directly from OpenMMLab and accepted only after its pinned SHA256 is verified. GPU acceleration is used when the managed PyTorch runtime and local NVIDIA driver report CUDA availability, with CPU fallback retained.
 
 ## Scientific reproducibility and provenance
 
