@@ -62,32 +62,5 @@ class LandmarkAIStageLineageTests(unittest.TestCase):
         )
         self.assertEqual("READY_FOR_FULL_PREDICTION", refresh_stage(self.project, create_missing=False)["stage"])
 
-class LandmarkAIReadyControlsTests(unittest.TestCase):
-    def test_ready_stage_shows_new_improvement_and_hides_training(self):
-        from app.editor_ready_v15 import ReadyEditorV15
-
-        class Widget:
-            def __init__(self): self.grid_calls = 0; self.removed = 0
-            def grid(self, **_kwargs): self.grid_calls += 1
-            def grid_remove(self): self.removed += 1
-            def config(self, **_kwargs): pass
-        class Context:
-            def winfo_manager(self): return False
-            def pack(self, **_kwargs): pass
-            def pack_forget(self): pass
-
-        editor = ReadyEditorV15.__new__(ReadyEditorV15)
-        editor._landmark_workflow_active = False
-        editor.landmark_workflow_context = Context()
-        editor.landmark_train_button = Widget()
-        editor.landmark_improvement_button = Widget()
-        editor._landmark_ai_info = {"stage": "READY_FOR_FULL_PREDICTION", "verified": 10, "total": 10, "active_model_id": "rtmpose_v004"}
-        editor._set_landmark_workflow_controls()
-        self.assertEqual(1, editor.landmark_train_button.grid_calls)
-        self.assertEqual(0, editor.landmark_train_button.removed)
-        self.assertEqual(1, editor.landmark_improvement_button.grid_calls)
-        source = (Path(__file__).parents[1] / "app" / "editor_ready_v15.py").read_text(encoding="utf-8")
-        self.assertIn('text="New Improvement Batch"', source)
-
 if __name__ == "__main__":
     unittest.main()

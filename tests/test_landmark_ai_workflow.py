@@ -69,13 +69,6 @@ class LandmarkAIWorkflowEditingSafetyTests(unittest.TestCase):
         self.assertIn(image_id, self.project.permanent_test_image_ids())
         self.assertFalse(self.project.annotation_status(image_id)["verified"])
 
-    def test_core_editing_controls_are_outside_contextual_review_section(self):
-        source = (Path(__file__).parents[1] / "app" / "editor_ready_v15.py").read_text(encoding="utf-8")
-        self.assertIn('editing=section("LANDMARKS")', source)
-        self.assertIn('grid_button(editing,"Mark missing (M)"', source)
-        self.assertIn('grid_button(editing,"Remove (Del)"', source)
-        self.assertIn('grid_button(editing,"Clear all…"', source)
-
 if __name__ == "__main__": unittest.main()
 
 class LandmarkAIWorkflowResumeTests(unittest.TestCase):
@@ -148,20 +141,3 @@ class ManageControlSetTests(unittest.TestCase):
   before=list(create_stage(self.p,'CONTROL_SET',25)['control_image_ids']);candidate=next(row['image_id'] for row in self.p.catalog_rows() if row['image_id'] not in before)
   info,added=add_control_image(self.p,candidate);self.assertTrue(added);self.assertEqual(before+[candidate],list(info['current_ids']));self.assertEqual(26,info['state']['control_target']);self.assertIn(candidate,self.p.permanent_test_image_ids())
   again,added_again=add_control_image(self.p,candidate);self.assertFalse(added_again);self.assertEqual(tuple(before+[candidate]),again['current_ids']);self.assertEqual((0,26),(control_set_summary(self.p)['verified'],control_set_summary(self.p)['total']))
- def test_completed_control_set_can_be_opened_for_sequential_review(self):
-  from app.editor_ready_v15 import ReadyEditorV15
-  from app.landmark_ai_workflow import create_stage
-  ids=list(create_stage(self.p,'CONTROL_SET',25)['control_image_ids'])
-  for image_id in ids:self.p.save_landmark(image_id,1,1,1,'present','manual');self.p.mark_checked(image_id)
-  editor=ReadyEditorV15.__new__(ReadyEditorV15);editor.project=self.p;editor.images=[{'image_id':ids[5]}];editor.current=lambda:{'image_id':ids[5]};editor._set_landmark_workflow_controls=lambda:None;opened=[];editor._open_landmark_workflow_item=lambda position:opened.append(position)
-  editor.review_control_set()
-  self.assertTrue(editor._landmark_workflow_active);self.assertTrue(editor._landmark_workflow_review_only);self.assertEqual(ids,editor._landmark_workflow_ids);self.assertEqual([5],opened)
- def test_confirm_next_cycles_completed_control_review(self):
-  from types import SimpleNamespace
-  from app.editor_ready_v15 import ReadyEditorV15
-  from app.landmark_ai_workflow import create_stage
-  ids=list(create_stage(self.p,'CONTROL_SET',25)['control_image_ids'])
-  for image_id in ids:self.p.save_landmark(image_id,1,1,'present','manual');self.p.mark_checked(image_id)
-  editor=ReadyEditorV15.__new__(ReadyEditorV15);editor.project=self.p;editor.current=lambda:{'image_id':ids[5]};editor._landmark_workflow_active=True;editor._landmark_workflow_review_only=True;editor._landmark_workflow_ids=ids;editor._landmark_workflow_index=5;editor._annotation_check_for_current=lambda:SimpleNamespace(hard=(),suspicious=());editor._load_current_landmark_state=lambda:SimpleNamespace(image_id=ids[5],complete=True);editor.mark_checked=lambda:self.p.mark_checked(ids[5]);opened=[];editor._open_landmark_workflow_item=lambda position:opened.append(position)
-  ReadyEditorV15.workflow_confirm_next(editor)
-  self.assertEqual([6],opened)

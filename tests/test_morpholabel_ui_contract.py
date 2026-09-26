@@ -181,6 +181,22 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         self.assertNotIn("from .gui import run",entry)
         self.assertIn("MorphoLabel",canonical)
 
+    def test_current_public_ui_has_one_supported_root_and_no_legacy_gui_imports(self):
+        root = Path(__file__).parents[1]
+        shell = (root / "app" / "ui" / "shell.py").read_text(encoding="utf-8")
+        hub = (root / "app" / "ui" / "module_hub.py").read_text(encoding="utf-8")
+        self.assertIn("class ProductionShell", shell)
+        self.assertIn("ModuleHub", shell)
+        self.assertIn("ModuleHub(self,", shell)
+        self.assertIn("class ModuleHub", hub)
+        self.assertIn('"Landmarks & measurements"', hub)
+        legacy = ("app.gui", "app.gui_full", "app.project_gui", "app.editor_ready", "app.operator_v")
+        for path in (root / "app").rglob("*.py"):
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            for name in legacy:
+                self.assertNotIn(f"from {name} import", text, path.name)
+                self.assertNotIn(f"import {name}", text, path.name)
+
     def test_user_facing_core_files_no_longer_brand_the_app_as_simm(self):
         root=Path(__file__).parents[1]
         for relative in (

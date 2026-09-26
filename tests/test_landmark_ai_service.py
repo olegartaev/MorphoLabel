@@ -12,7 +12,6 @@ from app.landmark_ai_service import LandmarkAIService, PredictionValidationError
 from app.project_runtime import record as project_record, scoped_project
 from app.project_storage import Project, schema_hash
 from app.workflow import save_record, set_human_point
-from app.editor_ready_v15 import ReadyEditorV15
 from app.transforms import Transform
 
 class LandmarkAIGateOneTests(unittest.TestCase):
@@ -115,26 +114,6 @@ class LandmarkAIGateOneTests(unittest.TestCase):
   self.assertEqual((row["model_id"],row["confidence"]),("mock-landmark-v1",initial["confidence"]))
   self.assertEqual(row["provenance"],"corrected_by_human")
 
- def test_predicted_landmark_hit_test_uses_canonical_editable_state(self):
-  image_id=self.ids[0];self.service().predict_one(image_id);rows=self.points(image_id)
-  editor=ReadyEditorV15.__new__(ReadyEditorV15);editor.pan=[0.,0.];editor.zoom=1.;editor._load_current_landmark_state=lambda:SimpleNamespace(present_ids=set(rows),points_by_id=rows)
-  event=SimpleNamespace(x=rows[2]["x_standardized"],y=rows[2]["y_standardized"])
-  self.assertEqual(2,editor._editable_landmark_hit(event))
- def test_editable_working_record_refresh_preserves_all_ai_points_after_drag(self):
-  image_id=self.ids[0]
-  with scoped_project(self.project): stale=project_record(self.project,self.images[0])
-  self.service().predict_one(image_id)
-  editor=ReadyEditorV15.__new__(ReadyEditorV15);editor.project=self.project;editor.images=self.images;editor.index=0;editor.record=stale;editor.profile=SimpleNamespace(profile_id="test",version="1");editor.state=SimpleNamespace(open_record=lambda record:None);editor.current=lambda:self.images[0]
-  with scoped_project(self.project): editor._ensure_editable_record_complete()
-  self.assertEqual(5,len(editor.record["points"]))
-  before=self.points(image_id)
-  with scoped_project(self.project): set_human_point(editor.record,2,"P2",44,55,corrected=True);save_record(editor.record)
-  after=self.points(image_id)
-  self.assertEqual(5,len(after))
-  self.assertEqual((44,55),(after[2]["x_standardized"],after[2]["y_standardized"]))
-  for landmark_id in (1,3,4,5):self.assertEqual((before[landmark_id]["x_standardized"],before[landmark_id]["y_standardized"]),(after[landmark_id]["x_standardized"],after[landmark_id]["y_standardized"]))
-  self.assertEqual((before[2]["predicted_x"],before[2]["predicted_y"]),(after[2]["predicted_x"],after[2]["predicted_y"]))
-  self.assertFalse(self.project.annotation_status(image_id)["verified"])
  def test_mock_prediction_can_be_checked_without_coordinate_change(self):
   image_id=self.ids[0];self.service().predict_one(image_id);before=self.points(image_id)
   self.project.mark_checked(image_id);after=Project.open(self.project.root).load_landmarks(image_id)

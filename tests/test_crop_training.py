@@ -4,7 +4,6 @@ from unittest.mock import patch
 import numpy as np
 from PIL import Image
 import app.crop_training as ct
-from app.editor_ready_v13 import ReadyEditorV13
 
 
 class CropTrainingTests(unittest.TestCase):
@@ -27,7 +26,4 @@ class CropTrainingTests(unittest.TestCase):
   metrics=[{"validation_iou":.1,"boundary_mae_percent":[1,1,1,1]},{"validation_iou":.9,"boundary_mae_percent":[1,1,1,1]}]
   with patch.object(ct,"latest_corrections",return_value=rows),patch.object(ct,"_feature",return_value=np.array([.2,.3])),patch.object(ct,"_metrics",side_effect=metrics): result=ct.train()
   self.assertEqual(result["model_id"],"crop_model_v002");self.assertFalse(result["new_model_activated"]);self.assertEqual(ct.active_info()["model_id"],"crop_model_v001")
- def test_navigation_class_does_not_train(self):
-  self.assertNotIn("train",ReadyEditorV13._load_selected_v12.__code__.co_names)
-
 if __name__=="__main__":unittest.main()

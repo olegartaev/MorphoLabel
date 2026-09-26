@@ -8,6 +8,7 @@ from app.operator_qc import (blind_session_input, cancel_repeat_session, complet
     create_repeat_session, evaluate_operator_sessions, operator_eligible_image_ids,
     remove_repeat_landmark, save_operator_report, select_repeat_candidates, set_repeat_landmark)
 from app.project_storage import Project, schema_hash
+from app.transforms import Transform
 
 class OperatorQCTests(unittest.TestCase):
  def setUp(self):
@@ -18,6 +19,8 @@ class OperatorQCTests(unittest.TestCase):
   self.ids=[row['image_id'] for row in self.p.catalog_rows()]
   for image_id in self.ids:
    path=self.p.cache_root/'standardized'/f'{image_id}.png'; path.parent.mkdir(parents=True,exist_ok=True); Image.new('RGB',(100,80)).save(path)
+   transform=Transform(100,80,0.0,50.0,40.0,0.0,0.0,100,80)
+   self.p.save_reviewed_crop(image_id, {"developed_full_relpath": f"cache/standardized/{image_id}.png", "standardized_relpath": f"cache/standardized/{image_id}.png", "crop_bounds": [0,0,100,80], "rotation_degrees": 0.0, "transform": transform.__dict__, "normalization_status": "final"})
    self._manual(image_id)
  def tearDown(self): shutil.rmtree(self.tmp,ignore_errors=True)
  def _manual(self,image_id,missing=()):

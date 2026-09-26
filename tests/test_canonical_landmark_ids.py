@@ -1,10 +1,8 @@
 import unittest
-from pathlib import Path
 from app.landmark_ids import (landmark_id, number_from_id, list_index_to_number,
                                number_to_list_index, record_key)
 from app.workflow import set_human_point
 from app.editor_state import EditorState
-from app.editor_ready_v15 import ReadyEditorV15
 
 class CanonicalLandmarkIdTests(unittest.TestCase):
  def test_ids_are_schema_values_and_round_trip(self):
@@ -27,14 +25,6 @@ class CanonicalLandmarkIdTests(unittest.TestCase):
   record={"points":{"P1":{},"P2":{},"P4":{}}}
   state=EditorState(25);state.open_record(record)
   self.assertEqual(state.current_landmark,3)
-
-class PrefetchDepthTests(unittest.TestCase):
- def test_prefetch_has_exactly_five_following_rows(self):
-  editor=ReadyEditorV15.__new__(ReadyEditorV15)
-  editor.index=0
-  editor.images=[{"source_relpath":f"orig_photos/{i}.nef"} for i in range(8)]
-  self.assertEqual(len(editor._prefetch_sources()),5)
-  self.assertEqual(editor._prefetch_sources()[-1],Path("orig_photos/5.nef"))
 
 if __name__=="__main__":unittest.main()
 

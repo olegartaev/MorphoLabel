@@ -426,7 +426,7 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   with self.assertRaises(ValueError) as caught:
    evaluate_model_on_repeatability_run(self.p,run['run_id'],'legacy-message-model',backend=backend)
   message=str(caught.exception)
-  self.assertIn('Image: 2/2',message);self.assertIn(f'ID: {image_ids[1]}',message);self.assertIn('Batch: Annotation 1',message);self.assertIn('Redo one image → 2',message)
+  self.assertIn('Image: 2/2',message);self.assertIn(f'ID: {image_ids[1]}',message);self.assertIn('Batch: Annotation 1',message);self.assertIn('Only this image must be repeated in Annotation 1 and Annotation 2.',message)
 
  def test_compare_manual_uses_frozen_repeatability_annotation_not_current_verified_state(self):
   image_id=self.ids[0];run=self._completed_repeatability_run(image_id)

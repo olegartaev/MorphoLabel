@@ -5,7 +5,14 @@ import inspect
 import tkinter as tk
 from tkinter import ttk,messagebox
 from app.photo_list import PhotoListCanvas
-from app.editor_ready_v15 import photo_search_cache,filtered_photo_indices
+
+def photo_search_cache(rows):
+ """Precompute catalog-only strings used by compact photo filters."""
+ return tuple((str(row.get("locality") or row.get("sample_id") or "").casefold(),(str(row.get("image_id") or "")+" "+Path(str(row.get("source_relpath") or "")).name).casefold()) for row in rows)
+
+def filtered_photo_indices(rows, cache, image_query="", locality_query="", *, show_excluded=True):
+ image_query=str(image_query or "").strip().casefold();locality_query=str(locality_query or "").strip().casefold()
+ return [index for index,(row,(locality,name)) in enumerate(zip(rows,cache)) if (show_excluded or not row.get("excluded")) and (not image_query or image_query in name) and (not locality_query or locality_query in locality)]
 
 class PhotoListPanel(ttk.Frame):
  def __init__(self,parent,context,on_select,tooltip,on_exclusion=None):

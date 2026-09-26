@@ -7,7 +7,6 @@ from app.ai_batch import BatchError, create_batch, create_batch_for_ids, load_ba
 from app.project_storage import Project, schema_hash
 from app.project_runtime import record, save
 from app.workflow import set_human_point
-from app.editor_ready_v15 import ReadyEditorV15
 from app.transforms import Transform
 from app.ui.landmarks_section import _next_pending_ai_prediction_ids
 
@@ -52,14 +51,6 @@ class AIBatchTests(unittest.TestCase):
   data,path=create_batch(self.p,'v1',self.ids[0],1);done,_=run_batch(self.p,path,FakeService(self.p));image_id=done['selected_images'][0]['image_id'];self.p.mark_checked(image_id);self.assertEqual(reviewed_count(self.p,done),1)
  def test_11_no_training_api_is_called_by_batch_module(self):
   data,path=create_batch(self.p,'v1',self.ids[0],1);run_batch(self.p,path,FakeService(self.p));self.assertFalse((self.p.data_root/'ai/models/v2').exists())
- def test_12_batch_navigation_stays_inside_exact_batch_ids(self):
-  class Editor: pass
-  editor=Editor();editor._ai_batch={'selected_images':[{'image_id':'b'},{'image_id':'c'}]};editor._ai_batch_index=0;editor.images=[{'image_id':'a','source_relpath':'L/a.nef'},{'image_id':'b','source_relpath':'L/b.nef'},{'image_id':'c','source_relpath':'L/c.nef'}];editor.index=0;editor._display_image_id='a';opened=[]
-  editor._update_ai_batch_status=lambda:None;editor._refresh_visible_photo_rows=lambda:None;editor.open_image=lambda **kwargs:opened.append(kwargs);editor._open_ai_batch_item=lambda index:ReadyEditorV15._open_ai_batch_item(editor,index)
-  ReadyEditorV15._open_ai_batch_item(editor,1);self.assertEqual(editor.index,2);self.assertEqual(len(opened),1)
-  ReadyEditorV15.previous_ai_batch(editor);self.assertEqual(editor.index,1)
- def test_13_editor_exposes_only_requested_batch_actions(self):
-  source=(Path(__file__).parents[1]/'app'/'editor_ready_v15.py').read_text(encoding='utf8');self.assertIn('text="AI Predict Batch"',source);self.assertIn('text="Previous AI"',source);self.assertIn('text="Next AI"',source)
  def test_14_insufficient_candidates_is_controlled(self):
   for image_id in self.ids[3:]:self.p.save_landmark(image_id,1,1,1,'manual')
   with self.assertRaises(BatchError):prospective_candidates(self.p,'v1',self.ids[0],10)

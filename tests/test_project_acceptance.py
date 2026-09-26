@@ -6,7 +6,6 @@ from app.project_runtime import open_project
 from app.normalization_pipeline import normalize,paths
 from app.workflow import image_catalog,load_record,set_human_point,save_record
 from app.editor_state import EditorState
-from app.editor_ready_v15 import ReadyEditorV15
 
 class ProjectAcceptanceTests(unittest.TestCase):
  def test_external_project_without_legacy_work(self):
@@ -19,7 +18,6 @@ class ProjectAcceptanceTests(unittest.TestCase):
    record=load_record(first,"schema","1");set_human_point(record,2,"A",10,11);save_record(record);set_human_point(record,2,"A",12,13,corrected=True);save_record(record)
    restored=Project.open(project.root).load_landmarks(first["image_id"]);self.assertEqual((restored[2]["x_standardized"],restored[2]["y_standardized"]),(12,13))
    state=EditorState(point_ids=(2,7));state.open_record(load_record(first,"schema","1"));self.assertEqual(state.current_landmark,7)
-   editor=ReadyEditorV15.__new__(ReadyEditorV15);editor.images=rows;editor.index=0;self.assertEqual(len(editor._prefetch_sources()),1)
    project.export_landmarks();shutil.rmtree(project.cache_root);(project.cache_root).mkdir();normalize(source,force=True);self.assertEqual(Project.open(project.root).load_landmarks(first["image_id"])[2]["x_standardized"],12)
   finally:shutil.rmtree(temp,ignore_errors=True)
 if __name__=="__main__":unittest.main()

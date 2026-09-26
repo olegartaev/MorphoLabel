@@ -34,27 +34,4 @@ class AnnotationDraftTests(unittest.TestCase):
 
 if __name__=='__main__':unittest.main()
 
-class ConfirmNextCheckTests(unittest.TestCase):
- def editor(self,result):
-  from types import SimpleNamespace
-  from app.editor_ready_v15 import ReadyEditorV15
-  e=ReadyEditorV15.__new__(ReadyEditorV15);e._annotation_check_for_current=lambda:result;e.current=lambda:{"image_id":"img"};e._landmark_workflow_ids=["img"];e._landmark_ai_info={"friendly_stage":"Control set"};e._landmark_workflow_active=True;e._set_landmark_workflow_controls=lambda:None;e._open_landmark_workflow_item=lambda _:None;e._refresh_landmark_ai_panel=lambda:None;e.marked=0;e.mark_checked=lambda:setattr(e,"marked",e.marked+1);e._load_current_landmark_state=lambda:SimpleNamespace(image_id="img",complete=True);e._show_annotation_findings=lambda findings,heading:setattr(e,"shown",(findings,heading))
-  class P:
-   def clear_annotation_draft(self,*_):pass
-   def annotation_status(self,*_):return {"verified":True}
-   def accept_review_warning(self,*_):pass
-  e.project=P();return e
- def test_normal_confirm_runs_check_silently_and_verifies(self):
-  from app.annotation_check import AnnotationCheckResult
-  from app.editor_ready_v15 import ReadyEditorV15
-  e=self.editor(AnnotationCheckResult("img",(),()))
-  with patch('app.editor_ready_v15.messagebox.showinfo'):ReadyEditorV15.workflow_confirm_next(e)
-  self.assertEqual(e.marked,1)
- def test_hard_error_blocks_confirm(self):
-  from app.annotation_check import AnnotationCheckResult
-  from app.editor_ready_v15 import ReadyEditorV15
-  e=self.editor(AnnotationCheckResult("img",({"message":"Unresolved LM8"},),()))
-  with patch('app.editor_ready_v15.messagebox.showwarning'):ReadyEditorV15.workflow_confirm_next(e)
-  self.assertEqual(e.marked,0);self.assertTrue(hasattr(e,'shown'))
-
 
