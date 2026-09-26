@@ -93,6 +93,12 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   from app.landmark_frames import crop_frame_record,restore_standardized_frame
   image_id=self.ids[0];self._final_crop(image_id)
   expected=self.p.cache_root/'standardized'/f'{image_id}.png'
+  # This fixture represents a valid legacy standardized frame produced after
+  # the persisted Crop.  Make that ordering explicit instead of depending on
+  # machine speed between setUp() and save_reviewed_crop().
+  Image.new('RGB',(40,30)).save(expected)
+  import os,time
+  future=time.time()+2.0;os.utime(expected,(future,future))
   developed=self.p.cache_root/'developed'/f'{image_id}.png';developed.parent.mkdir(parents=True,exist_ok=True);Image.new('RGB',(40,30)).save(developed)
   with self.p.transaction() as db:
    db.execute("UPDATE crops SET standardized_relpath=?,developed_relpath=? WHERE image_id=?",(f'project_data/cache/standardized/{image_id}.png',f'project_data/cache/developed/{image_id}.png',image_id))
