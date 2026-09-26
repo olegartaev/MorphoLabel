@@ -18,5 +18,14 @@ class DistributionVersionContractTests(unittest.TestCase):
         self.assertNotIn('0.5.0-beta.2-dev-$($env:GITHUB_SHA.Substring(0,7))',workflow)
 
 
+    def test_windows_distribution_uses_direct_inno_compiler_path(self):
+        workflow=(ROOT/".github"/"workflows"/"windows-release.yml").read_text(encoding="utf-8")
+        self.assertIn("--scope machine --source winget",workflow)
+        self.assertIn('Join-Path $env:ProgramFiles "Inno Setup 7\\ISCC.exe"',workflow)
+        self.assertIn("Test-Path -LiteralPath $iscc -PathType Leaf",workflow)
+        self.assertNotIn('-Filter ISCC.exe -Recurse',workflow)
+
+
+
 if __name__=="__main__":
     unittest.main()

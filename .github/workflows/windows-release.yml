@@ -46,10 +46,10 @@ jobs:
       - name: Install Inno Setup 7.1.0
         shell: pwsh
         run: |
-          winget install --id JRSoftware.InnoSetup.7 --version 7.1.0 -e --silent --accept-package-agreements --accept-source-agreements
-          $iscc = Get-ChildItem "C:\Program Files\Inno Setup 7" -Filter ISCC.exe -Recurse | Select-Object -First 1
-          if (-not $iscc) { throw "ISCC.exe not found after Inno Setup installation" }
-          "ISCC=$($iscc.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          winget install --id JRSoftware.InnoSetup.7 --version 7.1.0 -e --scope machine --source winget --silent --accept-package-agreements --accept-source-agreements
+          $iscc = Join-Path $env:ProgramFiles "Inno Setup 7\ISCC.exe"
+          if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) { throw "ISCC.exe not found after Inno Setup installation: $iscc" }
+          "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Choose and verify product version
         shell: pwsh
         run: |
