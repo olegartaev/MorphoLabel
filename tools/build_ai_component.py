@@ -83,16 +83,18 @@ def main():
          f"xtcocotools=={packages['xtcocotools']}"])
     run([python, "-m", "pip", "install", *common, "--no-deps", f"mmpose=={packages['mmpose']}"])
 
-    source_archive = download(spec["mmpose_source"]["archive_url"], downloads / "mmpose.tar.gz")
     source_tmp = work / "mmpose-source"
-    with tarfile.open(source_archive, "r:gz") as archive:
-        archive.extractall(source_tmp)
-    roots = [path for path in source_tmp.iterdir() if path.is_dir()]
-    if len(roots) != 1:
-        raise RuntimeError("unexpected MMPose source archive layout")
+    source_tmp.mkdir(parents=True)
+    run(["git", "-C", source_tmp, "init"])
+    run(["git", "-C", source_tmp, "remote", "add", "origin", spec["mmpose_source"]["repo_url"]])
+    run(["git", "-C", source_tmp, "fetch", "--depth", "1", "origin", spec["mmpose_source"]["commit"]])
+    run(["git", "-C", source_tmp, "checkout", "--detach", "FETCH_HEAD"])
+    git_dir = source_tmp / ".git"
+    if git_dir.exists():
+        shutil.rmtree(git_dir)
     vendor = runtime / "vendor" / "mmpose"
     vendor.parent.mkdir(parents=True)
-    shutil.move(str(roots[0]), str(vendor))
+    shutil.move(str(source_tmp), str(vendor))
     if not (vendor / "tools" / "train.py").is_file():
         raise RuntimeError("MMPose training source tools/train.py is missing")
 
