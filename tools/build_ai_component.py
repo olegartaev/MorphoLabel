@@ -89,12 +89,20 @@ def main():
     run(["git", "-C", source_tmp, "remote", "add", "origin", spec["mmpose_source"]["repo_url"]])
     run(["git", "-C", source_tmp, "fetch", "--depth", "1", "origin", spec["mmpose_source"]["commit"]])
     run(["git", "-C", source_tmp, "checkout", "--detach", "FETCH_HEAD"])
-    git_dir = source_tmp / ".git"
-    if git_dir.exists():
-        shutil.rmtree(git_dir)
+    tracked = subprocess.run(
+        ["git", "-C", str(source_tmp), "ls-files", "-z"],
+        check=True, capture_output=True,
+    ).stdout.split(b"\0")
     vendor = runtime / "vendor" / "mmpose"
-    vendor.parent.mkdir(parents=True)
-    shutil.move(str(source_tmp), str(vendor))
+    vendor.mkdir(parents=True)
+    for raw_name in tracked:
+        if not raw_name:
+            continue
+        relative = Path(os.fsdecode(raw_name))
+        source = source_tmp / relative
+        destination = vendor / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
     if not (vendor / "tools" / "train.py").is_file():
         raise RuntimeError("MMPose training source tools/train.py is missing")
 

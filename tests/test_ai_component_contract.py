@@ -34,6 +34,8 @@ class AIComponentContractTests(unittest.TestCase):
         self.assertIn("BOOTSTRAP_CONFIG_PASS",builder)
         self.assertIn('"fetch", "--depth", "1"',builder)
         self.assertIn('"checkout", "--detach", "FETCH_HEAD"',builder)
+        self.assertIn('"ls-files", "-z"',builder)
+        self.assertNotIn("shutil.rmtree(git_dir)",builder)
 
     def test_archive_install_is_atomic_and_active_runtime_is_first_candidate(self):
         with tempfile.TemporaryDirectory() as td:
