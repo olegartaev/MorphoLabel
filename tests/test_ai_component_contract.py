@@ -41,6 +41,8 @@ class AIComponentContractTests(unittest.TestCase):
         self.assertNotIn('"ls-files", "-z"',builder)
         self.assertNotIn("shutil.rmtree(git_dir)",builder)
         self.assertIn("mmdet.__version__",builder)
+        self.assertIn('run(["tar", "-a", "-c", "-f", archive',builder)
+        self.assertNotIn("shutil.make_archive",builder)
 
     def test_archive_install_is_atomic_and_active_runtime_is_first_candidate(self):
         with tempfile.TemporaryDirectory() as td:

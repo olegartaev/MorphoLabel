@@ -147,8 +147,16 @@ def main():
             raise RuntimeError(f"{key} version mismatch: {info.get(key)} != {expected}")
 
     output.mkdir(parents=True, exist_ok=True)
-    archive_base = output / f"MorphoLabel-AI-Windows-x64-{version}"
-    archive = Path(shutil.make_archive(str(archive_base), "zip", runtime))
+    archive = output / f"MorphoLabel-AI-Windows-x64-{version}.zip"
+    if archive.exists():
+        archive.unlink()
+    # GitHub-hosted Windows Python may lose access to some stdlib compression
+    # modules after the side-by-side managed Python installer runs. Use the
+    # Windows libarchive-backed tar executable to create a standards-compliant
+    # ZIP without depending on host-Python zipfile/gzip state.
+    run(["tar", "-a", "-c", "-f", archive, "-C", runtime, "."])
+    if not archive.is_file() or archive.stat().st_size <= 0:
+        raise RuntimeError("AI component ZIP was not created")
     checksum = sha256(archive)
     (output / "SHA256SUMS.txt").write_text(f"{checksum}  {archive.name}\n", encoding="utf-8")
     (output / "AI_BUILD_INFO.json").write_text(json.dumps({
