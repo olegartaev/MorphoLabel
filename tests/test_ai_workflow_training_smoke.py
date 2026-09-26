@@ -13,6 +13,7 @@ class AIWorkflowTrainingSmokeTests(unittest.TestCase):
         self.assertIn("MANAGED_AI_INFERENCE_TRAINING_PASS",text)
         self.assertIn("training_smoke.status",text)
         self.assertIn("training_smoke.checkpoint_sha256",text)
+        self.assertGreaterEqual(text.count('Join-Path $env:RUNNER_TEMP "MorphoLabel-managed-ai"'),2)
 
 
 if __name__=="__main__":

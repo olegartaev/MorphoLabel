@@ -45,6 +45,7 @@ jobs:
       - name: End-to-end managed inference and training smoke
         shell: pwsh
         run: |
+          $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP "MorphoLabel-managed-ai"
           python -m pip install -r requirements.txt
           $report = "dist\ai-component\AI_SELF_TEST.json"
           python -m app --ai-self-test --include-training --diagnostic-report $report
