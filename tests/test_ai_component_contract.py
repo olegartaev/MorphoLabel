@@ -117,6 +117,35 @@ class AIComponentContractTests(unittest.TestCase):
         self.assertIn('candidate/"component.json"',runner)
         self.assertIn('runtime_root=_managed_component_root() or executable.parent.parent',runner)
 
+    def test_windows_root_directory_entry_is_ignored_during_safe_extract(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);component=root/"payload"
+            (component/"vendor"/"mmpose"/"tools").mkdir(parents=True)
+            (component/"vendor"/"mmpose"/"tools"/"train.py").write_text("",encoding="utf-8")
+            (component/"vendor"/"mmpose"/"configs").mkdir(parents=True)
+            (component/"vendor"/"mmpose"/"configs"/"bootstrap.py").write_text("",encoding="utf-8")
+            (component/"python.exe").write_bytes(b"python")
+            import hashlib
+            manifest={"component_format":1,"component_version":"1.0.0-root-entry","platform":"windows-x64",
+                "python_relative_path":"python.exe","bootstrap_config":"vendor/mmpose/configs/bootstrap.py",
+                "bootstrap_checkpoint":"assets/bootstrap.pth",
+                "bootstrap_checkpoint_sha256":hashlib.sha256(b"weights").hexdigest(),
+                "bootstrap_checkpoint_url":"https://download.openmmlab.com/test/bootstrap.pth",
+                "mmpose_source":"vendor/mmpose"}
+            (component/"assets").mkdir()
+            (component/"assets"/"bootstrap.pth").write_bytes(b"weights")
+            (component/"component.json").write_text(json.dumps(manifest),encoding="utf-8")
+            archive=root/"component.zip"
+            with zipfile.ZipFile(archive,"w",zipfile.ZIP_DEFLATED) as z:
+                z.writestr("./",b"")
+                for path in component.rglob("*"):
+                    if path.is_file():
+                        z.write(path,"./"+path.relative_to(component).as_posix())
+            with patch.dict("os.environ",{"LOCALAPPDATA":str(root/"local")},clear=False):
+                runtime=install_component_archive(archive,run_runtime_check=False)
+                self.assertTrue(runtime.is_file())
+                self.assertEqual("1.0.0-root-entry",json.loads(active_record_path().read_text(encoding="utf-8"))["version"])
+
     def test_unsafe_archive_is_rejected_without_component(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);archive=root/"bad.zip"

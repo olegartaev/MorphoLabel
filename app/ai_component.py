@@ -139,15 +139,30 @@ def _safe_extract(archive: zipfile.ZipFile, destination: Path):
     destination = destination.resolve()
     for info in archive.infolist():
         name = info.filename.replace("\\", "/")
-        parts = Path(name).parts
-        if not name or name.startswith("/") or ".." in parts:
+        raw_parts = tuple(part for part in name.split("/") if part not in ("", "."))
+        # Windows ZIPs created from a directory commonly contain a harmless
+        # root entry named "./". It has no filename to extract and must simply
+        # be ignored rather than handed to ZipFile.extractall().
+        if not raw_parts:
+            if name.strip("/") in ("", "."):
+                continue
             raise AIComponentError(f"unsafe AI component archive path: {info.filename}")
-        target = (destination / Path(*parts)).resolve()
+        if name.startswith("/") or any(part == ".." for part in raw_parts):
+            raise AIComponentError(f"unsafe AI component archive path: {info.filename}")
+        first = raw_parts[0]
+        if len(first) >= 2 and first[1] == ":":
+            raise AIComponentError(f"unsafe AI component archive path: {info.filename}")
+        target = destination.joinpath(*raw_parts).resolve()
         try:
             target.relative_to(destination)
         except ValueError as exc:
             raise AIComponentError(f"unsafe AI component archive path: {info.filename}") from exc
-    archive.extractall(destination)
+        if info.is_dir() or name.endswith("/"):
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with archive.open(info, "r") as source, target.open("wb") as output:
+            shutil.copyfileobj(source, output)
 
 def install_component_archive(source, *, expected_sha256=None, activate=True, run_runtime_check=True):
     source = Path(source)
