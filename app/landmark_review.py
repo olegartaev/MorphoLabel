@@ -389,7 +389,12 @@ def early_identity_warnings(project):
         for right_id in image_ids[left_index+1:]:
             for first_index,first_id in enumerate(ids):
                 for second_id in ids[first_index+1:]:
-                    result=_pair_swap_evidence(rows[left_id],rows[right_id],first_id,second_id)
+                    # Early identity checks are deliberately conservative: a true
+                    # pair-label reversal is strong evidence, while the broader
+                    # cross-distance heuristic can misclassify coordinated
+                    # anatomical movement as a swap before a trusted reference
+                    # pool exists.
+                    result=_pair_vector_reversal_evidence(rows[left_id],rows[right_id],first_id,second_id)
                     if result:evidence.setdefault((first_id,second_id),[]).append((left_id,right_id,result))
     warnings=[]
     for (first_id,second_id),pairs in evidence.items():
