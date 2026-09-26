@@ -61,7 +61,6 @@ def run_ai_self_test(*, require_cuda=False, include_training=False, progress=Non
         bootstrap.runtime_python,
         runner,
         require_cuda=require_cuda,
-        timeout=30,
     )
     device = "cuda:0" if info.get("cuda_available") else "cpu"
     if require_cuda and device == "cpu":

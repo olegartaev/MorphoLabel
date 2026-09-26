@@ -18,7 +18,7 @@ import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from .ai_runtime_resolver import resolve_ai_runtime
+from .ai_runtime_resolver import AI_RUNTIME_INFO_TIMEOUT, resolve_ai_runtime
 from .io import atomic_json_write
 from .runtime_paths import app_state_dir, resource_path
 
@@ -46,8 +46,8 @@ class HardwareProfile:
         return asdict(self)
 
 
-def _run(command, *, input_text=None):
-    return subprocess.run(command, input=input_text, text=True, capture_output=True, check=False, timeout=8)
+def _run(command, *, input_text=None, timeout=8):
+    return subprocess.run(command, input=input_text, text=True, capture_output=True, check=False, timeout=timeout)
 
 
 def _ram_bytes():
@@ -122,7 +122,7 @@ def _runtime_cuda_info(command_runner, runtime_python, runner_path):
     if not runtime_python.is_file() or not runner_path.is_file():
         return {}
     try:
-        result = command_runner([str(runtime_python), str(runner_path), "info"], input_text="{}")
+        result = command_runner([str(runtime_python), str(runner_path), "info"], input_text="{}", timeout=AI_RUNTIME_INFO_TIMEOUT)
         if result.returncode:
             return {}
         import json

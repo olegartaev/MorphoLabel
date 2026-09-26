@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from .runtime_paths import app_state_dir, resource_path, source_root
 
+AI_RUNTIME_INFO_TIMEOUT = 60
+
 def _configured(project=None):
     values = []
     current = os.environ.get("MORPHOLABEL_AI_RUNTIME")
@@ -73,7 +75,7 @@ def resolve_ai_runtime(*, project=None, explicit=None, configured=None, runner_p
     fallback = values[0] if values else app_state_dir() / "components" / "ai" / "missing" / "Scripts" / "python.exe"
     return Path(fallback), runner
 
-def validate_ai_runtime(runtime_python, runner_path, *, require_cuda=False, timeout=15):
+def validate_ai_runtime(runtime_python, runner_path, *, require_cuda=False, timeout=AI_RUNTIME_INFO_TIMEOUT):
     runtime_python, runner_path = Path(runtime_python), Path(runner_path)
     if not runtime_python.is_file() or not runner_path.is_file():
         raise RuntimeError(f"AI runtime files are unavailable: {runtime_python}, {runner_path}")

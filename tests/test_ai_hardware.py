@@ -6,15 +6,18 @@ from unittest.mock import patch
 from pathlib import Path
 
 from app.ai_hardware import HardwareProfile, detect_hardware, get_inference_config, get_training_config, run_metadata, compact_worker_candidates, cuda_batch_candidates, persist_machine_profile, machine_profile_path
+from app.ai_runtime_resolver import AI_RUNTIME_INFO_TIMEOUT
 
 
 class AIHardwareTests(unittest.TestCase):
- def _runner(self, gpu=None, runtime=None):
-  def call(command, input_text=None):
+ def _runner(self, gpu=None, runtime=None, info_timeouts=None):
+  def call(command, input_text=None, timeout=None):
    if command[0] == "nvidia-smi":
     output = "" if gpu is None else f"{gpu[0]}, {gpu[1]}, 555.42\n"
     return subprocess.CompletedProcess(command, 0 if gpu else 1, output, "")
    if len(command) > 2 and command[2] == "info":
+    if info_timeouts is not None:
+     info_timeouts.append(timeout)
     return subprocess.CompletedProcess(command, 0, json.dumps(runtime or {}) + "\n", "")
    return subprocess.CompletedProcess(command, 0, "", "")
   return call
@@ -77,5 +80,15 @@ class AIHardwareTests(unittest.TestCase):
   gpu = HardwareProfile("CPU", 4, 8, 16, "GPU", 8192, None, True, "12", "CUDA")
   config = get_training_config("low resource", hardware=gpu)
   self.assertEqual({"device": "cpu", "batch_size": 1, "workers": 0, "mixed_precision": False, "pin_memory": False, "persistent_workers": False, "profile": "low_resource"}, config)
+
+
+ def test_runtime_cuda_probe_allows_cold_start_window(self):
+  with tempfile.TemporaryDirectory() as temp:
+   runtime = Path(temp) / "python.exe"; runner = Path(temp) / "runner.py"; runtime.touch(); runner.touch()
+   timeouts = []
+   profile = detect_hardware(command_runner=self._runner(("RTX Test", "12288"), {"cuda_available": True, "cuda_runtime": "12.1", "device": "RTX Test"}, timeouts), runtime_python=runtime, runner_path=runner)
+  self.assertTrue(profile.cuda_available)
+  self.assertEqual(60, AI_RUNTIME_INFO_TIMEOUT)
+  self.assertEqual([AI_RUNTIME_INFO_TIMEOUT], timeouts)
 
 if __name__ == "__main__": unittest.main()
