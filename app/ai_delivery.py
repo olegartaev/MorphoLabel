@@ -77,10 +77,41 @@ def _fetch_manifest(base_url, *, progress=None):
         raise AIDeliveryError("Published AI component sizes are invalid") from exc
     if archive_bytes <= 0 or installed_bytes < 0:
         raise AIDeliveryError("Published AI component sizes are invalid")
+    raw_parts = manifest.get("parts")
+    if raw_parts is None:
+        raw_parts = [{"name": name, "bytes": archive_bytes, "sha256": digest}]
+    if not isinstance(raw_parts, list) or not raw_parts:
+        raise AIDeliveryError("Published AI component part list is invalid")
+    parts = []
+    seen = set()
+    total_part_bytes = 0
+    for item in raw_parts:
+        if not isinstance(item, dict):
+            raise AIDeliveryError("Published AI component part entry is invalid")
+        part_name = str(item.get("name") or "")
+        if not part_name or not _SAFE_NAME.fullmatch(part_name) or Path(part_name).name != part_name:
+            raise AIDeliveryError("Published AI component part name is unsafe")
+        if part_name in seen:
+            raise AIDeliveryError("Published AI component contains duplicate parts")
+        seen.add(part_name)
+        part_digest = str(item.get("sha256") or "").lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", part_digest):
+            raise AIDeliveryError("Published AI component part SHA256 is invalid")
+        try:
+            part_bytes = int(item.get("bytes"))
+        except (TypeError, ValueError) as exc:
+            raise AIDeliveryError("Published AI component part size is invalid") from exc
+        if part_bytes <= 0 or part_bytes >= 2 * 1024**3:
+            raise AIDeliveryError("Published AI component part exceeds the GitHub Release size contract")
+        parts.append({"name": part_name, "bytes": part_bytes, "sha256": part_digest})
+        total_part_bytes += part_bytes
+    if total_part_bytes != archive_bytes:
+        raise AIDeliveryError("Published AI component parts do not match archive size")
     manifest["archive_bytes"] = archive_bytes
     manifest["installed_bytes"] = installed_bytes
     manifest["archive_sha256"] = digest
     manifest["archive_name"] = name
+    manifest["parts"] = parts
     return manifest
 
 
@@ -110,33 +141,49 @@ def _download_archive(manifest, base_url, *, progress=None):
 
     part = target.with_suffix(target.suffix + ".part")
     part.unlink(missing_ok=True)
-    url = f"{base_url.rstrip('/')}/{manifest['archive_name']}"
-    digest = hashlib.sha256()
+    full_digest = hashlib.sha256()
     received = 0
     _progress(progress, "AI COMPONENT", "Downloading the verified AI runtime…")
     try:
-        with urllib.request.urlopen(_request(url), timeout=60) as response, part.open("wb") as output:
-            while True:
-                block = response.read(1024 * 1024)
-                if not block:
-                    break
-                output.write(block)
-                digest.update(block)
-                received += len(block)
-                pct = min(100, int(received * 100 / manifest["archive_bytes"]))
-                _progress(progress, "AI COMPONENT", f"Downloading AI runtime… {pct}%")
-    except (OSError, urllib.error.URLError, urllib.error.HTTPError) as exc:
+        with part.open("wb") as output:
+            for asset in manifest["parts"]:
+                url = f"{base_url.rstrip('/')}/{asset['name']}"
+                asset_digest = hashlib.sha256()
+                asset_received = 0
+                try:
+                    response_context = urllib.request.urlopen(_request(url), timeout=60)
+                except (OSError, urllib.error.URLError, urllib.error.HTTPError) as exc:
+                    raise AIDeliveryError(f"AI component part download failed: {asset['name']}: {exc}") from exc
+                with response_context as response:
+                    while True:
+                        block = response.read(1024 * 1024)
+                        if not block:
+                            break
+                        output.write(block)
+                        asset_digest.update(block)
+                        full_digest.update(block)
+                        asset_received += len(block)
+                        received += len(block)
+                        pct = min(100, int(received * 100 / manifest["archive_bytes"]))
+                        _progress(progress, "AI COMPONENT", f"Downloading AI runtime… {pct}%")
+                if asset_received != asset["bytes"]:
+                    raise AIDeliveryError(
+                        f"AI component part is incomplete: {asset['name']}: {asset_received} of {asset['bytes']} bytes"
+                    )
+                if asset_digest.hexdigest() != asset["sha256"]:
+                    raise AIDeliveryError(f"AI component part failed SHA256 verification: {asset['name']}")
+    except Exception:
         part.unlink(missing_ok=True)
-        raise AIDeliveryError(f"AI component download failed: {exc}") from exc
+        raise
 
     if received != manifest["archive_bytes"]:
         part.unlink(missing_ok=True)
         raise AIDeliveryError(
             f"AI component download is incomplete: {received} of {manifest['archive_bytes']} bytes"
         )
-    if digest.hexdigest() != expected:
+    if full_digest.hexdigest() != expected:
         part.unlink(missing_ok=True)
-        raise AIDeliveryError("AI component download failed SHA256 verification")
+        raise AIDeliveryError("AI component assembled archive failed SHA256 verification")
     os.replace(part, target)
     return target
 

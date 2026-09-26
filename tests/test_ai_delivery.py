@@ -36,20 +36,46 @@ class AIDeliveryTests(unittest.TestCase):
             with self.assertRaises(ai_delivery.AIDeliveryError):
                 ai_delivery._fetch_manifest("https://example.test")
 
-    def test_download_verifies_sha_and_installer_receives_same_digest(self):
-        payload=b"managed-ai-archive"
-        digest=hashlib.sha256(payload).hexdigest()
-        manifest_data=json.dumps({
+    def test_multipart_download_reassembles_and_verifies_full_archive(self):
+        first=b"managed-ai-"
+        second=b"archive"
+        payload=first+second
+        manifest={
             "format_version":1,"app_version":"test","component_version":"1","platform":"windows-x64",
-            "archive_name":"MorphoLabel-AI-Windows-x64-test.zip","archive_sha256":digest,
+            "archive_name":"MorphoLabel-AI-Windows-x64-test.zip",
+            "archive_sha256":hashlib.sha256(payload).hexdigest(),
             "archive_bytes":len(payload),"installed_bytes":0,
-        }).encode()
-        responses=[_Response(manifest_data),_Response(payload)]
+            "parts":[
+                {"name":"component.part01","bytes":len(first),"sha256":hashlib.sha256(first).hexdigest()},
+                {"name":"component.part02","bytes":len(second),"sha256":hashlib.sha256(second).hexdigest()},
+            ],
+        }
+        responses=[_Response(json.dumps(manifest).encode()),_Response(first),_Response(second)]
         with tempfile.TemporaryDirectory() as td,              patch.dict(os.environ,{"LOCALAPPDATA":td,"MORPHOLABEL_AI_RELEASE_BASE":"https://example.test"},clear=False),              patch("urllib.request.urlopen",side_effect=responses),              patch("app.ai_delivery.install_component_archive",return_value=Path(td)/"runtime"/"python.exe") as install:
             runtime=ai_delivery.install_published_ai_component(release_version="test")
             self.assertEqual(Path(td)/"runtime"/"python.exe",runtime)
-            self.assertEqual(digest,install.call_args.kwargs["expected_sha256"])
-            self.assertFalse((Path(td)/"MorphoLabel"/"downloads"/"ai"/manifest_data.decode(errors="ignore")).exists())
+            self.assertEqual(manifest["archive_sha256"],install.call_args.kwargs["expected_sha256"])
+            cache=Path(td)/"MorphoLabel"/"downloads"/"ai"
+            self.assertFalse(any(cache.glob("*.part")))
+
+    def test_multipart_download_rejects_corrupt_part_before_install(self):
+        first=b"good"
+        bad=b"tampered"
+        manifest={
+            "format_version":1,"app_version":"test","component_version":"1","platform":"windows-x64",
+            "archive_name":"component.zip",
+            "archive_sha256":hashlib.sha256(first+b"expected").hexdigest(),
+            "archive_bytes":len(first)+len(bad),"installed_bytes":0,
+            "parts":[
+                {"name":"component.part01","bytes":len(first),"sha256":hashlib.sha256(first).hexdigest()},
+                {"name":"component.part02","bytes":len(bad),"sha256":hashlib.sha256(b"expected").hexdigest()},
+            ],
+        }
+        responses=[_Response(json.dumps(manifest).encode()),_Response(first),_Response(bad)]
+        with tempfile.TemporaryDirectory() as td,              patch.dict(os.environ,{"LOCALAPPDATA":td,"MORPHOLABEL_AI_RELEASE_BASE":"https://example.test"},clear=False),              patch("urllib.request.urlopen",side_effect=responses),              patch("app.ai_delivery.install_component_archive") as install:
+            with self.assertRaises(ai_delivery.AIDeliveryError):
+                ai_delivery.install_published_ai_component(release_version="test")
+            install.assert_not_called()
 
     def test_source_checkout_ensure_remains_network_free(self):
         with tempfile.TemporaryDirectory() as td,              patch.dict(os.environ,{"LOCALAPPDATA":td},clear=False),              patch("app.ai_delivery.is_frozen",return_value=False),              patch("app.ai_delivery.install_published_ai_component") as install:
