@@ -1,0 +1,109 @@
+name: Windows distribution
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install core and build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-build.txt
+      - name: Full deterministic test suite
+        run: python -m unittest discover -s tests -t . -p "test_*.py"
+      - name: Build onedir application
+        run: python -m PyInstaller --clean --noconfirm packaging/morpholabel.spec
+      - name: Packaged CLI smoke
+        shell: pwsh
+        run: |
+          .\dist\MorphoLabel\MorphoLabel.exe --version
+          .\dist\MorphoLabel\MorphoLabel.exe --self-test
+      - name: Packaged GUI process smoke
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath ".\dist\MorphoLabel\MorphoLabel.exe" -PassThru
+          Start-Sleep -Seconds 6
+          if ($p.HasExited) { throw "Packaged GUI exited during startup with code $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
+      - name: Install Inno Setup 7.1.0
+        shell: pwsh
+        run: |
+          winget install --id JRSoftware.InnoSetup.7 --version 7.1.0 -e --silent --accept-package-agreements --accept-source-agreements
+          $iscc = Get-ChildItem "C:\Program Files\Inno Setup 7" -Filter ISCC.exe -Recurse | Select-Object -First 1
+          if (-not $iscc) { throw "ISCC.exe not found after Inno Setup installation" }
+          "ISCC=$($iscc.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Choose artifact version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $version = $env:GITHUB_REF_NAME -replace '^v',''
+          } else {
+            $version = "0.5.0-beta.2-dev-$($env:GITHUB_SHA.Substring(0,7))"
+          }
+          "DIST_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Build installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist\installer | Out-Null
+          & "$env:ISCC" /DMyAppVersion="$env:DIST_VERSION" packaging\windows\MorphoLabel.iss
+      - name: Silent clean-install smoke
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\installer\MorphoLabel-*-Setup-x64.exe | Select-Object -First 1
+          if (-not $setup) { throw "Installer was not produced" }
+          $target = Join-Path $env:RUNNER_TEMP "MorphoLabel-installed"
+          $proc = Start-Process -FilePath $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=$target" -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "Installer failed with code $($proc.ExitCode)" }
+          $exe = Join-Path $target "MorphoLabel.exe"
+          if (-not (Test-Path $exe)) { throw "Installed executable missing" }
+          & $exe --self-test
+          $gui = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 6
+          if ($gui.HasExited) { throw "Installed GUI exited during startup with code $($gui.ExitCode)" }
+          Stop-Process -Id $gui.Id -Force
+          $uninstaller = Join-Path $target "unins000.exe"
+          if (-not (Test-Path $uninstaller)) { throw "Uninstaller missing" }
+          $un = Start-Process -FilePath $uninstaller -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          if ($un.ExitCode -ne 0) { throw "Uninstall failed with code $($un.ExitCode)" }
+      - name: Record sizes and SHA256
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\installer\MorphoLabel-*-Setup-x64.exe | Select-Object -First 1
+          $hash = Get-FileHash $setup.FullName -Algorithm SHA256
+          "$($hash.Hash.ToLower())  $($setup.Name)" | Set-Content dist\installer\SHA256SUMS.txt
+          $installedBytes = (Get-ChildItem dist\MorphoLabel -Recurse -File | Measure-Object Length -Sum).Sum
+          "setup_bytes=$($setup.Length)" | Set-Content dist\installer\BUILD_SIZES.txt
+          "installed_bytes=$installedBytes" | Add-Content dist\installer\BUILD_SIZES.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MorphoLabel-Windows-${{ github.sha }}
+          path: |
+            dist/installer/MorphoLabel-*-Setup-x64.exe
+            dist/installer/SHA256SUMS.txt
+            dist/installer/BUILD_SIZES.txt
+      - name: Attach release assets for tags
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $setup = Get-ChildItem dist\installer\MorphoLabel-*-Setup-x64.exe | Select-Object -First 1
+          gh release view "$env:GITHUB_REF_NAME" *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create "$env:GITHUB_REF_NAME" --prerelease --title "$env:GITHUB_REF_NAME" --notes "Development beta."
+          }
+          gh release upload "$env:GITHUB_REF_NAME" $setup.FullName dist\installer\SHA256SUMS.txt --clobber

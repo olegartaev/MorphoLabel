@@ -23,19 +23,29 @@ The active module is **Landmarks & measurements**. It opens from the module hub 
 
 ## Installation
 
-Tested runtime: Python 3.11 on Windows 10/11 x64. Create a virtual environment and install the core dependencies:
+### Windows
+
+The public Windows distribution is built as a standalone application: users do not need Python, Git, pip, or PATH changes.
+
+1. Open GitHub Releases.
+2. Download the MorphoLabel Setup executable for the current beta.
+3. Run the installer.
+4. Start **MorphoLabel** from the Start Menu (or the optional desktop shortcut).
+
+RAW decoding is bundled in the Windows application. AI remains optional and isolated from the core GUI; the managed AI component is being verified separately before the next beta is released.
+
+### Development from source
+
+For development, use Python 3.11 on Windows 10/11 x64:
 
 ```text
 python -m venv .venv
 .venv\Scripts\activate
 python -m pip install -r requirements.txt
+python -m app
 ```
 
-RAW-photo support is optional; install `requirements-raw.txt` only when working with supported RAW files. AI training/runtime dependencies are documented separately in `requirements-ai.txt` and are not required for the basic GUI.
-
-## Quick start
-
-From the repository root on Windows, run [`START_APP.cmd`](START_APP.cmd). The application starts in the MorphoLabel Module Hub. Keep project data outside version control; see [data safety](.gitignore).
+The application starts in the MorphoLabel Module Hub. Keep project data outside version control; see [data safety](.gitignore).
 
 ## Typical workflow
 

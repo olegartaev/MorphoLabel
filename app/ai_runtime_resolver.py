@@ -1,21 +1,16 @@
-"""Portable resolution of the isolated SIMM AI runtime."""
+"""Resolve MorphoLabel's isolated AI runtime without scanning unrelated user directories."""
 from __future__ import annotations
-
 import json
 import os
 import subprocess
 from pathlib import Path
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
-
+from .runtime_paths import app_state_dir, resource_path, source_root
 
 def _configured(project=None):
     values = []
-    env = os.environ.get("SIMM_AI_RUNTIME")
-    if env:
-        values.append(env)
+    current = os.environ.get("MORPHOLABEL_AI_RUNTIME")
+    if current:
+        values.append(current)
     if project is not None:
         try:
             config = project.config
@@ -24,16 +19,17 @@ def _configured(project=None):
                     values.append(config[key])
         except (AttributeError, OSError, TypeError, ValueError, json.JSONDecodeError):
             pass
+    legacy = os.environ.get("SIMM_AI_RUNTIME")
+    if legacy:
+        values.append(legacy)
     return values
-
 
 def _artifact_runtimes(project=None):
     if project is None:
         return []
-    roots = []
     try:
         data_root = Path(project.data_root)
-        roots.extend((data_root / "ai" / "models", data_root / "models" / "landmark"))
+        roots = (data_root / "ai" / "models", data_root / "models" / "landmark")
     except (AttributeError, TypeError):
         return []
     values = []
@@ -50,32 +46,23 @@ def _artifact_runtimes(project=None):
                 values.append(runtime)
     return values
 
-
-def _discovered(repo_root: Path):
-    values = []
-    # Keep discovery generic: verified runtimes in sibling SIMM workspaces are
-    # candidates, without making any one legacy path mandatory.
-    for parent in (repo_root.parent, Path.cwd().parent):
-        try:
-            values.extend(str(path) for path in parent.glob("*/ai_runtime/Scripts/python.exe"))
-        except OSError:
-            continue
-    return values
-
+def installed_component_runtimes():
+    root = app_state_dir() / "components" / "ai"
+    if not root.is_dir():
+        return []
+    return [folder / "Scripts" / "python.exe" for folder in sorted(root.iterdir(), key=lambda p: p.name, reverse=True) if folder.is_dir()]
 
 def resolve_ai_runtime(*, project=None, explicit=None, configured=None, runner_path=None):
-    """Return ``(python_executable, current_runner)`` using portable priority."""
-    root = _repo_root()
-    runner = Path(runner_path) if runner_path is not None else root / "ai_runtime" / "rtmpose_runner.py"
+    runner = Path(runner_path) if runner_path is not None else resource_path("ai_runtime", "rtmpose_runner.py")
     values = []
     if explicit is not None:
         values.append(explicit)
     values.extend(_configured(project))
     if configured is not None:
         values.append(configured)
-    values.append(root / "ai_runtime" / "Scripts" / "python.exe")
+    values.extend(installed_component_runtimes())
     values.extend(_artifact_runtimes(project))
-    values.extend(_discovered(root))
+    values.append(source_root() / "ai_runtime" / "Scripts" / "python.exe")
     seen = set()
     for value in values:
         path = Path(value).expanduser()
@@ -85,17 +72,14 @@ def resolve_ai_runtime(*, project=None, explicit=None, configured=None, runner_p
         seen.add(key)
         if path.is_file():
             return path, runner
-    # Preserve a controlled missing-runtime error at the call site.
-    return Path(values[0]) if values else root / "ai_runtime" / "Scripts" / "python.exe", runner
-
+    fallback = values[0] if values else app_state_dir() / "components" / "ai" / "missing" / "Scripts" / "python.exe"
+    return Path(fallback), runner
 
 def validate_ai_runtime(runtime_python, runner_path, *, require_cuda=False, timeout=15):
-    """Execute the runner info operation and return its JSON capability record."""
     runtime_python, runner_path = Path(runtime_python), Path(runner_path)
     if not runtime_python.is_file() or not runner_path.is_file():
         raise RuntimeError(f"AI runtime files are unavailable: {runtime_python}, {runner_path}")
-    result = subprocess.run([str(runtime_python), str(runner_path), "info"], input="{}", text=True,
-                            capture_output=True, check=False, timeout=timeout)
+    result = subprocess.run([str(runtime_python), str(runner_path), "info"], input="{}", text=True, capture_output=True, check=False, timeout=timeout)
     if result.returncode:
         raise RuntimeError(f"AI runtime info failed (return code {result.returncode}): {result.stderr}")
     try:

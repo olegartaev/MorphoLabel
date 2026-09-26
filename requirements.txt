@@ -2,3 +2,4 @@
 Pillow>=10.0
 numpy>=1.26
 opencv-python>=4.8
+rawpy==0.27.1
