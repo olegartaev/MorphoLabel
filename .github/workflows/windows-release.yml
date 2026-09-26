@@ -50,15 +50,18 @@ jobs:
           $iscc = Get-ChildItem "C:\Program Files\Inno Setup 7" -Filter ISCC.exe -Recurse | Select-Object -First 1
           if (-not $iscc) { throw "ISCC.exe not found after Inno Setup installation" }
           "ISCC=$($iscc.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
-      - name: Choose artifact version
+      - name: Choose and verify product version
         shell: pwsh
         run: |
+          $sourceVersion = python -c "from app.version import __version__; print(__version__)"
+          if (-not $sourceVersion) { throw "Could not read app.version.__version__" }
           if ($env:GITHUB_REF_TYPE -eq "tag") {
-            $version = $env:GITHUB_REF_NAME -replace '^v',''
-          } else {
-            $version = "0.5.0-beta.2-dev-$($env:GITHUB_SHA.Substring(0,7))"
+            $tagVersion = $env:GITHUB_REF_NAME -replace '^v',''
+            if ($tagVersion -ne $sourceVersion) {
+              throw "Release tag version $tagVersion does not match application version $sourceVersion"
+            }
           }
-          "DIST_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "DIST_VERSION=$sourceVersion" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Build installer
         shell: pwsh
         run: |
