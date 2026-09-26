@@ -301,7 +301,7 @@ def _robust_alignment(source_rows, target_rows, excluded_ids):
     return transform
 
 def _pair_vector_reversal_evidence(source_rows,target_rows,first_id,second_id):
-    """Detect a label swap from reversal of the pair vector after robust similarity alignment."""
+    """Detect a conservative label swap after robust similarity alignment."""
     if not all(i in source_rows and i in target_rows for i in (first_id,second_id)):return None
     transform=_robust_alignment(source_rows,target_rows,{first_id,second_id})
     if transform is None:return None
@@ -310,7 +310,14 @@ def _pair_vector_reversal_evidence(source_rows,target_rows,first_id,second_id):
     target_first=(target_rows[first_id]['x_standardized'],target_rows[first_id]['y_standardized'])
     target_second=(target_rows[second_id]['x_standardized'],target_rows[second_id]['y_standardized'])
     metrics=pair_vector_reversal_metrics(target_first,target_second,first,second,min_reference_length=2.0)
-    return metrics if metrics["vector_reversal"] else None
+    if not metrics["vector_reversal"]:return None
+    original_first=math.dist(first,target_first);original_second=math.dist(second,target_second)
+    swapped_first=math.dist(first,target_second);swapped_second=math.dist(second,target_first)
+    # A reversed vector alone is not enough: coordinated anatomical movement can
+    # reverse an unrelated pair after alignment.  For an actual A<->B label
+    # swap, each endpoint must independently fit the opposite identity better.
+    if not (swapped_first<original_first and swapped_second<original_second):return None
+    return {**metrics,"cost_original":original_first+original_second,"cost_swapped":swapped_first+swapped_second}
 
 def _pair_swap_evidence(source_rows, target_rows, first_id, second_id):
     reversal=_pair_vector_reversal_evidence(source_rows,target_rows,first_id,second_id)
