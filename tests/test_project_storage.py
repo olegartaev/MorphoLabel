@@ -53,6 +53,24 @@ class ProjectStorageTests(unittest.TestCase):
   self.assertEqual(expected["missing_ids"],row["missing_ids"])
   self.assertEqual(expected["color"],row["status_color"])
 
+ def test_direct_layout_includes_nested_source_paths(self):
+  nested=self.src/"s"/"nested"/"deeper";nested.mkdir(parents=True);(nested/"b.jpg").write_bytes(b"nested image")
+  p=Project.create("nested",self.src,self.tmp,self.schema,source_layout="direct")
+  rows={row["relative_path"]:row for row in p.catalog_rows()}
+  self.assertIn("s/nested/deeper/b.jpg",rows)
+  self.assertEqual("s",rows["s/nested/deeper/b.jpg"]["locality"])
+
+ def test_reopen_refreshes_deleted_source_availability_without_losing_history(self):
+  p=self.new("missing_source");image_id=self.image_id(p);source=p.image_path(image_id)
+  p.save_landmark(image_id,1,10,11,"manual",provenance="manual")
+  source.unlink()
+  reopened=Project.open(p.root)
+  with reopened.transaction() as c:row=dict(c.execute("SELECT active,source_available FROM images WHERE image_id=?",(image_id,)).fetchone())
+  self.assertEqual(1,row["active"])
+  self.assertEqual(0,row["source_available"])
+  self.assertIsNone(reopened.image_path(image_id))
+  self.assertEqual(10,reopened.load_landmarks(image_id)[1]["x_standardized"])
+
  def test_source_filter_excludes_service_folders_and_non_selected_types(self):
   (self.src/"png").mkdir();(self.src/"png"/"bad.png").write_bytes(b"bad")
   (self.src/"_Points").mkdir();(self.src/"_Points"/"v.1.png").write_bytes(b"ref")

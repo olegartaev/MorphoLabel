@@ -90,7 +90,7 @@ class Project:
   project._schema_cache_signature=schema_file_signature(project.schema_path)
   try: project._schema_cache=load_schema(project.schema_path)
   except Exception as exc: project._schema_cache=[];project._schema_error=exc
-  project.ensure_schema();project._sync_schema_hash_metadata();project._sync_auto_verified_images();return project
+  project.ensure_schema();project._sync_schema_hash_metadata();project._refresh_source_availability();project._sync_auto_verified_images();return project
  @property
  def schema_error(self): return self._schema_error
  @property
@@ -198,9 +198,11 @@ WHERE provenance='manual'
     if len(parts)<3 or parts[-2].casefold()!=str(sub).casefold(): continue
     locality=parts[-3]
    else:
-    if len(parts)==1: locality=root.name
-    elif len(parts)==2: locality=parts[0]
-    else: continue
+    # Direct projects may contain arbitrarily nested source folders.  The
+    # first directory below source_root remains the locality; root-level files
+    # belong to source_root itself.  Silently dropping deeper paths loses
+    # specimens from the catalogue.
+    locality=root.name if len(parts)==1 else parts[0]
    items.append((p,rel.as_posix(),locality))
   items.sort(key=lambda x:(natural_key(x[2]),natural_key(x[0].name),x[1].casefold()))
   totals={}
@@ -245,16 +247,28 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
  def scan_originals(self,hashes=False,source_types=None):
   self.ensure_schema(); items=self._source_items(); root=self.source_root
   with self.transaction() as c:
-   c.execute("UPDATE images SET active=0")
+   c.execute("UPDATE images SET active=0,source_available=0")
    totals={}; positions={}
    for _,_,loc,_,_ in items: totals[loc]=totals.get(loc,0)+1
    for p,rel,loc,_,_ in items:
     positions[loc]=positions.get(loc,0)+1; st=p.stat(); ident=hashlib.sha256(f"orig_photos/{rel}".encode()).hexdigest()[:16]; digest=sha256(p) if hashes else None
     c.execute("INSERT INTO images(image_id,specimen_id,original_name,relative_path,sample_id,locality,index_in_locality,total_in_locality,file_size,mtime_ns,source_sha256,active,source_available,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(image_id) DO UPDATE SET specimen_id=COALESCE(images.specimen_id,excluded.specimen_id),original_name=excluded.original_name,relative_path=excluded.relative_path,sample_id=excluded.locality,locality=excluded.locality,index_in_locality=excluded.index_in_locality,total_in_locality=excluded.total_in_locality,file_size=excluded.file_size,mtime_ns=excluded.mtime_ns,source_sha256=COALESCE(excluded.source_sha256,images.source_sha256),active=1,source_available=1",(ident,ident,p.name,rel,loc,loc,positions[loc],totals[loc],st.st_size,st.st_mtime_ns,digest,1,1,now()))
   return len(items)
+ def _refresh_source_availability(self):
+  """Refresh source presence without deleting catalogue/history state."""
+  root=self.source_root
+  with self.transaction() as c:
+   rows=c.execute("SELECT image_id,relative_path FROM images").fetchall()
+   c.executemany(
+    "UPDATE images SET source_available=? WHERE image_id=?",
+    [(int((root/row["relative_path"]).is_file()),row["image_id"]) for row in rows],
+   )
+  return sum(int((root/row["relative_path"]).is_file()) for row in rows)
  def image_path(self,image_id):
   with self.transaction() as c:r=c.execute("SELECT relative_path,source_available FROM images WHERE image_id=?",(image_id,)).fetchone()
-  return self.source_root/r["relative_path"] if r and r["source_available"] else None
+  if not r or not r["source_available"]:return None
+  path=self.source_root/r["relative_path"]
+  return path if path.is_file() else None
  def relink(self,new_root):
   new_root=Path(new_root).resolve();files=[p for p in new_root.rglob("*") if p.is_file()];by_rel={p.relative_to(new_root).as_posix():p for p in files};by_sig={(p.name,p.stat().st_size):p for p in files};matched=0
   with self.transaction() as c:
