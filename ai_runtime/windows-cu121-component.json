@@ -1,0 +1,28 @@
+{
+  "component_format": 1,
+  "component_version": "1.0.0-dev1",
+  "platform": "windows-x64",
+  "python": {
+    "version": "3.11.9",
+    "installer_url": "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe"
+  },
+  "packages": {
+    "numpy": "1.26.4",
+    "torch": "2.1.0",
+    "torchvision": "0.16.0",
+    "torch_index_url": "https://download.pytorch.org/whl/cu121",
+    "mmengine": "0.10.7",
+    "mmcv": "2.1.0",
+    "mmcv_find_links": "https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html",
+    "mmpose": "1.3.2"
+  },
+  "mmpose_source": {
+    "commit": "5408bc76f5b848cf925a0d1857899011d8c5b497",
+    "archive_url": "https://github.com/open-mmlab/mmpose/archive/5408bc76f5b848cf925a0d1857899011d8c5b497.zip"
+  },
+  "bootstrap": {
+    "config_relative_path": "vendor/mmpose/configs/animal_2d_keypoint/rtmpose/ap10k/rtmpose-m_8xb64-210e_ap10k-256x256.py",
+    "checkpoint_relative_path": "assets/rtmpose-m_ap10k_7a041aa1.pth",
+    "checkpoint_url": "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/rtmpose-m_simcc-ap10k_pt-aic-coco_210e-256x256-7a041aa1_20230206.pth"
+  }
+}

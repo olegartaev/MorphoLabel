@@ -1,0 +1,40 @@
+name: Windows AI component
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "ai_runtime/windows-cu121-component.json"
+      - "ai_runtime/rtmpose_runner.py"
+      - "tools/build_ai_component.py"
+      - ".github/workflows/ai-component.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-ai:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build pinned managed AI component
+        run: python tools/build_ai_component.py ai_runtime/windows-cu121-component.json dist/ai-component
+      - name: Verify archive contract
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem dist\ai-component\MorphoLabel-AI-Windows-x64-*.zip | Select-Object -First 1
+          if (-not $zip) { throw "AI component archive missing" }
+          if (-not (Test-Path dist\ai-component\SHA256SUMS.txt)) { throw "AI component checksum missing" }
+          if (-not (Test-Path dist\ai-component\AI_BUILD_INFO.json)) { throw "AI component build info missing" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MorphoLabel-AI-Windows-x64-${{ github.sha }}
+          compression-level: 0
+          path: |
+            dist/ai-component/MorphoLabel-AI-Windows-x64-*.zip
+            dist/ai-component/SHA256SUMS.txt
+            dist/ai-component/AI_BUILD_INFO.json

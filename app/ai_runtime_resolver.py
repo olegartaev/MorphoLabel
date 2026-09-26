@@ -47,10 +47,8 @@ def _artifact_runtimes(project=None):
     return values
 
 def installed_component_runtimes():
-    root = app_state_dir() / "components" / "ai"
-    if not root.is_dir():
-        return []
-    return [folder / "Scripts" / "python.exe" for folder in sorted(root.iterdir(), key=lambda p: p.name, reverse=True) if folder.is_dir()]
+    from .ai_component import component_runtime_candidates
+    return component_runtime_candidates()
 
 def resolve_ai_runtime(*, project=None, explicit=None, configured=None, runner_path=None):
     runner = Path(runner_path) if runner_path is not None else resource_path("ai_runtime", "rtmpose_runner.py")
