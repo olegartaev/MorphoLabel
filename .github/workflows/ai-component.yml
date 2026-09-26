@@ -30,6 +30,13 @@ jobs:
           if (-not $zip) { throw "AI component archive missing" }
           if (-not (Test-Path dist\ai-component\SHA256SUMS.txt)) { throw "AI component checksum missing" }
           if (-not (Test-Path dist\ai-component\AI_BUILD_INFO.json)) { throw "AI component build info missing" }
+      - name: Managed install and bootstrap smoke
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem dist\ai-component\MorphoLabel-AI-Windows-x64-*.zip | Select-Object -First 1
+          $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP "MorphoLabel-managed-ai"
+          python -c "from app.ai_component import install_component_archive; from app.landmark_bootstrap import resolve_landmark_bootstrap; import sys; runtime=install_component_archive(sys.argv[1]); bootstrap=resolve_landmark_bootstrap(None); assert bootstrap.runtime_python.resolve()==runtime.resolve(); assert bootstrap.config_path.is_file(); assert bootstrap.checkpoint_path.is_file(); print('MANAGED_AI_INSTALL_PASS', runtime)" $zip.FullName
+          if (-not (Test-Path "$env:LOCALAPPDATA\MorphoLabel\components\ai\active.json")) { throw "Managed AI active record missing" }
       - uses: actions/upload-artifact@v4
         with:
           name: MorphoLabel-AI-Windows-x64-${{ github.sha }}

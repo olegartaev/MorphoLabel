@@ -189,15 +189,20 @@ def main():
     if not archive.is_file() or archive.stat().st_size <= 0:
         raise RuntimeError("AI component ZIP was not created")
     checksum = sha256(archive)
-    (output / "SHA256SUMS.txt").write_text(f"{checksum}  {archive.name}\n", encoding="utf-8")
-    (output / "AI_BUILD_INFO.json").write_text(json.dumps({
+    runtime_files = [path for path in runtime.rglob("*") if path.is_file()]
+    runtime_bytes = sum(path.stat().st_size for path in runtime_files)
+    build_info = {
         "archive": archive.name,
         "archive_sha256": checksum,
         "archive_bytes": archive.stat().st_size,
+        "installed_bytes": runtime_bytes,
+        "installed_file_count": len(runtime_files),
         "runtime_info": info,
         "component_manifest": manifest,
-    }, indent=2, sort_keys=True), encoding="utf-8")
-    print(json.dumps({"archive": str(archive), "sha256": checksum, "bytes": archive.stat().st_size, "runtime": info}, indent=2))
+    }
+    (output / "SHA256SUMS.txt").write_text(f"{checksum}  {archive.name}\n", encoding="utf-8")
+    (output / "AI_BUILD_INFO.json").write_text(json.dumps(build_info, indent=2, sort_keys=True), encoding="utf-8")
+    print(json.dumps(build_info, indent=2))
 
 if __name__ == "__main__":
     main()
