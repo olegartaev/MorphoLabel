@@ -113,7 +113,9 @@ class CropTrainingBatchTests(unittest.TestCase):
         result = prepare_crop_training_images(self.project, [row], prepare_proposal=proposal)
         self.assertEqual((row["image_id"],), result["prepared_ids"])
         self.assertEqual([2, 3, 28, 18], result["proposals"][row["image_id"]])
-        self.assertEqual([self.source / row["relative_path"]], calls)
+        self.assertEqual(1, len(calls))
+        self.assertTrue(calls[0].is_file())
+        self.assertTrue(calls[0].samefile(self.source / row["relative_path"]))
         with self.project.transaction() as connection:
             saved = connection.execute("SELECT crop_json,provenance,model_id FROM crops WHERE image_id=?", (row["image_id"],)).fetchone()
         self.assertEqual("[2, 3, 28, 18]", saved["crop_json"])

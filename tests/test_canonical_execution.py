@@ -9,6 +9,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from app.landmark_training_workflow import prepare_landmark_training
+from app.ai_runtime_resolver import resolve_ai_runtime
 from app.project_storage import Project
 from app.landmark_frames import restore_standardized_frame
 from app.transforms import Transform
@@ -19,14 +20,20 @@ REPO = Path(__file__).resolve().parents[1]
 
 class CanonicalExecutionTests(unittest.TestCase):
     def test_poisoned_cwd_and_pythonpath_still_import_canonical_app(self):
-        environment = dict(os.environ, PYTHONPATH=r"D:\Morphology_Pipeline")
         with tempfile.TemporaryDirectory() as temporary:
-            for cwd in (Path(r"D:\Morphology_Pipeline"), Path(temporary)):
+            root = Path(temporary)
+            poison = root / "poison"
+            (poison / "app").mkdir(parents=True)
+            (poison / "app" / "__init__.py").write_text("raise RuntimeError('poison app imported')\n", encoding="utf-8")
+            foreign = root / "foreign"
+            foreign.mkdir()
+            environment = dict(os.environ, PYTHONPATH=str(poison))
+            for cwd in (poison, foreign):
                 result = subprocess.run([str(REPO / "RUN_CANONICAL.cmd"), "provenance"], cwd=cwd, env=environment, text=True, capture_output=True, check=False)
                 self.assertEqual(0, result.returncode, result.stderr)
                 sources = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
                 self.assertTrue(Path(sources["APP_SOURCE"]).resolve().is_relative_to(REPO.resolve()))
-                self.assertFalse(Path(sources["APP_SOURCE"]).resolve().is_relative_to(Path(r"D:\Morphology_Pipeline").resolve()))
+                self.assertFalse(Path(sources["APP_SOURCE"]).resolve().is_relative_to(poison.resolve()))
 
     def test_zero_model_preflight_resolves_real_bootstrap_without_active_backend(self):
         root = Path(tempfile.mkdtemp())
@@ -47,6 +54,12 @@ class CanonicalExecutionTests(unittest.TestCase):
             project.save_landmark(image_id, 2, 50, 30, "manual", provenance="manual")
             project.mark_checked(image_id)
         self.assertIsNone(project.active_model_readonly("landmark"))
+        runtime, _ = resolve_ai_runtime(project=project)
+        assets = runtime.parents[1]
+        config = assets / "vendor" / "mmpose" / "configs" / "animal_2d_keypoint" / "rtmpose" / "ap10k" / "rtmpose-m_8xb64-210e_ap10k-256x256.py"
+        checkpoints = assets / "assets"
+        if not runtime.is_file() or not config.is_file() or not any(checkpoints.glob("rtmpose-m_ap10k_*.pth")):
+            self.skipTest("optional RTMPose bootstrap not installed")
         with patch("app.landmark_training_workflow.auto_performance_config", return_value={"batch_size": 1, "workers": 0, "device": "cpu"}):
             plan = prepare_landmark_training(project, seed=17)
         bootstrap = plan.training_settings["bootstrap"]
