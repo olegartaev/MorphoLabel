@@ -48,7 +48,7 @@ def run_self_test():
     }
 
 
-def run_ai_self_test(*, require_cuda=False, progress=None):
+def run_ai_self_test(*, require_cuda=False, include_training=False, progress=None):
     """Exercise the same managed runtime/bootstrap path used by the GUI."""
     from PIL import Image
 
@@ -105,6 +105,89 @@ def run_ai_self_test(*, require_cuda=False, progress=None):
             if not all(math.isfinite(float(point[key])) for key in ("x", "y", "confidence")):
                 raise RuntimeError("AI prediction self-test returned non-finite landmark output")
 
+        training_result = None
+        if include_training:
+            from .rtmpose_dataset import export_coco, generate_smoke_config
+
+            training_root = Path(folder) / "training"
+            training_root.mkdir()
+            schema = [{"landmark_id": index, "abbr": f"P{index:02d}"} for index in range(1, 18)]
+            entries = []
+            for image_index in range(2):
+                image_name = f"train_{image_index + 1}.png"
+                Image.new("RGB", (256, 128), (110 + image_index * 10, 120, 130)).save(training_root / image_name)
+                labels = []
+                for landmark_id in range(1, 18):
+                    labels.append({
+                        "landmark_id": landmark_id,
+                        "state": "placed",
+                        "x": float(20 + landmark_id * 12),
+                        "y": float(48 + (landmark_id % 4) * 8),
+                    })
+                entries.append({
+                    "image_id": f"train-{image_index + 1}",
+                    "split": "train",
+                    "standardized_relpath": image_name,
+                    "standardized_width": 256,
+                    "standardized_height": 128,
+                    "landmarks": labels,
+                })
+            manifest_path = training_root / "dataset.json"
+            manifest_path.write_text(json.dumps({
+                "format_version": 1,
+                "dataset_id": "ai-self-test-training",
+                "schema_sha256": "ai-self-test-training",
+                "schema_landmarks": schema,
+                "images": entries,
+            }), encoding="utf-8")
+            train_coco = training_root / "train.coco.json"
+            val_coco = training_root / "val.coco.json"
+            export_coco(manifest_path, train_coco, splits=("train",))
+            export_coco(manifest_path, val_coco, splits=("train",))
+            config_path = generate_smoke_config(
+                manifest_path,
+                data_root=training_root,
+                train_coco=train_coco,
+                val_coco=val_coco,
+                output_path=training_root / "smoke_config.py",
+                base_config=bootstrap.config_path,
+                base_checkpoint=bootstrap.checkpoint_path,
+                batch_size=1,
+                workers=0,
+                mixed_precision=bool(device.startswith("cuda")),
+                device=device,
+                max_epochs=1,
+                input_size=(256, 128),
+                photometric_augmentation=False,
+            )
+            training_output = training_root / "output"
+            training_output.mkdir()
+            train_run = subprocess.run(
+                [str(bootstrap.runtime_python), str(runner), "train"],
+                input=json.dumps({
+                    "output_dir": str(training_output),
+                    "settings": {"config_path": str(config_path)},
+                }),
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=600,
+            )
+            if train_run.returncode:
+                raise RuntimeError(
+                    f"AI training self-test failed (return code {train_run.returncode}): "
+                    f"{train_run.stderr[-4000:] or train_run.stdout[-4000:]}"
+                )
+            try:
+                training_result = json.loads(next(
+                    line for line in reversed(train_run.stdout.splitlines()) if line.strip()
+                ))
+            except (ValueError, StopIteration) as exc:
+                raise RuntimeError("AI training self-test returned invalid JSON") from exc
+            checkpoint_path = Path(training_result.get("checkpoint_path") or "")
+            if training_result.get("status") != "trained" or not checkpoint_path.is_file():
+                raise RuntimeError("AI training self-test did not produce a checkpoint")
+
     return {
         "status": "PASS",
         "version": __version__,
@@ -124,6 +207,11 @@ def run_ai_self_test(*, require_cuda=False, progress=None):
         "numpy": info.get("numpy"),
         "opencv": info.get("opencv"),
         "landmarks": 17,
+        "training_smoke": None if training_result is None else {
+            "status": training_result.get("status"),
+            "duration_seconds": training_result.get("duration_seconds"),
+            "checkpoint_sha256": training_result.get("checkpoint_sha256"),
+        },
     }
 
 
@@ -131,9 +219,9 @@ def print_self_test():
     print(json.dumps(run_self_test(), indent=2, sort_keys=True))
 
 
-def print_ai_self_test(*, require_cuda=False, progress=None):
+def print_ai_self_test(*, require_cuda=False, include_training=False, progress=None):
     print(json.dumps(
-        run_ai_self_test(require_cuda=require_cuda, progress=progress),
+        run_ai_self_test(require_cuda=require_cuda, include_training=include_training, progress=progress),
         indent=2,
         sort_keys=True,
     ))

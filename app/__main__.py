@@ -14,10 +14,13 @@ def main(argv=None):
     parser.add_argument("--install-ai", action="store_true", help="download, verify and install the published managed AI component")
     parser.add_argument("--ai-self-test", action="store_true", help="verify the managed AI runtime and run one RTMPose prediction")
     parser.add_argument("--require-cuda", action="store_true", help="require CUDA during --ai-self-test")
+    parser.add_argument("--include-training", action="store_true", help="also run a disposable one-epoch RTMPose training smoke")
     parser.add_argument("--diagnostic-report", help="write AI self-test PASS/FAIL JSON to this file")
     args = parser.parse_args(argv)
     if args.require_cuda and not args.ai_self_test:
         parser.error("--require-cuda is only valid with --ai-self-test")
+    if args.include_training and not args.ai_self_test:
+        parser.error("--include-training is only valid with --ai-self-test")
     if args.diagnostic_report and not args.ai_self_test:
         parser.error("--diagnostic-report is only valid with --ai-self-test")
     if args.version:
@@ -38,6 +41,7 @@ def main(argv=None):
         try:
             result = run_ai_self_test(
                 require_cuda=args.require_cuda,
+                include_training=args.include_training,
                 progress=lambda stage, detail: print(f"{stage}: {detail}"),
             )
             if report_path:

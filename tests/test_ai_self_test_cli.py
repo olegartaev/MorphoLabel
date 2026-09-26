@@ -11,6 +11,7 @@ class AISelfTestCliContractTests(unittest.TestCase):
             self.assertEqual(0, main(["--ai-self-test", "--require-cuda"]))
         diagnostic.assert_called_once()
         self.assertTrue(diagnostic.call_args.kwargs["require_cuda"])
+        self.assertFalse(diagnostic.call_args.kwargs["include_training"])
 
     def test_ai_self_test_writes_machine_readable_report(self):
         with tempfile.TemporaryDirectory() as td:
@@ -28,6 +29,15 @@ class AISelfTestCliContractTests(unittest.TestCase):
             data=json.loads(target.read_text(encoding="utf-8"))
             self.assertEqual("FAIL",data["status"])
             self.assertEqual("RuntimeError",data["error_type"])
+
+    def test_include_training_is_forwarded(self):
+        with patch("app.self_test.run_ai_self_test", return_value={"status":"PASS"}) as diagnostic:
+            self.assertEqual(0, main(["--ai-self-test","--include-training"]))
+        self.assertTrue(diagnostic.call_args.kwargs["include_training"])
+
+    def test_include_training_without_ai_self_test_is_rejected(self):
+        with self.assertRaises(SystemExit):
+            main(["--include-training"])
 
     def test_require_cuda_without_ai_self_test_is_rejected(self):
         with self.assertRaises(SystemExit):
