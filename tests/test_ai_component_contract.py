@@ -56,6 +56,8 @@ class AIComponentContractTests(unittest.TestCase):
         self.assertIn("mmdet.__version__",builder)
         self.assertIn("THIRD_PARTY_NOTICES.txt",builder)
         self.assertIn("MODEL_PROVENANCE.txt",builder)
+        self.assertIn("checkpoint_sha256 = sha256(checkpoint)",builder)
+        self.assertNotIn("checkpoint_sha256 = checkpoint_sha256",builder)
         self.assertIn("checkpoint.unlink()",builder)
         self.assertIn('"bootstrap_checkpoint_url"',builder)
         self.assertIn('"installed_bytes": runtime_bytes',builder)

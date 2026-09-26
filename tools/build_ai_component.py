@@ -101,7 +101,7 @@ def main():
 
     checkpoint_rel = Path(spec["bootstrap"]["checkpoint_relative_path"])
     checkpoint = download(spec["bootstrap"]["checkpoint_url"], runtime / checkpoint_rel)
-    checkpoint_sha256 = checkpoint_sha256
+    checkpoint_sha256 = sha256(checkpoint)
     expected_checkpoint_sha256 = str(spec["bootstrap"]["checkpoint_sha256"]).lower()
     if checkpoint_sha256 != expected_checkpoint_sha256:
         raise RuntimeError(
