@@ -4,11 +4,10 @@ from pathlib import Path
 from app.profile import load_profile
 from app.transforms import Transform
 from app.io import atomic_json_write, read_json
-from app.paths import PROFILES
 
 class CoreTests(unittest.TestCase):
     def test_profile_has_25_and_gm_first_twenty(self):
-        profile = load_profile(PROFILES / "Phoxinus_lateral_v1.json")
+        profile = load_profile(Path(__file__).resolve().parent / "fixtures" / "phoxinus" / "Phoxinus_lateral_v1.json")
         self.assertEqual(len(profile.landmarks), 25)
         self.assertTrue(all(p.gm_included for p in profile.landmarks[:20]))
         self.assertTrue(all(p.measurement_only for p in profile.landmarks[20:]))

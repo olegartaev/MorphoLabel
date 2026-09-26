@@ -20,6 +20,6 @@ class LandmarkSchemaRoleTests(unittest.TestCase):
   with self.assertRaisesRegex(ValueError,r'row 3.*invalid role'):
    load_schema(self.schema('id,abbr,name,role\n1,A,Alpha,BOTH\n2,B,Beta,other\n'))
  def test_current_schema_has_25_both(self):
-  rows=load_schema(Path('landmark_schema.csv'))
+  rows=load_schema(Path(__file__).resolve().parent / "fixtures" / "phoxinus" / "landmark_schema.csv")
   self.assertEqual(len(rows),25);self.assertTrue(all(row['role'] in {'CLASSICAL','GM','BOTH'} for row in rows))
 if __name__=='__main__': unittest.main()

@@ -17,6 +17,6 @@ class SchemaDelimiterTests(unittest.TestCase):
   path=Path(tempfile.mkdtemp())/'schema.csv';path.write_text('# before\nid;abbr;name;role\n1;A;Alpha;BOTH\n# inside\n2;B;Beta;GM\n# after\n',encoding='utf-8')
   self.assertEqual(len(load_schema_profile(path).landmarks),2)
  def test_real_phoxinus_schema(self):
-  path=Path(__file__).resolve().parents[1]/'landmark_schema.csv';profile=load_schema_profile(path)
+  path=Path(__file__).resolve().parent / "fixtures" / "phoxinus"/'landmark_schema.csv';profile=load_schema_profile(path)
   self.assertEqual(len(profile.landmarks),25);self.assertEqual(Counter(x.role for x in profile.landmarks),Counter({'BOTH':20,'CLASSICAL':5}))
 if __name__=='__main__':unittest.main()
