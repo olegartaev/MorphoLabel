@@ -217,7 +217,11 @@ def _finalize_trained_artifact(project,artifact,backend,state,progress_callback=
  if progress_callback:progress_callback("CREATING FINAL EMA CHECKPOINT",0,0)
  final=Path(artifact)/"best_engineering_validation.pth"
  if not final.is_file() or final.stat().st_size<=0: final=create_ema_inference_checkpoint(backend,Path(artifact)/f"epoch_{selection['best_epoch']}.pth",final)
- result=dict(state.get("training_result",{}));result.update({"checkpoint_path":str(final),"best_epoch":selection["best_epoch"],"engineering_validation":selection["best_metrics"],"validation_by_epoch":selection["validation_by_epoch"],"ema_used":True,"checkpoint_sha256":__import__("hashlib").sha256(final.read_bytes()).hexdigest()})
+ portable_config=Path(artifact)/"inference_config.py"
+ backend._invoke("export_inference_config",{"config_path":str(config_path),"output_path":str(portable_config)})
+ if not portable_config.is_file() or portable_config.stat().st_size<=0:raise RTMPoseRuntimeError("portable inference config was not created")
+ portable_sha=__import__("hashlib").sha256(portable_config.read_bytes()).hexdigest()
+ result=dict(state.get("training_result",{}));result.update({"checkpoint_path":str(final),"best_epoch":selection["best_epoch"],"engineering_validation":selection["best_metrics"],"validation_by_epoch":selection["validation_by_epoch"],"ema_used":True,"checkpoint_sha256":__import__("hashlib").sha256(final.read_bytes()).hexdigest(),"inference_config":"inference_config.py","inference_config_sha256":portable_sha})
  state.update({"stage":"REGISTERING MODEL","result":result});_write_finalization(artifact,state)
  if progress_callback:progress_callback("REGISTERING MODEL",0,0)
  environment_path=Path(artifact)/"environment.json"

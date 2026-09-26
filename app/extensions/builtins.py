@@ -30,7 +30,9 @@ def _rtmpose_provider(context: BackendContext):
     checkpoint = artifact / "best_engineering_validation.pth"
     if not checkpoint.is_file():
         checkpoint = Path(info.get("result", {}).get("checkpoint_path", ""))
-    config = artifact / "config.py"
+    config = artifact / "inference_config.py"
+    if not config.is_file():
+        config = artifact / "config.py"
     if not checkpoint.is_file() or not config.is_file():
         raise ValueError("landmark model checkpoint or config is unavailable")
     performance = context.performance

@@ -61,18 +61,61 @@ def import_ai_package(project, source):
  return tuple(imported)
 
 
+def _zip_bytes(z, name, data, manifest):
+ z.writestr(name,data);manifest[name]=hashlib.sha256(data).hexdigest()
+
+def _portable_landmark_export(directory, model):
+ portable_config=directory/"inference_config.py";checkpoint=directory/"best_engineering_validation.pth"
+ if not portable_config.is_file():
+  raise AIPackageError("landmark model has no portable inference config; finalize or retrain it with the current MorphoLabel version")
+ if not checkpoint.is_file() or checkpoint.stat().st_size<=0:
+  raise AIPackageError("landmark model inference checkpoint is unavailable")
+ try:source_info=json.loads((directory/"model.json").read_text(encoding="utf-8"))
+ except (OSError,json.JSONDecodeError) as exc:raise AIPackageError("landmark model metadata is unavailable") from exc
+ portable_info={
+  "model_id":model["model_id"],
+  "backend":source_info.get("backend") or "rtmpose",
+  "schema_sha256":model.get("schema_sha256") or source_info.get("schema_sha256"),
+  "input_size":source_info.get("input_size") or [512,256],
+  "result":{
+   "checkpoint_path":"best_engineering_validation.pth",
+   "checkpoint_sha256":_digest(checkpoint),
+   "inference_config":"config.py",
+   "inference_config_sha256":_digest(portable_config),
+  },
+ }
+ files={
+  "artifacts/config.py":portable_config.read_bytes(),
+  "artifacts/best_engineering_validation.pth":checkpoint.read_bytes(),
+  "artifacts/model.json":json.dumps(portable_info,indent=2,sort_keys=True).encode("utf-8"),
+ }
+ safe_metrics={"backend":portable_info["backend"],"input_size":portable_info["input_size"],"portable":True}
+ return files,safe_metrics
+
 def export_model_package(project, kind, target, model_id=None):
- """Export exactly one registered project-local model, no project data."""
+ """Export exactly one portable inference model, never training/project data."""
  if kind not in {"crop","landmark"}: raise AIPackageError("unsupported model type")
  model=project.model_metadata(model_id) if model_id else project.active_model(kind)
  if not model or model.get("kind")!=kind: raise AIPackageError(f"no {kind} model selected")
  directory=project.data_root/model["path"]
  if not directory.is_dir(): raise AIPackageError("model artifact is unavailable")
- metrics=json.loads(model.get("metrics_json") or "{}")
- export_metadata={key:value for key,value in model.items() if key not in {"path","active"}}
+ if kind=="landmark":
+  files,metrics=_portable_landmark_export(directory,model)
+  export_metadata={"model_id":model["model_id"],"kind":"landmark","schema_sha256":model.get("schema_sha256"),"created_at":model.get("created_at"),"metrics_json":json.dumps(metrics,sort_keys=True)}
+ else:
+  # Crop model artifacts are already compact; redact training-image membership
+  # from the exported manifest while preserving the weights and model contract.
+  weights=directory/"model.npz";manifest_path=directory/"model_manifest.json"
+  if not weights.is_file() or not manifest_path.is_file():raise AIPackageError("crop model artifact is incomplete")
+  crop_manifest=json.loads(manifest_path.read_text(encoding="utf-8"))
+  for key in ("training_image_ids","train_indices","validation_indices"):crop_manifest.pop(key,None)
+  files={"artifacts/model.npz":weights.read_bytes(),"artifacts/model_manifest.json":json.dumps(crop_manifest,indent=2,sort_keys=True).encode("utf-8")}
+  metrics={"backend":crop_manifest.get("backend"),"metrics":crop_manifest.get("metrics",{}),"portable":True}
+  export_metadata={"model_id":model["model_id"],"kind":"crop","schema_sha256":model.get("schema_sha256"),"created_at":model.get("created_at"),"metrics_json":json.dumps(metrics,sort_keys=True)}
  manifest={"package_format_version":2,"model_type":kind,"model_id":model["model_id"],"created_at":model.get("created_at"),"schema_sha256":model.get("schema_sha256"),"backend":metrics.get("backend"),"training_statistics":metrics,"model_metadata":export_metadata,"files":{}}
  with zipfile.ZipFile(Path(target),"w",zipfile.ZIP_DEFLATED) as z:
-  _add_tree(z,directory,"artifacts",manifest["files"]);z.writestr("manifest.json",json.dumps(manifest,indent=2,sort_keys=True))
+  for name,data in files.items():_zip_bytes(z,name,data,manifest["files"])
+  z.writestr("manifest.json",json.dumps(manifest,indent=2,sort_keys=True))
  return Path(target)
 def import_model_package(project, source, expected_kind):
  source=Path(source)

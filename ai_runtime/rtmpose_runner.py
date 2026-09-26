@@ -157,8 +157,39 @@ def rank_inference_batches(model, requests, landmark_ids, batch_size, emit_progr
  finally:
   executor.shutdown(wait=True,cancel_futures=True)
  return results,effective,timings
+def export_portable_inference_config(config_path, output_path):
+ """Flatten a training config into a model-only inference config with no project paths."""
+ from copy import deepcopy
+ from mmengine.config import Config
+ cfg=Config.fromfile(config_path)
+ model=deepcopy(cfg.model)
+ try:
+  if model.get('init_cfg') is not None:model['init_cfg']=None
+  backbone=model.get('backbone')
+  if isinstance(backbone,dict) and backbone.get('init_cfg') is not None:backbone['init_cfg']=None
+ except AttributeError:pass
+ train_dataset=cfg.train_dataloader.dataset
+ metainfo=deepcopy(train_dataset.get('metainfo',cfg.get('metainfo',{})))
+ pipeline=deepcopy(cfg.get('val_pipeline') or train_dataset.get('pipeline') or [])
+ dataset=dict(type='CocoDataset',data_mode='topdown',metainfo=metainfo,pipeline=pipeline)
+ portable=Config(dict(
+  default_scope=cfg.get('default_scope','mmpose'),
+  model=model,
+  train_dataloader=dict(dataset=deepcopy(dataset)),
+  test_dataloader=dict(dataset=deepcopy(dataset)),
+  val_pipeline=deepcopy(pipeline),
+ ))
+ target=Path(output_path).resolve();target.parent.mkdir(parents=True,exist_ok=True);portable.dump(str(target))
+ # Re-open what was written so a broken serialization never enters a model artifact.
+ check=Config.fromfile(str(target))
+ if check.get('model') is None or check.get('test_dataloader') is None:
+  raise RuntimeError('portable inference config is incomplete')
+ return target
+
 def main():
  operation=sys.argv[1] if len(sys.argv)>1 else ''; request=json.load(sys.stdin)
+ if operation=='export_inference_config':
+  target=export_portable_inference_config(request['config_path'],request['output_path']);print(json.dumps({'status':'ok','config_path':str(target)}));return
  if operation=='predict':
   from mmpose.apis import inference_topdown
   model=inference_model(request)
