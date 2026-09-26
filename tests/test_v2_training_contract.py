@@ -9,6 +9,7 @@ from PIL import Image
 from app.landmark_dataset import create_dataset
 from app.rtmpose_dataset import generate_smoke_config
 from app.project_storage import Project
+from tests.current_fixtures import make_reviewed_crop
 
 
 class V2TrainingContractTests(unittest.TestCase):
@@ -31,7 +32,7 @@ class V2TrainingContractTests(unittest.TestCase):
         source = self.temp / 'source'; source.mkdir(); Image.new('RGB',(20,20)).save(source/'fish.jpg')
         schema = self.temp / 'schema.csv'; schema.write_text('id,abbr,name\n1,A,One\n', encoding='utf-8')
         project = Project.create('p',source,self.temp,schema,source_layout='direct'); image_id=project.catalog_rows()[0]['image_id']
-        cache=project.cache_root/'standardized'/f'{image_id}.png'; cache.parent.mkdir(parents=True,exist_ok=True); Image.new('RGB',(20,20)).save(cache)
+        make_reviewed_crop(project,image_id,20,20); cache=project.cache_root/'standardized'/f'{image_id}.png'
         project.save_landmark(image_id,1,4,5,'manual',provenance='manual'); project.mark_checked(image_id)
         before=hashlib.sha256(cache.read_bytes()).hexdigest()
         create_dataset(project,dataset_id='d',splits={'train':[image_id]},eligibility_mode='v2_human_final')

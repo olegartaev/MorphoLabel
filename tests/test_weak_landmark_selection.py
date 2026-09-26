@@ -17,7 +17,8 @@ def profile(model_id, weak_id):
 
 
 class WeakLandmarkSelectionTests(unittest.TestCase):
- def setUp(self): self.root=Path(tempfile.mkdtemp()); self.project=type('P',(),{'data_root':self.root})()
+ def setUp(self):
+  self.root=Path(tempfile.mkdtemp()); schema=self.root/'schema.csv'; schema.write_text('id,abbr,name,role\n1,A,Alpha,BOTH\n',encoding='utf8'); self.project=type('P',(),{'data_root':self.root,'schema_path':schema})()
  def tearDown(self): shutil.rmtree(self.root,ignore_errors=True)
  def add_profile(self, value):
   with patch('app.landmark_qc.evaluate_control_set',return_value=value): return control_landmark_quality_profile(self.project,value['model_id'],recalculate=True)

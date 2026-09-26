@@ -1,6 +1,7 @@
 import shutil,tempfile,unittest
 from pathlib import Path
 from app.project_storage import Project
+from tests.current_fixtures import make_reviewed_crop
 
 class AnnotationControlsTests(unittest.TestCase):
  def setUp(self):
@@ -9,14 +10,14 @@ class AnnotationControlsTests(unittest.TestCase):
    (self.src/loc/"orig").mkdir(parents=True)
   for name in ("img_10.nef","img_2.jpg","img_1.tiff"):(self.src/"A"/"orig"/name).write_bytes(b"x")
   (self.src/"B"/"orig"/"img_1.nef").write_bytes(b"x")
-  schema=self.tmp/"schema.csv";schema.write_text("id,abbr,name\n1,A,A\n7,B,B\n18,C,C\n")
-  self.p=Project.create("p",self.src,self.tmp,schema,source_layout="subfolder",source_image_subfolder="orig");self.rows=self.p.catalog_rows();self.a=self.rows[0]["image_id"]
+  schema=self.tmp/"schema.csv";schema.write_text("id,abbr,name\n1,A,A\n2,B,B\n3,C,C\n")
+  self.p=Project.create("p",self.src,self.tmp,schema,source_layout="subfolder",source_image_subfolder="orig");self.rows=self.p.catalog_rows();self.a=self.rows[0]["image_id"];make_reviewed_crop(self.p,self.a,80,60)
  def tearDown(self):shutil.rmtree(self.tmp,ignore_errors=True)
  def fill(self):
-  for ident in (1,7,18):self.p.save_landmark(self.a,ident,ident,ident,"manual")
+  for ident in (1,2,3):self.p.save_landmark(self.a,ident,ident,ident,"manual")
  def test_red_yellow_green_and_reset_after_change(self):
   self.p.save_landmark(self.a,1,1,1,"auto",provenance="machine");self.assertEqual(self.p.annotation_status(self.a)["color"],"red")
-  for ident in (1,7,18):self.p.save_landmark(self.a,ident,ident,ident,"auto",provenance="machine")
+  for ident in (1,2,3):self.p.save_landmark(self.a,ident,ident,ident,"auto",provenance="machine")
   self.assertEqual(self.p.annotation_status(self.a)["color"],"yellow")
   self.p.mark_checked(self.a);self.assertEqual(self.p.annotation_status(self.a)["color"],"green")
   self.p.save_landmark(self.a,1,10,10,"auto",provenance="machine");self.assertEqual(self.p.annotation_status(self.a)["color"],"yellow")
@@ -24,9 +25,9 @@ class AnnotationControlsTests(unittest.TestCase):
  def test_all_human_points_are_green_without_checked(self):
   self.fill();self.assertEqual(self.p.annotation_status(self.a)["color"],"green")
  def test_partially_corrected_machine_set_stays_yellow_until_all_human(self):
-  for ident in (1,7,18):self.p.save_landmark(self.a,ident,ident,ident,"auto",provenance="machine")
+  for ident in (1,2,3):self.p.save_landmark(self.a,ident,ident,ident,"auto",provenance="machine")
   self.p.save_landmark(self.a,1,1,1,"corrected",provenance="corrected_by_human");self.assertEqual(self.p.annotation_status(self.a)["color"],"yellow")
-  for ident in (7,18):self.p.save_landmark(self.a,ident,ident,ident,"corrected",provenance="corrected_by_human")
+  for ident in (2,3):self.p.save_landmark(self.a,ident,ident,ident,"corrected",provenance="corrected_by_human")
   self.assertEqual(self.p.annotation_status(self.a)["color"],"green")
   self.p.replace_landmarks(self.a,{"1":{"x_standardized":1,"y_standardized":1,"state":"manual"}});self.assertEqual(self.p.annotation_status(self.a)["color"],"red")
  def test_restart_calibration_and_attributes(self):
@@ -38,20 +39,20 @@ class AnnotationControlsTests(unittest.TestCase):
 
  def _eighteen(self):
   schema=self.tmp/"schema18.csv";schema.write_text("id,abbr,name\n"+"\n".join(f"{i},P{i},Point {i}" for i in range(1,19)))
-  return Project.create("p18",self.src,self.tmp,schema,source_layout="subfolder",source_image_subfolder="orig")
+  p=Project.create("p18",self.src,self.tmp,schema,source_layout="subfolder",source_image_subfolder="orig");make_reviewed_crop(p,p.catalog_rows()[0]["image_id"],80,60);return p
  def test_completeness_uses_schema_ids_and_reports_extras(self):
   p=self._eighteen(); rows=p.catalog_rows(); image_id=rows[0]["image_id"]
   with p.transaction() as c:
    for ident in range(19,25):c.execute("INSERT INTO landmark_schema(landmark_id,abbr,name) VALUES (?,?,?)",(ident,f"P{ident}",f"Legacy {ident}"))
   for ident in range(1,25):p.save_landmark(image_id,ident,ident,ident,"manual")
   status=p.annotation_status(image_id)
-  self.assertEqual(status["expected"],18);self.assertEqual(status["placed"],18);self.assertEqual(status["missing_ids"],[]);self.assertEqual(status["extra_ids"],[19,20,21,22,23,24]);self.assertEqual(status["color"],"green")
-  row=p.catalog_rows()[0];self.assertEqual(row["status_image_id"],image_id);self.assertEqual(row["extra_ids"],[19,20,21,22,23,24])
+  self.assertEqual(status["expected"],18);self.assertEqual(status["placed"],18);self.assertEqual(status["missing_ids"],[]);self.assertEqual(status["extra_ids"],[]);self.assertEqual(status["color"],"green")
+  row=p.catalog_rows()[0];self.assertEqual(row["status_image_id"],image_id);self.assertEqual(row["extra_ids"],[])
  def test_explicit_missing_is_distinct_from_unplaced(self):
   p=self._eighteen();image_id=p.catalog_rows()[0]["image_id"]
   p.save_landmark(image_id,1,1,1,"manual")
-  p.save_landmark(image_id,7,None,None,"missing")
-  status=p.annotation_status(image_id);self.assertNotIn(7,status["missing_ids"]);self.assertIn(7,status["explicitly_missing_ids"])
+  p.save_landmark(image_id,2,None,None,"missing")
+  status=p.annotation_status(image_id);self.assertNotIn(2,status["missing_ids"]);self.assertIn(2,status["explicitly_missing_ids"])
   self.assertEqual(status["color"],"red")
 
  def test_manual_missing_resolves_and_checked_accepts_it(self):

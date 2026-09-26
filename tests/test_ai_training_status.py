@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.ai_training_status import format_training_status, training_status
 from app.project_storage import Project, schema_hash
+from tests.current_fixtures import make_reviewed_crop
 
 
 class AITrainingStatusTests(unittest.TestCase):
@@ -18,6 +19,7 @@ class AITrainingStatusTests(unittest.TestCase):
         schema.write_text("id,abbr,name\n1,A,Alpha\n2,B,Beta\n", encoding="utf-8")
         self.project = Project.create("p", source, self.temp, schema, source_layout="direct")
         self.rows = {row["original_name"]: row["image_id"] for row in self.project.catalog_rows()}
+        for image_id in self.rows.values(): make_reviewed_crop(self.project, image_id, 80, 60)
         self.project.register_model("landmark_v1", "landmark", path="ai/models/v1", active=True)
 
     def tearDown(self):

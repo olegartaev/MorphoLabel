@@ -8,6 +8,7 @@ from PIL import Image
 
 from app.landmark_ai_workflow import STATE_KEY, begin_improvement, training_eligible_ids
 from app.project_storage import Project
+from tests.current_fixtures import make_reviewed_crop
 
 
 class ImprovementCycleTests(unittest.TestCase):
@@ -19,6 +20,7 @@ class ImprovementCycleTests(unittest.TestCase):
         self.ids=[row["image_id"] for row in self.project.catalog_rows()]
         self.control=self.ids[:2];self.initial=self.ids[2:4];self.old=self.ids[4:9]
         for image_id in self.old:
+            make_reviewed_crop(self.project,image_id,20,20)
             self.project.save_landmark(image_id,1,5,5,"present",provenance="manual");self.project.mark_checked(image_id)
         self.state={"stage":"READY_FOR_FULL_PREDICTION","seed":17,"control_image_ids":self.control,"initial_image_ids":self.initial,"improvement_image_ids":self.old,"improvement_history_ids":[],"improvement_target":5,"current_image_id":self.old[0],"current_position":0,"unfinished_image_id":self.old[0]}
         self.project.set_ui_state(STATE_KEY,self.state)

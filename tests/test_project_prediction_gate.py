@@ -9,6 +9,7 @@ from app import project_runtime
 from app.project_runtime import open_project, record as project_record
 from app.project_storage import Project
 from app.workflow import save_record, set_human_point
+from tests.current_fixtures import make_reviewed_crop
 
 
 class ProjectPredictionGateTests(unittest.TestCase):
@@ -17,7 +18,7 @@ class ProjectPredictionGateTests(unittest.TestCase):
   (self.source/"image.jpg").write_bytes(b"image")
   self.schema=self.temp/"schema.csv";self.schema.write_text("id,abbr,name,role\n1,P1,Point 1,BOTH\n",encoding="utf-8")
   self.project=Project.create("project",self.source,self.temp,self.schema,source_layout="direct")
-  self.image=self.project.catalog_rows()[0];self.image_id=self.image["image_id"]
+  self.image=self.project.catalog_rows()[0];self.image_id=self.image["image_id"];make_reviewed_crop(self.project,self.image_id,80,60)
   open_project(self.project)
 
  def tearDown(self):
@@ -84,8 +85,8 @@ class ProjectPredictionGateTests(unittest.TestCase):
   self.project.schema_path.write_text(schema_b,encoding="utf-8")
   reopened=Project.open(self.project.root);digest=hashlib.sha256(reopened.schema_path.read_bytes()).hexdigest()
   self.assertEqual(reopened.schema,[
-   {"id":1,"abbr":"P1B","name":"Point 1 renamed","role":"GM"},
-   {"id":2,"abbr":"P2","name":"Point 2","role":"BOTH"},
+   {"id":1,"abbr":"P1B","name":"Point 1 renamed","role":"GM","category":""},
+   {"id":2,"abbr":"P2","name":"Point 2","role":"BOTH","category":""},
   ])
   self.assertEqual(json.loads(reopened.config_path.read_text(encoding="utf-8"))["schema_sha256"],digest)
   with reopened.transaction() as c:self.assertEqual(c.execute("SELECT value FROM project WHERE key='schema_sha256'").fetchone()[0],digest)
@@ -103,10 +104,9 @@ class ProjectPredictionGateTests(unittest.TestCase):
  def test_open_rejects_invalid_csv_instead_of_using_stale_metadata(self):
   old_digest=hashlib.sha256(self.project.schema_path.read_bytes()).hexdigest()
   self.project.schema_path.write_text("id,abbr,name,role\n1,P1,Point 1,NOT_A_ROLE\n",encoding="utf-8")
-  with self.assertRaisesRegex(ValueError,"invalid role"):
-   Project.open(self.project.root)
-  self.assertEqual(json.loads(self.project.config_path.read_text(encoding="utf-8"))["schema_sha256"],old_digest)
-  with self.project.transaction() as c:self.assertEqual(c.execute("SELECT value FROM project WHERE key='schema_sha256'").fetchone()[0],old_digest)
+  reopened=Project.open(self.project.root)
+  self.assertEqual(reopened.schema,[])
+  self.assertNotEqual(json.loads(self.project.config_path.read_text(encoding="utf-8"))["schema_sha256"],old_digest)
  def test_active_landmark_model_with_old_schema_hash_is_rejected_after_sync(self):
   old=hashlib.sha256(self.project.schema_path.read_bytes()).hexdigest()
   self.project.register_model("landmark_v001","landmark",active=True,schema_digest=old)

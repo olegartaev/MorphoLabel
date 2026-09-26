@@ -8,6 +8,7 @@ from app.ai import MockBackend
 from app.landmark_ai_service import LandmarkAIService
 from app.landmark_dataset import (DatasetError, ModelLineageError, create_dataset, dataset_manifest_path, deterministic_splits, eligible_image_ids, is_image_unseen_by_model, model_seen_image_ids, verify_dataset)
 from app.project_storage import Project, schema_hash
+from tests.current_fixtures import make_reviewed_crop
 
 class LandmarkDatasetGateTwoTests(unittest.TestCase):
  def setUp(self):
@@ -16,7 +17,7 @@ class LandmarkDatasetGateTwoTests(unittest.TestCase):
   self.schema=self.temp/'schema.csv';self.schema.write_text('id,abbr,name,role\n1,P1,One,BOTH\n2,P2,Two,GM\n',encoding='utf-8')
   self.project=Project.create('project',self.source,self.temp,self.schema,source_layout='direct');self.images=self.project.catalog_rows();self.ids=[row['image_id'] for row in self.images]
   for n,image_id in enumerate(self.ids):
-   path=self.project.cache_root/'standardized'/f'{image_id}.png';path.parent.mkdir(parents=True,exist_ok=True);Image.new('RGB',(80,60),(n,2,3)).save(path)
+   make_reviewed_crop(self.project,image_id,80,60)
    with self.project.transaction() as c:c.execute('UPDATE images SET locality=?,sample_id=? WHERE image_id=?',(chr(65+n//2),chr(65+n//2),image_id))
  def tearDown(self): shutil.rmtree(self.temp,ignore_errors=True)
  def manual(self,image_id,missing=False):
@@ -81,15 +82,15 @@ class LandmarkDatasetGateTwoTests(unittest.TestCase):
   with self.assertRaises(FileExistsError): self.dataset('fixed')
   self.assertEqual(path.read_bytes(),before)
 
- def test_lineage_seen_and_unseen_use_only_train_across_ancestors(self):
+ def test_lineage_seen_and_unseen_use_train_and_validation_across_ancestors(self):
   for image_id in self.ids:self.manual(image_id)
   self.dataset('d1',{'train':[self.ids[0]],'validation':[self.ids[1]]});self.dataset('d2',{'train':[self.ids[2]]});self.dataset('d3',{'train':[self.ids[3]]})
   digest=schema_hash(self.project.schema_path)
   self.project.register_model('v1','landmark',schema_digest=digest,dataset_id='d1',dataset_manifest_path=self.rel('d1'))
   self.project.register_model('v2','landmark',schema_digest=digest,dataset_id='d2',parent_model_id='v1',dataset_manifest_path=self.rel('d2'))
   self.project.register_model('v3','landmark',schema_digest=digest,dataset_id='d3',parent_model_id='v2',dataset_manifest_path=self.rel('d3'))
-  self.assertEqual(model_seen_image_ids(self.project,'v3'),frozenset((self.ids[0],self.ids[2],self.ids[3])))
-  self.assertTrue(is_image_unseen_by_model(self.project,'v3',self.ids[1]));self.assertFalse(is_image_unseen_by_model(self.project,'v3',self.ids[0]));self.assertTrue(is_image_unseen_by_model(self.project,'v3',self.ids[4]))
+  self.assertEqual(model_seen_image_ids(self.project,'v3'),frozenset((self.ids[0],self.ids[1],self.ids[2],self.ids[3])))
+  self.assertFalse(is_image_unseen_by_model(self.project,'v3',self.ids[1]));self.assertFalse(is_image_unseen_by_model(self.project,'v3',self.ids[0]));self.assertTrue(is_image_unseen_by_model(self.project,'v3',self.ids[4]))
 
  def test_broken_or_cyclic_lineage_is_controlled_error(self):
   self.manual(self.ids[0]);self.dataset('d1');digest=schema_hash(self.project.schema_path)

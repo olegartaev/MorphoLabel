@@ -6,6 +6,7 @@ from pathlib import Path
 
 from app.project_storage import Project
 from app.results_export import parse_tps
+from tests.current_fixtures import make_reviewed_crop
 
 
 class ExclusionAndCropTests(unittest.TestCase):
@@ -26,7 +27,7 @@ class ExclusionAndCropTests(unittest.TestCase):
   (self.project.cache_root/"developed"/(image_id+".png")).write_bytes(b"cache")
   (self.project.cache_root/"standardized"/(image_id+".png")).write_bytes(b"cache")
   self.assertFalse(self.project.crop_exists(image_id))
-  self.project.save_crop(image_id,{"crop_bounds":[1,2,30,40],"rotation_degrees":0,"standardized_relpath":"cache/standardized/x.png"})
+  make_reviewed_crop(self.project,image_id,40,40)
   rows={row["image_id"]:row for row in self.project.catalog_rows()}
   self.assertTrue(rows[image_id]["has_crop"])
   self.assertFalse(rows[self.uncropped["image_id"]]["has_crop"])

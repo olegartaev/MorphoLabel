@@ -8,6 +8,7 @@ from PIL import Image
 from app.landmark_dataset import create_dataset, v2_human_final_eligible_image_ids
 from app.landmark_review import root_v1_eligible_image_ids
 from app.project_storage import Project
+from tests.current_fixtures import make_reviewed_crop
 
 
 class V2DatasetSemanticsTests(unittest.TestCase):
@@ -20,9 +21,7 @@ class V2DatasetSemanticsTests(unittest.TestCase):
         schema.write_text('id,abbr,name,role\n1,A,One,BOTH\n2,B,Two,BOTH\n', encoding='utf-8')
         self.project = Project.create('p', source, self.temp, schema, source_layout='direct')
         self.image_id = self.project.catalog_rows()[0]['image_id']
-        cache = self.project.cache_root / 'standardized' / f'{self.image_id}.png'
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        Image.new('RGB', (100, 80)).save(cache)
+        make_reviewed_crop(self.project, self.image_id, 100, 80)
 
     def tearDown(self):
         shutil.rmtree(self.temp, ignore_errors=True)

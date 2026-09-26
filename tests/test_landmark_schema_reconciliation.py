@@ -101,7 +101,10 @@ class LandmarkSchemaReconciliationTests(unittest.TestCase):
         canvas.image = SimpleNamespace(width=100, height=100); canvas._points = {}; canvas.image_id = self.image_id
         canvas.state = SimpleNamespace(unresolved_ids=frozenset({1, 2, 3, 4}))
         canvas.operator_state = EditorState(point_ids=(1, 2, 3, 4)); canvas.operator_state.select(3)
-        canvas.choice = _Choice(3); canvas.context = SimpleNamespace(project=self.project)
+        canvas.choice = _Choice(3); canvas.context = SimpleNamespace(project=self.project, current=lambda: {"image_id": self.image_id})
+        canvas.requested_image_id = canvas.displayed_image_id = self.image_id
+        canvas.image_path = None
+        canvas.display_settings = {"size": 10}; canvas._position = lambda x, y: (x, y)
         canvas._point = lambda event: (10.0, 20.0); canvas.refresh_authoritative = lambda notify=False: None
         canvas._next = lambda: None; canvas._draw_overlays = lambda: None; canvas._sync_selection = lambda: None; canvas.changed = lambda: None
         canvas._persistence_error = lambda action, exc: self.fail(f"unexpected {action}: {exc}")
