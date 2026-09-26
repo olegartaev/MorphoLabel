@@ -89,7 +89,7 @@ def main():
     run(["git", "-C", source_tmp, "fetch", "--depth", "1", "origin", spec["mmpose_source"]["commit"]])
     run(["git", "-C", source_tmp, "checkout", "--detach", "FETCH_HEAD"])
     vendor = runtime / "vendor" / "mmpose"
-    vendor.mkdir(parents=True)
+    (vendor / "tools").mkdir(parents=True)
     # MorphoLabel only executes tools/train.py and resolves configs from the
     # pinned MMPose source tree. Do not vendor unrelated projects/demos/tests,
     # some of which contain Unix-only filesystem entries that cannot be copied

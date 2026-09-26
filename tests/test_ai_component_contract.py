@@ -36,6 +36,7 @@ class AIComponentContractTests(unittest.TestCase):
         self.assertIn('"fetch", "--depth", "1"',builder)
         self.assertIn('"checkout", "--detach", "FETCH_HEAD"',builder)
         self.assertIn('shutil.copytree(source_tmp / "configs"',builder)
+        self.assertIn('(vendor / "tools").mkdir(parents=True)',builder)
         self.assertIn('shutil.copy2(source_tmp / "tools" / "train.py"',builder)
         self.assertNotIn('"ls-files", "-z"',builder)
         self.assertNotIn("shutil.rmtree(git_dir)",builder)
