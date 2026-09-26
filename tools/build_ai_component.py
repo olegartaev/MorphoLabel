@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import urllib.request
 import zipfile
 from pathlib import Path
