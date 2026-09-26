@@ -6,9 +6,13 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   core:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,7 +23,7 @@ jobs:
       - name: Compile Python sources
         shell: pwsh
         run: Get-ChildItem app,tools -Recurse -Filter *.py | % { python -m py_compile $_.FullName }
-      - name: Focused UI contract test
-        run: python -m unittest tests/test_morpholabel_ui_contract.py
+      - name: Full deterministic test suite
+        run: python -m unittest discover -s tests -t . -p "test_*.py"
       - name: Canonical launcher provenance smoke test
         run: python tools/canonical_exec.py provenance
