@@ -29,6 +29,8 @@ class AIComponentContractTests(unittest.TestCase):
         self.assertIn("build_ai_component.py",text)
         self.assertIn("MorphoLabel-AI-Windows-x64-",text)
         self.assertIn("AI_BUILD_INFO.json",text)
+        self.assertIn("MorphoLabel-AI-Windows-x64.json",text)
+        self.assertIn("Attach managed AI assets for tags",text)
         self.assertIn("build_ai_notices.py", (ROOT/"tools"/"build_ai_component.py").read_text(encoding="utf-8"))
         self.assertIn("Managed install and bootstrap smoke",text)
         self.assertIn("MANAGED_AI_INSTALL_PASS",text)

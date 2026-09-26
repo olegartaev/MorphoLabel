@@ -32,7 +32,7 @@ The public Windows distribution is built as a standalone application: users do n
 3. Run the installer.
 4. Start **MorphoLabel** from the Start Menu (or the optional desktop shortcut).
 
-RAW decoding is bundled in the Windows application. AI remains optional and isolated from the core GUI; the managed AI component is being verified separately before the next beta is released.
+RAW decoding is bundled in the Windows application. AI remains optional and isolated from the core GUI. On the first AI operation, a tagged Windows release can download its matching managed AI component from the MorphoLabel GitHub Release, verify SHA256, install it under the user's MorphoLabel application-data directory, and activate it only after the runtime self-test passes.
 
 ### Development from source
 
@@ -58,7 +58,7 @@ The application starts in the MorphoLabel Module Hub. Keep project data outside 
 
 ## AI and hardware requirements
 
-The base application runs without cloud services or Ollama. AI training and model-specific inference are optional local workflows and may require PyTorch, torchvision, OpenCV, MMEngine, MMCV, and MMPose; see [`requirements-ai.txt`](requirements-ai.txt). GPU acceleration is optional where the installed PyTorch build supports it.
+The base application runs without cloud services or Ollama. Tagged Windows releases use a versioned managed AI component containing the pinned Python/PyTorch/OpenMMLab runtime and bootstrap assets; users do not install Python packages manually. GPU acceleration is used when the managed PyTorch runtime and local NVIDIA driver report CUDA availability, with CPU fallback retained.
 
 ## Scientific reproducibility and provenance
 
@@ -66,7 +66,7 @@ Projects record relative source paths, source hashes, processing metadata, coord
 
 ## Current beta limitations
 
-This is a development beta. AI backends require separately prepared model/runtime assets. GUI acceptance still requires local Windows execution with representative disposable data.
+This is a development beta. The managed Windows AI component is built and smoke-tested in CI, while final GUI acceptance still requires local Windows execution with representative disposable data.
 
 ## Citation
 

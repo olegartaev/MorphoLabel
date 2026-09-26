@@ -10,7 +10,7 @@ on:
       - ".github/workflows/ai-component.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-ai:
@@ -30,6 +30,24 @@ jobs:
           if (-not $zip) { throw "AI component archive missing" }
           if (-not (Test-Path dist\ai-component\SHA256SUMS.txt)) { throw "AI component checksum missing" }
           if (-not (Test-Path dist\ai-component\AI_BUILD_INFO.json)) { throw "AI component build info missing" }
+
+      - name: Build public delivery manifest
+        shell: pwsh
+        run: |
+          $build = Get-Content dist\ai-component\AI_BUILD_INFO.json -Raw | ConvertFrom-Json
+          $spec = Get-Content ai_runtime\windows-cu121-component.json -Raw | ConvertFrom-Json
+          $appVersion = python -c "from app.version import __version__; print(__version__)"
+          $manifest = [ordered]@{
+            format_version = 1
+            app_version = $appVersion
+            component_version = $spec.component_version
+            platform = $spec.platform
+            archive_name = $build.archive
+            archive_sha256 = $build.archive_sha256
+            archive_bytes = [int64]$build.archive_bytes
+            installed_bytes = [int64]$build.installed_bytes
+          }
+          $manifest | ConvertTo-Json | Set-Content dist\ai-component\MorphoLabel-AI-Windows-x64.json
       - name: Managed install and bootstrap smoke
         shell: pwsh
         run: |
@@ -45,3 +63,20 @@ jobs:
             dist/ai-component/MorphoLabel-AI-Windows-x64-*.zip
             dist/ai-component/SHA256SUMS.txt
             dist/ai-component/AI_BUILD_INFO.json
+            dist/ai-component/MorphoLabel-AI-Windows-x64.json
+
+      - name: Attach managed AI assets for tags
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $sourceVersion = python -c "from app.version import __version__; print(__version__)"
+          $tagVersion = $env:GITHUB_REF_NAME -replace '^v',''
+          if ($tagVersion -ne $sourceVersion) { throw "Release tag does not match application version" }
+          gh release view "$env:GITHUB_REF_NAME" *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create "$env:GITHUB_REF_NAME" --prerelease --title "$env:GITHUB_REF_NAME" --notes "Development beta."
+          }
+          $zip = Get-ChildItem dist\ai-component\MorphoLabel-AI-Windows-x64-*.zip | Select-Object -First 1
+          gh release upload "$env:GITHUB_REF_NAME" $zip.FullName dist\ai-component\MorphoLabel-AI-Windows-x64.json dist\ai-component\AI_BUILD_INFO.json --clobber

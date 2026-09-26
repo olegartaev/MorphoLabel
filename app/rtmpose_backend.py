@@ -8,7 +8,8 @@ from .landmark_dataset import dataset_manifest_path,verify_dataset
 from .rtmpose_dataset import FISH_INPUT_SIZE,export_coco,mmpose_metainfo,generate_smoke_config
 from .io import atomic_json_write
 from .project_storage import schema_hash, landmark_model_schema_compatible
-from .ai_runtime_resolver import resolve_ai_runtime, validate_ai_runtime
+from .ai_runtime_resolver import validate_ai_runtime
+from .ai_delivery import ensure_ai_runtime
 
 class RTMPoseRuntimeError(RuntimeError): pass
 @dataclass(frozen=True)
@@ -19,7 +20,7 @@ class RTMPoseBackend(LandmarkBackend):
  """JSON/subprocess bridge; the manual SIMM runtime has no OpenMMLab imports."""
  def __init__(self,spec:RTMPoseModelSpec,*,runtime_python=None,runner_path=None):
   self.spec=spec;self.model_id=spec.model_id;self.schema_sha256=spec.schema_sha256;self.last_rank_batch_size=max(1,int(spec.inference_batch_size))
-  self.runtime_python,self.runner_path=resolve_ai_runtime(explicit=runtime_python,runner_path=runner_path)
+  self.runtime_python,self.runner_path=ensure_ai_runtime(explicit=runtime_python,runner_path=runner_path)
   self._runtime_explicit=runtime_python is not None or runner_path is not None
   self._runtime_validated=False
  def _invoke(self,operation,payload,*,progress_callback=None,no_progress_timeout=180):

@@ -120,7 +120,7 @@ def prepare_landmark_training(project, *, parent_model_id=None, seed=None, exper
         parent, backend = backend_for_model(project, parent["model_id"], model=parent) if parent_model_id else active_backend(project)
         progress("MODEL", "Active model resolved; checking schema compatibility...")
     else:
-        bootstrap = resolve_landmark_bootstrap(project)
+        bootstrap = resolve_landmark_bootstrap(project, progress_callback=progress)
         backend = RTMPoseBackend(RTMPoseModelSpec("bootstrap", schema_hash(project.schema_path), bootstrap.config_path, bootstrap.checkpoint_path, bootstrap.input_size))
         progress("MODEL", "First-model bootstrap resolved.")
     import time
