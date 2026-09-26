@@ -6,7 +6,8 @@ from pathlib import Path
 from .io import atomic_json_write
 from .landmark_ai_service import LandmarkAIService
 from .project_storage import schema_hash, landmark_model_schema_compatible, landmark_schema_identity, load_schema
-from .rtmpose_backend import RTMPoseBackend, RTMPoseModelSpec
+from .extensions.api import BackendContext
+from .extensions.builtins import backend_registry
 from .ai_hardware import auto_performance_config
 from .landmark_frames import landmark_frame_ready
 
@@ -21,19 +22,22 @@ def _manifest(project,model):
  try:return json.loads(path.read_text(encoding='utf8'))
  except Exception as exc:raise BatchError('active model development dataset manifest is unavailable') from exc
 
-def backend_for_model(project,model_id,*,model=None):
+def backend_for_model(project,model_id,*,model=None,registry=None):
  model=project.model_metadata(model_id) if model is None else model
  if not model or model.get('kind')!='landmark':raise BatchError('requested landmark model is unavailable')
  if not landmark_model_schema_compatible(project,model):raise BatchError('landmark model landmark identities/order do not match current landmark_schema.csv')
  artifact=project.data_root/(model.get('path') or '')
  info=json.loads((artifact/'model.json').read_text(encoding='utf8'))
- checkpoint=artifact/'best_engineering_validation.pth'
- if not checkpoint.exists(): checkpoint=Path(info.get('result',{}).get('checkpoint_path',''))
- config=artifact/'config.py'
- if not checkpoint.exists() or not config.exists():raise BatchError('landmark model checkpoint or config is unavailable')
  input_size=tuple(info.get('input_size') or model.get('input_size') or (512,256))
  performance=auto_performance_config(project,workload='landmark_inference',model=str(model['model_id']),input_size=input_size,training=False)
- return model,RTMPoseBackend(RTMPoseModelSpec(str(model['model_id']),schema_hash(project.schema_path),config,checkpoint,input_size,performance['device'],int(performance['batch_size'])))
+ metrics=json.loads(model.get('metrics_json') or '{}')
+ provider_id=info.get('backend_id') or info.get('backend') or model.get('backend_id') or metrics.get('backend') or 'rtmpose'
+ provider=(registry or backend_registry()).get(provider_id)
+ if provider is None or provider.task!='landmark':raise BatchError(f'landmark backend is unavailable: {provider_id}')
+ context=BackendContext(project,model,artifact,info,input_size,performance)
+ try:backend=provider.factory(context)
+ except ValueError as exc:raise BatchError(str(exc)) from exc
+ return model,backend
 
 def active_backend(project,*,model=None):
  model=project.active_model('landmark') if model is None else model

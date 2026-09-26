@@ -6,9 +6,10 @@ from app.identity import APP_NAME, APP_VERSION, APP_STATUS, icon_image
 
 
 class ModuleHub:
-    def __init__(self,shell,parent):
+    def __init__(self,shell,parent,registry):
         self.shell=shell
         self.parent=parent
+        self.registry=registry
         self.logo=None
 
     def render(self):
@@ -26,34 +27,22 @@ class ModuleHub:
 
         modules=ttk.Frame(host)
         modules.grid(row=1,column=0,sticky="n")
-        card=ttk.LabelFrame(modules,text="Available module",padding=(18,14))
-        card.grid(row=0,column=0,sticky="ew")
-        card.columnconfigure(0,weight=1)
-        ttk.Label(card,text="Landmarks & measurements",style="ModuleTitle.TLabel").grid(row=0,column=0,sticky="w")
-        ttk.Label(
-            card,
-            text="Crop → landmark annotation and AI review → measurements → export",
-            style="Muted.TLabel",
-        ).grid(row=1,column=0,sticky="w",pady=(3,10))
-        remembered=getattr(self.shell,"_remembered_project_path",None)
-        if remembered:
-            ttk.Label(
-                card,
-                text=f"Last project: {Path(remembered).name}",
-                style="Muted.TLabel",
-            ).grid(row=2,column=0,sticky="w",pady=(0,9))
-        self.shell.control_button(
-            card,
-            "Open module",
-            self.shell.open_primary_module,
-            "Open the Landmarks & measurements module.",
-            primary=True,
-        ).grid(row=3,column=0,sticky="ew")
+        for index,spec in enumerate(self.registry.available()):
+            card=ttk.LabelFrame(modules,text="Available module",padding=(18,14))
+            card.grid(row=index,column=0,sticky="ew",pady=(0,8))
+            card.columnconfigure(0,weight=1)
+            ttk.Label(card,text=spec.display_name,style="ModuleTitle.TLabel").grid(row=0,column=0,sticky="w")
+            ttk.Label(card,text=spec.description,style="Muted.TLabel").grid(row=1,column=0,sticky="w",pady=(3,10))
+            remembered=getattr(self.shell,"_remembered_project_path",None)
+            if remembered:
+                ttk.Label(card,text=f"Last project: {Path(remembered).name}",style="Muted.TLabel").grid(row=2,column=0,sticky="w",pady=(0,9))
+            self.shell.control_button(card,"Open module",lambda key=spec.module_id:self.shell.open_module(key),
+                                      f"Open {spec.display_name}.",primary=True).grid(row=3,column=0,sticky="ew")
 
         planned=ttk.LabelFrame(host,text="Planned modules",padding=(14,9))
         planned.grid(row=2,column=0,sticky="n",pady=(16,0))
-        ttk.Label(planned,text="X-ray counts",style="Muted.TLabel").grid(row=0,column=0,padx=(0,18))
-        ttk.Label(planned,text="Scales & meristics",style="Muted.TLabel").grid(row=0,column=1)
+        for index,spec in enumerate(self.registry.planned()):
+            ttk.Label(planned,text=spec.display_name,style="Muted.TLabel").grid(row=0,column=index,padx=(0,18))
 
         footer=ttk.Frame(host)
         footer.grid(row=3,column=0,sticky="n",pady=(18,0))

@@ -192,7 +192,9 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         self.assertIn("ModuleHub", shell)
         self.assertIn("ModuleHub(self,", shell)
         self.assertIn("class ModuleHub", hub)
-        self.assertIn('"Landmarks & measurements"', hub)
+        from app.extensions.builtins import module_registry
+        self.assertEqual("Landmarks & measurements", module_registry().get("landmarks").display_name)
+        self.assertIn("spec.display_name", hub)
         legacy = ("app.gui", "app.gui_full", "app.project_gui", "app.editor_ready", "app.operator_v")
         for path in (root / "app").rglob("*.py"):
             text = path.read_text(encoding="utf-8", errors="ignore")
@@ -218,7 +220,9 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         landmarks=(root/"app"/"ui"/"landmarks_section.py").read_text(encoding="utf-8")
         self.assertIn('self.module_key="landmarks" if project is not None else None',shell)
         self.assertNotIn('elif remembered_path:',shell)
-        self.assertIn('"Landmarks & measurements"',hub)
+        from app.extensions.builtins import module_registry
+        self.assertEqual("Landmarks & measurements",module_registry().get("landmarks").display_name)
+        self.assertIn("spec.display_name",hub)
         self.assertIn('"Open module"',hub)
         self.assertIn("Landmark actions:",landmarks)
 

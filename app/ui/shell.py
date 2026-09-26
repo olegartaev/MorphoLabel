@@ -21,6 +21,8 @@ from .landmarks_section import LandmarksSection
 from .measurements_section import MeasurementsSection
 from .export_section import ExportSection
 from .module_hub import ModuleHub
+from app.extensions.api import ModuleHost
+from app.extensions.builtins import module_registry
 from app.calibration_workflow import CalibrationWorkflow
 from app.measurements_ui import MeasurementsWindow
 from app.ai_hardware import get_hardware_profile, persist_machine_profile, format_hardware_profile
@@ -36,6 +38,8 @@ class ProductionShell(tk.Tk):
         remembered_path=None if project is not None else last_project()
         self._remembered_project_path=remembered_path
         self.module_key="landmarks" if project is not None else None
+        self.module_registry=module_registry()
+        self._active_module_runtime=None
         # Paint the module hub first. Large projects are opened only after the
         # user enters the current module, keeping startup fast and predictable.
         self.context=UIContext(None)
@@ -85,8 +89,13 @@ class ProductionShell(tk.Tk):
             self.after_idle(lambda p=requested_project:self._load_existing_project_async(p,"Opening project"))
 
     def open_primary_module(self):
-        """Enter the only currently active MorphoLabel module."""
-        self.module_key="landmarks"
+        """Compatibility action for opening the original built-in module."""
+        return self.open_module("landmarks")
+
+    def _module_host(self):
+        return ModuleHost(self.root,self.context.project,self.show_module_hub,self._render_landmarks_workspace,self._open_landmarks_workspace)
+
+    def _open_landmarks_workspace(self):
         if self.context.project:
             self.render();return
         remembered=self._remembered_project_path
@@ -95,7 +104,24 @@ class ProductionShell(tk.Tk):
         else:
             self.context.section="project";self.render()
 
+    def open_module(self,module_id):
+        """Open any registered module through its runtime contract."""
+        spec=self.module_registry.get(module_id)
+        if spec is None or spec.status!="available" or spec.factory is None:
+            raise ValueError(f"module is unavailable: {module_id}")
+        if self._active_module_runtime is not None:
+            self._active_module_runtime.close()
+        runtime=spec.factory()
+        self._active_module_runtime=runtime
+        self.module_key=module_id
+        on_open=getattr(runtime,"on_open",None)
+        if callable(on_open):on_open(self._module_host())
+        else:self.render()
+
     def show_module_hub(self):
+        if self._active_module_runtime is not None:
+            self._active_module_runtime.close()
+            self._active_module_runtime=None
         self.module_key=None
         self.render()
 
@@ -173,9 +199,18 @@ class ProductionShell(tk.Tk):
         if self.module_key is None:
             self.root.rowconfigure(0,weight=1);self.root.columnconfigure(0,weight=1)
             self.section_host=ttk.Frame(self.root);self.section_host.grid(row=0,column=0,sticky="nsew")
-            ModuleHub(self,self.section_host).render()
+            ModuleHub(self,self.section_host,self.module_registry).render()
             self.current_view=None
             return
+        if self._active_module_runtime is None:
+            spec=self.module_registry.get(self.module_key)
+            if spec is None or spec.status!="available" or spec.factory is None:
+                raise ValueError(f"module is unavailable: {self.module_key}")
+            self._active_module_runtime=spec.factory()
+        self._active_module_runtime.render(self._module_host())
+
+    def _render_landmarks_workspace(self):
+        """Private bridge used only by the built-in Landmarks adapter."""
         self.context.refresh(); self._nav()
         if not self.context.project:
             self.section_host=ttk.Frame(self.root); self.section_host.grid(row=1,column=0,sticky="nsew")
