@@ -82,9 +82,9 @@ def main():
          f"xtcocotools=={packages['xtcocotools']}"])
     run([python, "-m", "pip", "install", *common, "--no-deps", f"mmpose=={packages['mmpose']}"])
 
-    source_zip = download(spec["mmpose_source"]["archive_url"], downloads / "mmpose.zip")
+    source_archive = download(spec["mmpose_source"]["archive_url"], downloads / "mmpose.tar.gz")
     source_tmp = work / "mmpose-source"
-    with zipfile.ZipFile(source_zip) as archive:
+    with tarfile.open(source_archive, "r:gz") as archive:
         archive.extractall(source_tmp)
     roots = [path for path in source_tmp.iterdir() if path.is_dir()]
     if len(roots) != 1:

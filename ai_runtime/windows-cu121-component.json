@@ -1,6 +1,6 @@
 {
   "component_format": 1,
-  "component_version": "1.0.0-dev2",
+  "component_version": "1.0.0-dev3",
   "platform": "windows-x64",
   "python": {
     "version": "3.11.9",
@@ -23,7 +23,7 @@
   },
   "mmpose_source": {
     "commit": "5408bc76f5b848cf925a0d1857899011d8c5b497",
-    "archive_url": "https://github.com/open-mmlab/mmpose/archive/5408bc76f5b848cf925a0d1857899011d8c5b497.zip"
+    "archive_url": "https://github.com/open-mmlab/mmpose/archive/5408bc76f5b848cf925a0d1857899011d8c5b497.tar.gz"
   },
   "bootstrap": {
     "config_relative_path": "vendor/mmpose/configs/animal_2d_keypoint/rtmpose/ap10k/rtmpose-m_8xb64-210e_ap10k-256x256.py",

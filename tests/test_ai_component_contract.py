@@ -20,6 +20,7 @@ class AIComponentContractTests(unittest.TestCase):
         self.assertEqual("1.26.4",spec["packages"]["numpy"])
         self.assertEqual("4.10.0.84",spec["packages"]["opencv_python"])
         self.assertEqual("5408bc76f5b848cf925a0d1857899011d8c5b497",spec["mmpose_source"]["commit"])
+        self.assertTrue(spec["mmpose_source"]["archive_url"].endswith(".tar.gz"))
         self.assertIn("rtmpose-m_simcc-ap10k",spec["bootstrap"]["checkpoint_url"])
 
     def test_workflow_builds_real_component_and_uploads_zip(self):
@@ -31,6 +32,7 @@ class AIComponentContractTests(unittest.TestCase):
         self.assertIn("--no-deps",builder)
         self.assertIn("constraints.txt",builder)
         self.assertIn("BOOTSTRAP_CONFIG_PASS",builder)
+        self.assertIn("tarfile.open",builder)
 
     def test_archive_install_is_atomic_and_active_runtime_is_first_candidate(self):
         with tempfile.TemporaryDirectory() as td:
