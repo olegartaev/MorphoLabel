@@ -41,6 +41,9 @@ class AIComponentContractTests(unittest.TestCase):
         self.assertNotIn('"ls-files", "-z"',builder)
         self.assertNotIn("shutil.rmtree(git_dir)",builder)
         self.assertIn("mmdet.__version__",builder)
+        self.assertIn("BOOTSTRAP_INFERENCE_PASS",builder)
+        self.assertIn('"device": "cpu"',builder)
+        self.assertIn('list(range(1, 18))',builder)
         self.assertIn('run(["tar", "-a", "-c", "-f", archive',builder)
         self.assertNotIn("shutil.make_archive",builder)
 

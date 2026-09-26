@@ -139,6 +139,37 @@ def main():
         "print('BOOTSTRAP_CONFIG_PASS')"
     )
     run([python, "-c", smoke])
+
+    # End-to-end CPU inference smoke through the exact MorphoLabel runner.
+    smoke_image = work / "bootstrap_smoke.png"
+    run([python, "-c",
+         "from PIL import Image; import sys; Image.new('RGB',(320,180),(128,128,128)).save(sys.argv[1])",
+         smoke_image])
+    predict_request = {
+        "image_id": "bootstrap-smoke",
+        "image_path": str(smoke_image),
+        "schema_sha256": "bootstrap-smoke",
+        "model_id": "official-ap10k-smoke",
+        "config_path": str(runtime / config_rel),
+        "checkpoint_path": str(checkpoint),
+        "input_size": [256, 256],
+        "device": "cpu",
+        "simm_landmark_ids": list(range(1, 18)),
+    }
+    predicted = subprocess.run(
+        [str(python), str(runner), "predict"],
+        input=json.dumps(predict_request), text=True, capture_output=True, check=True,
+    )
+    prediction = json.loads(next(line for line in reversed(predicted.stdout.splitlines()) if line.strip()))
+    landmarks = prediction.get("landmarks") or []
+    if len(landmarks) != 17:
+        raise RuntimeError(f"bootstrap inference returned {len(landmarks)} landmarks instead of 17")
+    import math
+    for point in landmarks:
+        if not all(math.isfinite(float(point[key])) for key in ("x", "y", "confidence")):
+            raise RuntimeError("bootstrap inference returned non-finite landmark output")
+    print("BOOTSTRAP_INFERENCE_PASS")
+
     for key, expected in {
         "torch": packages["torch"], "torchvision": packages["torchvision"],
         "mmengine": packages["mmengine"], "mmcv": packages["mmcv"], "mmpose": packages["mmpose"],
