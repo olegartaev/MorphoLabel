@@ -31,16 +31,6 @@ jobs:
           if (-not (Test-Path dist\ai-component\SHA256SUMS.txt)) { throw "AI component checksum missing" }
           if (-not (Test-Path dist\ai-component\AI_BUILD_INFO.json)) { throw "AI component build info missing" }
 
-      - name: Build split public delivery assets
-        shell: pwsh
-        run: |
-          $appVersion = python -c "from app.version import __version__; print(__version__)"
-          python tools\build_ai_release_assets.py dist\ai-component $appVersion
-          $manifest = Get-Content dist\ai-component\release-assets\MorphoLabel-AI-Windows-x64.json -Raw | ConvertFrom-Json
-          foreach ($part in $manifest.parts) {
-            if ([int64]$part.bytes -ge 2147483648) { throw "Release asset part exceeds GitHub 2 GiB limit" }
-            if (-not (Test-Path (Join-Path "dist\ai-component\release-assets" $part.name))) { throw "Release asset part missing" }
-          }
       - name: Managed install and bootstrap smoke
         shell: pwsh
         run: |
@@ -48,6 +38,21 @@ jobs:
           $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP "MorphoLabel-managed-ai"
           python -c "from app.ai_component import install_component_archive; from app.landmark_bootstrap import resolve_landmark_bootstrap; import sys; runtime=install_component_archive(sys.argv[1]); bootstrap=resolve_landmark_bootstrap(None); assert bootstrap.runtime_python.resolve()==runtime.resolve(); assert bootstrap.config_path.is_file(); assert bootstrap.checkpoint_path.is_file(); print('MANAGED_AI_INSTALL_PASS', runtime)" $zip.FullName
           if (-not (Test-Path "$env:LOCALAPPDATA\MorphoLabel\components\ai\active.json")) { throw "Managed AI active record missing" }
+
+      - name: Reclaim smoke space and build split public delivery assets
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force (Join-Path $env:RUNNER_TEMP "MorphoLabel-managed-ai") -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force build\ai-component\runtime -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force build\ai-component\mmpose-source -ErrorAction SilentlyContinue
+          $appVersion = python -c "from app.version import __version__; print(__version__)"
+          python tools\build_ai_release_assets.py dist\ai-component $appVersion
+          $manifest = Get-Content dist\ai-component\release-assets\MorphoLabel-AI-Windows-x64.json -Raw | ConvertFrom-Json
+          foreach ($part in $manifest.parts) {
+            if ([int64]$part.bytes -ge 2147483648) { throw "Release asset part exceeds GitHub 2 GiB limit" }
+            if (-not (Test-Path (Join-Path "dist\ai-component\release-assets" $part.name))) { throw "Release asset part missing" }
+          }
+          Get-ChildItem dist\ai-component\MorphoLabel-AI-Windows-x64-*.zip | Remove-Item -Force
       - uses: actions/upload-artifact@v4
         with:
           name: MorphoLabel-AI-Windows-x64-${{ github.sha }}
