@@ -20,6 +20,9 @@ class ModuleHub:
         brand=ttk.Frame(host)
         brand.grid(row=0,column=0,sticky="n",pady=(4,24))
         self.logo=icon_image(brand)
+        # Keep the Tcl image owned by the durable shell, not by this temporary
+        # ModuleHub renderer object.
+        self.shell._morpholabel_hub_icon=self.logo
         ttk.Label(brand,image=self.logo).pack()
         ttk.Label(brand,text=APP_NAME,style="HubTitle.TLabel").pack(pady=(12,2))
         ttk.Label(brand,text="Open scientific tools for biological morphology annotation.",style="PageSubtitle.TLabel").pack()

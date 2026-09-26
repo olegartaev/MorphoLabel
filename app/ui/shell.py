@@ -89,6 +89,35 @@ class ProductionShell(tk.Tk):
         if requested_project is not None:
             self.after_idle(lambda p=requested_project:self._load_existing_project_async(p,"Opening project"))
 
+    def destroy(self):
+        """Release Tk-owned views/images on the Tk thread before Tcl teardown."""
+        if getattr(self, "_morpholabel_destroying", False):
+            return
+        self._morpholabel_destroying = True
+        try:
+            runtime = getattr(self, "_active_module_runtime", None)
+            module_id = getattr(self, "module_key", None) or "unknown"
+            if runtime is not None:
+                self._dispose_module_runtime(module_id, runtime)
+                self._active_module_runtime = None
+            try:
+                if hasattr(self, "root"):
+                    self._clear()
+            except tk.TclError:
+                pass
+            self.current_view = None
+            self.photo_panel = None
+            # Drop Python references while Tcl is still alive. PIL/tk image
+            # destructors are not safe if cyclic GC later runs on a worker
+            # thread after the interpreter has already been destroyed.
+            for name in ("_morpholabel_hub_icon", "_morpholabel_about_icon", "_morpholabel_window_icon"):
+                if hasattr(self, name):
+                    setattr(self, name, None)
+            import gc
+            gc.collect()
+        finally:
+            super().destroy()
+
     def open_primary_module(self):
         """Compatibility action for opening the original built-in module."""
         return self.open_module("landmarks")
