@@ -27,6 +27,8 @@ jobs:
         run: python -m unittest discover -s tests -t . -p "test_*.py"
       - name: Generate exact third-party notices
         run: python tools/build_third_party_notices.py build/third_party
+      - name: Generate Windows branding assets
+        run: python tools/build_brand_assets.py build/brand
       - name: Build onedir application
         run: python -m PyInstaller --clean --noconfirm packaging/morpholabel.spec
       - name: Packaged CLI smoke

@@ -8,6 +8,8 @@
   #define MyOutputDir "..\..\dist\installer"
 #endif
 [Setup]
+SetupIconFile=..\..\build\brand\MorphoLabel.ico
+UninstallDisplayIcon={app}\MorphoLabel.exe
 AppId={{B1BB76C4-FF12-4FF4-8A27-0CB1BBA5513A}
 AppName=MorphoLabel
 AppVersion={#MyAppVersion}

@@ -18,5 +18,6 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="MorphoLabel", debug=False,
-          bootloader_ignore_signals=False, strip=False, upx=False, console=False)
+          bootloader_ignore_signals=False, strip=False, upx=False, console=False,
+          icon=str(ROOT / "build" / "brand" / "MorphoLabel.ico"))
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="MorphoLabel")
