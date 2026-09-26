@@ -105,6 +105,22 @@ def main():
     if not (runtime / config_rel).is_file():
         raise RuntimeError("official AP-10K RTMPose config is missing from pinned MMPose source")
 
+    run([python, ROOT / "tools" / "build_ai_notices.py", runtime])
+    provenance = runtime / "MODEL_PROVENANCE.txt"
+    provenance.write_text(
+        "MorphoLabel bootstrap model provenance\n"
+        "=====================================\n\n"
+        f"MMPose source commit: {spec['mmpose_source']['commit']}\n"
+        f"Bootstrap config: {config_rel.as_posix()}\n"
+        f"Checkpoint URL: {spec['bootstrap']['checkpoint_url']}\n"
+        f"Checkpoint SHA256: {sha256(checkpoint)}\n\n"
+        "The checkpoint is an upstream OpenMMLab MMPose model trained using AP-10K and pretraining sources named by the upstream artifact. "
+        "Dataset/model terms remain those of their respective upstream sources.\n",
+        encoding="utf-8",
+    )
+    if not (runtime / "THIRD_PARTY_NOTICES.txt").is_file() or not provenance.is_file():
+        raise RuntimeError("AI redistribution notices were not generated")
+
     freeze = subprocess.run([str(python), "-m", "pip", "freeze"], check=True, text=True, capture_output=True).stdout.splitlines()
     manifest = {
         "component_format": 1,
