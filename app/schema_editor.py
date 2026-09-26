@@ -6,7 +6,7 @@ from pathlib import Path
 from .profile import read_schema_csv
 from .identity import apply_window_identity
 
-LEGEND=("# ROLE LEGEND:","# BOTH = used for classical and geometric morphometrics","# GM = geometric morphometrics only","# CLASSICAL = classical morphometrics only","# Lines beginning with # are comments and are ignored by SIMM.")
+LEGEND=("# ROLE LEGEND:","# BOTH = used for classical and geometric morphometrics","# GM = geometric morphometrics only","# CLASSICAL = classical morphometrics only","# Lines beginning with # are comments and are ignored by MorphoLabel.")
 ROLE_CODES={"BT":"BOTH","GM":"GM","CL":"CLASSICAL"}
 ROLE_NAMES={"BT":"Both","GM":"Geometric morphometrics","CL":"Classical morphometrics"}
 ROLE_FROM_NAME={v:k for k,v in ROLE_NAMES.items()}

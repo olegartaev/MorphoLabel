@@ -98,7 +98,7 @@ def _architecture_tuning_identity(backend, landmark_count):
  import hashlib
  config=Path(backend.spec.config_path)
  try:
-  # Generated SIMM configs deliberately differ in dataset paths, epochs and
+  # Generated MorphoLabel configs deliberately differ in dataset paths, epochs and
   # checkpoint references.  Those are not model architecture.  Fingerprint
   # only structural MMPose declarations, while input size/runtime/hardware
   # remain separate cache-key fields.
