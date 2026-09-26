@@ -37,8 +37,10 @@ class ServiceFallbackTests(unittest.TestCase):
     class Project:
         def __init__(self, root):
             self.data_root = Path(root)
+            self.schema_path = self.data_root / 'schema.csv'
+            self.schema_path.write_text('id,abbr,name,role\n1,A,Alpha,BOTH\n', encoding='utf8')
         def model_metadata(self, _):
-            return {'kind': 'landmark', 'schema_sha256': 'schema'}
+            return {'kind': 'landmark', 'schema_sha256': __import__('hashlib').sha256(self.schema_path.read_bytes()).hexdigest()}
 
     class Backend:
         model_id = 'm'

@@ -2,7 +2,7 @@ import json,tempfile,unittest
 from pathlib import Path
 from app.ai_batch import run_batch
 class P:
- def __init__(self,d):self.data_root=Path(d);self.schema_path=self.data_root/'schema';self.schema_path.write_text('x')
+ def __init__(self,d):self.data_root=Path(d);self.schema_path=self.data_root/'schema.csv';self.schema_path.write_text('id,abbr,name,role\n1,A,Alpha,BOTH\n',encoding='utf8')
 class S:
  def __init__(self):self.calls=[]
  def predict_many(self,ids,progress=None):

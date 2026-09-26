@@ -13,6 +13,7 @@ from app.prospective_qc import evaluate_prospective_batch
 from app.project_runtime import record, scoped_project, save
 from app.project_storage import Project, schema_hash
 from app.workflow import set_human_point
+from tests.current_fixtures import make_reviewed_crop
 
 
 class ProspectiveQCTests(unittest.TestCase):
@@ -28,9 +29,7 @@ class ProspectiveQCTests(unittest.TestCase):
         self.rows = self.project.catalog_rows()
         self.ids = [row["image_id"] for row in self.rows]
         for image_id in self.ids:
-            target = self.project.cache_root / "standardized" / f"{image_id}.png"
-            target.parent.mkdir(parents=True, exist_ok=True)
-            Image.new("RGB", (100, 80)).save(target)
+            make_reviewed_crop(self.project, image_id, 100, 80)
         self.backend = MockBackend(schema_hash(self.project.schema_path), confidences={1: .2, 2: .8})
         self.service = LandmarkAIService(self.project, self.backend)
 

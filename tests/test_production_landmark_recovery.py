@@ -10,6 +10,7 @@ from app.landmark_ai_workflow import STATE_KEY, begin_improvement
 from app.project_storage import Project
 from app.ui.context import UIContext
 from app.ui.landmarks_section import LandmarksSection
+from tests.current_fixtures import make_reviewed_crop
 
 
 class ProductionLandmarkRecoveryTests(unittest.TestCase):
@@ -25,6 +26,7 @@ class ProductionLandmarkRecoveryTests(unittest.TestCase):
         schema.write_text("id,abbr,name\n1,A,Alpha\n", encoding="utf-8")
         self.project = Project.create("project", source, self.root, schema, source_layout="direct")
         self.ids = [row["image_id"] for row in self.project.catalog_rows()]
+        for image_id in self.ids: make_reviewed_crop(self.project, image_id, 20, 20)
 
     def tearDown(self):
         shutil.rmtree(self.root, ignore_errors=True)
@@ -48,6 +50,7 @@ class ProductionLandmarkRecoveryTests(unittest.TestCase):
         state = {"stage": "READY_FOR_FULL_PREDICTION", "seed": 11, "control_image_ids": self.ids[:2], "initial_image_ids": self.ids[2:4], "improvement_image_ids": [], "improvement_history_ids": []}
         section = LandmarksSection.__new__(LandmarksSection)
         section.context = type("Context", (), {"project": self.project, "rows": self.project.catalog_rows()})()
+        section.shell = type("Shell", (), {"_run_background_task": lambda self, title, message, worker, done: done(worker(lambda *_: None))})()
         called = []
         section._start_improvement_batch = lambda count, value: called.append((count, value))
         with patch("app.ui.landmarks_section.stage_summary", return_value={"state": state, "stage": "READY_FOR_FULL_PREDICTION", "verified": 0, "total": 0}):

@@ -45,7 +45,8 @@ class SeparateModelPackageTests(unittest.TestCase):
         target.set_active_model("crop", local)
         prediction, used = __import__("app.crop_training", fromlist=["predict"]).predict(Image.new("RGB", (64, 48)), image_id="test", project=target)
         self.assertEqual(local, used)
-        self.assertEqual(4, len(prediction))
+        self.assertEqual({"bounds", "rotation_degrees", "output_count"}, set(prediction))
+        self.assertGreaterEqual(prediction["output_count"], 4)
 
     def test_landmark_package_imports_as_local_parent_candidate(self):
         package = self.temp / "landmark.zip"; export_model_package(self.project, "landmark", package)

@@ -7,10 +7,11 @@ from app.landmark_qc import evaluate_model, save_qc_report
 from app.project_runtime import scoped_project, record
 from app.project_storage import Project, schema_hash
 from app.workflow import save_record,set_human_point
+from tests.current_fixtures import make_reviewed_crop
 
 class PredictionHistoryQCTests(unittest.TestCase):
  def setUp(self):
-  self.tmp=Path(tempfile.mkdtemp());src=self.tmp/'src';src.mkdir();(src/'a.jpg').write_bytes(b'x');self.schema=self.tmp/'s.csv';self.schema.write_text('id,abbr,name,role\n1,A,One,BOTH\n2,B,Two,BOTH\n3,C,Three,BOTH\n',encoding='utf-8');self.p=Project.create('p',src,self.tmp,self.schema,source_layout='direct');self.image=self.p.catalog_rows()[0];self.id=self.image['image_id'];path=self.p.cache_root/'standardized'/f'{self.id}.png';path.parent.mkdir(parents=True,exist_ok=True);Image.new('RGB',(100,80)).save(path)
+  self.tmp=Path(tempfile.mkdtemp());src=self.tmp/'src';src.mkdir();(src/'a.jpg').write_bytes(b'x');self.schema=self.tmp/'s.csv';self.schema.write_text('id,abbr,name,role\n1,A,One,BOTH\n2,B,Two,BOTH\n3,C,Three,BOTH\n',encoding='utf-8');self.p=Project.create('p',src,self.tmp,self.schema,source_layout='direct');self.image=self.p.catalog_rows()[0];self.id=self.image['image_id'];make_reviewed_crop(self.p,self.id,100,80)
  def tearDown(self):shutil.rmtree(self.tmp,ignore_errors=True)
  def service(self,**kw):return LandmarkAIService(self.p,MockBackend(schema_hash(self.p.schema_path),**kw))
  def test_manifest_records_returned_omitted_and_run_survives_edits(self):

@@ -19,7 +19,8 @@ def evaluation(model_id, weak_first=23):
 class LandmarkQualityActivationTests(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp())
-        self.project = type("Project", (), {"data_root": self.root})()
+        schema = self.root / "schema.csv"; schema.write_text("id,abbr,name,role\n1,A,Alpha,BOTH\n", encoding="utf8")
+        self.project = type("Project", (), {"data_root": self.root, "schema_path": schema})()
 
     def tearDown(self):
         shutil.rmtree(self.root, ignore_errors=True)
