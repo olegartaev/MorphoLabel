@@ -19,11 +19,18 @@ disabled for that registry instance and reported in diagnostics.
 An entry point in `morpholabel.modules` returns an immutable `ModuleSpec`.
 `status` is `available`, `planned`, or `unavailable`. Available modules supply
 a zero-argument `factory` returning an object with `render(host)` and `close()`.
-`host` exposes `container` (an empty Tk parent), `project` (the current
-core project or `None`), and `show_module_hub()` for navigation. The extension must not import `ProductionShell` or call
-its private methods. `close()` is called when leaving or switching modules.
-An optional `on_open(host)` hook may defer the first render, as the built-in
+The public host exposes `container` (an empty Tk parent), `project` (the current
+core project or `None`), `show_module_hub()`, `open_project(path=None)`, and
+`new_project()`. The open/new actions use MorphoLabel's normal project dialogs
+and loading workflow; `open_project(path)` may be used when the extension has
+already selected a project path. The extension must not import
+`ProductionShell` or call its private methods. `close()` is called when leaving
+or switching modules. An optional `on_open()` hook may defer the first render, as the built-in
 Landmarks adapter does while loading a remembered project.
+
+Core owns every `Project` and all scientific persistence. Modules may request
+or open a core project through the host, but must not silently replace the
+canonical project storage or scientific records.
 
 ```python
 # my_package/plugin.py
@@ -34,6 +41,8 @@ class MyWorkspace:
     def render(self, host):
         ttk.Label(host.container, text="My scientific workspace").pack()
         ttk.Button(host.container, text="Modules", command=host.show_module_hub).pack()
+        ttk.Button(host.container, text="Open project", command=host.open_project).pack()
+        ttk.Button(host.container, text="New project", command=host.new_project).pack()
 
     def close(self):
         pass
@@ -58,13 +67,15 @@ metadata and have no runtime factory yet.
 
 ## AI backends
 
-An entry point in `morpholabel.ai_backends` returns a `BackendSpec`. Its
-`factory(context)` receives an immutable `BackendContext` containing the core
-project, model metadata, artifact directory, model JSON, input size and
-performance settings. It must return an `app.ai.LandmarkBackend` implementation
-for the `landmark` task. The existing `RTMPoseBackend` is registered as the
-built-in `rtmpose` provider. No AI packages or model weights are installed by
-the extension API.
+An entry point in `morpholabel.ai_backends` returns a `BackendSpec`. The
+registry is task-neutral: `factory(context)` may return any object appropriate
+for the declared task. The current landmark inference consumer verifies that
+the returned object implements `app.ai.LandmarkBackend` and rejects providers
+for other tasks. Future scientific consumers define and validate their own
+backend protocol. `BackendContext` currently supplies the core project, model
+metadata, artifact directory, model JSON, input size and performance settings.
+The existing `RTMPoseBackend` is registered as the built-in `rtmpose` provider.
+No AI packages or model weights are installed by the extension API.
 
 ```python
 # my_package/backend.py
@@ -84,9 +95,8 @@ def get_backend():
 my_backend = "my_package.backend:get_backend"
 ```
 
-Provider identity is read from existing `model.json` `backend_id`/`backend`
-or project model metrics `backend`. If absent, it defaults to `rtmpose`.
-A package
+Provider identity is read from existing `model.json` `backend_id`/`backend` or
+project model metrics `backend`. If absent, it defaults to `rtmpose`. A package
 that names another installed provider can use it without changing core
 dispatch. This is a non-destructive metadata choice; no package format
 migration is required. Backend predictions still pass through the core

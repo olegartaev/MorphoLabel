@@ -7,7 +7,6 @@ from typing import Callable, Literal, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from tkinter import Misc
-    from app.ai import LandmarkBackend
     from app.project_storage import Project
 
 EXTENSION_API_VERSION = 1
@@ -21,8 +20,8 @@ class ModuleHost:
     container: Misc
     project: Project | None
     show_module_hub: Callable[[], None]
-    _render_core: Callable[[], None] | None = None
-    _open_core: Callable[[], None] | None = None
+    open_project: Callable[..., object]
+    new_project: Callable[[], object]
 
 
 class ModuleRuntime(Protocol):
@@ -62,5 +61,5 @@ class BackendSpec:
     task: str
     version: str
     api_version: int
-    factory: Callable[[BackendContext], LandmarkBackend]
+    factory: Callable[[BackendContext], object]
     source: str

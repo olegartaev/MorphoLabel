@@ -23,6 +23,7 @@ from .export_section import ExportSection
 from .module_hub import ModuleHub
 from app.extensions.api import ModuleHost
 from app.extensions.builtins import module_registry
+from app.extensions.internal_runtime import create_internal_runtime
 from app.calibration_workflow import CalibrationWorkflow
 from app.measurements_ui import MeasurementsWindow
 from app.ai_hardware import get_hardware_profile, persist_machine_profile, format_hardware_profile
@@ -93,7 +94,27 @@ class ProductionShell(tk.Tk):
         return self.open_module("landmarks")
 
     def _module_host(self):
-        return ModuleHost(self.root,self.context.project,self.show_module_hub,self._render_landmarks_workspace,self._open_landmarks_workspace)
+        return ModuleHost(self.root,self.context.project,self.show_module_hub,self.open_project,self.new_project)
+
+    def _create_module_runtime(self,spec):
+        internal=create_internal_runtime(spec,self)
+        if internal is not None:return internal
+        return spec.factory()
+
+    def _dispose_module_runtime(self,module_id,runtime):
+        if runtime is None:return
+        try:runtime.close()
+        except Exception as exc:
+            self.module_registry.diagnostics.append(f"module {module_id}: close failed: {type(exc).__name__}: {exc}")
+
+    def _module_failed(self,module_id,phase,error,runtime=None):
+        self.module_registry.diagnostics.append(f"module {module_id}: {phase} failed: {type(error).__name__}: {error}")
+        if self._active_module_runtime is runtime:self._active_module_runtime=None
+        self.module_key=None
+        self._dispose_module_runtime(module_id,runtime)
+        self.render()
+        try:messagebox.showerror("Module could not be opened",f"{module_id} failed during {phase}.\n\n{error}",parent=self)
+        except tk.TclError:pass
 
     def _open_landmarks_workspace(self):
         if self.context.project:
@@ -109,19 +130,26 @@ class ProductionShell(tk.Tk):
         spec=self.module_registry.get(module_id)
         if spec is None or spec.status!="available" or spec.factory is None:
             raise ValueError(f"module is unavailable: {module_id}")
-        if self._active_module_runtime is not None:
-            self._active_module_runtime.close()
-        runtime=spec.factory()
+        previous=self.module_key or "unknown"
+        self._dispose_module_runtime(previous,self._active_module_runtime)
+        self._active_module_runtime=None
+        try:runtime=self._create_module_runtime(spec)
+        except Exception as exc:
+            self._module_failed(module_id,"factory",exc)
+            return
         self._active_module_runtime=runtime
         self.module_key=module_id
         on_open=getattr(runtime,"on_open",None)
-        if callable(on_open):on_open(self._module_host())
-        else:self.render()
+        try:
+            if callable(on_open):on_open()
+            else:self.render()
+        except Exception as exc:
+            if self._active_module_runtime is runtime:self._module_failed(module_id,"open",exc,runtime)
 
     def show_module_hub(self):
-        if self._active_module_runtime is not None:
-            self._active_module_runtime.close()
-            self._active_module_runtime=None
+        module_id=self.module_key or "unknown"
+        self._dispose_module_runtime(module_id,self._active_module_runtime)
+        self._active_module_runtime=None
         self.module_key=None
         self.render()
 
@@ -206,8 +234,14 @@ class ProductionShell(tk.Tk):
             spec=self.module_registry.get(self.module_key)
             if spec is None or spec.status!="available" or spec.factory is None:
                 raise ValueError(f"module is unavailable: {self.module_key}")
-            self._active_module_runtime=spec.factory()
-        self._active_module_runtime.render(self._module_host())
+            try:self._active_module_runtime=self._create_module_runtime(spec)
+            except Exception as exc:
+                self._module_failed(self.module_key,"factory",exc)
+                return
+        runtime=self._active_module_runtime;module_id=self.module_key
+        try:runtime.render(self._module_host())
+        except Exception as exc:
+            if self._active_module_runtime is runtime:self._module_failed(module_id,"render",exc,runtime)
 
     def _render_landmarks_workspace(self):
         """Private bridge used only by the built-in Landmarks adapter."""
@@ -427,7 +461,8 @@ class ProductionShell(tk.Tk):
             return None
 
     def _attach_project(self, project, prepared_rows=None):
-        self.module_key="landmarks";self._remembered_project_path=project.root
+        if self.module_key is None:self.module_key="landmarks"
+        self._remembered_project_path=project.root
         self.context=UIContext(project=project,section="project")
         if prepared_rows is None:self.context.refresh(force=True)
         else:
@@ -436,7 +471,9 @@ class ProductionShell(tk.Tk):
         log("GLOBAL","project_opened_in_shell","END",path=str(project.root),detail=f"images={len(self.context.rows)}")
         self.render()
 
-    def open_project(self):
+    def open_project(self,path=None):
+        if path is not None:
+            return self._open_project_path_async(Path(path),"Open project")
         folder=filedialog.askdirectory(parent=self,title="Select project folder")
         if not folder:return
         self._open_project_path_async(Path(folder),"Open project")

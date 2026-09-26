@@ -4,6 +4,7 @@ import json, time, uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from .io import atomic_json_write
+from .ai import LandmarkBackend
 from .landmark_ai_service import LandmarkAIService
 from .project_storage import schema_hash, landmark_model_schema_compatible, landmark_schema_identity, load_schema
 from .extensions.api import BackendContext
@@ -37,6 +38,7 @@ def backend_for_model(project,model_id,*,model=None,registry=None):
  context=BackendContext(project,model,artifact,info,input_size,performance)
  try:backend=provider.factory(context)
  except ValueError as exc:raise BatchError(str(exc)) from exc
+ if not isinstance(backend,LandmarkBackend):raise BatchError(f'backend provider {provider_id} did not return a LandmarkBackend')
  return model,backend
 
 def active_backend(project,*,model=None):
