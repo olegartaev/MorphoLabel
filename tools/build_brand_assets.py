@@ -1,11 +1,21 @@
 """Generate Windows branding assets from the single embedded MorphoLabel PNG source."""
 from __future__ import annotations
 import base64
+import hashlib
+import sys
 from io import BytesIO
 from pathlib import Path
+
+# Direct execution makes Python put tools/ rather than the repository root on
+# sys.path. Add the root explicitly so CI, Codex worktrees and source checkouts
+# behave identically without PYTHONPATH.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from PIL import Image
 from app.identity import ICON_PNG_BASE64, ICON_SOURCE_SHA256
-import hashlib
+
 
 def generate(output_root: Path):
     output_root=Path(output_root)
@@ -18,6 +28,6 @@ def generate(output_root: Path):
     image.save(target,format="ICO",sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
     return target
 
+
 if __name__=="__main__":
-    import sys
     print(generate(Path(sys.argv[1] if len(sys.argv)>1 else "build/brand")))
