@@ -105,6 +105,12 @@ class ExtensionArchitectureTests(unittest.TestCase):
         self.assertEqual(("landmarks",), tuple(item.module_id for item in registry.available()))
         self.assertEqual(("xray_counts", "scales_meristics"), tuple(item.module_id for item in registry.planned()))
 
+    def test_builtin_landmarks_factory_obeys_public_zero_argument_contract(self):
+        spec = module_registry().get("landmarks")
+        runtime = spec.factory()
+        self.assertTrue(callable(runtime.render))
+        self.assertTrue(callable(runtime.close))
+
     def test_deterministic_order_and_duplicate_module(self):
         registry = ModuleRegistry()
         registry.register(fake_module("z", 2))
