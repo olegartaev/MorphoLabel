@@ -41,6 +41,20 @@ def component_runtime(component_dir: Path) -> Path:
     manifest = component_manifest(component_dir)
     return component_dir / str(manifest.get("python_relative_path") or "python.exe")
 
+def component_root_for_runtime(runtime_python: Path) -> Path | None:
+    """Return the managed component root containing this runtime, if any."""
+    runtime = Path(runtime_python).resolve()
+    for candidate in runtime.parents:
+        manifest_path = candidate / _COMPONENT_FILE
+        if not manifest_path.is_file():
+            continue
+        try:
+            if component_runtime(candidate).resolve() == runtime:
+                return candidate
+        except (AIComponentError, OSError):
+            continue
+    return None
+
 def component_runtime_candidates():
     root = components_root()
     if not root.is_dir():

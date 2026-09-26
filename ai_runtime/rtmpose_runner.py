@@ -18,9 +18,24 @@ class _TrainingProbeDataset:
    array=np.asarray(rgb,dtype=np.float32).copy()/255.0
   return torch.from_numpy(array).permute(2,0,1)
 
+def _managed_component_root():
+ """Locate a managed component by its own manifest instead of directory shape."""
+ executable=Path(sys.executable).resolve()
+ for candidate in executable.parents:
+  manifest=candidate/"component.json"
+  if not manifest.is_file():continue
+  try:
+   meta=json.loads(manifest.read_text(encoding="utf-8"))
+   relative=str(meta.get("python_relative_path") or "python.exe")
+   if (candidate/relative).resolve()==executable:return candidate
+  except (OSError,ValueError,TypeError,json.JSONDecodeError):
+   continue
+ return None
+
 def resolve_mmpose_training_source():
  """Resolve MMPose source beside the active runtime, then local fallback."""
- runtime_root=Path(sys.executable).resolve().parent.parent
+ executable=Path(sys.executable).resolve()
+ runtime_root=_managed_component_root() or executable.parent.parent
  repo_root=Path(__file__).resolve().parents[1]
  candidates=(runtime_root / "vendor" / "mmpose", repo_root / "ai_runtime" / "vendor" / "mmpose")
  checked=[]

@@ -74,6 +74,27 @@ class AIComponentContractTests(unittest.TestCase):
                 self.assertEqual(runtime,component_runtime_candidates()[0])
                 self.assertEqual("1.0.0-test",json.loads(active_record_path().read_text(encoding="utf-8"))["version"])
 
+
+    def test_managed_component_root_is_manifest_based_not_scripts_layout(self):
+        from app.ai_component import component_root_for_runtime
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)/"component"
+            root.mkdir()
+            runtime=root/"python.exe"
+            runtime.write_bytes(b"python")
+            (root/"component.json").write_text(json.dumps({
+                "component_format":1,
+                "component_version":"1.0.0-test",
+                "platform":"windows-x64",
+                "python_relative_path":"python.exe",
+            }),encoding="utf-8")
+            self.assertEqual(root.resolve(),component_root_for_runtime(runtime))
+
+    def test_runner_uses_component_manifest_to_find_runtime_root(self):
+        runner=(ROOT/"ai_runtime"/"rtmpose_runner.py").read_text(encoding="utf-8")
+        self.assertIn('candidate/"component.json"',runner)
+        self.assertIn('runtime_root=_managed_component_root() or executable.parent.parent',runner)
+
     def test_unsafe_archive_is_rejected_without_component(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);archive=root/"bad.zip"
