@@ -1,6 +1,6 @@
 {
   "component_format": 1,
-  "component_version": "1.0.0-dev4",
+  "component_version": "1.0.0-dev5",
   "platform": "windows-x64",
   "python": {
     "version": "3.11.9",
@@ -19,7 +19,8 @@
     "scipy": "1.11.4",
     "json_tricks": "3.17.3",
     "munkres": "1.1.4",
-    "xtcocotools": "1.14.3"
+    "xtcocotools": "1.14.3",
+    "mmdet": "3.2.0"
   },
   "mmpose_source": {
     "commit": "5408bc76f5b848cf925a0d1857899011d8c5b497",

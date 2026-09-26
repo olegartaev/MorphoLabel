@@ -6,9 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
-import tarfile
 import urllib.request
-import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,6 +72,7 @@ def main():
     run([python, "-m", "pip", "install", *common, f"mmengine=={packages['mmengine']}"])
     run([python, "-m", "pip", "install", *common, f"mmcv=={packages['mmcv']}",
          "-f", packages["mmcv_find_links"]])
+    run([python, "-m", "pip", "install", *common, f"mmdet=={packages['mmdet']}"])
     # MMPose 1.3.2 metadata still declares chumpy although the MMPose source
     # does not import it and our RTMPose/AP-10K path does not use it. chumpy's
     # legacy build fails under modern isolated pip builds, so install the
@@ -89,20 +88,14 @@ def main():
     run(["git", "-C", source_tmp, "remote", "add", "origin", spec["mmpose_source"]["repo_url"]])
     run(["git", "-C", source_tmp, "fetch", "--depth", "1", "origin", spec["mmpose_source"]["commit"]])
     run(["git", "-C", source_tmp, "checkout", "--detach", "FETCH_HEAD"])
-    tracked = subprocess.run(
-        ["git", "-C", str(source_tmp), "ls-files", "-z"],
-        check=True, capture_output=True,
-    ).stdout.split(b"\0")
     vendor = runtime / "vendor" / "mmpose"
     vendor.mkdir(parents=True)
-    for raw_name in tracked:
-        if not raw_name:
-            continue
-        relative = Path(os.fsdecode(raw_name))
-        source = source_tmp / relative
-        destination = vendor / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
+    # MorphoLabel only executes tools/train.py and resolves configs from the
+    # pinned MMPose source tree. Do not vendor unrelated projects/demos/tests,
+    # some of which contain Unix-only filesystem entries that cannot be copied
+    # on Windows.
+    shutil.copy2(source_tmp / "tools" / "train.py", vendor / "tools" / "train.py")
+    shutil.copytree(source_tmp / "configs", vendor / "configs", dirs_exist_ok=True)
     if not (vendor / "tools" / "train.py").is_file():
         raise RuntimeError("MMPose training source tools/train.py is missing")
 
@@ -138,9 +131,11 @@ def main():
     # dependencies fail in CI before an archive is published.
     smoke = (
         "from mmengine.config import Config; "
+        "import mmdet; "
         "from mmpose.utils import register_all_modules; "
         "register_all_modules(); "
         f"Config.fromfile(r'{str(runtime / config_rel)}'); "
+        f"assert mmdet.__version__.startswith('{packages['mmdet']}'); "
         "print('BOOTSTRAP_CONFIG_PASS')"
     )
     run([python, "-c", smoke])

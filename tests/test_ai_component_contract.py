@@ -17,6 +17,7 @@ class AIComponentContractTests(unittest.TestCase):
         self.assertEqual("0.16.0",spec["packages"]["torchvision"])
         self.assertEqual("2.1.0",spec["packages"]["mmcv"])
         self.assertEqual("1.3.2",spec["packages"]["mmpose"])
+        self.assertEqual("3.2.0",spec["packages"]["mmdet"])
         self.assertEqual("1.26.4",spec["packages"]["numpy"])
         self.assertEqual("4.10.0.84",spec["packages"]["opencv_python"])
         self.assertEqual("5408bc76f5b848cf925a0d1857899011d8c5b497",spec["mmpose_source"]["commit"])
@@ -34,8 +35,11 @@ class AIComponentContractTests(unittest.TestCase):
         self.assertIn("BOOTSTRAP_CONFIG_PASS",builder)
         self.assertIn('"fetch", "--depth", "1"',builder)
         self.assertIn('"checkout", "--detach", "FETCH_HEAD"',builder)
-        self.assertIn('"ls-files", "-z"',builder)
+        self.assertIn('shutil.copytree(source_tmp / "configs"',builder)
+        self.assertIn('shutil.copy2(source_tmp / "tools" / "train.py"',builder)
+        self.assertNotIn('"ls-files", "-z"',builder)
         self.assertNotIn("shutil.rmtree(git_dir)",builder)
+        self.assertIn("mmdet.__version__",builder)
 
     def test_archive_install_is_atomic_and_active_runtime_is_first_candidate(self):
         with tempfile.TemporaryDirectory() as td:
