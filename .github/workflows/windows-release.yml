@@ -25,6 +25,8 @@ jobs:
           python -m pip install -r requirements-build.txt
       - name: Full deterministic test suite
         run: python -m unittest discover -s tests -t . -p "test_*.py"
+      - name: Generate exact third-party notices
+        run: python tools/build_third_party_notices.py build/third_party
       - name: Build onedir application
         run: python -m PyInstaller --clean --noconfirm packaging/morpholabel.spec
       - name: Packaged CLI smoke

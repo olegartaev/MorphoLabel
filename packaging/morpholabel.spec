@@ -10,6 +10,8 @@ a = Analysis(
         (str(ROOT / "ai_runtime" / "rtmpose_runner.py"), "ai_runtime"),
         (str(ROOT / "LICENSE"), "."),
         (str(ROOT / "NOTICE"), "."),
+        (str(ROOT / "build" / "third_party" / "THIRD_PARTY_NOTICES.txt"), "."),
+        (str(ROOT / "build" / "third_party" / "licenses"), "licenses"),
     ],
     hiddenimports=collect_submodules("app"),
     hookspath=[], hooksconfig={}, runtime_hooks=[], excludes=["tests", "tools"], noarchive=False,
