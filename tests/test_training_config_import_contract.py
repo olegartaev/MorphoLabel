@@ -1,0 +1,35 @@
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from app.rtmpose_dataset import generate_smoke_config
+
+
+class TrainingConfigImportContractTests(unittest.TestCase):
+    def test_default_training_config_has_no_missing_custom_module(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            manifest=root/"dataset.json"
+            manifest.write_text(json.dumps({
+                "format_version":1,
+                "dataset_id":"d",
+                "schema_sha256":"h",
+                "schema_landmarks":[{"landmark_id":1,"abbr":"P"}],
+                "images":[],
+            }),encoding="utf-8")
+            text=generate_smoke_config(
+                manifest,
+                data_root=root,
+                train_coco=root/"train.json",
+                val_coco=root/"val.json",
+                output_path=root/"config.py",
+                base_config=root/"base.py",
+                base_checkpoint=root/"base.pth",
+            ).read_text(encoding="utf-8")
+            self.assertNotIn("rtmpose_augmentations",text)
+            self.assertNotIn("custom_imports",text)
+
+
+if __name__=="__main__":
+    unittest.main()
