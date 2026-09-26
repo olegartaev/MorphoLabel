@@ -1,6 +1,6 @@
 {
   "component_format": 1,
-  "component_version": "1.0.0-dev1",
+  "component_version": "1.0.0-dev2",
   "platform": "windows-x64",
   "python": {
     "version": "3.11.9",
@@ -14,7 +14,12 @@
     "mmengine": "0.10.7",
     "mmcv": "2.1.0",
     "mmcv_find_links": "https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html",
-    "mmpose": "1.3.2"
+    "mmpose": "1.3.2",
+    "opencv_python": "4.10.0.84",
+    "scipy": "1.11.4",
+    "json_tricks": "3.17.3",
+    "munkres": "1.1.4",
+    "xtcocotools": "1.14.3"
   },
   "mmpose_source": {
     "commit": "5408bc76f5b848cf925a0d1857899011d8c5b497",

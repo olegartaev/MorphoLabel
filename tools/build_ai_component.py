@@ -53,15 +53,34 @@ def main():
         raise RuntimeError("managed Python installation did not create python.exe")
 
     packages = spec["packages"]
+    constraints = work / "constraints.txt"
+    constraints.write_text(
+        "\n".join((
+            f"numpy=={packages['numpy']}",
+            f"opencv-python=={packages['opencv_python']}",
+            f"scipy=={packages['scipy']}",
+        )) + "\n",
+        encoding="utf-8",
+    )
+    common = ["--disable-pip-version-check", "-c", constraints]
     run([python, "-m", "pip", "install", "--disable-pip-version-check", "--upgrade", "pip==24.3.1"])
-    run([python, "-m", "pip", "install", "--disable-pip-version-check", f"numpy=={packages['numpy']}"])
-    run([python, "-m", "pip", "install", "--disable-pip-version-check",
+    run([python, "-m", "pip", "install", *common,
+         f"numpy=={packages['numpy']}", f"opencv-python=={packages['opencv_python']}",
+         f"scipy=={packages['scipy']}"])
+    run([python, "-m", "pip", "install", *common,
          f"torch=={packages['torch']}", f"torchvision=={packages['torchvision']}",
          "--index-url", packages["torch_index_url"]])
-    run([python, "-m", "pip", "install", "--disable-pip-version-check", f"mmengine=={packages['mmengine']}"])
-    run([python, "-m", "pip", "install", "--disable-pip-version-check", f"mmcv=={packages['mmcv']}",
+    run([python, "-m", "pip", "install", *common, f"mmengine=={packages['mmengine']}"])
+    run([python, "-m", "pip", "install", *common, f"mmcv=={packages['mmcv']}",
          "-f", packages["mmcv_find_links"]])
-    run([python, "-m", "pip", "install", "--disable-pip-version-check", f"mmpose=={packages['mmpose']}"])
+    # MMPose 1.3.2 metadata still declares chumpy although the MMPose source
+    # does not import it and our RTMPose/AP-10K path does not use it. chumpy's
+    # legacy build fails under modern isolated pip builds, so install the
+    # required 2D runtime dependencies explicitly and MMPose without metadata deps.
+    run([python, "-m", "pip", "install", *common,
+         f"json_tricks=={packages['json_tricks']}", f"munkres=={packages['munkres']}",
+         f"xtcocotools=={packages['xtcocotools']}"])
+    run([python, "-m", "pip", "install", *common, "--no-deps", f"mmpose=={packages['mmpose']}"])
 
     source_zip = download(spec["mmpose_source"]["archive_url"], downloads / "mmpose.zip")
     source_tmp = work / "mmpose-source"
@@ -100,6 +119,20 @@ def main():
     runner = ROOT / "ai_runtime" / "rtmpose_runner.py"
     result = subprocess.run([str(python), str(runner), "info"], input="{}", text=True, capture_output=True, check=True)
     info = json.loads(next(line for line in reversed(result.stdout.splitlines()) if line.strip()))
+    if not str(info.get("numpy", "")).startswith(packages["numpy"]):
+        raise RuntimeError(f"numpy version mismatch: {info.get('numpy')} != {packages['numpy']}")
+    if not str(info.get("opencv", "")).startswith(packages["opencv_python"].split(".84")[0]):
+        raise RuntimeError(f"opencv version mismatch: {info.get('opencv')} != {packages['opencv_python']}")
+    # Import and parse the exact bootstrap configuration so missing runtime
+    # dependencies fail in CI before an archive is published.
+    smoke = (
+        "from mmengine.config import Config; "
+        "from mmpose.utils import register_all_modules; "
+        "register_all_modules(); "
+        f"Config.fromfile(r'{str(runtime / config_rel)}'); "
+        "print('BOOTSTRAP_CONFIG_PASS')"
+    )
+    run([python, "-c", smoke])
     for key, expected in {
         "torch": packages["torch"], "torchvision": packages["torchvision"],
         "mmengine": packages["mmengine"], "mmcv": packages["mmcv"], "mmpose": packages["mmpose"],
