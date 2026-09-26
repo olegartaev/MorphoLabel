@@ -1,6 +1,6 @@
 """Read-only, dependency-free AI hardware discovery and recommendations.
 
-Manual SIMM never imports an ML framework here.  CUDA availability is queried
+Core MorphoLabel never imports an ML framework here.  CUDA availability is queried
 only through the existing isolated AI runtime when it is present.
 """
 from __future__ import annotations
@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from .ai_runtime_resolver import resolve_ai_runtime
 from .io import atomic_json_write
+from .runtime_paths import app_state_dir, resource_path
 
 
 AUTO = "auto"
@@ -207,8 +208,7 @@ _MACHINE_PROFILE_FILENAME = "hardware_profile.json"
 
 
 def machine_profile_path():
-    root=os.environ.get("LOCALAPPDATA") or (Path.home()/"AppData"/"Local")
-    return Path(root)/"SIMM"/_MACHINE_PROFILE_FILENAME
+    return app_state_dir()/_MACHINE_PROFILE_FILENAME
 
 
 def persist_machine_profile(hardware=None):
@@ -220,7 +220,7 @@ def persist_machine_profile(hardware=None):
         "inference_default":get_inference_config(hardware=hardware),
     }
     try:atomic_json_write(machine_profile_path(),payload)
-    except OSError as exc:logging.getLogger(__name__).warning("SIMM hardware-profile write failed: %s",exc)
+    except OSError as exc:logging.getLogger(__name__).warning("MorphoLabel hardware-profile write failed: %s",exc)
     return payload
 
 
@@ -285,13 +285,13 @@ def _save_performance_cache(project, cache):
         path.parent.mkdir(parents=True, exist_ok=True)
         atomic_json_write(path, cache)
     except OSError as exc:
-        logging.getLogger(__name__).warning("SIMM performance-cache write failed for %s: %s", path, exc)
+        logging.getLogger(__name__).warning("MorphoLabel performance-cache write failed for %s: %s", path, exc)
 
 _AUTOTUNE_DIAGNOSTIC_FILENAME = "autotune_latest.json"
 
 
 def autotune_diagnostic_path():
-    return Path(__file__).resolve().parents[1]/"diagnostics"/"runtime"/_AUTOTUNE_DIAGNOSTIC_FILENAME
+    return app_state_dir()/"diagnostics"/"runtime"/_AUTOTUNE_DIAGNOSTIC_FILENAME
 
 
 def _source_identity(path):
@@ -318,7 +318,7 @@ def _write_autotune_diagnostic(payload):
                 "performance_engine":_source_identity(performance_engine.__file__),
                 "landmark_training_workflow":_source_identity(Path(__file__).with_name("landmark_training_workflow.py")),
                 "landmark_ai_service":_source_identity(Path(__file__).with_name("landmark_ai_service.py")),
-                "rtmpose_runner":_source_identity(Path(__file__).resolve().parents[1]/"ai_runtime"/"rtmpose_runner.py"),
+                "rtmpose_runner":_source_identity(resource_path("ai_runtime","rtmpose_runner.py")),
             },
             **dict(payload),
         }
@@ -332,9 +332,9 @@ def _write_autotune_diagnostic(payload):
             try:
                 atomic_json_write(Path(target),data)
             except OSError as exc:
-                logging.getLogger(__name__).warning("SIMM autotune diagnostic write failed for %s: %s",target,exc)
+                logging.getLogger(__name__).warning("MorphoLabel autotune diagnostic write failed for %s: %s",target,exc)
     except Exception as exc:
-        logging.getLogger(__name__).warning("SIMM autotune diagnostic write failed: %s",exc)
+        logging.getLogger(__name__).warning("MorphoLabel autotune diagnostic write failed: %s",exc)
 
 
 def is_cuda_oom(error):
@@ -398,7 +398,7 @@ def auto_performance_config(project, *, workload, model, input_size, training=Fa
         candidates = [{"batch_size": batch} for batch in batches]
     # Tune against installed VRAM, not a momentary free-memory snapshot from
     # application startup. Current contention is handled by the measured OOM
-    # fallback; otherwise a transient GPU user could permanently under-tune SIMM.
+    # fallback; otherwise a transient GPU user could permanently under-tune MorphoLabel.
     budget=int((hardware.gpu_vram_mib or hardware.gpu_free_mib or 0)*.90)
     def measured(config):
         value=probe(config if probe_configurations else int(config["batch_size"]))

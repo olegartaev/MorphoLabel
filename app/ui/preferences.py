@@ -4,20 +4,36 @@ import json
 import os
 from pathlib import Path
 from app.gui_crop_debug import log
+from app.runtime_paths import app_state_dir
 
-_PATH = Path(os.environ.get("APPDATA", Path.home())) / "SIMM" / "ui_preferences.json"
+_FILENAME = "ui_preferences.json"
+
+def preference_path() -> Path:
+    return app_state_dir() / _FILENAME
+
+def legacy_preference_path() -> Path:
+    root = Path(os.environ.get("APPDATA", Path.home()))
+    return root / "SIMM" / _FILENAME
+
+def _read_from(path: Path) -> dict:
+    if not path.is_file():
+        return {}
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("preference document must be a JSON object")
+    return value
 
 def _read() -> dict:
-    try:
-        if not _PATH.is_file():
-            return {}
-        value = json.loads(_PATH.read_text(encoding="utf-8"))
-        if not isinstance(value, dict):
-            raise ValueError("preference document must be a JSON object")
-        return value
-    except Exception as exc:
-        log("GLOBAL", "ui_preference_read", "ERROR", path=str(_PATH), detail=str(exc))
-        return {}
+    current = preference_path()
+    legacy = legacy_preference_path()
+    for path in (current, legacy):
+        try:
+            value = _read_from(path)
+            if value:
+                return value
+        except Exception as exc:
+            log("GLOBAL", "ui_preference_read", "ERROR", path=str(path), detail=str(exc))
+    return {}
 
 def last_project() -> Path | None:
     raw = _read().get("last_project")
@@ -34,18 +50,19 @@ def last_project() -> Path | None:
     return path
 
 def remember_project(path: Path | str) -> bool:
+    target = preference_path()
     try:
         normalized = Path(path).expanduser().resolve(strict=True)
         if not normalized.is_dir() or not os.access(normalized, os.R_OK):
             raise OSError("project directory is not readable")
-        _PATH.parent.mkdir(parents=True, exist_ok=True)
+        target.parent.mkdir(parents=True, exist_ok=True)
         data = _read()
         data["last_project"] = str(normalized)
-        temporary = _PATH.with_suffix(_PATH.suffix + ".tmp")
+        temporary = target.with_suffix(target.suffix + ".tmp")
         temporary.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        os.replace(temporary, _PATH)
-        log("GLOBAL", "ui_preference_write", "END", path=str(_PATH), detail=f"last_project={normalized}")
+        os.replace(temporary, target)
+        log("GLOBAL", "ui_preference_write", "END", path=str(target), detail=f"last_project={normalized}")
         return True
     except Exception as exc:
-        log("GLOBAL", "ui_preference_write", "ERROR", path=str(_PATH), detail=str(exc))
+        log("GLOBAL", "ui_preference_write", "ERROR", path=str(target), detail=str(exc))
         return False
