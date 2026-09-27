@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0-beta.4
+
+- Landmarks workspace rendering no longer starts or downloads the AI runtime;
+- first launch after installation visibly prepares managed AI support in the background;
+- first-run setup downloads and verifies the AI runtime and bootstrap model when needed;
+- first-run hardware qualification records CPU, RAM, GPU, VRAM and CUDA availability;
+- a real inference and short training smoke test confirm that AI is usable on the machine;
+- safe machine defaults are stored once, while project-specific performance tuning remains tied to real workloads.
+
 ## 0.5.0-beta.3
 
 - resumable managed-AI downloads with retry and verified partial-file recovery;
