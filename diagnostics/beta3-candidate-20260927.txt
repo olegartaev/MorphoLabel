@@ -1,0 +1,17 @@
+HEAD=d7fbc6ec9a0373a0417064a7d1a3aeb81ee13433
+GITHUB_CANDIDATE_BUILD=PASS (workflow 36331376640; workflow_dispatch; exact HEAD; success)
+SETUP_INSTALL=PASS
+INSTALLED_VERSION=0.5.0-beta.3
+CORE_SELF_TEST=PASS
+AI_DOWNLOAD=PASS
+AI_RESUME_USED=NO
+CUDA=PASS
+GPU=NVIDIA GeForce RTX 3060
+AI_INFERENCE=PASS (17 landmarks)
+AI_TRAINING=PASS (trained; checkpoint SHA256 7deebf35e760b936957e232d8af9a7f3ff84094a6ebbff8b6151acde707ccba3)
+GUI_PROCESS_SMOKE=PASS (installed GUI alive and responding; versioned window observed)
+GUI_AUTOMATION=UNAVAILABLE
+REAL_PROJECT_OPENED=NO
+SECTIONS_OPENED=NONE
+OVERALL=PASS
+FAILURE=Tk controls were not exposed as actionable UIA/Win32 controls; keyboard Tab/Enter did not produce a verifiable module/project/section transition. GUI automation unavailable is non-fatal under the acceptance criteria because the GUI remained alive and responsive and the other candidate checks passed.
