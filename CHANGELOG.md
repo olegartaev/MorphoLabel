@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0-beta.3
+
+- resumable managed-AI downloads with retry and verified partial-file recovery;
+- interrupted first-use AI installation no longer discards already downloaded data;
+- release-candidate validation is performed before the public tag is created.
+
 ## 0.5.0-beta.2
 
 - standalone Windows installer with clean install/uninstall checks;
