@@ -1,6 +1,8 @@
 """Production MorphoLabel shell using the accepted module workflow and real services."""
 from __future__ import annotations
 from pathlib import Path
+import subprocess
+import sys
 import threading, queue
 import webbrowser
 import tkinter as tk
@@ -91,15 +93,19 @@ class ProductionShell(tk.Tk):
 
     def report_callback_exception(self, exc_type, exc_value, tb):
         """Persist an unexpected Tk callback failure instead of losing it in a frozen GUI."""
+        bundle=None
         try:
             from app.diagnostics import create_diagnostic_bundle, record_exception
             record_exception(exc_type, exc_value, tb, shell=self)
             bundle=create_diagnostic_bundle(shell=self)
-            detail=f"\n\nDiagnostic report saved:\n{bundle}"
         except Exception:
-            detail=""
+            pass
         try:
-            messagebox.showerror("MorphoLabel error",f"{getattr(exc_type,'__name__','Error')}: {exc_value}{detail}",parent=self)
+            error_text=f"{getattr(exc_type,'__name__','Error')}: {exc_value}"
+            if bundle is not None:
+                self._show_diagnostic_report_dialog(bundle,title="MorphoLabel error",intro=error_text)
+            else:
+                messagebox.showerror("MorphoLabel error",error_text,parent=self)
         except tk.TclError:
             pass
 
@@ -811,20 +817,57 @@ class ProductionShell(tk.Tk):
             next_row=next((row for row in self.context.rows if not row.get('excluded')),None)
             if next_row:self.context.select_image(next_row["image_id"])
         self.render()
+    def _open_folder(self,path):
+        folder=Path(path)
+        try:
+            if sys.platform.startswith("win"):
+                subprocess.Popen(["explorer",str(folder)])
+            elif sys.platform=="darwin":
+                subprocess.Popen(["open",str(folder)])
+            else:
+                subprocess.Popen(["xdg-open",str(folder)])
+            return True
+        except Exception as exc:
+            messagebox.showerror("Open report folder",f"Could not open the folder:\n{exc}",parent=self)
+            return False
+
+    def _show_diagnostic_report_dialog(self,bundle,*,title="Diagnostic report",intro=None):
+        bundle=Path(bundle)
+        dialog=tk.Toplevel(self);dialog.title(title);dialog.transient(self);dialog.resizable(False,False)
+        frame=ttk.Frame(dialog,padding=16);frame.pack(fill="both",expand=True)
+        if intro:
+            ttk.Label(frame,text=intro,justify="left",wraplength=650).pack(anchor="w",pady=(0,10))
+        ttk.Label(
+            frame,
+            text="Diagnostic ZIP created. It contains no photographs or SQLite database.",
+            justify="left",
+            wraplength=650,
+        ).pack(anchor="w")
+        ttk.Label(frame,text="Report path:",style="Muted.TLabel").pack(anchor="w",pady=(10,2))
+        path_var=tk.StringVar(value=str(bundle))
+        ttk.Entry(frame,textvariable=path_var,state="readonly",width=88).pack(fill="x")
+        ttk.Label(frame,text="The path was copied to the clipboard.",style="Muted.TLabel").pack(anchor="w",pady=(5,0))
+        actions=ttk.Frame(frame);actions.pack(fill="x",pady=(14,0))
+        self.control_button(
+            actions,
+            "Open report folder",
+            lambda:self._open_folder(bundle.parent),
+            "Open the folder containing the diagnostic ZIP so it can be attached to a support message.",
+            style="Primary.TButton",
+        ).pack(side="left")
+        self.control_button(actions,"Close",dialog.destroy,"Close this window.").pack(side="right")
+        center(self,dialog)
+        return dialog
+
     def create_diagnostic_report(self):
         try:
             from app.diagnostics import create_diagnostic_bundle
             bundle=create_diagnostic_bundle(shell=self)
             try:
                 self.clipboard_clear();self.clipboard_append(str(bundle));self.update_idletasks()
-                copied="\n\nThe path was copied to the clipboard."
             except tk.TclError:
-                copied=""
-            messagebox.showinfo(
-                "Diagnostic report",
-                f"Diagnostic ZIP created. It contains no photographs or SQLite database.\n\n{bundle}{copied}",
-                parent=self,
-            )
+                pass
+            self._show_diagnostic_report_dialog(bundle)
             return bundle
         except Exception as exc:
             messagebox.showerror("Diagnostic report",f"Could not create diagnostic report:\n{exc}",parent=self)
