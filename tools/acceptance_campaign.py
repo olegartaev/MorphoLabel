@@ -158,7 +158,10 @@ def run_process(name, command, *, timeout, env, scenario_dir):
         except subprocess.TimeoutExpired:
             timed_out = True
             _kill_tree(proc)
-            code = proc.wait(timeout=30)
+            try:
+                code = proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                code = None
     elapsed = time.monotonic() - started
     status = "HANG" if timed_out else ("PASS" if code == 0 else "FAIL")
     return {
@@ -433,8 +436,8 @@ def _scenario_landmark_training_one_epoch(project_root):
     result = run_landmark_training(
         project,
         plan,
-        progress_callback=lambda done, total=None: print(
-            f"TRAINING: {done}" if total is None else f"TRAINING: {done}/{total}", flush=True
+        progress_callback=lambda *parts: print(
+            "TRAINING: " + " / ".join(str(part) for part in parts), flush=True
         ),
     )
     if result is None:
