@@ -30,6 +30,7 @@ from app.calibration_workflow import CalibrationWorkflow
 from app.measurements_ui import MeasurementsWindow
 from app.ai_hardware import get_hardware_profile, persist_machine_profile, format_hardware_profile
 from app.ai_package import export_model_package, import_model_package
+from app.first_run_setup import first_run_setup_required, run_first_run_setup
 
 BG="#f5f7f8"; ACC="#256d9e"
 
@@ -84,10 +85,13 @@ class ProductionShell(tk.Tk):
         requested_label=(str(requested_project.root) if requested_project is not None else str(remembered_path or "none"))
         log("GLOBAL", "production_shell_start", "START", detail=f"project={requested_label}")
         self.render()
-        # Earliest reliable "installation" check: once the real AI runtime,
-        # GPU driver and CUDA environment are actually visible to MorphoLabel.
-        # Run off Tk so startup never freezes on torch/CUDA discovery.
-        threading.Thread(target=self._warm_ai_hardware,daemon=True,name="simm-hardware-profile").start()
+        # Public installed builds perform one explicit, visible setup before
+        # ordinary work. Source/developer runs remain side-effect free.
+        if first_run_setup_required():
+            self.after(300,self._show_first_run_setup)
+        else:
+            # Keep routine hardware discovery off Tk on subsequent launches.
+            threading.Thread(target=self._warm_ai_hardware,daemon=True,name="morpholabel-hardware-profile").start()
         if requested_project is not None:
             self.after_idle(lambda p=requested_project:self._load_existing_project_async(p,"Opening project"))
 
@@ -206,6 +210,100 @@ class ProductionShell(tk.Tk):
         self._active_module_runtime=None
         self.module_key=None
         self.render()
+
+    def _show_first_run_setup(self):
+        """Visible one-time setup for public installs; all blocking work stays off Tk."""
+        if getattr(self,"_first_run_setup_active",False):return
+        self._first_run_setup_active=True
+        dialog=tk.Toplevel(self);dialog.title("Preparing MorphoLabel");dialog.transient(self);dialog.resizable(False,False)
+        frame=ttk.Frame(dialog,padding=18);frame.pack(fill="both",expand=True);frame.columnconfigure(0,weight=1)
+        ttk.Label(frame,text="Preparing MorphoLabel for this computer",style="PageTitle.TLabel").grid(row=0,column=0,sticky="w")
+        ttk.Label(
+            frame,
+            text=(
+                "This happens once after installation. MorphoLabel will prepare its AI tools, "
+                "download the verified runtime and base model if they are not already present "
+                "(several GB), then test this computer.\n\n"
+                "The checks include GPU/CUDA detection, a real landmark prediction and a short "
+                "training test. Later, real AI jobs fine-tune batch size and worker counts on "
+                "your actual images."
+            ),
+            style="Muted.TLabel",justify="left",wraplength=610,
+        ).grid(row=1,column=0,sticky="w",pady=(7,14))
+        stage=ttk.Label(frame,text="Starting setup…",style="SectionTitle.TLabel");stage.grid(row=2,column=0,sticky="w")
+        detail=ttk.Label(frame,text="No project or scientific data will be changed.",style="Muted.TLabel",justify="left",wraplength=610)
+        detail.grid(row=3,column=0,sticky="w",pady=(4,8))
+        bar=ttk.Progressbar(frame,mode="indeterminate",length=560);bar.grid(row=4,column=0,sticky="ew");bar.start(10)
+        result_label=ttk.Label(frame,text="",justify="left",wraplength=610);result_label.grid(row=5,column=0,sticky="w",pady=(10,0))
+        actions=ttk.Frame(frame);actions.grid(row=6,column=0,sticky="e",pady=(14,0))
+        events=queue.Queue();working={"value":False}
+        dialog.protocol("WM_DELETE_WINDOW",lambda:None);dialog.grab_set();center(self,dialog)
+
+        def progress(stage_name,stage_detail):
+            events.put(("progress",str(stage_name),str(stage_detail)))
+
+        def worker():
+            try:events.put(("done",run_first_run_setup(progress=progress)))
+            except Exception as exc:events.put(("error",exc))
+
+        def start():
+            if working["value"]:return
+            working["value"]=True
+            for child in actions.winfo_children():child.destroy()
+            result_label.configure(text="")
+            stage.configure(text="Preparing AI support…")
+            detail.configure(text="Downloaded data is verified before it is activated.")
+            bar.configure(mode="indeterminate");bar.start(10)
+            threading.Thread(target=worker,daemon=True,name="morpholabel-first-run-setup").start()
+
+        def close_ready():
+            self._first_run_setup_active=False
+            try:dialog.grab_release()
+            except tk.TclError:pass
+            dialog.destroy()
+
+        def continue_core():
+            self._first_run_setup_active=False
+            try:dialog.grab_release()
+            except tk.TclError:pass
+            dialog.destroy()
+
+        def poll():
+            try:
+                while True:
+                    kind,*value=events.get_nowait()
+                    if kind=="progress":
+                        stage.configure(text=value[0]);detail.configure(text=value[1])
+                    elif kind=="error":
+                        working["value"]=False;bar.stop()
+                        stage.configure(text="Setup is incomplete")
+                        detail.configure(text=(
+                            "MorphoLabel can still be used without AI. Any partial AI download is kept, "
+                            "so Retry or the next launch can continue instead of starting over."
+                        ))
+                        result_label.configure(text=f"{type(value[0]).__name__}: {value[0]}")
+                        self.control_button(actions,"Continue without AI",continue_core,"Open MorphoLabel core tools without completing AI setup.").pack(side="right")
+                        self.control_button(actions,"Retry",start,"Retry first-time setup and resume any partial download.",primary=True).pack(side="right",padx=(0,6))
+                        log("GLOBAL","first_run_setup","ERROR",detail=str(value[0]))
+                    else:
+                        working["value"]=False;bar.stop();payload=value[0];hardware=payload.get("hardware") or {};test=payload.get("ai_self_test") or {}
+                        gpu=hardware.get("gpu_model") or "No dedicated GPU detected"
+                        accel="CUDA" if hardware.get("cuda_available") else "CPU fallback"
+                        training=(test.get("training_smoke") or {}).get("status") or "not run"
+                        stage.configure(text="MorphoLabel is ready")
+                        detail.configure(text="AI support is installed and verified. No further setup is required on ordinary launches.")
+                        result_label.configure(text=(
+                            f"GPU: {gpu}\nAcceleration: {accel}\n"
+                            f"Inference test: PASS\nTraining test: {str(training).upper()}\n\n"
+                            "Performance mode: Auto. MorphoLabel will measure the best workload settings "
+                            "when AI is first used on real project images."
+                        ))
+                        self.control_button(actions,"Start MorphoLabel",close_ready,"Finish setup and use MorphoLabel.",primary=True).pack(side="right")
+                        log("GLOBAL","first_run_setup","END",detail=f"gpu={gpu}; acceleration={accel}; training={training}")
+            except queue.Empty:
+                if dialog.winfo_exists():self.after(100,poll)
+
+        start();poll()
 
     def _warm_ai_hardware(self):
         try:
