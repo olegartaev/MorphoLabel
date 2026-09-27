@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import ttk,messagebox
 from app.photo_list import PhotoListCanvas
 
-DEFAULT_SHOW_EXCLUDED = False
+DEFAULT_SHOW_EXCLUDED = True
 
 def photo_search_cache(rows):
  """Precompute catalog-only strings used by compact photo filters."""
@@ -15,6 +15,18 @@ def photo_search_cache(rows):
 def filtered_photo_indices(rows, cache, image_query="", locality_query="", *, show_excluded=DEFAULT_SHOW_EXCLUDED):
  image_query=str(image_query or "").strip().casefold();locality_query=str(locality_query or "").strip().casefold()
  return [index for index,(row,(locality,name)) in enumerate(zip(rows,cache)) if (show_excluded or not row.get("excluded")) and (not image_query or image_query in name) and (not locality_query or locality_query in locality)]
+
+def next_working_photo_index(rows, visible_indices, current_index, step):
+ """Return the next non-excluded visible image while excluded rows stay inspectable."""
+ visible=list(visible_indices)
+ if not visible:return None
+ direction=1 if int(step)>=0 else -1
+ try:position=visible.index(int(current_index))
+ except (ValueError,TypeError):position=(-1 if direction>0 else 0)
+ for offset in range(1,len(visible)+1):
+  candidate=visible[(position+direction*offset)%len(visible)]
+  if not rows[candidate].get("excluded"):return candidate
+ return None
 
 class PhotoListPanel(ttk.Frame):
  def __init__(self,parent,context,on_select,tooltip,on_exclusion=None):
@@ -67,8 +79,9 @@ class PhotoListPanel(ttk.Frame):
   if len(inspect.signature(self.on_select).parameters):self.on_select(preserve_list)
   else:self.on_select()
  def navigate(self,step):
-  if not self.visible_indices:return False
-  current=self.context.selected;position=self.visible_indices.index(current) if current in self.visible_indices else 0;self.context.selected=self.visible_indices[(position+int(step))%len(self.visible_indices)];self.sync_current(reveal=True);self._notify(False);return True
+  target=next_working_photo_index(self.context.rows,self.visible_indices,self.context.selected,step)
+  if target is None:return False
+  self.context.selected=target;self.sync_current(reveal=True);self._notify(False);return True
  def exclude_or_restore(self):
   row=self.context.current()
   if not row:return
