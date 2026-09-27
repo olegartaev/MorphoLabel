@@ -5,6 +5,7 @@ import inspect
 import tkinter as tk
 from tkinter import ttk,messagebox
 from app.photo_list import PhotoListCanvas
+from app.ui.icons import tk_icon, CONTROL_ICON_SIZE
 
 DEFAULT_SHOW_EXCLUDED = True
 
@@ -30,7 +31,7 @@ def next_working_photo_index(rows, visible_indices, current_index, step):
 
 class PhotoListPanel(ttk.Frame):
  def __init__(self,parent,context,on_select,tooltip,on_exclusion=None):
-  super().__init__(parent,padding=(7,5));self.context,self.on_select,self.tooltip,self.on_exclusion=context,on_select,tooltip,on_exclusion;self.image_query=tk.StringVar(master=self);self.locality_query=tk.StringVar(master=self);self.show_excluded=tk.BooleanVar(master=self,value=DEFAULT_SHOW_EXCLUDED)
+  super().__init__(parent,padding=(7,5));self.context,self.on_select,self.tooltip,self.on_exclusion=context,on_select,tooltip,on_exclusion;self.image_query=tk.StringVar(master=self);self.locality_query=tk.StringVar(master=self);self.show_excluded=tk.BooleanVar(master=self,value=DEFAULT_SHOW_EXCLUDED);self._icons={}
   search=ttk.Frame(self,padding=(0,0,0,4));search.pack(fill='x');search.columnconfigure(0,weight=1);search.columnconfigure(1,weight=1)
   ttk.Label(search,text='Sample',style='Muted.TLabel').grid(row=0,column=0,sticky='w')
   ttk.Label(search,text='Specimen',style='Muted.TLabel').grid(row=0,column=1,sticky='w',padx=(6,0))
@@ -39,8 +40,12 @@ class PhotoListPanel(ttk.Frame):
   tooltip.bind(self.locality_entry,'Find images in a sample.');tooltip.bind(self.image_entry,'Find an image by its filename.')
   self._build_legend()
   list_host=ttk.Frame(self);list_host.pack(fill='both',expand=True);self.canvas=PhotoListCanvas(list_host,height=24,bg='white');self.scrollbar=ttk.Scrollbar(list_host,orient='vertical',command=self.canvas.yview);self.canvas.configure(yscrollcommand=self.scrollbar.set);self.canvas.pack(side='left',fill='both',expand=True);self.scrollbar.pack(side='right',fill='y');self.canvas.bind('<<ListboxSelect>>',self._selected);self.visible_indices=[];self._cache=()
-  action=ttk.Frame(self,padding=(0,5,0,0));action.pack(fill='x');self.exclude_button=ttk.Button(action,text='⊘ Exclude',command=self.exclude_or_restore);self.exclude_button.pack(side='left');tooltip.bind(self.exclude_button,'Exclude this image from active workflows and review queues without deleting its scientific data. Restore keeps the data but does not silently re-add the image to a finite review queue.')
+  action=ttk.Frame(self,padding=(0,5,0,0));action.pack(fill='x');self.exclude_button=ttk.Button(action,text='Exclude',image=self._action_icon('exclude'),compound='left',style='Icon.TButton',command=self.exclude_or_restore);self.exclude_button.pack(side='left');tooltip.bind(self.exclude_button,'Exclude this image from active workflows and review queues without deleting its scientific data. Restore keeps the data but does not silently re-add the image to a finite review queue.')
   for variable in (self.image_query,self.locality_query,self.show_excluded):variable.trace_add('write',lambda *_:self.refresh())
+ def _action_icon(self,name):
+  key=(name,CONTROL_ICON_SIZE)
+  if key not in self._icons:self._icons[key]=tk_icon(self,name,CONTROL_ICON_SIZE)
+  return self._icons[key]
  def _build_legend(self):
   legend=ttk.Frame(self);legend.pack(fill='x',pady=(0,4))
   meta=ttk.Frame(legend);meta.pack(fill='x')
@@ -66,7 +71,7 @@ class PhotoListPanel(ttk.Frame):
   if self.context.selected in self.visible_indices:self.canvas.selection_set(self.visible_indices.index(self.context.selected))
   if yview is not None:self.canvas.yview_moveto(yview)
   elif self.context.selected in self.visible_indices:self.canvas.see(self.visible_indices.index(self.context.selected))
-  row=self.context.current() or {};self.exclude_button.configure(text='↩ Restore' if row.get('excluded') else '⊘ Exclude',state='normal' if row else 'disabled')
+  row=self.context.current() or {};excluded=bool(row.get('excluded'));self.exclude_button.configure(text='Restore' if excluded else 'Exclude',image=self._action_icon('restore' if excluded else 'exclude'),state='normal' if row else 'disabled')
  def sync_current(self,reveal=True):
   if self.context.selected in self.visible_indices:
    visible=self.visible_indices.index(self.context.selected);self.canvas.selection_set(visible)

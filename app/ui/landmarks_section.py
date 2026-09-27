@@ -128,12 +128,13 @@ class LandmarksSection(SectionView):
   self.canvas_frame.pack_propagate(False)
   self.canvas=LandmarkCanvasController(self.canvas_frame,self.context,self.refresh,self._landmark_selected);self.canvas.on_image_ready=self._image_ready
   ttk.Label(controls,text='Landmark actions:',style='SectionTitle.TLabel').pack(side='left',padx=(0,6))
-  self.missing_button=self.button(controls,'Mark missing',self.canvas.toggle_missing,'Mark the selected landmark as deliberately missing; click again to undo missing.');self.missing_button.pack(side='left',padx=2)
-  self.button(controls,'Delete',self.canvas.delete_current,'Remove this landmark so it can be placed again.').pack(side='left',padx=2)
-  self.button(controls,'Clear all…',self.canvas.clear_all,'Clear all editable landmarks on this image.').pack(side='left',padx=2)
-  self.verify_button=self.button(controls,'Verify image',self.canvas.mark_checked,'Verify this completed landmark set after human review.');self.verify_button.pack(side='left',padx=2)
-  self.button(controls,'🎨 Display…',self.open_display_settings,'Change landmark colours, marker size and marker style.').pack(side='right',padx=(8,2))
-  ttk.Label(controls,text='Click to place; drag a point to correct it.',style="Muted.TLabel").pack(side='left',padx=10)
+  self.missing_button=self.button(controls,'Mark missing',self.canvas.toggle_missing,'Mark the selected landmark as deliberately missing; click again to undo missing.',icon='missing');self.missing_button.pack(side='left',padx=2)
+  self.button(controls,'Delete',self.canvas.delete_current,'Remove this landmark so it can be placed again.',icon='delete').pack(side='left',padx=2)
+  self.button(controls,'Clear all…',self.canvas.clear_all,'Clear all editable landmarks on this image.',icon='clear').pack(side='left',padx=2)
+  ttk.Separator(controls,orient='vertical').pack(side='left',fill='y',padx=(6,4),pady=3)
+  self.verify_button=self.button(controls,'Verify image',self.canvas.mark_checked,'Verify this completed landmark set after human review.',icon='verify');self.verify_button.pack(side='left',padx=2)
+  self.button(controls,'Display…',self.open_display_settings,'Change landmark colours, marker size and marker style.',icon='display').pack(side='right',padx=(8,2))
+  ttk.Label(controls,text='Click = place · drag = correct',style="Muted.TLabel").pack(side='right',padx=(6,8))
 
   batch=tk.IntVar(value=24);prediction=tk.IntVar(value=24)
   guide='Why: Landmarks turns specimen anatomy into comparable point coordinates for morphometric analysis.\n\n1. Repeatability\nOptional. Mark the same control images twice, with a break between passes, to estimate your own placement error.\n\n2. Training batch\nMark every required point or choose Mark missing. Use Confirm & Next to finish each image.\n\n3. Train\nTrain from all human-confirmed images. Choose Bootstrap for the first model or a saved model as the parent.\n\n4. Apply and review\nApply the active model to new images. Check its points and confirm them before they can be used for training.'

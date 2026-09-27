@@ -13,6 +13,7 @@ from app.gui_crop_debug import log
 from .context import UIContext
 from .section_registry import visible_sections
 from .tooltips import Tooltip
+from .icons import tk_icon, TOPBAR_ICON_SIZE, CONTROL_ICON_SIZE
 from .dialogs import center, info, install_auto_center
 from .photo_list_panel import PhotoListPanel
 from .landmark_sidebar import LandmarkSidebar
@@ -49,12 +50,14 @@ class ProductionShell(tk.Tk):
         self.context=UIContext(None)
         apply_window_identity(self)
         self.geometry("1600x900"); self.minsize(980,650); self.configure(bg=BG)
+        self._ui_icons={}
         install_auto_center(self)
         self.style=ttk.Style(self)
         # A deliberately small design system: quiet surfaces, one accent and
         # consistent hierarchy.  Section code should use these styles instead
         # of inventing local colours/sizes.
         self.style.configure("P.TButton", padding=(10,7))
+        self.style.configure("Icon.TButton", padding=(7,4), font=("Segoe UI",9))
         self.style.configure("Primary.TButton", padding=(10,6), font=("Segoe UI",9,"bold"))
         self.style.configure("ComplexQC.TButton", padding=(12,7), font=("Segoe UI",9,"bold"), foreground=ACC, background="#e7f2f8")
         self.style.map("ComplexQC.TButton", foreground=[("!disabled",ACC)], background=[("active","#d7eaf5"),("!disabled","#e7f2f8")])
@@ -313,9 +316,17 @@ class ProductionShell(tk.Tk):
         except Exception as exc:
             log("GLOBAL","hardware_profile","ERROR",detail=str(exc))
 
-    def control_button(self,parent,text,command,help_text,primary=False,enabled=True,**kwargs):
-        style=kwargs.pop("style","P.TButton" if primary else "TButton")
+    def ui_icon(self,name,size):
+        key=(str(name),int(size))
+        if key not in self._ui_icons:self._ui_icons[key]=tk_icon(self,name,size)
+        return self._ui_icons[key]
+
+    def control_button(self,parent,text,command,help_text,primary=False,enabled=True,icon=None,icon_size=CONTROL_ICON_SIZE,**kwargs):
+        style=kwargs.pop("style","P.TButton" if primary else ("Icon.TButton" if icon else "TButton"))
         state=kwargs.pop("state","normal" if enabled else "disabled")
+        if icon:
+            kwargs.setdefault("image",self.ui_icon(icon,icon_size))
+            kwargs.setdefault("compound","left")
         button=ttk.Button(parent,text=text,command=command,state=state,style=style,**kwargs)
         self.tip.bind(button,help_text); return button
 
@@ -424,12 +435,12 @@ class ProductionShell(tk.Tk):
 
     def _nav(self):
         row=ttk.Frame(self.root,style="Topbar.TFrame"); row.grid(row=0,column=0,sticky="ew",pady=(0,4))
-        home=ttk.Button(row,text="⌂ Modules",command=self.show_module_hub,style="Stage.TButton")
+        home=ttk.Button(row,text="Modules",image=self.ui_icon("modules",TOPBAR_ICON_SIZE),compound="left",command=self.show_module_hub,style="Stage.TButton")
         home.pack(side="left",padx=(0,8));self.tip.bind(home,"Return to the MorphoLabel module hub.")
         sections=visible_sections(self.context.crop_enabled()) if self.context.project else visible_sections(True)
         for spec in sections:
             active=spec.key == self.context.section
-            button=ttk.Button(row,text=("● "+spec.label) if active else spec.label,command=lambda key=spec.key:self.select(key),style="StageActive.TButton" if active else "Stage.TButton",state="normal" if self.context.project or spec.key=="project" else "disabled")
+            button=ttk.Button(row,text=spec.label,image=self.ui_icon(spec.key,TOPBAR_ICON_SIZE),compound="left",command=lambda key=spec.key:self.select(key),style="StageActive.TButton" if active else "Stage.TButton",state="normal" if self.context.project or spec.key=="project" else "disabled")
             button.pack(side="left",padx=(0,3)); self.tip.bind(button,f"Open the {spec.label} section.")
         self._menus(row)
 
