@@ -1,0 +1,176 @@
+RUNNING_VERSION=0.5.0-beta.3
+RUNNING_EXE_SHA256=76BF4AA4565DAB8D1EA9D592B27FDBBAAC0016A3FD0DD8C8D82798E2B7A78A94
+HUNG_PROCESS_FOUND=YES
+WINDOW_RESPONDING=YES (final snapshot; initial snapshot was NO)
+PYSPY_CAPTURE=PASS (--native; two snapshots captured; full text also saved outside repo at D:\MorphoLabel_Acceptance\landmarks-freeze\py-spy.txt)
+PROJECT_SQLITE_QUICK_CHECK=ok
+ACTIVE_LANDMARK_MODEL=NONE
+LANDMARK_WORKFLOW_STAGE=CONTROL_SET (persisted workflow state present; current batch image-ID count=0)
+REPEATABILITY_ACTIVE=NO
+REVIEW_SESSION_ACTIVE=NO (suspicious review inactive; prediction review inactive)
+
+CODE / PROCESS IDENTITY
+Git branch at capture: main
+HEAD: d7fbc6ec9a0373a0417064a7d1a3aeb81ee13433
+origin/main: d7fbc6ec9a0373a0417064a7d1a3aeb81ee13433
+git status: clean
+Installed executable: <HOME>\AppData\Local\Programs\MorphoLabel\MorphoLabel.exe
+Installed executable SHA256: 76BF4AA4565DAB8D1EA9D592B27FDBBAAC0016A3FD0DD8C8D82798E2B7A78A94
+Separate fresh-process --version: exit=0; stdout=0.5.0-beta.3; stderr empty
+
+RUNNING MORPHOLABEL.EXE PROCESSES
+Exactly one process found.
+PID=39232
+Executable path=<HOME>\AppData\Local\Programs\MorphoLabel\MorphoLabel.exe
+Start time=2026-09-27 20:41:58 local
+Initial snapshot: Responding=NO; CPU=12.468750 s; working set=146976768 bytes; private memory=922869760 bytes; threads=27
+Final snapshot: Responding=YES; CPU=60.500000 s; working set=169852928 bytes; private memory=945152000 bytes; threads=26
+
+LIVE PYTHON STACK / HANG SNAPSHOTS
+py-spy 0.4.2 `dump --pid 39232 --native` succeeded twice; no attach error. The initial snapshot caught the apparent freeze while the UI thread was downloading the published AI archive over TLS. The follow-up snapshot showed the UI thread back in Tk's message loop. The complete native and Python stack frames from both captures follow; executable home paths are redacted, frame order is unchanged.
+
+INITIAL CAPTURE — MainThread blocked in HTTPS response read:
+Thread 36720 (idle): "MainThread"
+    NtWaitForSingleObject (ntdll.dll)
+    0x7ffd1936951a (mswsock.dll)
+    0x7ffd193691f2 (mswsock.dll)
+    select (WS2_32.dll)
+    PyInit__ssl (_ssl.pyd)
+    PyInit__ssl (_ssl.pyd)
+    PyInit__ssl (_ssl.pyd)
+    PyObject_Vectorcall (python311.dll)
+    PyEval_EvalFrameDefault (python311.dll)
+    PyFunction_Vectorcall (python311.dll)
+    PyObject_VectorcallMethod (python311.dll)
+    Py_convert_optional_to_ssize_t (python311.dll)
+    PyErr_CheckSignals (python311.dll)
+    PyTime_AsMilliseconds (python311.dll)
+    PyTime_AsMilliseconds (python311.dll)
+    PyEval_EvalFrameDefault (python311.dll)
+    PyUnicodeWriter_WriteSubstring (python311.dll)
+    PyObject_MakeTpCall (python311.dll)
+    PyObject_Vectorcall (python311.dll)
+    PyEval_EvalFrameDefault (python311.dll)
+    PyFunction_Vectorcall (python311.dll)
+    PyIter_Send (python311.dll)
+    PyObject_Call (python311.dll)
+    PyInit__tkinter (_tkinter.pyd)
+    TclNRRunCallbacks (tcl86t.dll)
+    Tk_PkgInitStubsCheck (tk86t.dll)
+    Tk_PkgInitStubsCheck (tk86t.dll)
+    TclNRRunCallbacks (tcl86t.dll)
+    Tk_PkgInitStubsCheck (tk86t.dll)
+    Tk_PkgInitStubsCheck (tk86t.dll)
+    Tk_PkgInitStubsCheck (tk86t.dll)
+    TclNRRunCallbacks (tcl86t.dll)
+    Tk_PkgInitStubsCheck (tk86t.dll)
+    TclNRRunCallbacks (tcl86t.dll)
+    Tk_PkgInitStubsCheck (tk86t.dll)
+    Tcl_EvalEx (tcl86t.dll)
+    Tcl_EvalEx (tcl86t.dll)
+    Tk_BindEvent (tk86t.dll)
+    TkBindEventProc (tk86t.dll)
+    Tk_HandleEvent (tk86t.dll)
+    TkQueueEventForAllChildren (tk86t.dll)
+    Tcl_ServiceEvent (tcl86t.dll)
+    Tcl_DoOneEvent (tcl86t.dll)
+    PyInit__tkinter (_tkinter.pyd)
+    PyInit__tkinter (_tkinter.pyd)
+    PyUnicode_FastFill (python311.dll)
+    PyObject_Vectorcall (python311.dll)
+    PyEval_EvalFrameDefault (python311.dll)
+    PyType_CalculateMetaclass (python311.dll)
+    PyEval_EvalCode (python311.dll)
+    MorphoLabel.exe (frozen runtime frame; address 0x7ff6233d4639)
+    MorphoLabel.exe (frozen runtime frame; address 0x7ff6233d56b7)
+    MorphoLabel.exe (frozen runtime frame; address 0x7ff6233de6f9)
+    read (ssl.py:1166)
+    recv_into (ssl.py:1314)
+    readinto (socket.py:706)
+    read (client.py:473)
+    _download_archive (app\ai_delivery.py:227)
+    install_published_ai_component (app\ai_delivery.py:286)
+    ensure_ai_runtime (app\ai_delivery.py:318)
+    __init__ (app\rtmpose_backend.py:23)
+    _rtmpose_provider (app\extensions\builtins.py:43)
+    backend_for_model (app\ai_batch.py:39)
+    available_training_parents (app\landmark_training_workflow.py:91)
+    render (app\ui\landmarks_section.py:168)
+    _section (app\ui\shell.py:504)
+    _render_landmarks_workspace (app\ui\shell.py:325)
+    render (app\modules\landmarks.py:22)
+    render (app\ui\shell.py:302)
+    select (app\ui\shell.py:512)
+    <lambda> (app\ui\shell.py:334)
+    __call__ (__init__.py:1967)
+    mainloop (__init__.py:1504)
+    run (app\ui\shell.py:937)
+    main (app\__main__.py:64)
+    <module> (entrypoint.py:2)
+
+FOLLOW-UP CAPTURE — MainThread returned to Tk message loop:
+Thread 36720 (idle): "MainThread"
+    NtUserMsgWaitForMultipleObjectsEx (win32u.dll)
+    Tcl_WaitForEvent (tcl86t.dll)
+    Tcl_DoOneEvent (tcl86t.dll)
+    PyInit__tkinter (_tkinter.pyd)
+    PyInit__tkinter (_tkinter.pyd)
+    PyUnicode_FastFill (python311.dll)
+    PyObject_Vectorcall (python311.dll)
+    PyEval_EvalFrameDefault (python311.dll)
+    PyType_CalculateMetaclass (python311.dll)
+    PyEval_EvalCode (python311.dll)
+    MorphoLabel.exe (frozen runtime frame; address 0x7ff6233d4639)
+    MorphoLabel.exe (frozen runtime frame; address 0x7ff6233d56b7)
+    MorphoLabel.exe (frozen runtime frame; address 0x7ff6233de6f9)
+    mainloop (__init__.py:1504)
+    run (app\ui\shell.py:937)
+    main (app\__main__.py:64)
+    <module> (entrypoint.py:2)
+
+RELEVANT LOG TAIL (SANITIZED)
+The requested LOCALAPPDATA MorphoLabel\logs\app.log exists (36681 bytes; last write 2026-09-27 15:31:41 local), earlier than process start 20:41:58; there were 0 eligible entries in the capture window. The project-mirrored app.log exists (34814 bytes; last write 2026-09-27 15:20:04 local), also earlier than process start; there were 0 eligible entries. No raw log lines or project/source paths are included.
+
+READ-ONLY PROJECT / SQLITE STATE
+Project resolved from isolated MorphoLabel preferences: <PROJECT>; project.yaml, landmark_schema.csv, project_data/project.sqlite exist. Config source_root resolves to <SOURCE>, outside project; source path exists. No project files were written by this diagnostic.
+SQLite mode=ro; PRAGMA query_only=ON; quick_check=ok; DB size=167936 bytes.
+Tables: ai_permanent_holdouts, annotation_drafts, corrections, crop_evaluations, crop_holdout, crop_holdout_references, crop_predictions, crop_training_membership, crop_verified_observations, crops, image_attributes, image_review, images, landmark_schema, landmarks, locality_calibrations, models, project, qc, training_examples.
+Counts: images=3; excluded=1; crops=3; landmarks=9; models=0; datasets table=absent; training_examples=9.
+Active crop model=NONE; active landmark model=NONE. Model lineage rows=0; referenced model/dataset manifests=none.
+Persisted landmark AI workflow state=present; stage=CONTROL_SET; current workflow image-ID count=0.
+Repeatability: no run records; no active run.
+Suspicious review: inactive; item count=0. Landmark prediction review: inactive; active session count=0; active item count=0.
+
+WINDOWS THREADS (final enumeration; Id / ThreadState / WaitReason / TotalProcessorTime seconds)
+36720 / Wait / UserRequest / 58.95
+22228 / Wait / UserRequest / 0.00
+18312 / Wait / UserRequest / 0.00
+6268 / Wait / UserRequest / 0.00
+7508 / Wait / UserRequest / 0.00
+21836 / Wait / UserRequest / 0.00
+25652 / Wait / UserRequest / 0.00
+29812 / Wait / UserRequest / 0.00
+39560 / Wait / UserRequest / 0.00
+39264 / Wait / UserRequest / 0.00
+39660 / Wait / UserRequest / 0.00
+29384 / Wait / UserRequest / 0.00
+17400 / Wait / UserRequest / 0.00
+39900 / Wait / UserRequest / 0.00
+22628 / Wait / UserRequest / 0.00
+39396 / Wait / UserRequest / 0.00
+38172 / Wait / UserRequest / 0.00
+39460 / Wait / UserRequest / 0.00
+31780 / Wait / UserRequest / 0.00
+7080 / Wait / UserRequest / 0.00
+5416 / Wait / UserRequest / 0.00
+28968 / Wait / UserRequest / 0.00
+35968 / Wait / UserRequest / 0.00
+36688 / Wait / UserRequest / 0.00
+40416 / Wait / UserRequest / 0.02
+40568 / Wait / EventPairLow / 0.00
+
+RESOURCE SNAPSHOT
+Final 10-second interval: Responding YES at start/end; CPU delta=0.109375 seconds; private memory delta=0 bytes; working-set delta=4096 bytes; thread count=26.
+Final point: CPU=60.500000 seconds; private memory=945152000 bytes; working set=169852928 bytes; available RAM=34362408960 bytes.
+Free space: project volume D:=1329460117504 bytes; LOCALAPPDATA volume C:=666044358656 bytes.
+Initial apparent freeze: Responding NO; MainThread blocked reading TLS response while synchronously downloading the AI release archive during the Landmarks render path. Follow-up capture: MainThread in Tk mainloop and window responding. Process left running and not closed.
