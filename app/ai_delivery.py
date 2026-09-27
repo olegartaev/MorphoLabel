@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -18,6 +19,8 @@ from .version import __version__
 _RELEASE_ROOT = "https://github.com/olegartaev/MorphoLabel/releases/download"
 _MANIFEST_NAME = "MorphoLabel-AI-Windows-x64.json"
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
+_DOWNLOAD_RETRIES = 4
+_DOWNLOAD_BLOCK_BYTES = 1024 * 1024
 
 
 class AIDeliveryError(RuntimeError):
@@ -37,11 +40,57 @@ def release_base_url(version=None):
     return f"{_RELEASE_ROOT}/v{version}"
 
 
-def _request(url):
-    return urllib.request.Request(
-        url,
-        headers={"User-Agent": f"MorphoLabel/{__version__} managed-ai"},
-    )
+def _request(url, *, range_start=None):
+    headers={"User-Agent": f"MorphoLabel/{__version__} managed-ai"}
+    if range_start is not None and int(range_start) > 0:
+        headers["Range"]=f"bytes={int(range_start)}-"
+    return urllib.request.Request(url,headers=headers)
+
+
+def _response_status(response):
+    status=getattr(response,"status",None)
+    if status is None:
+        getter=getattr(response,"getcode",None)
+        status=getter() if callable(getter) else 200
+    return int(status or 200)
+
+
+def _hash_segment(path,start,length):
+    digest=hashlib.sha256();read=0
+    with Path(path).open("rb") as handle:
+        handle.seek(int(start))
+        remaining=int(length)
+        while remaining>0:
+            block=handle.read(min(_DOWNLOAD_BLOCK_BYTES,remaining))
+            if not block:break
+            digest.update(block);read+=len(block);remaining-=len(block)
+    return digest.hexdigest(),read
+
+
+def _truncate(path,size):
+    path=Path(path)
+    path.parent.mkdir(parents=True,exist_ok=True)
+    mode="r+b" if path.exists() else "w+b"
+    with path.open(mode) as handle:
+        handle.truncate(int(size))
+
+
+def _validated_partial_size(path,parts,archive_bytes):
+    path=Path(path)
+    if not path.is_file():return 0
+    size=path.stat().st_size
+    if size<0 or size>int(archive_bytes):
+        _truncate(path,0);return 0
+    offset=0
+    for asset in parts:
+        end=offset+int(asset["bytes"])
+        if size<end:break
+        digest,read=_hash_segment(path,offset,asset["bytes"])
+        if read!=int(asset["bytes"]) or digest!=asset["sha256"]:
+            _truncate(path,offset)
+            return offset
+        offset=end
+    return size
 
 
 def _fetch_manifest(base_url, *, progress=None):
@@ -131,62 +180,100 @@ def _download_archive(manifest, base_url, *, progress=None):
     if target.is_file() and target.stat().st_size == manifest["archive_bytes"] and _sha256(target) == expected:
         _progress(progress, "AI COMPONENT", "Using the verified cached AI component…")
         return target
+    if target.exists():
+        target.unlink(missing_ok=True)
+
+    part = target.with_suffix(target.suffix + ".part")
+    received = _validated_partial_size(part, manifest["parts"], manifest["archive_bytes"])
+    if received:
+        pct=min(100,int(received*100/manifest["archive_bytes"]))
+        _progress(progress,"AI COMPONENT",f"Resuming AI runtime download… {pct}%")
 
     free = shutil.disk_usage(cache).free
-    required = manifest["archive_bytes"] + manifest["installed_bytes"] + 512 * 1024 * 1024
+    remaining = max(0, manifest["archive_bytes"] - received)
+    required = remaining + manifest["installed_bytes"] + 512 * 1024 * 1024
     if free < required:
         raise AIDeliveryError(
             f"Not enough free disk space for the AI component: need about {required / (1024**3):.1f} GB"
         )
 
-    part = target.with_suffix(target.suffix + ".part")
-    part.unlink(missing_ok=True)
-    full_digest = hashlib.sha256()
-    received = 0
     _progress(progress, "AI COMPONENT", "Downloading the verified AI runtime…")
-    try:
-        with part.open("wb") as output:
-            for asset in manifest["parts"]:
-                url = f"{base_url.rstrip('/')}/{asset['name']}"
-                asset_digest = hashlib.sha256()
-                asset_received = 0
-                try:
-                    response_context = urllib.request.urlopen(_request(url), timeout=60)
-                except (OSError, urllib.error.URLError, urllib.error.HTTPError) as exc:
-                    raise AIDeliveryError(f"AI component part download failed: {asset['name']}: {exc}") from exc
-                with response_context as response:
-                    while True:
-                        block = response.read(1024 * 1024)
-                        if not block:
-                            break
-                        output.write(block)
-                        asset_digest.update(block)
-                        full_digest.update(block)
-                        asset_received += len(block)
-                        received += len(block)
-                        pct = min(100, int(received * 100 / manifest["archive_bytes"]))
-                        _progress(progress, "AI COMPONENT", f"Downloading AI runtime… {pct}%")
-                if asset_received != asset["bytes"]:
-                    raise AIDeliveryError(
-                        f"AI component part is incomplete: {asset['name']}: {asset_received} of {asset['bytes']} bytes"
-                    )
-                if asset_digest.hexdigest() != asset["sha256"]:
-                    raise AIDeliveryError(f"AI component part failed SHA256 verification: {asset['name']}")
-    except Exception:
-        part.unlink(missing_ok=True)
-        raise
+    offset=0
+    transient=(OSError,urllib.error.URLError,urllib.error.HTTPError)
+    for asset in manifest["parts"]:
+        asset_bytes=int(asset["bytes"]);asset_end=offset+asset_bytes
+        if received>=asset_end:
+            offset=asset_end
+            continue
+        if received<offset:
+            _truncate(part,offset);received=offset
 
-    if received != manifest["archive_bytes"]:
-        part.unlink(missing_ok=True)
+        attempts=0
+        while received<asset_end:
+            attempts+=1
+            local_offset=received-offset
+            url=f"{base_url.rstrip('/')}/{asset['name']}"
+            try:
+                request=_request(url,range_start=local_offset if local_offset else None)
+                with urllib.request.urlopen(request,timeout=60) as response:
+                    # Some servers/proxies ignore Range and return 200. In that
+                    # case restart only this release part, never earlier verified parts.
+                    if local_offset and _response_status(response)!=206:
+                        _truncate(part,offset);received=offset;local_offset=0
+                    mode="r+b" if part.exists() else "w+b"
+                    with part.open(mode) as output:
+                        output.seek(received)
+                        while received<asset_end:
+                            block=response.read(min(_DOWNLOAD_BLOCK_BYTES,asset_end-received))
+                            if not block:break
+                            output.write(block);received+=len(block)
+                            pct=min(100,int(received*100/manifest["archive_bytes"]))
+                            _progress(progress,"AI COMPONENT",f"Downloading AI runtime… {pct}%")
+                        output.flush()
+            except transient as exc:
+                if attempts>=_DOWNLOAD_RETRIES:
+                    pct=min(100,int(received*100/manifest["archive_bytes"]))
+                    raise AIDeliveryError(
+                        f"AI component download was interrupted after {pct}%; "
+                        f"the partial download was kept and will resume next time: {exc}"
+                    ) from exc
+                _progress(progress,"AI COMPONENT","Connection interrupted; resuming AI runtime download…")
+                time.sleep(min(4,attempts))
+                continue
+
+            if received<asset_end:
+                if attempts>=_DOWNLOAD_RETRIES:
+                    pct=min(100,int(received*100/manifest["archive_bytes"]))
+                    raise AIDeliveryError(
+                        f"AI component part remained incomplete after retries at {pct}%; "
+                        "the partial download was kept and will resume next time"
+                    )
+                _progress(progress,"AI COMPONENT","Connection ended early; resuming AI runtime download…")
+                time.sleep(min(4,attempts))
+                continue
+
+            digest,read=_hash_segment(part,offset,asset_bytes)
+            if read!=asset_bytes or digest!=asset["sha256"]:
+                _truncate(part,offset);received=offset
+                if attempts>=_DOWNLOAD_RETRIES:
+                    raise AIDeliveryError(
+                        f"AI component part failed SHA256 verification after retries: {asset['name']}"
+                    )
+                _progress(progress,"AI COMPONENT","Downloaded AI part failed verification; retrying that part…")
+                time.sleep(min(4,attempts))
+                continue
+            break
+        offset=asset_end
+
+    if received != manifest["archive_bytes"] or part.stat().st_size != manifest["archive_bytes"]:
         raise AIDeliveryError(
             f"AI component download is incomplete: {received} of {manifest['archive_bytes']} bytes"
         )
-    if full_digest.hexdigest() != expected:
+    if _sha256(part) != expected:
         part.unlink(missing_ok=True)
         raise AIDeliveryError("AI component assembled archive failed SHA256 verification")
     os.replace(part, target)
     return target
-
 
 def install_published_ai_component(*, progress=None, release_version=None):
     version = str(release_version or __version__)
