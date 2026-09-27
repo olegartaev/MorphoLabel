@@ -440,7 +440,7 @@ class ProductionShell(tk.Tk):
         sections=visible_sections(self.context.crop_enabled()) if self.context.project else visible_sections(True)
         for spec in sections:
             active=spec.key == self.context.section
-            button=ttk.Button(row,text=spec.label,image=self.ui_icon(spec.key,TOPBAR_ICON_SIZE),compound="left",command=lambda key=spec.key:self.select(key),style="StageActive.TButton" if active else "Stage.TButton",state="normal" if self.context.project or spec.key=="project" else "disabled")
+            button=ttk.Button(row,text=("● "+spec.label) if active else spec.label,image=self.ui_icon(spec.key,TOPBAR_ICON_SIZE),compound="left",command=lambda key=spec.key:self.select(key),style="StageActive.TButton" if active else "Stage.TButton",state="normal" if self.context.project or spec.key=="project" else "disabled")
             button.pack(side="left",padx=(0,3)); self.tip.bind(button,f"Open the {spec.label} section.")
         self._menus(row)
 
