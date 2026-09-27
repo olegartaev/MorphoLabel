@@ -1,0 +1,145 @@
+{
+  "created_at": "2026-09-27T15:02:18.717936+00:00",
+  "expected_version": "0.5.0-beta.2",
+  "fail": 7,
+  "format_version": 1,
+  "hang": 0,
+  "pass": 13,
+  "scenario_count": 20,
+  "scenarios": [
+    {
+      "elapsed_seconds": 3.64,
+      "name": "install_published_release",
+      "returncode": 0,
+      "status": "PASS"
+    },
+    {
+      "elapsed_seconds": 0.157,
+      "name": "installed_version",
+      "returncode": 0,
+      "status": "PASS"
+    },
+    {
+      "elapsed_seconds": 0.156,
+      "name": "installed_core_self_test",
+      "returncode": 0,
+      "status": "PASS"
+    },
+    {
+      "elapsed_seconds": 15.172,
+      "name": "installed_gui_startup",
+      "returncode": null,
+      "status": "PASS"
+    },
+    {
+      "elapsed_seconds": 995.094,
+      "failure_tail": "Traceback (most recent call last):\n  File \"entrypoint.py\", line 2, in <module>\n  File \"app\\__main__.py\", line 35, in main\n    runtime = install_published_ai_component(progress=lambda stage, detail: print(f\"{stage}: {detail}\"))\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"app\\ai_delivery.py\", line 199, in install_published_ai_component\n    archive = _download_archive(manifest, base, progress=progress)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"app\\ai_delivery.py\", line 159, in _download_archive\n    block = response.read(1024 * 1024)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"http\\client.py\", line 473, in read\n  File \"socket.py\", line 706, in readinto\n  File \"ssl.py\", line 1314, in recv_into\n  File \"ssl.py\", line 1166, in read\nTimeoutError: The read operation timed out\n\ning AI runtime… 38%\nAI COMPONENT: Downloading AI runtime… 38%\nAI COMPONENT: Downloading AI runtime… 38%\nAI COMPONENT: Downloading AI runtime… 38%\nAI COMPONENT: Downloading AI runtime… 38%\nAI COMPONENT: Downloading AI runtime… 38%\nAI COMPONENT: Downloading AI runtime… 38%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 39%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 40%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 41%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 42%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 43%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 44%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%\nAI COMPONENT: Downloading AI runtime… 45%",
+      "name": "published_ai_install",
+      "returncode": 1,
+      "status": "FAIL"
+    },
+    {
+      "elapsed_seconds": 274.593,
+      "failure_tail": "Traceback (most recent call last):\n  File \"entrypoint.py\", line 2, in <module>\n  File \"app\\__main__.py\", line 42, in main\n    result = run_ai_self_test(\n             ^^^^^^^^^^^^^^^^^\n  File \"app\\self_test.py\", line 58, in run_ai_self_test\n    bootstrap = resolve_landmark_bootstrap(None, progress_callback=progress)\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"app\\landmark_bootstrap.py\", line 86, in resolve_landmark_bootstrap\n    runtime, _ = ensure_ai_runtime(project=project, progress=progress_callback)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"app\\ai_delivery.py\", line 231, in ensure_ai_runtime\n    install_published_ai_component(progress=progress)\n  File \"app\\ai_delivery.py\", line 199, in install_published_ai_component\n    archive = _download_archive(manifest, base, progress=progress)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"app\\ai_delivery.py\", line 159, in _download_archive\n    block = response.read(1024 * 1024)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"http\\client.py\", line 473, in read\n  File \"socket.py\", line 706, in readinto\n  File \"ssl.py\", line 1314, in recv_into\n  File \"ssl.py\", line 1166, in read\nTimeoutError: The read operation timed out\n\ning AI runtime… 14%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 15%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 16%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 17%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 18%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 19%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 20%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 21%\nAI COMPONENT: Downloading AI runtime… 22%\nAI COMPONENT: Downloading AI runtime… 22%\nAI COMPONENT: Downloading AI runtime… 22%\nAI COMPONENT: Downloading AI runtime… 22%\nAI COMPONENT: Downloading AI runtime… 22%\nAI COMPONENT: Downloading AI runtime… 22%",
+      "name": "published_ai_cuda_inference_training",
+      "returncode": 1,
+      "status": "FAIL"
+    },
+    {
+      "elapsed_seconds": 0.969,
+      "name": "project_open",
+      "returncode": 0,
+      "status": "PASS"
+    },
+    {
+      "elapsed_seconds": 0.344,
+      "name": "persistence_roundtrip",
+      "returncode": 0,
+      "status": "PASS"
+    },
+    {
+      "elapsed_seconds": 0.594,
+      "name": "exclusion_roundtrip",
+      "returncode": 0,
+      "status": "PASS"
+    },
+    {
+      "elapsed_seconds": 0.578,
+      "name": "landmark_roundtrip",
+      "returncode": 0,
+      "status": "PASS"
+    },
+    {
+      "elapsed_seconds": 5.875,
+      "name": "exports",
+      "returncode": 0,
+      "status": "PASS"
+    },
+    {
+      "elapsed_seconds": 0.062,
+      "failure_tail": "Traceback (most recent call last):\n  File \"<REPO>\\tools\\acceptance_campaign.py\", line 508, in run_child\n    result = CHILD_SCENARIOS[args.child_scenario](Path(args.project).resolve())\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<REPO>\\tools\\acceptance_campaign.py\", line 340, in _scenario_counts_lineage\n    from app.landmark_dataset import training_ready_image_ids\n  File \"<REPO>\\app\\landmark_dataset.py\", line 8, in <module>\n    from PIL import Image\nModuleNotFoundError: No module named 'PIL'\n\n{\"status\": \"FAIL\", \"error_type\": \"ModuleNotFoundError\", \"error\": \"No module named 'PIL'\"}",
+      "name": "counts_lineage",
+      "returncode": 1,
+      "status": "FAIL"
+    },
+    {
+      "elapsed_seconds": 0.078,
+      "failure_tail": "Traceback (most recent call last):\n  File \"<REPO>\\tools\\acceptance_campaign.py\", line 508, in run_child\n    result = CHILD_SCENARIOS[args.child_scenario](Path(args.project).resolve())\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<REPO>\\tools\\acceptance_campaign.py\", line 358, in _scenario_gui_sections\n    from app.ui.shell import ProductionShell\n  File \"<REPO>\\app\\ui\\shell.py\", line 13, in <module>\n    from .context import UIContext\n  File \"<REPO>\\app\\ui\\context.py\", line 4, in <module>\n    from app.landmark_dataset import v2_human_final_eligible, v2_human_final_eligible_image_ids, model_seen_image_ids, model_training_state_fingerprints, current_training_state_fingerprint, current_training_state_fingerprints, training_ready_image_ids\n  File \"<REPO>\\app\\landmark_dataset.py\", line 8, in <module>\n    from PIL import Image\nModuleNotFoundError: No module named 'PIL'\n\n{\"status\": \"FAIL\", \"error_type\": \"ModuleNotFoundError\", \"error\": \"No module named 'PIL'\"}",
+      "name": "gui_sections",
+      "returncode": 1,
+      "status": "FAIL"
+    },
+    {
+      "elapsed_seconds": 0.078,
+      "failure_tail": "Traceback (most recent call last):\n  File \"<REPO>\\tools\\acceptance_campaign.py\", line 508, in run_child\n    result = CHILD_SCENARIOS[args.child_scenario](Path(args.project).resolve())\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<REPO>\\tools\\acceptance_campaign.py\", line 390, in _scenario_project_ai_inference\n    from app.ai_batch import active_backend\n  File \"<REPO>\\app\\ai_batch.py\", line 8, in <module>\n    from .landmark_ai_service import LandmarkAIService\n  File \"<REPO>\\app\\landmark_ai_service.py\", line 9, in <module>\n    from PIL import Image\nModuleNotFoundError: No module named 'PIL'\n\n{\"status\": \"FAIL\", \"error_type\": \"ModuleNotFoundError\", \"error\": \"No module named 'PIL'\"}",
+      "name": "project_ai_inference",
+      "returncode": 1,
+      "status": "FAIL"
+    },
+    {
+      "elapsed_seconds": 0.063,
+      "failure_tail": "Traceback (most recent call last):\n  File \"<REPO>\\tools\\acceptance_campaign.py\", line 508, in run_child\n    result = CHILD_SCENARIOS[args.child_scenario](Path(args.project).resolve())\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<REPO>\\tools\\acceptance_campaign.py\", line 409, in _scenario_crop_training_candidate\n    from app.crop_training import train_project\n  File \"<REPO>\\app\\crop_training.py\", line 6, in <module>\n    import numpy as np\nModuleNotFoundError: No module named 'numpy'\n\n{\"status\": \"FAIL\", \"error_type\": \"ModuleNotFoundError\", \"error\": \"No module named 'numpy'\"}",
+      "name": "crop_training_candidate",
+      "returncode": 1,
+      "status": "FAIL"
+    },
+    {
+      "elapsed_seconds": 0.062,
+      "failure_tail": "Traceback (most recent call last):\n  File \"<REPO>\\tools\\acceptance_campaign.py\", line 508, in run_child\n    result = CHILD_SCENARIOS[args.child_scenario](Path(args.project).resolve())\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<REPO>\\tools\\acceptance_campaign.py\", line 427, in _scenario_landmark_training_one_epoch\n    from app.landmark_training_workflow import prepare_landmark_training, run_landmark_training\n  File \"<REPO>\\app\\landmark_training_workflow.py\", line 9, in <module>\n    from .ai_batch import active_backend, backend_for_model, BatchError\n  File \"<REPO>\\app\\ai_batch.py\", line 8, in <module>\n    from .landmark_ai_service import LandmarkAIService\n  File \"<REPO>\\app\\landmark_ai_service.py\", line 9, in <module>\n    from PIL import Image\nModuleNotFoundError: No module named 'PIL'\n\n{\"status\": \"FAIL\", \"error_type\": \"ModuleNotFoundError\", \"error\": \"No module named 'PIL'\"}",
+      "name": "landmark_training_one_epoch",
+      "returncode": 1,
+      "status": "FAIL"
+    },
+    {
+      "elapsed_seconds": 0.297,
+      "name": "diagnostic_bundle",
+      "returncode": 0,
+      "status": "PASS"
+    },
+    {
+      "elapsed_seconds": 0.297,
+      "name": "final_reopen",
+      "returncode": 0,
+      "status": "PASS"
+    },
+    {
+      "elapsed_seconds": 0.0,
+      "name": "source_images_unchanged",
+      "returncode": 0,
+      "status": "PASS"
+    },
+    {
+      "elapsed_seconds": 0.406,
+      "name": "uninstall_published_release",
+      "returncode": 0,
+      "status": "PASS"
+    }
+  ],
+  "source_images": {
+    "bytes_after": 30675373634,
+    "bytes_before": 30675373634,
+    "count_after": 1304,
+    "count_before": 1304,
+    "metadata_unchanged": true
+  }
+}

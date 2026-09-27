@@ -1,0 +1,26 @@
+MorphoLabel acceptance campaign — 2026-09-27T15:02:18.717936+00:00
+Expected release: 0.5.0-beta.2
+
+install_published_release                  PASS      3.64s
+installed_version                          PASS     0.157s
+installed_core_self_test                   PASS     0.156s
+installed_gui_startup                      PASS    15.172s
+published_ai_install                       FAIL   995.094s
+published_ai_cuda_inference_training       FAIL   274.593s
+project_open                               PASS     0.969s
+persistence_roundtrip                      PASS     0.344s
+exclusion_roundtrip                        PASS     0.594s
+landmark_roundtrip                         PASS     0.578s
+exports                                    PASS     5.875s
+counts_lineage                             FAIL     0.062s
+gui_sections                               FAIL     0.078s
+project_ai_inference                       FAIL     0.078s
+crop_training_candidate                    FAIL     0.063s
+landmark_training_one_epoch                FAIL     0.062s
+diagnostic_bundle                          PASS     0.297s
+final_reopen                               PASS     0.297s
+source_images_unchanged                    PASS       0.0s
+uninstall_published_release                PASS     0.406s
+
+PASS=13 FAIL=7 HANG=0
+SOURCE_IMAGES_UNCHANGED=YES
