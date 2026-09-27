@@ -1,0 +1,72 @@
+MorphoLabel acceptance project audit — 2026-09-27
+READ-ONLY. No project files or SQLite data were modified.
+
+REPOSITORY
+Branch at capture: main
+HEAD: e374d3915728b13b5c14440b8867b64075f1a2f3
+origin/main tracking ref: e374d3915728b13b5c14440b8867b64075f1a2f3
+Git status: clean
+
+INSTALLED APPLICATION
+Executable: D:\MorphoLabel_GUI_Acceptance\installed\MorphoLabel.exe
+Version from --version: 0.5.0-beta.2-dev
+
+PROJECT
+Root: D:\Phoxinus_25-26 — копия\Phoxinus_25-26
+project.yaml: present
+landmark_schema.csv: present (832 bytes)
+project.sqlite: present at project_data\project.sqlite (19,607,552 bytes)
+Structural project validity: YES (config, schema and SQLite present; required core tables readable)
+Total project root size: 127,779,358,785 bytes
+source_root: G:\Research\Morphology\Photos\Phoxinus
+source_root inside this copy: NO (source path is outside the copy)
+D: free space: 1,340,154,621,952 bytes
+
+SQLITE READ-ONLY COUNTS
+Connection used mode=ro&immutable=1; no writes performed.
+images: 1303
+excluded images: 3 (images.excluded)
+crops: 1303
+landmarks: 32532
+models: 38
+active crop model id: crop_model_v006
+active landmark model id: rtmpose_v032
+datasets table: absent
+training_examples: 893
+annotation_drafts: 5
+image_review: 1303
+qc: 564
+corrections: 34599
+crop_predictions: 752
+crop_evaluations: 10
+crop_holdout: 50
+crop_holdout_references: 26
+crop_training_membership: 3073
+crop_verified_observations: 1020
+ai_permanent_holdouts: 26
+
+SQLite schema/table names only:
+schema: main
+tables: ai_permanent_holdouts, annotation_drafts, corrections, crop_evaluations, crop_holdout, crop_holdout_references, crop_predictions, crop_training_membership, crop_verified_observations, crops, image_attributes, image_review, images, landmark_schema, landmarks, locality_calibrations, models, project, qc, training_examples
+
+PROJECT ROOT TOP-LEVEL ENTRIES (name, type, size only)
+backups | directory | 49,626,066 bytes
+migration_logs | directory | 1,569 bytes
+project_data | directory | 127,728,152,231 bytes
+results | directory | 1,109,284 bytes
+landmark_schema.csv | file | 832 bytes
+measurement_schema.csv | file | 692 bytes
+measurements.csv | file | 467,685 bytes
+project.yaml | file | 426 bytes
+Suspicious/legacy candidate count: 1 — migration_logs (migration artifact; not confirmed stale and not modified).
+measurement_schema.csv and measurements.csv are current supported MorphoLabel project files.
+
+OUTPUT LOCATIONS (all inside the copy)
+project_data: D:\Phoxinus_25-26 — копия\Phoxinus_25-26\project_data | present | inside copy
+cache: D:\Phoxinus_25-26 — копия\Phoxinus_25-26\project_data\cache | present | inside copy
+models: D:\Phoxinus_25-26 — копия\Phoxinus_25-26\project_data\models | present | inside copy
+results: D:\Phoxinus_25-26 — копия\Phoxinus_25-26\results | present | inside copy
+backups: D:\Phoxinus_25-26 — копия\Phoxinus_25-26\backups | present | inside copy
+No root-level cache or models directory exists.
+
+Scope note: source image contents, image filenames, locality/specimen names, coordinates and model file contents were not read. No files from the project were staged or pushed.
