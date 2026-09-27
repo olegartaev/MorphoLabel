@@ -82,15 +82,16 @@ def _prepare_training_probe_assets(project, image_ids, splits, backend, *, seed,
     export_coco(manifest_path, val_coco, splits=("validation",))
     return {"root": root, "manifest": manifest_path, "train_coco": train_coco, "val_coco": val_coco}
 def available_training_parents(project):
- """Compatible registered landmark artifacts usable as an explicit training parent."""
+ """Schema-compatible registered parents for UI selection, without starting AI runtime.
+
+ Runtime/artifact resolution is deliberately deferred to explicit training
+ preflight. Rendering the Landmarks workspace must never install/download AI.
+ """
  models=[]
  with project.transaction() as connection: rows=connection.execute("SELECT * FROM models WHERE kind='landmark' ORDER BY model_id").fetchall()
  for row in rows:
   model=dict(row)
-  if not landmark_model_schema_compatible(project,model):continue
-  try:model,_backend=backend_for_model(project,str(model["model_id"]),model=model)
-  except Exception:continue
-  models.append(model)
+  if landmark_model_schema_compatible(project,model):models.append(model)
  return tuple(models)
 
 def _architecture_tuning_identity(backend, landmark_count):
