@@ -1,6 +1,6 @@
 # MorphoLabel
 
-Development beta · 0.5.0-beta.2-dev
+Development beta · 0.5.0-beta.2
 
 Open-source scientific software for biological morphology annotation, AI-assisted landmarking, quality control, measurements, and reproducible export.
 
@@ -66,7 +66,7 @@ Projects record relative source paths, source hashes, processing metadata, coord
 
 ## Current beta limitations
 
-This is a development beta. The managed Windows AI component is built and smoke-tested in CI, while final GUI acceptance still requires local Windows execution with representative disposable data.
+This is a development beta. The Windows installer, managed AI component, representative GUI workflows, and clean uninstall path have been validated; workflows and interfaces may still change before a stable release.
 
 ## Citation
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0-beta.2
+
+- standalone Windows installer with clean install/uninstall checks;
+- managed, versioned AI runtime with verified downloads, CUDA support and CPU fallback;
+- module hub and extension-ready module architecture;
+- portable project/state handling under the user application-data directory;
+- improved crop, landmark, measurement, exclusion, queue and training-readiness consistency;
+- privacy-conscious diagnostic ZIP reports for support;
+- RAW-image support, distribution metadata, branding and release hardening.
+
 ## 0.5.0-beta.1
 
 - release hardening for the first public beta;
