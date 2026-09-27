@@ -89,6 +89,20 @@ class ProductionShell(tk.Tk):
         if requested_project is not None:
             self.after_idle(lambda p=requested_project:self._load_existing_project_async(p,"Opening project"))
 
+    def report_callback_exception(self, exc_type, exc_value, tb):
+        """Persist an unexpected Tk callback failure instead of losing it in a frozen GUI."""
+        try:
+            from app.diagnostics import create_diagnostic_bundle, record_exception
+            record_exception(exc_type, exc_value, tb, shell=self)
+            bundle=create_diagnostic_bundle(shell=self)
+            detail=f"\n\nDiagnostic report saved:\n{bundle}"
+        except Exception:
+            detail=""
+        try:
+            messagebox.showerror("MorphoLabel error",f"{getattr(exc_type,'__name__','Error')}: {exc_value}{detail}",parent=self)
+        except tk.TclError:
+            pass
+
     def destroy(self):
         """Release Tk-owned views/images on the Tk thread before Tcl teardown."""
         if getattr(self, "_morpholabel_destroying", False):
@@ -138,6 +152,11 @@ class ProductionShell(tk.Tk):
 
     def _module_failed(self,module_id,phase,error,runtime=None):
         self.module_registry.diagnostics.append(f"module {module_id}: {phase} failed: {type(error).__name__}: {error}")
+        try:
+            from app.diagnostics import record_exception
+            record_exception(type(error),error,error.__traceback__,shell=self)
+        except Exception:
+            pass
         if self._active_module_runtime is runtime:self._active_module_runtime=None
         self.module_key=None
         self._dispose_module_runtime(module_id,runtime)
@@ -219,7 +238,13 @@ class ProductionShell(tk.Tk):
         def progress(text,done=None,total=None):events.put(("progress",str(text),done,total))
         def run():
             try:events.put(("done",worker(progress)))
-            except Exception as exc:events.put(("error",exc))
+            except Exception as exc:
+                try:
+                    from app.diagnostics import record_exception
+                    record_exception(type(exc),exc,exc.__traceback__)
+                except Exception:
+                    pass
+                events.put(("error",exc))
         threading.Thread(target=run,daemon=True,name="production-background-task").start()
         def poll():
             try:
@@ -307,6 +332,7 @@ class ProductionShell(tk.Tk):
     def _menus(self,row):
         about=ttk.Menubutton(row,text="About"); about_menu=tk.Menu(about,tearoff=False)
         about_menu.add_command(label="About MorphoLabel...",command=self.show_about)
+        about_menu.add_command(label="Create diagnostic report...",command=self.create_diagnostic_report)
         about_menu.add_command(label="GitHub project",command=lambda:webbrowser.open(PUBLIC_REPOSITORY))
         about.configure(menu=about_menu); about.pack(side="right",padx=2); self.tip.bind(about,"About MorphoLabel, license and project links.")
         ai=ttk.Menubutton(row,text="AI"); ai_menu=tk.Menu(ai,tearoff=False)
@@ -785,6 +811,25 @@ class ProductionShell(tk.Tk):
             next_row=next((row for row in self.context.rows if not row.get('excluded')),None)
             if next_row:self.context.select_image(next_row["image_id"])
         self.render()
+    def create_diagnostic_report(self):
+        try:
+            from app.diagnostics import create_diagnostic_bundle
+            bundle=create_diagnostic_bundle(shell=self)
+            try:
+                self.clipboard_clear();self.clipboard_append(str(bundle));self.update_idletasks()
+                copied="\n\nThe path was copied to the clipboard."
+            except tk.TclError:
+                copied=""
+            messagebox.showinfo(
+                "Diagnostic report",
+                f"Diagnostic ZIP created. It contains no photographs or SQLite database.\n\n{bundle}{copied}",
+                parent=self,
+            )
+            return bundle
+        except Exception as exc:
+            messagebox.showerror("Diagnostic report",f"Could not create diagnostic report:\n{exc}",parent=self)
+            return None
+
     def show_about(self):
         dialog=tk.Toplevel(self);dialog.transient(self);dialog.resizable(False,False);apply_window_identity(dialog,short=True)
         frame=ttk.Frame(dialog,padding=18);frame.pack(fill="both",expand=True)

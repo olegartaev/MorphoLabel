@@ -6,9 +6,9 @@ import threading
 import time
 import traceback
 from pathlib import Path
-from .paths import ROOT
+from .runtime_paths import app_state_dir
 
-LOG = ROOT / "app.log"
+LOG = app_state_dir() / "logs" / "app.log"
 TRACE = LOG
 
 def _log_paths():
