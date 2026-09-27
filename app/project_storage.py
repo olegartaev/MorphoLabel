@@ -168,12 +168,16 @@ WHERE provenance='manual'
   AND transform_json IS NOT NULL AND transform_json!='null'
   AND EXISTS(SELECT 1 FROM landmarks l WHERE l.image_id=crops.image_id)""")
  def _sync_schema_hash_metadata(self):
-  """Keep derived config/SQLite hash metadata aligned with authoritative CSV bytes."""
+  """Keep derived config/SQLite hash metadata aligned without rewriting unchanged state."""
   digest=schema_hash(self.schema_path);config=self.config
   if config.get("schema_sha256")!=digest:
    config["schema_sha256"]=digest;_json(self.config_path,config)
   with self.transaction() as c:
-   c.execute("INSERT INTO project(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",("schema_sha256",digest))
+   row=c.execute("SELECT value FROM project WHERE key=?",("schema_sha256",)).fetchone()
+   if row is None:
+    c.execute("INSERT INTO project(key,value) VALUES (?,?)",("schema_sha256",digest))
+   elif row[0]!=digest:
+    c.execute("UPDATE project SET value=? WHERE key=?",(digest,"schema_sha256"))
   return digest
  def get_ui_state(self,key,default=None):
   with self.transaction() as c:r=c.execute("SELECT value FROM project WHERE key=?",("ui."+key,)).fetchone()
@@ -255,15 +259,14 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
     c.execute("INSERT INTO images(image_id,specimen_id,original_name,relative_path,sample_id,locality,index_in_locality,total_in_locality,file_size,mtime_ns,source_sha256,active,source_available,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(image_id) DO UPDATE SET specimen_id=COALESCE(images.specimen_id,excluded.specimen_id),original_name=excluded.original_name,relative_path=excluded.relative_path,sample_id=excluded.locality,locality=excluded.locality,index_in_locality=excluded.index_in_locality,total_in_locality=excluded.total_in_locality,file_size=excluded.file_size,mtime_ns=excluded.mtime_ns,source_sha256=COALESCE(excluded.source_sha256,images.source_sha256),active=1,source_available=1",(ident,ident,p.name,rel,loc,loc,positions[loc],totals[loc],st.st_size,st.st_mtime_ns,digest,1,1,now()))
   return len(items)
  def _refresh_source_availability(self):
-  """Refresh source presence without deleting catalogue/history state."""
+  """Refresh source presence, writing only rows whose availability really changed."""
   root=self.source_root
   with self.transaction() as c:
-   rows=c.execute("SELECT image_id,relative_path FROM images").fetchall()
-   c.executemany(
-    "UPDATE images SET source_available=? WHERE image_id=?",
-    [(int((root/row["relative_path"]).is_file()),row["image_id"]) for row in rows],
-   )
-  return sum(int((root/row["relative_path"]).is_file()) for row in rows)
+   rows=c.execute("SELECT image_id,relative_path,source_available FROM images").fetchall()
+   states=[(row["image_id"],int((root/row["relative_path"]).is_file()),int(row["source_available"] or 0)) for row in rows]
+   changed=[(available,image_id) for image_id,available,stored in states if available!=stored]
+   if changed:c.executemany("UPDATE images SET source_available=? WHERE image_id=?",changed)
+  return sum(available for _image_id,available,_stored in states)
  def image_path(self,image_id):
   with self.transaction() as c:r=c.execute("SELECT relative_path,source_available FROM images WHERE image_id=?",(image_id,)).fetchone()
   if not r or not r["source_available"]:return None
@@ -413,12 +416,14 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
   Pending AI/Crop review already makes the *effective* catalog/annotation state
   unchecked.  Opening a project must not overwrite persisted human review rows:
   the state-changing operation that introduced new AI/Crop content owns that
-  invalidation.  This migration therefore only fills provably human-final rows.
+  invalidation.  This migration therefore only fills provably human-final rows,
+  and never refreshes timestamps for rows that are already verified.
   """
   human={"manual","corrected","corrected_by_human","reviewed_by_human","missing"};required={row["abbr"] for row in self.schema}
   if not required:return
   with self.transaction() as c:
    by_image={row["image_id"]:{} for row in c.execute("SELECT image_id FROM images WHERE COALESCE(active,1)=1")}
+   existing_review={row["image_id"]:int(row["human_verified"]) for row in c.execute("SELECT image_id,human_verified FROM image_review")}
    from .landmark_state import landmark_needs_ai_review
    pending_ai=set()
    for row in c.execute("SELECT image_id,landmark_abbr,x_standardized,y_standardized,state,provenance,model_id,prediction_run_id,reviewed FROM landmarks"):
@@ -428,7 +433,7 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
    crop_review={row["image_id"] for row in c.execute("SELECT image_id FROM image_attributes WHERE attribute_key='landmark_crop_review_required' AND lower(value)='true'")}
    blocked=crop_review|pending_ai;stamp=now()
    for image_id,rows in by_image.items():
-    if image_id in blocked:continue
+    if image_id in blocked or existing_review.get(image_id)==1:continue
     if all((row:=rows.get(abbr)) and row.get("provenance") in human and (row.get("state")=="missing" or (row.get("x_standardized") is not None and row.get("y_standardized") is not None)) for abbr in required):
      c.execute("INSERT INTO image_review(image_id,human_verified,updated_at) VALUES (?,?,?) ON CONFLICT(image_id) DO UPDATE SET human_verified=1,updated_at=excluded.updated_at",(image_id,1,stamp))
  def reassign_present_landmarks(self,image_id,assignment):

@@ -1,4 +1,4 @@
-import shutil, tempfile, unittest
+import hashlib, shutil, tempfile, unittest
 from pathlib import Path
 from app.project_storage import Project, load_schema, migrate_legacy
 
@@ -70,6 +70,33 @@ class ProjectStorageTests(unittest.TestCase):
   self.assertEqual(0,row["source_available"])
   self.assertIsNone(reopened.image_path(image_id))
   self.assertEqual(10,reopened.load_landmarks(image_id)[1]["x_standardized"])
+
+ def test_reopen_of_unchanged_current_project_is_database_noop(self):
+  p=self.new("stable_open");image_id=self.image_id(p)
+  for ident in (1,2,3):
+   p.save_landmark(image_id,ident,float(ident),float(ident+1),"manual",provenance="manual")
+  p.mark_checked(image_id)
+  reopened=Project.open(p.root)
+  with reopened.transaction() as c:
+   before_review=c.execute("SELECT human_verified,updated_at FROM image_review WHERE image_id=?",(image_id,)).fetchone()
+  before=hashlib.sha256(reopened.path.read_bytes()).hexdigest()
+  reopened_again=Project.open(reopened.root)
+  after=hashlib.sha256(reopened_again.path.read_bytes()).hexdigest()
+  with reopened_again.transaction() as c:
+   after_review=c.execute("SELECT human_verified,updated_at FROM image_review WHERE image_id=?",(image_id,)).fetchone()
+  self.assertEqual(before,after)
+  self.assertEqual(tuple(before_review),tuple(after_review))
+
+ def test_reopen_writes_source_availability_only_when_presence_changes(self):
+  p=self.new("availability_delta");image_id=self.image_id(p)
+  stable=Project.open(p.root)
+  before=hashlib.sha256(stable.path.read_bytes()).hexdigest()
+  self.assertEqual(before,hashlib.sha256(Project.open(stable.root).path.read_bytes()).hexdigest())
+  source=stable.image_path(image_id);source.unlink()
+  reopened=Project.open(stable.root)
+  self.assertNotEqual(before,hashlib.sha256(reopened.path.read_bytes()).hexdigest())
+  with reopened.transaction() as c:
+   self.assertEqual(0,c.execute("SELECT source_available FROM images WHERE image_id=?",(image_id,)).fetchone()[0])
 
  def test_source_filter_excludes_service_folders_and_non_selected_types(self):
   (self.src/"png").mkdir();(self.src/"png"/"bad.png").write_bytes(b"bad")
