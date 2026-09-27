@@ -6,17 +6,19 @@ import tkinter as tk
 from tkinter import ttk,messagebox
 from app.photo_list import PhotoListCanvas
 
+DEFAULT_SHOW_EXCLUDED = False
+
 def photo_search_cache(rows):
  """Precompute catalog-only strings used by compact photo filters."""
  return tuple((str(row.get("locality") or row.get("sample_id") or "").casefold(),(str(row.get("image_id") or "")+" "+Path(str(row.get("source_relpath") or "")).name).casefold()) for row in rows)
 
-def filtered_photo_indices(rows, cache, image_query="", locality_query="", *, show_excluded=True):
+def filtered_photo_indices(rows, cache, image_query="", locality_query="", *, show_excluded=DEFAULT_SHOW_EXCLUDED):
  image_query=str(image_query or "").strip().casefold();locality_query=str(locality_query or "").strip().casefold()
  return [index for index,(row,(locality,name)) in enumerate(zip(rows,cache)) if (show_excluded or not row.get("excluded")) and (not image_query or image_query in name) and (not locality_query or locality_query in locality)]
 
 class PhotoListPanel(ttk.Frame):
  def __init__(self,parent,context,on_select,tooltip,on_exclusion=None):
-  super().__init__(parent,padding=(7,5));self.context,self.on_select,self.tooltip,self.on_exclusion=context,on_select,tooltip,on_exclusion;self.image_query=tk.StringVar(master=self);self.locality_query=tk.StringVar(master=self);self.show_excluded=tk.BooleanVar(master=self,value=True)
+  super().__init__(parent,padding=(7,5));self.context,self.on_select,self.tooltip,self.on_exclusion=context,on_select,tooltip,on_exclusion;self.image_query=tk.StringVar(master=self);self.locality_query=tk.StringVar(master=self);self.show_excluded=tk.BooleanVar(master=self,value=DEFAULT_SHOW_EXCLUDED)
   search=ttk.Frame(self,padding=(0,0,0,4));search.pack(fill='x');search.columnconfigure(0,weight=1);search.columnconfigure(1,weight=1)
   ttk.Label(search,text='Sample',style='Muted.TLabel').grid(row=0,column=0,sticky='w')
   ttk.Label(search,text='Specimen',style='Muted.TLabel').grid(row=0,column=1,sticky='w',padx=(6,0))
