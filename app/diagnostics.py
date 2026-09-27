@@ -11,7 +11,7 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .runtime_paths import app_state_dir, is_frozen
+from .runtime_paths import app_state_dir, is_frozen, source_root
 from .version import __version__
 
 
@@ -115,10 +115,8 @@ def collect_summary(shell=None):
             current = context.current()
         except Exception:
             current = None
-    modules = []
     registry = getattr(shell, "module_registry", None)
-    if registry is not None:
-        modules = [str(item) for item in getattr(registry, "diagnostics", ())[-20:]]
+    module_diagnostic_count = len(getattr(registry, "diagnostics", ())) if registry is not None else 0
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "morpholabel_version": __version__,
@@ -129,7 +127,7 @@ def collect_summary(shell=None):
         "section": getattr(context, "section", None),
         "current_image": _token((current or {}).get("image_id")),
         "project": _project_summary(project),
-        "module_diagnostics": modules,
+        "module_diagnostic_count": module_diagnostic_count,
     }
 
 
@@ -139,6 +137,7 @@ def _known_replacements(shell=None):
         ("<USER_HOME>", Path.home()),
         ("<APP_STATE>", app_state_dir()),
         ("<EXECUTABLE_DIR>", Path(sys.executable).resolve().parent),
+        ("<CODE_ROOT>", source_root()),
     ):
         values.append((str(value), label))
     project = getattr(getattr(shell, "context", None), "project", None)
