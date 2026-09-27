@@ -1,0 +1,25 @@
+MorphoLabel diagnostic report — 2026-09-27
+
+Repository: D:\MorphoLabel
+Branch: main
+Local HEAD: d3488369c6363dfcbb4cc92b838cc56ecf61064c
+origin/main: d3488369c6363dfcbb4cc92b838cc56ecf61064c
+Git status: clean
+
+app/ui/shell.py SHA256: 47408425777fb01c2f582995c06b4e3451e385567d36841f15bac60d92037c13
+Contains _open_report_location: yes
+Contains "Copy path": yes
+Contains explorer","/select,: yes (line 826: subprocess.Popen(["explorer","/select,",str(bundle)])).
+
+LOCALAPPDATA: C:\Users\artae\AppData\Local
+%LOCALAPPDATA%\MorphoLabel exists: yes
+%LOCALAPPDATA%\MorphoLabel\diagnostics exists: yes
+
+ZIP files in %LOCALAPPDATA%\MorphoLabel\diagnostics:
+- C:\Users\artae\AppData\Local\MorphoLabel\diagnostics\MorphoLabel-diagnostic-20260927T113850Z.zip | 1917 bytes | 2026-09-27T14:38:50.183+03:00
+- C:\Users\artae\AppData\Local\MorphoLabel\diagnostics\MorphoLabel-diagnostic-20260927T122022Z.zip | 2910 bytes | 2026-09-27T15:20:22.991+03:00
+- C:\Users\artae\AppData\Local\MorphoLabel\diagnostics\MorphoLabel-diagnostic-20260927T122039Z.zip | 2910 bytes | 2026-09-27T15:20:39.377+03:00
+- C:\Users\artae\AppData\Local\MorphoLabel\diagnostics\MorphoLabel-diagnostic-20260927T123146Z.zip | 2959 bytes | 2026-09-27T15:31:46.114+03:00
+
+Running processes named MorphoLabel.exe, python.exe, or pythonw.exe: none found at capture time.
+No files were created in %LOCALAPPDATA%\MorphoLabel\diagnostics by this report operation.
