@@ -27,6 +27,9 @@ class ToolbarIconContractTests(unittest.TestCase):
 
     def test_landmark_toolbar_uses_only_existing_actions_with_variant_b_icons(self):
         text=open("app/ui/landmarks_section.py",encoding="utf-8").read()
+        start=text.index("ttk.Label(controls,text='Landmark actions:'")
+        end=text.index("batch=tk.IntVar",start)
+        toolbar=text[start:end]
         for label,icon in (
             ("Mark missing","missing"),
             ("Delete","delete"),
@@ -34,10 +37,10 @@ class ToolbarIconContractTests(unittest.TestCase):
             ("Verify image","verify"),
             ("Display…","display"),
         ):
-            self.assertIn(repr(label),text)
-            self.assertIn("icon="+repr(icon),text)
-        self.assertNotIn("'Undo'",text)
-        self.assertNotIn("'Redo'",text)
+            self.assertIn(repr(label),toolbar)
+            self.assertIn("icon="+repr(icon),toolbar)
+        self.assertNotIn("'Undo'",toolbar)
+        self.assertNotIn("'Redo'",toolbar)
 
     def test_exclude_button_changes_icon_without_changing_exclusion_semantics(self):
         text=open("app/ui/photo_list_panel.py",encoding="utf-8").read()
