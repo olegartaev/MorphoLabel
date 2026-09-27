@@ -171,6 +171,7 @@ def run_process(name, command, *, timeout, env, scenario_dir):
         "elapsed_seconds": round(elapsed, 3),
         "stdout": str(stdout_path),
         "stderr": str(stderr_path),
+        "thread_dump": str(scenario_dir / "thread_dump.txt"),
     }
 
 
@@ -531,6 +532,11 @@ def _sanitize(text, replacements):
         if raw:
             value = value.replace(str(raw), label)
             value = value.replace(str(raw).replace("\\", "/"), label)
+    value = re.sub(
+        r"(?i)(?<![A-Za-z0-9_])[^\\s\"']+\\.(?:jpg|jpeg|png|nef|tif|tiff)(?![A-Za-z0-9_])",
+        "<IMAGE_FILE>",
+        value,
+    )
     return value
 
 
@@ -551,7 +557,12 @@ def build_support_report(results, *, project_root, source_root, output_root, sou
             "elapsed_seconds": item.get("elapsed_seconds"),
         }
         if item["status"] != "PASS":
-            detail = (_tail(item.get("stderr")) + "\n" + _tail(item.get("stdout"))).strip()
+            detail = "\n".join(part for part in (
+                str(item.get("error") or ""),
+                _tail(item.get("stderr")),
+                _tail(item.get("stdout")),
+                _tail(item.get("thread_dump")),
+            ) if part).strip()
             row["failure_tail"] = _sanitize(detail, replacements)
         compact.append(row)
     source_unchanged = source_before == source_after
