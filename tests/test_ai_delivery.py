@@ -139,8 +139,8 @@ class AIDeliveryTests(unittest.TestCase):
                 {"name":"component.part02","bytes":len(bad),"sha256":hashlib.sha256(b"expected").hexdigest()},
             ],
         }
-        responses=[_Response(json.dumps(manifest).encode()),_Response(first),_Response(bad)]
-        with tempfile.TemporaryDirectory() as td,              patch.dict(os.environ,{"LOCALAPPDATA":td,"MORPHOLABEL_AI_RELEASE_BASE":"https://example.test"},clear=False),              patch("urllib.request.urlopen",side_effect=responses),              patch("app.ai_delivery.install_component_archive") as install:
+        responses=[_Response(json.dumps(manifest).encode()),_Response(first),*[_Response(bad) for _ in range(ai_delivery._DOWNLOAD_RETRIES)]]
+        with tempfile.TemporaryDirectory() as td,              patch.dict(os.environ,{"LOCALAPPDATA":td,"MORPHOLABEL_AI_RELEASE_BASE":"https://example.test"},clear=False),              patch("urllib.request.urlopen",side_effect=responses),              patch("app.ai_delivery.time.sleep"),              patch("app.ai_delivery.install_component_archive") as install:
             with self.assertRaises(ai_delivery.AIDeliveryError):
                 ai_delivery.install_published_ai_component(release_version="test")
             install.assert_not_called()
