@@ -119,15 +119,15 @@ class MeasurementsSection(SectionView):
   guide='Why: Measurements turns confirmed landmarks into quantitative traits that can be compared and analysed.\n\n1. Calibrate samples\nNeeded when results must be in physical units such as millimetres. Set one known reference distance for each sample.\n\n2. Define measurements\nCreate named distances by choosing the two landmarks that define each trait.\n\n3. Review and export\nInspect the preview, then export the measurements for statistical analysis.'
   dock=self.workflow_dock(panel,help_title='Measurements — quick guide',help_text=guide);dock.grid(row=2,column=0,sticky='ew',pady=(4,0))
 
-  first=dock.add_card('1. Calibrate samples',icon='📏',help_text='Convert pixel distances to physical units for each sample.')
+  first=dock.add_card('1. Calibrate samples',icon='measurement_calibrate',help_text='Convert pixel distances to physical units for each sample.')
   ttk.Label(first,text='Needed for measurements in mm or other real units.',style='Muted.TLabel',wraplength=310,justify='left').pack(anchor='w')
   self.button(first,'Calibrate samples',self.shell.open_calibration,'Open sample calibration and set a known reference distance.').pack(anchor='w',pady=(7,0))
 
-  second=dock.add_card('2. Define measurements',icon='✏️📏',help_text='Define each measurement as the distance between two landmarks.')
+  second=dock.add_card('2. Define measurements',icon='measurement_define',help_text='Define each measurement as the distance between two landmarks.')
   ttk.Label(second,text='Choose landmark pairs and give each distance a short code and name.',style='Muted.TLabel',wraplength=310,justify='left').pack(anchor='w')
   self.button(second,'Measurement definitions…',self.shell.open_measurements,'Create, edit or disable measurement definitions.').pack(anchor='w',pady=(7,0))
 
-  third=dock.add_card('3. Review and export',icon='📤',help_text='Check the measurement preview, then export project-level results.')
+  third=dock.add_card('3. Review and export',icon='measurement_export',help_text='Check the measurement preview, then export project-level results.')
   ttk.Label(third,text='Preview the active definitions, then export them for analysis.',style='Muted.TLabel',wraplength=310,justify='left').pack(anchor='w')
   self.button(third,'Open Export',lambda:self.shell.select('export'),'Open the Export section for project-level output.').pack(anchor='w',pady=(7,0))
 

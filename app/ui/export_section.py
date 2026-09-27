@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from app.export_formats import available_groups, export_landmark_tps, export_landmark_csv_long, export_landmark_wide, export_morphoj_text
 from app.measurements import export_measurements
+from .icons import WORKFLOW_ICON_SIZE
 from .section_base import SectionView
 
 class ExportSection(SectionView):
@@ -16,8 +17,13 @@ class ExportSection(SectionView):
   self.what_to_do(header,'Export — quick guide',guide).grid(row=0,column=1,rowspan=2,sticky='ne')
 
   cards=ttk.Frame(panel);cards.pack(fill='x');cards.columnconfigure(0,weight=1);cards.columnconfigure(1,weight=1)
+  def card_header(icon,text):
+   header=ttk.Frame(cards)
+   ttk.Label(header,image=self.shell.ui_icon(icon,WORKFLOW_ICON_SIZE)).pack(side='left',padx=(0,6))
+   ttk.Label(header,text=text,style='WorkflowCardTitle.TLabel').pack(side='left')
+   return header
 
-  land=ttk.LabelFrame(cards,text='📍  Landmark coordinates',padding=14);land.grid(row=0,column=0,sticky='nsew',padx=(0,5))
+  land=ttk.LabelFrame(cards,labelwidget=card_header('export_landmarks','Landmark coordinates'),padding=14);land.grid(row=0,column=0,sticky='nsew',padx=(0,5))
   ttk.Label(land,text='Export landmark positions for geometric morphometrics or other coordinate-based analyses.',style='Muted.TLabel',wraplength=430,justify='left').grid(row=0,column=0,columnspan=3,sticky='w',pady=(0,10))
   mode=tk.StringVar(value='all');groups=available_groups(self.context.project);chosen={name:tk.BooleanVar(value=True) for name in groups};checks=[]
   ttk.Label(land,text='Landmarks to include',style='SectionTitle.TLabel').grid(row=1,column=0,columnspan=3,sticky='w')
@@ -35,7 +41,7 @@ class ExportSection(SectionView):
   mode.trace_add('write',update);update()
   self.button(land,'Export landmark coordinates…',lambda:self.landmarks(mode.get(),[name for name,var in chosen.items() if var.get()]),'Choose an output format and destination.',style='Primary.TButton').grid(row=4,column=0,columnspan=3,sticky='w',pady=(12,0))
 
-  measurement=ttk.LabelFrame(cards,text='📏  Measurements',padding=14);measurement.grid(row=0,column=1,sticky='nsew',padx=(5,0))
+  measurement=ttk.LabelFrame(cards,labelwidget=card_header('export_measurements','Measurements'),padding=14);measurement.grid(row=0,column=1,sticky='nsew',padx=(5,0))
   ttk.Label(measurement,text='Export the active named distances as a table for statistical analysis.',style='Muted.TLabel',wraplength=430,justify='left').pack(anchor='w',pady=(0,10))
   ttk.Label(measurement,text='Output contains the project measurement definitions and their values for eligible images.',wraplength=430,justify='left').pack(anchor='w')
   self.button(measurement,'Export measurements…',self.measurements,'Choose CSV or tab-delimited text and a destination.',style='Primary.TButton').pack(anchor='w',pady=(12,0))

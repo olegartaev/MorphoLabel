@@ -147,13 +147,13 @@ class LandmarksSection(SectionView):
    repeat_total=int(repeat_run.get('actual_count',len(repeat_run.get('image_ids',()))));p1=pass_progress(self.context.project,repeat_run,1);p2=pass_progress(self.context.project,repeat_run,2);repeat_label=f'Run images: {repeat_total}'
   else:
    repeat_total=len(available_control_image_ids(self.context.project));p1={'completed':0,'total':0};p2={'completed':0,'total':0};repeat_label=f'Eligible images: {repeat_total}'
-  one=dock.add_card('1. Repeatability',icon='👤👤',help_text='Estimate your placement error from two independent annotations of the same images.')
+  one=dock.add_card('1. Repeatability',icon='landmark_repeat',help_text='Estimate your placement error from two independent annotations of the same images.')
   self.repeat_pool_label=ttk.Label(one,text=repeat_label.replace('Run images: ','').replace('Eligible images: ','')+' images',style='Muted.TLabel');self.repeat_pool_label.grid(row=0,column=0,sticky='w')
   self.repeat_pass_label=ttk.Label(one,text=f"P1 {p1['completed']}/{p1['total']} · P2 {p2['completed']}/{p2['total']}",style='Muted.TLabel');self.repeat_pass_label.grid(row=0,column=1,sticky='e',padx=(8,0))
   one.columnconfigure(1,weight=1)
   self.button(one,'Repeat…',self.open_repeat,'Open the two independent blind annotation passes.').grid(row=1,column=0,columnspan=2,sticky='w',pady=(5,0))
 
-  two=dock.add_card('2. Training data',icon='✏️📷',help_text='Create or continue the human-annotated image set used for model training.')
+  two=dock.add_card('2. Training data',icon='landmark_training',help_text='Create or continue the human-annotated image set used for model training.')
   ttk.Label(two,text='Batch').grid(row=0,column=0,sticky='w')
   ttk.Spinbox(two,from_=1,to=500,textvariable=batch,width=5).grid(row=0,column=1,sticky='w',padx=4)
   ttk.Label(two,text='20–30 recommended',style='Muted.TLabel').grid(row=0,column=2,sticky='w')
@@ -161,7 +161,7 @@ class LandmarksSection(SectionView):
   label='Start first batch' if not batch_state.get('initial_image_ids') else 'Continue batch' if batch_info['stage']=='INITIAL_TRAINING' or (batch_info['stage']=='MODEL_IMPROVEMENT' and batch_info['verified']<batch_info['total']) else 'Add next batch'
   self.button(two,label,lambda:self.start_training_batch(batch.get()),'Create or continue the persistent landmark training batch.').grid(row=1,column=0,columnspan=3,sticky='w',pady=(5,0))
 
-  three=dock.add_card('3. Train model',icon='🧠',help_text='Train a new Landmark model from all human-confirmed examples.')
+  three=dock.add_card('3. Train model',icon='landmark_train',help_text='Train a new Landmark model from all human-confirmed examples.')
   active_warning=None
   try:active=self.context.project.active_model_readonly('landmark') or {}
   except ValueError:
@@ -176,7 +176,7 @@ class LandmarksSection(SectionView):
   self.button(three,'Train',lambda:self.preflight(None if parent_choice.get()=='Bootstrap / first model' else parent_choice.get()),'Check then run Landmark model training.',style='Primary.TButton').grid(row=2,column=0,columnspan=2,sticky='w',pady=(5,0))
   self.button(three,'Models…',lambda:self.shell.show_models('landmark'),'Compare and select saved Landmark models.').grid(row=2,column=2,sticky='e',padx=(5,0),pady=(5,0))
 
-  four=dock.add_card('4. Apply & review',icon='✓',help_text='Apply the active model to new images, then review and confirm its landmark predictions.')
+  four=dock.add_card('4. Apply & review',icon='landmark_apply',help_text='Apply the active model to new images, then review and confirm its landmark predictions.')
   ttk.Label(four,text='Batch').grid(row=0,column=0,sticky='w')
   ttk.Spinbox(four,from_=1,to=500,textvariable=prediction,width=5).grid(row=0,column=1,sticky='w',padx=4)
   ttk.Label(four,text='images',style='Muted.TLabel').grid(row=0,column=2,sticky='w')

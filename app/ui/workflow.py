@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from tkinter import ttk
+from .icons import ICON_NAMES, WORKFLOW_ICON_SIZE
 
 
 def columns_for_width(width: int, card_count: int, card_widths=None) -> int:
@@ -55,8 +56,14 @@ class WorkflowDock(ttk.Frame):
     def add_card(self, title, *, icon="", help_text=""):
         header = ttk.Frame(self.cards_host)
         if icon:
-            style = "WorkflowCheck.TLabel" if icon in {"✓", "✔"} else "WorkflowIcon.TLabel"
-            ttk.Label(header, text=icon, style=style).pack(side="left", padx=(0, 6))
+            if icon in ICON_NAMES:
+                ttk.Label(
+                    header,
+                    image=self.shell.ui_icon(icon, WORKFLOW_ICON_SIZE),
+                ).pack(side="left", padx=(0, 6))
+            else:
+                style = "WorkflowCheck.TLabel" if icon in {"✓", "✔"} else "WorkflowIcon.TLabel"
+                ttk.Label(header, text=icon, style=style).pack(side="left", padx=(0, 6))
         ttk.Label(header, text=title, style="WorkflowCardTitle.TLabel").pack(side="left")
         card = ttk.LabelFrame(
             self.cards_host,

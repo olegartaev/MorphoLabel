@@ -26,7 +26,7 @@ class CropSection(SectionView):
   dock=self.workflow_dock(panel,help_title="Crop — quick guide",help_text=guide);dock.grid(row=2,column=0,sticky="ew",pady=(4,0))
 
   training_rows=self.context.project.crop_training_rows()
-  one=dock.add_card("1. Training batch",icon="✏️📷",help_text="Create or continue the human-corrected Crop examples used for model training.")
+  one=dock.add_card("1. Training batch",icon="crop_training",help_text="Create or continue the human-corrected Crop examples used for model training.")
   ttk.Label(one,text="Manual corrected examples",style="Muted.TLabel").grid(row=0,column=0,columnspan=3,sticky="w")
   ttk.Label(one,text="Batch size").grid(row=1,column=0,sticky="w",pady=(5,0))
   ttk.Spinbox(one,from_=1,to=500,textvariable=batch,width=5).grid(row=1,column=1,sticky="w",padx=4,pady=(5,0))
@@ -34,13 +34,13 @@ class CropSection(SectionView):
   first=not bool(training_rows)
   self.button(one,"Start first batch" if first else "Add next batch",lambda:self.batch(batch.get()),"Create a persistent set of real images for manual crop correction.").grid(row=2,column=0,columnspan=3,sticky="w",pady=(7,0))
 
-  two=dock.add_card("2. Train",icon="🧠",help_text="Train a new Crop model from all human-confirmed Crop examples.")
+  two=dock.add_card("2. Train",icon="crop_train",help_text="Train a new Crop model from all human-confirmed Crop examples.")
   ttk.Label(two,text=f"Active: {current_label(self.context.project)}",style="Muted.TLabel").grid(row=0,column=0,columnspan=2,sticky="w")
   ttk.Label(two,text=f"Train-ready examples: {len(training_rows)}").grid(row=1,column=0,columnspan=2,sticky="w",pady=(4,0))
   self.button(two,"Train crop model",self.train,"Train the Crop model from all verified examples.",style="Primary.TButton").grid(row=2,column=0,sticky="w",pady=(7,0))
   self.button(two,"Models…",lambda:self.shell.show_models('crop'),"Compare and select saved Crop model versions.").grid(row=2,column=1,sticky="w",padx=(5,0),pady=(7,0))
 
-  three=dock.add_card("3. Apply and check",icon="✓",help_text="Apply the active Crop model to new images, then review and confirm its proposals.")
+  three=dock.add_card("3. Apply and check",icon="crop_apply",help_text="Apply the active Crop model to new images, then review and confirm its proposals.")
   ttk.Label(three,text="Prediction batch").grid(row=0,column=0,sticky="w")
   ttk.Spinbox(three,from_=1,to=500,textvariable=prediction,width=5).grid(row=0,column=1,sticky="w",padx=4)
   ttk.Label(three,text="images",style="Muted.TLabel").grid(row=0,column=2,sticky="w")
