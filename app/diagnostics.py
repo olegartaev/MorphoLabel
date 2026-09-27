@@ -16,8 +16,8 @@ from .version import __version__
 
 
 _EVENT = re.compile(
-    r"^(?P<time>\\S+) thread=(?P<thread>\\S+) image_id=(?P<image>\\S*) "
-    r"op=(?P<op>\\S+) state=(?P<state>\\S+) elapsed_s=(?P<elapsed>[0-9.]+)"
+    r"^(?P<time>\S+) thread=(?P<thread>\S+) image_id=(?P<image>\S*) "
+    r"op=(?P<op>\S+) state=(?P<state>\S+) elapsed_s=(?P<elapsed>[0-9.]+)"
 )
 
 
