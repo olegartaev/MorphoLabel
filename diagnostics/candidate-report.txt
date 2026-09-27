@@ -1,0 +1,20 @@
+HEAD=d2e9c5e8343c4d4c7e8e80c0866f2e38233ae39f
+WINDOWS_BUILD=PASS (workflow run 36345183911; workflow_dispatch; exact HEAD; SUCCESS)
+SETUP_INSTALL=PASS (installed beta.4 Setup; installer exit 0)
+FIRST_RUN_DIALOG=PASS
+FIRST_RUN_GUI_RESPONSIVE=PASS
+AI_RUNTIME_INSTALL=PASS
+BOOTSTRAP_DOWNLOAD=PASS
+HARDWARE_DETECTION=PASS
+GPU=NVIDIA GeForce RTX 3060
+CUDA=CUDA
+AI_INFERENCE=PASS
+AI_TRAINING=PASS
+FIRST_RUN_COMPLETED=PASS
+SECOND_START_NO_SETUP=PASS
+PROJECT_OPEN=PASS
+LANDMARKS_OPEN=PASS
+LANDMARKS_RESPONSIVE=PASS (Windows process Responding=True)
+LANDMARKS_STARTED_AI_DOWNLOAD=NO (no new files observed in isolated AI downloads directory)
+OVERALL=FAIL
+FAILURE=The project copy's project_data/project.sqlite LastWriteTime advanced to 2026-09-27 23:07:15 during project opening. No scientific edits were made intentionally and no rollback was attempted. A pre-open checksum was not captured, so whether SQLite contents changed cannot be established; project-data unchanged acceptance is therefore unverified.
