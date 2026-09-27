@@ -817,20 +817,21 @@ class ProductionShell(tk.Tk):
             next_row=next((row for row in self.context.rows if not row.get('excluded')),None)
             if next_row:self.context.select_image(next_row["image_id"])
         self.render()
-    def _open_report_location(self,bundle):
+    def _open_report_folder(self,bundle):
         bundle=Path(bundle)
         try:
             if not bundle.is_file():
                 raise FileNotFoundError(bundle)
+            folder=bundle.parent
             if sys.platform.startswith("win"):
-                subprocess.Popen(["explorer","/select,",str(bundle)])
+                subprocess.Popen(["explorer",str(folder)])
             elif sys.platform=="darwin":
-                subprocess.Popen(["open","-R",str(bundle)])
+                subprocess.Popen(["open",str(folder)])
             else:
-                subprocess.Popen(["xdg-open",str(bundle.parent)])
+                subprocess.Popen(["xdg-open",str(folder)])
             return True
         except Exception as exc:
-            messagebox.showerror("Open report folder",f"Could not open the report location:\n{exc}",parent=self)
+            messagebox.showerror("Open report folder",f"Could not open the report folder:\n{exc}",parent=self)
             return False
 
     def _show_diagnostic_report_dialog(self,bundle,*,title="Diagnostic report",intro=None):
@@ -858,8 +859,8 @@ class ProductionShell(tk.Tk):
         self.control_button(
             actions,
             "Open report folder",
-            lambda:self._open_report_location(bundle),
-            "Open Explorer with this diagnostic ZIP selected so it can be attached to a support message.",
+            lambda:self._open_report_folder(bundle),
+            "Open the folder containing this diagnostic ZIP so it can be attached to a support message.",
             style="Primary.TButton",
         ).pack(side="left")
         self.control_button(actions,"Copy path",copy_path,"Copy the diagnostic ZIP path to the clipboard.").pack(side="left",padx=(6,0))
