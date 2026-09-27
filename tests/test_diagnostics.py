@@ -79,6 +79,10 @@ class DiagnosticBundleTests(unittest.TestCase):
         self.assertIn("def report_callback_exception", source)
         self.assertIn("create_diagnostic_bundle(shell=self)", source)
         self.assertIn("record_exception(type(exc),exc,exc.__traceback__)", source)
+        self.assertIn('text="Open report folder"', source)
+        self.assertIn("lambda:self._open_folder(bundle.parent)", source)
+        self.assertIn('subprocess.Popen(["explorer",str(folder)])', source)
+        self.assertIn("self._show_diagnostic_report_dialog(bundle,title=\"MorphoLabel error\",intro=error_text)", source)
 
     def test_global_log_is_stored_in_local_app_state(self):
         source=(Path(__file__).resolve().parents[1]/"app"/"gui_crop_debug.py").read_text(encoding="utf-8")
