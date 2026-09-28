@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0-beta.6
+
+- first-run AI setup names the exact runtime/model components and shows explicit staged progress to 100%;
+- Landmark finite-review navigation uses **Verify & Next** with the same green verification icon;
+- **Clear all** returns selection to the first landmark for immediate re-annotation;
+- **Review worst** is strictly a pre-verification queue of complete unverified AI predictions and skips members verified after queue creation;
+- **Complex QC** is now a distinct post-verification audit of final human-verified data;
+- Review worst and Complex QC use equal-sized controls, distinct icons, and updated help text that explains their roles.
+
+
 ## 0.5.0-beta.5
 
 - first launch explains the managed AI runtime and bootstrap model before any large download;

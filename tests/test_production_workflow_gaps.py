@@ -543,9 +543,10 @@ class ProductionWorkflowGapTests(unittest.TestCase):
  def test_clear_all_resets_only_current_image_through_existing_rebuild_path(self):
   from app.ui.landmark_canvas import LandmarkCanvasController
   image_id=self.ids[0];before=self.p.load_landmarks(image_id);other_before=self.p.load_landmarks(self.ids[1])
-  canvas=LandmarkCanvasController.__new__(LandmarkCanvasController);canvas.image_id=image_id;canvas._points=before;canvas.parent=object();canvas.context=SimpleNamespace(project=self.p);canvas.changed=Mock();canvas.refresh_authoritative=Mock();canvas._draw_overlays=Mock();canvas._sync_selection=Mock()
+  canvas=LandmarkCanvasController.__new__(LandmarkCanvasController);canvas.image_id=image_id;canvas._points=before;canvas.parent=object();canvas.context=SimpleNamespace(project=self.p);canvas.changed=Mock();canvas.refresh_authoritative=Mock();canvas._draw_overlays=Mock();canvas._sync_selection=Mock();canvas.operator_state=Mock();canvas.choice=Mock()
   with patch('app.ui.landmark_canvas.messagebox.askyesno',return_value=True):LandmarkCanvasController.clear_all(canvas)
   self.assertFalse(self.p.annotation_status(image_id)['verified']);self.assertEqual({1,2},set(self.p.annotation_status(image_id)['unresolved_ids']));canvas.changed.assert_called_once()
+  canvas.operator_state.select.assert_called_once_with(1);canvas.choice.set.assert_called_once_with(1)
   self.assertEqual(other_before,self.p.load_landmarks(self.ids[1]))
  def test_clear_repeat_session_never_changes_canonical_landmarks(self):
   from app.operator_qc import create_repeat_session,clear_repeat_landmarks

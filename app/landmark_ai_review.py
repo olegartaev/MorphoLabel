@@ -36,19 +36,34 @@ def pending_review_session(project):
 def active_review_session(project):
  doc=_load(project)
  return next((dict(item) for item in doc.get("sessions",()) if item.get("active") and not item.get("complete")),None)
+def _pending_positions(project,ids):
+ return [index for index,image_id in enumerate(ids) if not project.landmark_ai_review_ready(image_id)]
+
+def _pending_target(project,ids,current_position,step=1):
+ pending=_pending_positions(project,ids)
+ if not pending:return None
+ current_position=max(0,min(int(current_position),len(ids)-1))
+ if int(step)<0:
+  before=[index for index in pending if index<current_position]
+  if before:return before[-1]
+  return current_position if current_position in pending else pending[0]
+ after=[index for index in pending if index>current_position]
+ if after:return after[0]
+ return current_position if current_position in pending else pending[0]
+
 def activate_review_session(project,batch_id=None):
  doc=_load(project);session=_session(doc,batch_id) if batch_id else next((item for item in doc.get("sessions",()) if not item.get("complete")),None)
  if session is None:return None
  for item in doc.get("sessions",()):item["active"]=False
- session["active"]=True
  ids=list(session.get("image_ids",()))
  if not ids:return None
  position=max(0,min(int(session.get("current_position",0)),len(ids)-1))
- # A reopened review always resumes an unconfirmed exact batch member.  Membership
- # is persistent batch data; confirmation is authoritative Project state.
  if project.landmark_ai_review_ready(ids[position]):
-  position=next((index for index,image_id in enumerate(ids) if not project.landmark_ai_review_ready(image_id)),position)
- session["current_position"]=position;session["current_image_id"]=ids[position]
+  target=_pending_target(project,ids,position,1)
+  if target is None:
+   session.update({"complete":True,"active":False});_save(project,doc);return None
+  position=target
+ session["active"]=True;session["current_position"]=position;session["current_image_id"]=ids[position]
  _save(project,doc);return dict(session)
 def review_summary(project,session=None,current_id=None):
  session=session or active_review_session(project)
@@ -56,22 +71,24 @@ def review_summary(project,session=None,current_id=None):
  ids=tuple(map(str,session.get("image_ids",())))
  current=str(current_id or session.get("current_image_id") or "")
  done=tuple(image_id for image_id in ids if project.landmark_ai_review_ready(image_id))
- position=ids.index(current)+1 if current in ids else 0
- return {"batch_id":session["batch_id"],"image_ids":ids,"position":position,"total":len(ids),"remaining":sum(image_id not in done for image_id in ids),"confirmed_ids":done,"complete":bool(session.get("complete"))}
+ remaining=sum(image_id not in done for image_id in ids)
+ position=min(len(ids),len(done)+1) if current in ids and current not in done else (ids.index(current)+1 if current in ids else 0)
+ return {"batch_id":session["batch_id"],"image_ids":ids,"position":position,"total":len(ids),"remaining":remaining,"confirmed_ids":done,"complete":bool(session.get("complete"))}
 def move_review_position(project,batch_id,current_id,step):
  doc=_load(project);session=_session(doc,batch_id)
  if session is None or session.get("complete"):return None
  ids=list(session.get("image_ids",()))
  if str(current_id) not in ids:return None
- target=max(0,min(len(ids)-1,ids.index(str(current_id))+int(step)))
+ position=ids.index(str(current_id));target=_pending_target(project,ids,position,step)
+ if target is None:
+  session.update({"complete":True,"active":False});_save(project,doc);return dict(session)
  session["current_position"]=target;session["current_image_id"]=ids[target];_save(project,doc);return dict(session)
 def complete_or_advance_review(project,batch_id,current_id):
  doc=_load(project);session=_session(doc,batch_id)
  if session is None:return None,False
  ids=list(session.get("image_ids",()))
- position=ids.index(str(current_id))
- target=position+1
- if target>=len(ids):
+ position=ids.index(str(current_id));target=_pending_target(project,ids,position,1)
+ if target is None:
   session["complete"]=True;session["active"]=False;session["current_position"]=position;session["current_image_id"]=str(current_id);_save(project,doc);return dict(session),True
  session["current_position"]=target;session["current_image_id"]=ids[target];_save(project,doc);return dict(session),False
 

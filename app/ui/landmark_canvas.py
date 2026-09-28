@@ -536,6 +536,11 @@ class LandmarkCanvasController:
             self._persistence_error("clear all landmarks", exc)
             return
         self.refresh_authoritative(notify=False)
+        schema=list(getattr(self.context.project,"schema",()) or ())
+        if schema:
+            first_id=int(schema[0]["id"])
+            self.operator_state.select(first_id)
+            self.choice.set(first_id)
         self._draw_overlays()
         self._sync_selection()
         self.changed()

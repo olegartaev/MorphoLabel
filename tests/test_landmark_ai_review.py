@@ -92,6 +92,33 @@ class LandmarkAIReviewTests(unittest.TestCase):
         self.assertEqual(second,active_session["current_image_id"])
         self.assertFalse(self.project.landmark_ai_review_ready(first))
 
+    def test_review_navigation_skips_members_verified_after_queue_creation(self):
+        first,second,third=self.ids
+        for image_id in self.ids:self._machine(image_id)
+        create_review_session_for_ids(self.project,"skip-verified",(first,second,third),kind="review_worst_v2")
+        session=activate_review_session(self.project,"skip-verified")
+        self.assertEqual(first,session["current_image_id"])
+        self.project.confirm_landmark_ai_review(first)
+        self.project.confirm_landmark_ai_review(second)
+        session,complete=complete_or_advance_review(self.project,"skip-verified",first)
+        self.assertFalse(complete)
+        self.assertEqual(third,session["current_image_id"])
+        self.assertFalse(self.project.landmark_ai_review_ready(third))
+
+    def test_review_previous_does_not_enter_verified_member(self):
+        first,second,third=self.ids
+        for image_id in self.ids:self._machine(image_id)
+        create_review_session_for_ids(self.project,"skip-back",(first,second,third),kind="review_worst_v2")
+        self.project.confirm_landmark_ai_review(second)
+        from app.landmark_ai_review import move_review_position
+        session=activate_review_session(self.project,"skip-back")
+        self.assertEqual(first,session["current_image_id"])
+        session=move_review_position(self.project,"skip-back",first,-1)
+        self.assertEqual(first,session["current_image_id"])
+        self.project.confirm_landmark_ai_review(first)
+        session=activate_review_session(self.project,"skip-back")
+        self.assertEqual(third,session["current_image_id"])
+
     def test_review_worst_learns_error_magnitude_from_verified_predictions(self):
         class Snapshot:
             schema = ({'id': 1, 'abbr': 'A', 'name': 'Alpha', 'role': 'BOTH'},)

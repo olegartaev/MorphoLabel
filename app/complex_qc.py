@@ -516,9 +516,10 @@ def _issue_from_signals(record, signals, abbrs):
 
 
 def scan_complex_qc(project, progress=None, cancelled=None):
-    """Scan every complete non-excluded annotation; return one ranked human-review queue.
+    """Scan every human-verified complete annotation; return one ranked post-verification QC queue.
 
-    Incomplete landmark sets stay in the normal annotation workflow.  Fast
+    Unverified AI predictions belong to Review worst, not Complex QC. Incomplete
+    landmark sets stay in the normal annotation workflow. Fast
     invariant checks run on every complete annotation.  The expensive legacy
     identity search is a bounded second stage for the strongest fast-stage
     candidates only.  Every annotation participates in the scan, but only
@@ -537,9 +538,9 @@ def scan_complex_qc(project, progress=None, cancelled=None):
         points = snapshot.load_landmarks(image_id)
         if points:
             status = snapshot.annotation_status(image_id)
-            if not status.get("complete"):
+            if not status.get("complete") or not status.get("verified"):
                 if progress and (index == total or index % 50 == 0):
-                    progress("Reading complete annotations", index, total)
+                    progress("Reading verified annotations", index, total)
                 continue
             records[image_id] = {
                 "image_id":image_id,
@@ -548,10 +549,10 @@ def scan_complex_qc(project, progress=None, cancelled=None):
                 "points":points,
                 "status":status,
                 "dimensions":snapshot.dimensions_by_id.get(image_id),
-                "checked":bool(row.get("human_verified")) and bool(status.get("complete")),
+                "checked":True,
             }
         if progress and (index == total or index % 50 == 0):
-            progress("Reading annotated images", index, total)
+            progress("Reading verified annotations", index, total)
 
     if not records:
         return {

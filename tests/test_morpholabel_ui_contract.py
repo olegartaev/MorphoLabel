@@ -38,7 +38,7 @@ class _RowsProject:
 
 class MorphoLabelUIContractTests(unittest.TestCase):
     def test_package_and_identity_versions_are_consistent(self):
-        self.assertEqual("0.5.0-beta.5", PACKAGE_VERSION)
+        self.assertEqual("0.5.0-beta.6", PACKAGE_VERSION)
         self.assertEqual(PACKAGE_VERSION, APP_VERSION)
         root=Path(__file__).parents[1]
         self.assertIn(f"Development beta · {PACKAGE_VERSION}",(root/"README.md").read_text(encoding="utf-8"))
@@ -46,7 +46,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
 
     def test_identity_is_development_morpholabel_with_supplied_png(self):
         self.assertEqual("MorphoLabel",APP_NAME)
-        self.assertEqual("0.5.0-beta.5",APP_VERSION)
+        self.assertEqual("0.5.0-beta.6",APP_VERSION)
         self.assertEqual("Development beta",APP_STATUS)
         self.assertEqual("morpholabel@olegartaev.com",CONTACT_EMAIL)
         self.assertEqual("https://github.com/olegartaev/MorphoLabel",PUBLIC_REPOSITORY)
@@ -211,6 +211,15 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         ready,title=_first_run_progress_state("READY","First-time AI setup completed.",model)
         self.assertEqual(100,ready)
         self.assertEqual("Setup complete",title)
+
+    def test_landmark_batch_navigation_uses_verify_next_with_green_verify_icon(self):
+        root=Path(__file__).parents[1]
+        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
+        self.assertIn("'Verify & Next ›'",shell)
+        self.assertIn("self.ui_icon('verify',CONTROL_ICON_SIZE)",shell)
+        self.assertIn('width=16',shell)
+        self.assertNotIn("'Checked & Next ›'",shell)
+        self.assertIn("kind in {'landmark','landmark_ai_review','landmark_suspicious'}",shell)
 
     def test_package_entrypoint_uses_same_morpholabel_shell(self):
         root=Path(__file__).parents[1]
