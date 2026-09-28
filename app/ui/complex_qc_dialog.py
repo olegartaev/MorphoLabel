@@ -1,4 +1,4 @@
-"""Compact UI for project-wide Complex QC."""
+"""Compact UI for project-wide Final data QC."""
 from __future__ import annotations
 
 import queue
@@ -21,22 +21,22 @@ def _method_summary(result):
     parts=[
         f"Geometry: {basic.get('issues',0)} issue(s)" if basic.get("used") else "Geometry: skipped",
         f"Identity: {established.get('candidate_images',0)} candidate(s)" if established.get("used") else "Identity: skipped",
-        f"Distance: {distance.get('landmarks',0)} landmarks" if distance.get("used") else "Distance: not enough data",
-        f"Measurements: {measurements.get('definitions',0)}" if measurements.get("used") else "Measurements: skipped",
-        f"GM PCA: {gm.get('landmarks',0)} landmarks" if gm.get("used") else "GM PCA: "+str(gm.get("reason") or "skipped"),
+        f"Landmark distances: {distance.get('landmarks',0)} landmarks" if distance.get("used") else "Landmark distances: not enough data",
+        f"Within-group measurements: {measurements.get('definitions',0)}" if measurements.get("used") else "Within-group measurements: skipped",
+        f"Shape (GPA/PCA): {gm.get('landmarks',0)} landmarks" if gm.get("used") else "Shape (GPA/PCA): "+str(gm.get("reason") or "skipped"),
     ]
     return " · ".join(parts)
 
 
 def open_complex_qc(section):
     project=section.context.project
-    dialog=tk.Toplevel(section.shell);dialog.title("Complex QC");dialog.transient(section.shell);dialog.geometry("920x560");dialog.minsize(760,440)
+    dialog=tk.Toplevel(section.shell);dialog.title("Final data QC");dialog.transient(section.shell);dialog.geometry("920x560");dialog.minsize(760,440)
     frame=ttk.Frame(dialog,padding=14);frame.pack(fill="both",expand=True);frame.rowconfigure(4,weight=1);frame.columnconfigure(0,weight=1)
 
-    ttk.Label(frame,text="Complex QC",font=("Segoe UI",12,"bold")).grid(row=0,column=0,sticky="w")
+    ttk.Label(frame,text="Final data QC",font=("Segoe UI",12,"bold")).grid(row=0,column=0,sticky="w")
     ttk.Label(
         frame,
-        text="Post-verification audit of final human-verified landmark sets. Unverified AI predictions are handled by Review worst.",
+        text="Post-verification audit of final human-verified landmark sets. It checks landmark geometry, within-group measurements and geometric-morphometric shape outliers. Unverified AI predictions are handled by Unverified AI review.",
         style="Muted.TLabel",
     ).grid(row=1,column=0,sticky="w",pady=(2,0))
     ttk.Label(
@@ -67,7 +67,7 @@ def open_complex_qc(section):
     ttk.Label(frame,textvariable=detail,style="Muted.TLabel",wraplength=880,justify="left").grid(row=5,column=0,sticky="ew",pady=(8,0))
 
     actions=ttk.Frame(frame);actions.grid(row=6,column=0,sticky="ew",pady=(10,0));actions.columnconfigure(0,weight=1)
-    all_button=section.button(actions,"Review flagged — worst first",lambda:None,"Review final verified images flagged by Complex QC, strongest suspicion first.",primary=True,enabled=False,icon='complex_qc')
+    all_button=section.button(actions,"Review flagged — worst first",lambda:None,"Review final verified images flagged by Final data QC, strongest suspicion first.",primary=True,enabled=False,icon='complex_qc')
     all_button.grid(row=0,column=0,sticky="ew")
 
     state={"result":None,"items":{},"running":False}
@@ -83,12 +83,12 @@ def open_complex_qc(section):
     def begin_review(issues):
         issues=list(issues)
         if not issues:return
-        start_suspicious_review(project,issues,source="Complex QC")
+        start_suspicious_review(project,issues,source="Final data QC")
         section.context.refresh(force=True)
         first=issues[0]["image_id"]
         try:section.context.selected=next(i for i,row in enumerate(section.context.rows) if row.get("image_id")==first)
         except StopIteration:
-            messagebox.showerror("Complex QC","The selected image is no longer in the active catalogue.",parent=dialog);return
+            messagebox.showerror("Final data QC","The selected image is no longer in the active catalogue.",parent=dialog);return
         dialog.destroy();section.shell.render();section.shell.after_idle(lambda:section.shell._selected_image(False))
 
     def review_all():
@@ -132,7 +132,7 @@ def open_complex_qc(section):
                     stage,done,total=payload;summary.set(stage+"…" if not total else f"{stage}: {done} / {total}")
                 elif kind=="error":
                     state["running"]=False;progress.stop()
-                    messagebox.showerror("Complex QC",str(payload[0]),parent=dialog);summary.set("Scan failed. Close and reopen Complex QC to retry.");return
+                    messagebox.showerror("Final data QC",str(payload[0]),parent=dialog);summary.set("Scan failed. Close and reopen Final data QC to retry.");return
                 else:
                     state["running"]=False;progress.stop();progress.configure(mode="determinate",value=0)
                     render_result(payload[0])
