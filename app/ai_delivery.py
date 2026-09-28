@@ -1,4 +1,4 @@
-"""Download and atomically install the published MorphoLabel managed AI component."""
+"""Download and atomically install the published MorphoLabel managed AI engine."""
 from __future__ import annotations
 
 import hashlib
@@ -95,67 +95,67 @@ def _validated_partial_size(path,parts,archive_bytes):
 
 def _fetch_manifest(base_url, *, progress=None):
     url = f"{base_url.rstrip('/')}/{_MANIFEST_NAME}"
-    _progress(progress, "AI COMPONENT", "Checking the published AI component…")
+    _progress(progress, "AI ENGINE", "Checking the published AI engine…")
     try:
         with urllib.request.urlopen(_request(url), timeout=60) as response:
             raw = response.read()
     except (OSError, urllib.error.URLError, urllib.error.HTTPError) as exc:
-        raise AIDeliveryError(f"Could not retrieve the MorphoLabel AI component manifest: {exc}") from exc
+        raise AIDeliveryError(f"Could not retrieve the MorphoLabel AI engine manifest: {exc}") from exc
     try:
         manifest = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise AIDeliveryError("Published AI component manifest is invalid") from exc
+        raise AIDeliveryError("Published AI engine manifest is invalid") from exc
     if not isinstance(manifest, dict) or int(manifest.get("format_version", 0)) != 1:
         raise AIDeliveryError("Unsupported AI delivery manifest format")
     if str(manifest.get("platform")) != "windows-x64":
-        raise AIDeliveryError("Published AI component is not for Windows x64")
+        raise AIDeliveryError("Published AI engine is not for Windows x64")
     if str(manifest.get("app_version")) != str(__version__) and not os.environ.get("MORPHOLABEL_AI_RELEASE_BASE"):
         raise AIDeliveryError(
-            f"Published AI component targets MorphoLabel {manifest.get('app_version')}, not {__version__}"
+            f"Published AI engine targets MorphoLabel {manifest.get('app_version')}, not {__version__}"
         )
     name = str(manifest.get("archive_name") or "")
     if not name or not _SAFE_NAME.fullmatch(name) or Path(name).name != name or not name.lower().endswith(".zip"):
-        raise AIDeliveryError("Published AI component archive name is unsafe")
+        raise AIDeliveryError("Published AI engine archive name is unsafe")
     digest = str(manifest.get("archive_sha256") or "").lower()
     if not re.fullmatch(r"[0-9a-f]{64}", digest):
-        raise AIDeliveryError("Published AI component SHA256 is invalid")
+        raise AIDeliveryError("Published AI engine SHA256 is invalid")
     try:
         archive_bytes = int(manifest.get("archive_bytes"))
         installed_bytes = int(manifest.get("installed_bytes") or 0)
     except (TypeError, ValueError) as exc:
-        raise AIDeliveryError("Published AI component sizes are invalid") from exc
+        raise AIDeliveryError("Published AI engine sizes are invalid") from exc
     if archive_bytes <= 0 or installed_bytes < 0:
-        raise AIDeliveryError("Published AI component sizes are invalid")
+        raise AIDeliveryError("Published AI engine sizes are invalid")
     raw_parts = manifest.get("parts")
     if raw_parts is None:
         raw_parts = [{"name": name, "bytes": archive_bytes, "sha256": digest}]
     if not isinstance(raw_parts, list) or not raw_parts:
-        raise AIDeliveryError("Published AI component part list is invalid")
+        raise AIDeliveryError("Published AI engine part list is invalid")
     parts = []
     seen = set()
     total_part_bytes = 0
     for item in raw_parts:
         if not isinstance(item, dict):
-            raise AIDeliveryError("Published AI component part entry is invalid")
+            raise AIDeliveryError("Published AI engine part entry is invalid")
         part_name = str(item.get("name") or "")
         if not part_name or not _SAFE_NAME.fullmatch(part_name) or Path(part_name).name != part_name:
-            raise AIDeliveryError("Published AI component part name is unsafe")
+            raise AIDeliveryError("Published AI engine part name is unsafe")
         if part_name in seen:
-            raise AIDeliveryError("Published AI component contains duplicate parts")
+            raise AIDeliveryError("Published AI engine contains duplicate parts")
         seen.add(part_name)
         part_digest = str(item.get("sha256") or "").lower()
         if not re.fullmatch(r"[0-9a-f]{64}", part_digest):
-            raise AIDeliveryError("Published AI component part SHA256 is invalid")
+            raise AIDeliveryError("Published AI engine part SHA256 is invalid")
         try:
             part_bytes = int(item.get("bytes"))
         except (TypeError, ValueError) as exc:
-            raise AIDeliveryError("Published AI component part size is invalid") from exc
+            raise AIDeliveryError("Published AI engine part size is invalid") from exc
         if part_bytes <= 0 or part_bytes >= 2 * 1024**3:
-            raise AIDeliveryError("Published AI component part exceeds the GitHub Release size contract")
+            raise AIDeliveryError("Published AI engine part exceeds the GitHub Release size contract")
         parts.append({"name": part_name, "bytes": part_bytes, "sha256": part_digest})
         total_part_bytes += part_bytes
     if total_part_bytes != archive_bytes:
-        raise AIDeliveryError("Published AI component parts do not match archive size")
+        raise AIDeliveryError("Published AI engine parts do not match archive size")
     manifest["archive_bytes"] = archive_bytes
     manifest["installed_bytes"] = installed_bytes
     manifest["archive_sha256"] = digest
@@ -178,7 +178,7 @@ def _download_archive(manifest, base_url, *, progress=None):
     target = cache / manifest["archive_name"]
     expected = manifest["archive_sha256"]
     if target.is_file() and target.stat().st_size == manifest["archive_bytes"] and _sha256(target) == expected:
-        _progress(progress, "AI COMPONENT", "Using the verified cached AI component…")
+        _progress(progress, "AI ENGINE", "Using the verified cached AI engine…")
         return target
     if target.exists():
         target.unlink(missing_ok=True)
@@ -187,17 +187,17 @@ def _download_archive(manifest, base_url, *, progress=None):
     received = _validated_partial_size(part, manifest["parts"], manifest["archive_bytes"])
     if received:
         pct=min(100,int(received*100/manifest["archive_bytes"]))
-        _progress(progress,"AI COMPONENT",f"Resuming AI runtime download… {pct}%")
+        _progress(progress,"AI ENGINE",f"Resuming AI engine download… {pct}%")
 
     free = shutil.disk_usage(cache).free
     remaining = max(0, manifest["archive_bytes"] - received)
     required = remaining + manifest["installed_bytes"] + 512 * 1024 * 1024
     if free < required:
         raise AIDeliveryError(
-            f"Not enough free disk space for the AI component: need about {required / (1024**3):.1f} GB"
+            f"Not enough free disk space for the AI engine: need about {required / (1024**3):.1f} GB"
         )
 
-    _progress(progress, "AI COMPONENT", "Downloading the verified AI runtime…")
+    _progress(progress, "AI ENGINE", "Downloading the verified AI engine…")
     offset=0
     transient=(OSError,urllib.error.URLError,urllib.error.HTTPError)
     for asset in manifest["parts"]:
@@ -228,16 +228,16 @@ def _download_archive(manifest, base_url, *, progress=None):
                             if not block:break
                             output.write(block);received+=len(block)
                             pct=min(100,int(received*100/manifest["archive_bytes"]))
-                            _progress(progress,"AI COMPONENT",f"Downloading AI runtime… {pct}%")
+                            _progress(progress,"AI ENGINE",f"Downloading AI engine… {pct}%")
                         output.flush()
             except transient as exc:
                 if attempts>=_DOWNLOAD_RETRIES:
                     pct=min(100,int(received*100/manifest["archive_bytes"]))
                     raise AIDeliveryError(
-                        f"AI component download was interrupted after {pct}%; "
+                        f"AI engine download was interrupted after {pct}%; "
                         f"the partial download was kept and will resume next time: {exc}"
                     ) from exc
-                _progress(progress,"AI COMPONENT","Connection interrupted; resuming AI runtime download…")
+                _progress(progress,"AI ENGINE","Connection interrupted; resuming AI engine download…")
                 time.sleep(min(4,attempts))
                 continue
 
@@ -245,10 +245,10 @@ def _download_archive(manifest, base_url, *, progress=None):
                 if attempts>=_DOWNLOAD_RETRIES:
                     pct=min(100,int(received*100/manifest["archive_bytes"]))
                     raise AIDeliveryError(
-                        f"AI component part remained incomplete after retries at {pct}%; "
+                        f"AI engine part remained incomplete after retries at {pct}%; "
                         "the partial download was kept and will resume next time"
                     )
-                _progress(progress,"AI COMPONENT","Connection ended early; resuming AI runtime download…")
+                _progress(progress,"AI ENGINE","Connection ended early; resuming AI engine download…")
                 time.sleep(min(4,attempts))
                 continue
 
@@ -257,9 +257,9 @@ def _download_archive(manifest, base_url, *, progress=None):
                 _truncate(part,offset);received=offset
                 if attempts>=_DOWNLOAD_RETRIES:
                     raise AIDeliveryError(
-                        f"AI component part failed SHA256 verification after retries: {asset['name']}"
+                        f"AI engine part failed SHA256 verification after retries: {asset['name']}"
                     )
-                _progress(progress,"AI COMPONENT","Downloaded AI part failed verification; retrying that part…")
+                _progress(progress,"AI ENGINE","Downloaded AI part failed verification; retrying that part…")
                 time.sleep(min(4,attempts))
                 continue
             break
@@ -267,11 +267,11 @@ def _download_archive(manifest, base_url, *, progress=None):
 
     if received != manifest["archive_bytes"] or part.stat().st_size != manifest["archive_bytes"]:
         raise AIDeliveryError(
-            f"AI component download is incomplete: {received} of {manifest['archive_bytes']} bytes"
+            f"AI engine download is incomplete: {received} of {manifest['archive_bytes']} bytes"
         )
     if _sha256(part) != expected:
         part.unlink(missing_ok=True)
-        raise AIDeliveryError("AI component assembled archive failed SHA256 verification")
+        raise AIDeliveryError("AI engine assembled archive failed SHA256 verification")
     os.replace(part, target)
     return target
 
@@ -279,12 +279,12 @@ def install_published_ai_component(*, progress=None, release_version=None):
     version = str(release_version or __version__)
     if version.endswith("-dev") and not os.environ.get("MORPHOLABEL_AI_RELEASE_BASE"):
         raise AIDeliveryError(
-            "This development build has no published managed AI component. Use a tagged MorphoLabel release."
+            "This development build has no published managed AI engine. Use a tagged MorphoLabel release."
         )
     base = release_base_url(version)
     manifest = _fetch_manifest(base, progress=progress)
     archive = _download_archive(manifest, base, progress=progress)
-    _progress(progress, "AI COMPONENT", "Verifying and installing the AI runtime…")
+    _progress(progress, "AI ENGINE", "Verifying and installing the AI engine…")
     try:
         runtime = install_component_archive(
             archive,
@@ -293,12 +293,12 @@ def install_published_ai_component(*, progress=None, release_version=None):
             run_runtime_check=True,
         )
     except Exception as exc:
-        raise AIDeliveryError(f"AI component installation failed: {exc}") from exc
+        raise AIDeliveryError(f"AI engine installation failed: {exc}") from exc
     try:
         archive.unlink()
     except OSError:
         pass
-    _progress(progress, "AI COMPONENT", "AI runtime installed and verified.")
+    _progress(progress, "AI ENGINE", "AI engine installed and verified.")
     return runtime
 
 
@@ -324,5 +324,5 @@ def ensure_ai_runtime(*, project=None, explicit=None, configured=None, runner_pa
     install_published_ai_component(progress=progress)
     runtime, runner = resolve_ai_runtime(project=project, runner_path=runner_path)
     if not runtime.is_file():
-        raise AIDeliveryError("Managed AI component installed but no runtime could be resolved")
+        raise AIDeliveryError("Managed AI engine installed but no runtime could be resolved")
     return runtime, runner

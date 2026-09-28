@@ -48,14 +48,17 @@ def run_self_test():
     }
 
 
-def run_ai_self_test(*, require_cuda=False, include_training=False, progress=None):
+def run_ai_self_test(*, require_cuda=False, include_training=False, progress=None, bootstrap=None):
     """Exercise the same managed runtime/bootstrap path used by the GUI."""
     from PIL import Image
 
     from .ai_runtime_resolver import validate_ai_runtime
     from .landmark_bootstrap import resolve_landmark_bootstrap
 
-    bootstrap = resolve_landmark_bootstrap(None, progress_callback=progress)
+    if bootstrap is None:
+        if progress:progress("PRETRAINED MODEL","Checking RTMPose-M AP-10K…")
+        bootstrap = resolve_landmark_bootstrap(None, progress_callback=progress)
+    if progress:progress("AI TEST","Checking installed AI packages and GPU support…")
     runner = resource_path("ai_runtime", "rtmpose_runner.py")
     info = validate_ai_runtime(
         bootstrap.runtime_python,
@@ -81,6 +84,7 @@ def run_ai_self_test(*, require_cuda=False, include_training=False, progress=Non
             "device": device,
             "simm_landmark_ids": list(range(1, 18)),
         }
+        if progress:progress("AI TEST",f"Testing landmark prediction on {'GPU' if device.startswith('cuda') else 'CPU'}…")
         result = subprocess.run(
             [str(bootstrap.runtime_python), str(runner), "predict"],
             input=json.dumps(request),
@@ -161,6 +165,7 @@ def run_ai_self_test(*, require_cuda=False, include_training=False, progress=Non
             )
             training_output = training_root / "output"
             training_output.mkdir()
+            if progress:progress("AI TEST","Testing model training with a short one-epoch run…")
             train_run = subprocess.run(
                 [str(bootstrap.runtime_python), str(runner), "train"],
                 input=json.dumps({
@@ -186,6 +191,9 @@ def run_ai_self_test(*, require_cuda=False, include_training=False, progress=Non
             checkpoint_path = Path(training_result.get("checkpoint_path") or "")
             if training_result.get("status") != "trained" or not checkpoint_path.is_file():
                 raise RuntimeError("AI training self-test did not produce a checkpoint")
+
+    if progress:
+        progress("AI TEST","AI prediction and training checks passed." if include_training else "AI prediction check passed.")
 
     return {
         "status": "PASS",

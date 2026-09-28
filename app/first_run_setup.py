@@ -69,12 +69,16 @@ def run_first_run_setup(*,progress=None):
     from .ai_delivery import ensure_ai_runtime
     from .ai_hardware import persist_machine_profile, refresh_hardware_profile
     from .self_test import run_ai_self_test
-    _progress(progress,"AI COMPONENT","Checking the managed AI runtime…")
+    from .landmark_bootstrap import resolve_landmark_bootstrap
+    _progress(progress,"AI ENGINE","Checking Python 3.11.9 / PyTorch 2.1.0 / MMPose 1.3.2…")
     runtime,_runner=ensure_ai_runtime(progress=progress)
-    _progress(progress,"HARDWARE","Detecting CPU, RAM, GPU, VRAM and CUDA…")
+    _progress(progress,"PRETRAINED MODEL","Checking RTMPose-M AP-10K…")
+    bootstrap=resolve_landmark_bootstrap(None,progress_callback=progress)
+    _progress(progress,"HARDWARE","Checking CPU, GPU and CUDA support…")
     hardware=refresh_hardware_profile();defaults=persist_machine_profile(hardware)
-    _progress(progress,"AI CHECK","Running a real prediction and short training test…")
-    ai_test=run_ai_self_test(require_cuda=False,include_training=True,progress=progress)
+    _progress(progress,"HARDWARE","Hardware check complete.")
+    _progress(progress,"AI TEST","Preparing prediction and training checks…")
+    ai_test=run_ai_self_test(require_cuda=False,include_training=True,progress=progress,bootstrap=bootstrap)
     training=ai_test.get("training_smoke") or {}
     if ai_test.get("status")!="PASS" or int(ai_test.get("landmarks") or 0)<=0: raise RuntimeError("AI inference qualification did not pass")
     if training.get("status")!="trained": raise RuntimeError("AI training qualification did not produce a checkpoint")

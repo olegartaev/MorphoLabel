@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 import sys
+import re
 import threading, queue
 import webbrowser
 import tkinter as tk
@@ -34,6 +35,34 @@ from app.ai_package import export_model_package, import_model_package
 from app.first_run_setup import first_run_setup_required, run_first_run_setup, defer_first_run_setup, ai_setup_complete
 
 BG="#f5f7f8"; ACC="#256d9e"
+
+_SETUP_STAGE_RANGES={
+    "AI ENGINE":(3,60,"Step 1 of 4 — Installing AI engine"),
+    "PRETRAINED MODEL":(62,78,"Step 2 of 4 — Installing RTMPose-M AP-10K"),
+    "HARDWARE":(80,86,"Step 3 of 4 — Checking hardware"),
+    "AI TEST":(88,99,"Step 4 of 4 — Testing AI"),
+    "READY":(100,100,"Setup complete"),
+}
+
+def _first_run_progress_state(stage,detail,current=0):
+    """Map truthful setup events to a monotonic user-facing progress value."""
+    key=str(stage or "").upper();text=str(detail or "")
+    lo,hi,title=_SETUP_STAGE_RANGES.get(key,(max(0,float(current)),max(0,float(current)),str(stage or "Working…")))
+    value=float(lo)
+    match=re.search(r"(\d{1,3})%",text)
+    if match and hi>lo:
+        pct=max(0,min(100,int(match.group(1))))
+        value=lo+(hi-lo)*(pct/100.0)
+    lowered=text.lower()
+    if key=="AI ENGINE" and ("installed and verified" in lowered or "already installed" in lowered):value=hi
+    elif key=="PRETRAINED MODEL" and ("verified" in lowered or "already installed" in lowered):value=hi
+    elif key=="HARDWARE" and "complete" in lowered:value=hi
+    elif key=="AI TEST":
+        if "training" in lowered:value=max(value,96)
+        elif "prediction" in lowered:value=max(value,92)
+        if "passed" in lowered:value=hi
+    elif key=="READY":value=100
+    return max(float(current),float(value)),title
 
 class ProductionShell(tk.Tk):
     """One durable Tk application; project selection never opens another shell."""
@@ -223,64 +252,101 @@ class ProductionShell(tk.Tk):
         dialog=tk.Toplevel(self);dialog.title("AI support setup");dialog.transient(self);dialog.resizable(False,False)
         frame=ttk.Frame(dialog,padding=18);frame.pack(fill="both",expand=True);frame.columnconfigure(0,weight=1)
         ttk.Label(frame,text="Set up AI features",style="PageTitle.TLabel").grid(row=0,column=0,sticky="w")
-        ttk.Label(frame,text="MorphoLabel works without AI. To use automatic crop and landmark placement, and to train models, install AI support:",justify="left",wraplength=640).grid(row=1,column=0,sticky="w",pady=(7,10))
+        ttk.Label(
+            frame,
+            text="MorphoLabel works without AI. For automatic landmark placement and model training, it can install the required AI components.",
+            justify="left",wraplength=640,
+        ).grid(row=1,column=0,sticky="w",pady=(7,10))
         components=ttk.Frame(frame);components.grid(row=2,column=0,sticky="ew")
-        ttk.Label(components,text="1. AI engine",style="SectionTitle.TLabel").grid(row=0,column=0,sticky="w")
-        ttk.Label(components,text="Required to run and train AI models. The download is several GB. It is installed only for MorphoLabel and does not change your system Python.",style="Muted.TLabel",justify="left",wraplength=600).grid(row=1,column=0,sticky="w",pady=(2,8))
+        ttk.Label(components,text="1. AI runtime",style="SectionTitle.TLabel").grid(row=0,column=0,sticky="w")
+        ttk.Label(
+            components,
+            text="Python 3.11.9 with PyTorch 2.1.0 (CUDA 12.1), MMPose 1.3.2 / RTMPose and required libraries. The download is several GB. It is installed only for MorphoLabel and does not change your system Python.",
+            style="Muted.TLabel",justify="left",wraplength=620,
+        ).grid(row=1,column=0,sticky="w",pady=(2,8))
         ttk.Label(components,text="2. Pretrained landmark model",style="SectionTitle.TLabel").grid(row=2,column=0,sticky="w")
-        ttk.Label(components,text="A pretrained RTMPose model used as the starting point for landmark detection and for training your own models.",style="Muted.TLabel",justify="left",wraplength=600).grid(row=3,column=0,sticky="w",pady=(2,8))
-        ttk.Label(components,text="After installation, MorphoLabel checks your hardware and selects a suitable mode. Project images and data are not uploaded.",justify="left",wraplength=620).grid(row=4,column=0,sticky="w")
-        stage=ttk.Label(frame,text="Nothing will be downloaded until you choose Install AI support.",style="SectionTitle.TLabel");stage.grid(row=3,column=0,sticky="w",pady=(14,0))
-        detail=ttk.Label(frame,text="You can skip this now and set it up later from the AI menu.",style="Muted.TLabel",justify="left",wraplength=620);detail.grid(row=4,column=0,sticky="w",pady=(4,8))
-        bar=ttk.Progressbar(frame,mode="indeterminate",length=580)
+        ttk.Label(
+            components,
+            text="RTMPose-M AP-10K from OpenMMLab. MorphoLabel uses it as the starting model for landmark detection and for training models on your own annotations.",
+            style="Muted.TLabel",justify="left",wraplength=620,
+        ).grid(row=3,column=0,sticky="w",pady=(2,8))
+        ttk.Label(
+            components,
+            text="After installation, MorphoLabel checks your CPU, GPU and CUDA support and runs a short AI test. Project images and data are not uploaded.",
+            justify="left",wraplength=620,
+        ).grid(row=4,column=0,sticky="w")
+        stage=ttk.Label(frame,text="Nothing will be downloaded until you choose Install AI support.",style="SectionTitle.TLabel")
+        stage.grid(row=3,column=0,sticky="w",pady=(14,0))
+        detail=ttk.Label(frame,text="You can skip this now and install AI support later from the AI menu.",style="Muted.TLabel",justify="left",wraplength=620)
+        detail.grid(row=4,column=0,sticky="w",pady=(4,8))
+        bar=ttk.Progressbar(frame,mode="determinate",maximum=100,value=0,length=580)
         result_label=ttk.Label(frame,text="",justify="left",wraplength=620);result_label.grid(row=6,column=0,sticky="w",pady=(10,0))
         actions=ttk.Frame(frame);actions.grid(row=7,column=0,sticky="e",pady=(14,0))
-        events=queue.Queue();working={"value":False}
+        events=queue.Queue();working={"value":False};progress_value={"value":0.0}
         dialog.protocol("WM_DELETE_WINDOW",lambda:None);dialog.grab_set();center(self,dialog)
-        def progress(stage_name,stage_detail):events.put(("progress",str(stage_name),str(stage_detail)))
+
+        def progress(stage_name,stage_detail):
+            events.put(("progress",str(stage_name),str(stage_detail)))
+
         def worker():
             try:events.put(("done",run_first_run_setup(progress=progress)))
             except Exception as exc:events.put(("error",exc))
+
         def start_setup():
             if working["value"]:return
-            working["value"]=True
+            working["value"]=True;progress_value["value"]=0.0
             for child in actions.winfo_children():child.destroy()
-            result_label.configure(text="");stage.configure(text="Installing AI support…")
-            detail.configure(text="Downloads are verified before activation. Interrupted downloads can resume later.")
-            bar.grid(row=5,column=0,sticky="ew");bar.start(10)
+            result_label.configure(text="")
+            stage.configure(text="Starting AI setup…")
+            detail.configure(text="Preparing the required components. Downloads can resume if the connection is interrupted.")
+            bar.configure(value=1);bar.grid(row=5,column=0,sticky="ew")
             threading.Thread(target=worker,daemon=True,name="morpholabel-first-run-setup").start()
+
         def close_ready():
             self._first_run_setup_active=False
             try:dialog.grab_release()
             except tk.TclError:pass
             dialog.destroy()
+
         def continue_core():
             defer_first_run_setup();self._first_run_setup_active=False
             try:dialog.grab_release()
             except tk.TclError:pass
             dialog.destroy();log("GLOBAL","first_run_setup","DEFERRED",detail="user chose to continue without AI")
+
         def initial_actions():
             self.control_button(actions,"Continue without AI",continue_core,"Continue now and set up AI later.").pack(side="right")
-            self.control_button(actions,"Install AI support",start_setup,"Approve the described AI downloads and test this computer.",primary=True).pack(side="right",padx=(0,6))
+            self.control_button(actions,"Install AI support",start_setup,"Install the listed AI components and test this computer.",primary=True).pack(side="right",padx=(0,6))
+
         def poll():
             try:
                 while True:
                     kind,*value=events.get_nowait()
-                    if kind=="progress":stage.configure(text=value[0]);detail.configure(text=value[1])
+                    if kind=="progress":
+                        current,title=_first_run_progress_state(value[0],value[1],progress_value["value"])
+                        progress_value["value"]=current
+                        bar.configure(value=current)
+                        stage.configure(text=title);detail.configure(text=value[1])
                     elif kind=="error":
-                        working["value"]=False;bar.stop();stage.configure(text="AI setup is incomplete")
+                        working["value"]=False
+                        stage.configure(text="AI setup is incomplete")
                         detail.configure(text="MorphoLabel can still be used without AI. Partial downloads stay local and resume only if you choose Retry or start AI setup again.")
                         result_label.configure(text=f"{type(value[0]).__name__}: {value[0]}")
                         self.control_button(actions,"Continue without AI",continue_core,"Continue now and set up AI later.").pack(side="right")
                         self.control_button(actions,"Retry",start_setup,"Retry the approved AI setup.",primary=True).pack(side="right",padx=(0,6))
                     else:
-                        working["value"]=False;bar.stop();payload=value[0];hardware=payload.get("hardware") or {};test=payload.get("ai_self_test") or {}
-                        gpu=hardware.get("gpu_model") or "No dedicated GPU detected";accel="CUDA" if hardware.get("cuda_available") else "CPU fallback";training=(test.get("training_smoke") or {}).get("status") or "not run"
-                        stage.configure(text="MorphoLabel is ready");detail.configure(text="AI support is installed and verified. Ordinary launches will not repeat this setup.")
-                        result_label.configure(text=f"GPU: {gpu}\nAcceleration: {accel}\nInference test: PASS\nTraining test: {str(training).upper()}\n\nPerformance mode: Auto.")
+                        working["value"]=False;progress_value["value"]=100.0;bar.configure(value=100)
+                        payload=value[0];hardware=payload.get("hardware") or {};test=payload.get("ai_self_test") or {}
+                        gpu=hardware.get("gpu_model") or "No dedicated GPU detected"
+                        accel="CUDA" if hardware.get("cuda_available") else "CPU"
+                        training=(test.get("training_smoke") or {}).get("status") or "not run"
+                        stage.configure(text="Setup complete")
+                        detail.configure(text="AI support is installed and verified. MorphoLabel is ready to use.")
+                        result_label.configure(text=f"GPU: {gpu}\nAI acceleration: {accel}\nPrediction test: PASS\nTraining test: {str(training).upper()}\n\nPerformance mode: Auto.")
                         self.control_button(actions,"Start MorphoLabel",close_ready,"Finish setup and use MorphoLabel.",primary=True).pack(side="right")
             except queue.Empty:
                 if dialog.winfo_exists():self.after(100,poll)
+
         initial_actions();poll()
 
     def _warm_ai_hardware(self):

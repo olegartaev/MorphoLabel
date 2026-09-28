@@ -44,6 +44,7 @@ class FirstRunSetupTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as td, patch.dict("os.environ",{"LOCALAPPDATA":td},clear=False), \
              patch("app.ai_delivery.ensure_ai_runtime",return_value=(Path("C:/managed/python.exe"),Path("runner.py"))) as ensure, \
+             patch("app.landmark_bootstrap.resolve_landmark_bootstrap",return_value=SimpleNamespace(checkpoint_path=Path("C:/managed/bootstrap.pth"))) as resolve_bootstrap, \
              patch("app.ai_hardware.refresh_hardware_profile",return_value=hardware) as detect, \
              patch("app.ai_hardware.persist_machine_profile",return_value={
                  "hardware":hardware.as_dict(),
@@ -54,11 +55,19 @@ class FirstRunSetupTests(unittest.TestCase):
             events=[]
             result=first_run_setup.run_first_run_setup(progress=lambda stage,detail:events.append((stage,detail)))
             ensure.assert_called_once()
+            resolve_bootstrap.assert_called_once()
             self.assertTrue(first_run_setup.ai_download_consent_granted())
             detect.assert_called_once()
             persist.assert_called_once_with(hardware)
             self_test.assert_called_once()
             self.assertTrue(self_test.call_args.kwargs["include_training"])
+            self.assertIsNotNone(self_test.call_args.kwargs["bootstrap"])
+            stages=[stage for stage,_detail in events]
+            for expected in ("AI ENGINE","PRETRAINED MODEL","HARDWARE","AI TEST","READY"):
+                self.assertIn(expected,stages)
+            self.assertLess(stages.index("AI ENGINE"),stages.index("PRETRAINED MODEL"))
+            self.assertLess(stages.index("PRETRAINED MODEL"),stages.index("HARDWARE"))
+            self.assertLess(stages.index("HARDWARE"),stages.index("AI TEST"))
             self.assertEqual("PASS",result["status"])
             saved=json.loads(first_run_setup.setup_state_path().read_text(encoding="utf-8"))
             self.assertEqual("PASS",saved["status"])
@@ -71,6 +80,7 @@ class FirstRunSetupTests(unittest.TestCase):
         bad={"status":"PASS","landmarks":17,"bootstrap_checkpoint":"x","training_smoke":{"status":"failed"}}
         with tempfile.TemporaryDirectory() as td, patch.dict("os.environ",{"LOCALAPPDATA":td},clear=False), \
              patch("app.ai_delivery.ensure_ai_runtime",return_value=(Path("python.exe"),Path("runner.py"))), \
+             patch("app.landmark_bootstrap.resolve_landmark_bootstrap",return_value=SimpleNamespace(checkpoint_path=Path("bootstrap.pth"))), \
              patch("app.ai_hardware.refresh_hardware_profile",return_value=hardware), \
              patch("app.ai_hardware.persist_machine_profile",return_value={"training_default":{},"inference_default":{}}), \
              patch("app.self_test.run_ai_self_test",return_value=bad):

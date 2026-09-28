@@ -25,7 +25,7 @@ class BootstrapSpec:
 
 def _progress(callback, detail):
     if callback:
-        callback("BOOTSTRAP MODEL", detail)
+        callback("PRETRAINED MODEL", detail)
 
 
 def _sha256(path):
@@ -47,6 +47,7 @@ def _download_verified_checkpoint(url, target, expected_sha256, progress_callbac
 
     if target.is_file():
         if _sha256(target) == expected:
+            _progress(progress_callback,"RTMPose-M AP-10K is already installed and verified.")
             return target
         target.unlink()
 
@@ -66,7 +67,7 @@ def _download_verified_checkpoint(url, target, expected_sha256, progress_callbac
         str(url),
         headers={"User-Agent": "MorphoLabel managed bootstrap"},
     )
-    _progress(progress_callback, "Downloading the official OpenMMLab RTMPose bootstrap model…")
+    _progress(progress_callback, "Downloading RTMPose-M AP-10K from OpenMMLab…")
     try:
         with urllib.request.urlopen(request, timeout=60) as response, temporary.open("wb") as output:
             total = response.headers.get("Content-Length") if getattr(response, "headers", None) else None
@@ -79,7 +80,7 @@ def _download_verified_checkpoint(url, target, expected_sha256, progress_callbac
                 digest.update(block)
                 received += len(block)
                 if total:
-                    _progress(progress_callback, f"Downloading bootstrap model… {min(100, int(received * 100 / total))}%")
+                    _progress(progress_callback, f"Downloading RTMPose-M AP-10K… {min(100, int(received * 100 / total))}%")
     except (OSError, urllib.error.URLError, urllib.error.HTTPError) as exc:
         temporary.unlink(missing_ok=True)
         raise RuntimeError(f"Could not download the official RTMPose bootstrap model: {exc}") from exc
@@ -87,7 +88,7 @@ def _download_verified_checkpoint(url, target, expected_sha256, progress_callbac
         temporary.unlink(missing_ok=True)
         raise RuntimeError("Downloaded RTMPose bootstrap checkpoint failed SHA256 verification")
     os.replace(temporary, target)
-    _progress(progress_callback, "Bootstrap model downloaded and verified.")
+    _progress(progress_callback, "RTMPose-M AP-10K downloaded and verified.")
     return target
 
 

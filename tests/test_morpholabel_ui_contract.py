@@ -14,7 +14,7 @@ from app import __version__ as PACKAGE_VERSION
 from app.project_storage import Project
 from app.ui.context import UIContext
 from app.ui.measurements_section import MeasurementsSection
-from app.ui.shell import ProductionShell
+from app.ui.shell import ProductionShell, _first_run_progress_state
 from app.landmark_suspicious_review import start as start_suspicious_review, current as current_suspicious
 from app.landmark_ai_review import create_review_session_for_ids, activate_review_session, active_review_session
 
@@ -186,10 +186,14 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         self.assertIn('"Install AI support"',shell)
         self.assertIn('"Continue without AI"',shell)
         self.assertIn('"Nothing will be downloaded until you choose Install AI support."',shell)
-        self.assertIn('"1. AI engine"',shell)
+        self.assertIn('"1. AI runtime"',shell)
         self.assertIn('"2. Pretrained landmark model"',shell)
+        self.assertIn("Python 3.11.9 with PyTorch 2.1.0 (CUDA 12.1), MMPose 1.3.2 / RTMPose",shell)
+        self.assertIn("RTMPose-M AP-10K from OpenMMLab",shell)
         self.assertIn("does not change your system Python",shell)
         self.assertIn("Project images and data are not uploaded",shell)
+        self.assertIn('mode="determinate"',shell)
+        self.assertIn('bar.configure(value=100)',shell)
         self.assertNotIn('"2. Base landmark model"',shell)
         self.assertIn('label="Set up AI support..."',shell)
         setup=shell[shell.index("    def _show_first_run_setup"):shell.index("    def _warm_ai_hardware")]
@@ -197,6 +201,16 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         self.assertNotIn("start_setup();poll()",setup)
         self.assertIn("ai_download_consent_granted",delivery)
         self.assertIn("review and approve the required downloads",delivery)
+
+    def test_first_run_progress_is_monotonic_and_finishes_at_100(self):
+        value,title=_first_run_progress_state("AI ENGINE","Downloading AI engine… 50%",0)
+        self.assertGreater(value,3)
+        self.assertIn("Step 1 of 4",title)
+        model,title=_first_run_progress_state("PRETRAINED MODEL","Downloading RTMPose-M AP-10K… 50%",value)
+        self.assertGreater(model,value)
+        ready,title=_first_run_progress_state("READY","First-time AI setup completed.",model)
+        self.assertEqual(100,ready)
+        self.assertEqual("Setup complete",title)
 
     def test_package_entrypoint_uses_same_morpholabel_shell(self):
         root=Path(__file__).parents[1]
