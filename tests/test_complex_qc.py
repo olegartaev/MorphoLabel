@@ -69,7 +69,7 @@ class ComplexQCTests(unittest.TestCase):
             self.assertIn("gm",families)
         self.assertEqual(before,project.load_landmarks(target))
 
-    def test_scan_covers_unchecked_manual_and_machine_annotations(self):
+    def test_scan_excludes_unverified_manual_and_machine_annotations(self):
         project,ids=self._project("clean")
         manual_id,machine_id=ids[1],ids[2]
         project.save_landmark(manual_id,5,145.0,25.0,"corrected",provenance="corrected_by_human");project.clear_checked(manual_id)
@@ -77,10 +77,9 @@ class ComplexQCTests(unittest.TestCase):
             db.execute("UPDATE landmarks SET x_standardized=145.0,y_standardized=25.0,provenance='machine',reviewed=0,model_id='m',prediction_run_id='r' WHERE image_id=? AND landmark_abbr='E'",(machine_id,))
             db.execute("UPDATE image_review SET human_verified=0 WHERE image_id=?",(machine_id,))
         result=scan_complex_qc(project)
-        self.assertEqual(len(ids),result["scanned"])
+        self.assertEqual(len(ids)-2,result["scanned"])
         queued={item["image_id"]:item for item in result["queue"]}
-        self.assertIn(manual_id,queued);self.assertIn(machine_id,queued)
-        self.assertTrue(queued[manual_id]["signals"]);self.assertTrue(queued[machine_id]["signals"])
+        self.assertNotIn(manual_id,queued);self.assertNotIn(machine_id,queued)
 
     def test_incomplete_annotation_stays_out_of_complex_qc(self):
         project,ids=self._project("clean");target=ids[0]
@@ -126,6 +125,7 @@ class ComplexQCTests(unittest.TestCase):
         project,ids=self._project("clean")
         project.save_landmark(ids[0],5,145.0,25.0,"corrected",provenance="corrected_by_human")
         project.save_landmark(ids[1],5,130.0,30.0,"corrected",provenance="corrected_by_human")
+        project.mark_checked(ids[0]);project.mark_checked(ids[1])
         result=scan_complex_qc(project)
         risks=[float(item["risk_score"]) for item in result["queue"] if item.get("priority")=="High"]
         self.assertEqual(risks,sorted(risks,reverse=True))
@@ -135,11 +135,12 @@ class ComplexQCTests(unittest.TestCase):
         landmarks=(root/"app"/"ui"/"landmarks_section.py").read_text(encoding="utf8")
         shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf8")
         dialog=(root/"app"/"ui"/"complex_qc_dialog.py").read_text(encoding="utf8")
-        self.assertIn("🛡 Complex QC",landmarks)
+        self.assertIn("'Complex QC'",landmarks)
+        self.assertIn("'Review worst'",landmarks)
         self.assertNotIn("'Review pending'",landmarks)
-        self.assertIn("ComplexQC.TButton",shell)
-        self.assertIn('"Review all — worst first"',dialog)
-        self.assertNotIn('"Review flagged"',dialog)
+        self.assertIn("ReviewAction.TButton",shell)
+        self.assertIn('"Review flagged — worst first"',dialog)
+        self.assertIn("human-verified",dialog)
         self.assertNotIn('"Review selected"',dialog)
         self.assertNotIn('"Scan again"',dialog)
         self.assertIn("Outlier ≠ error",dialog)
