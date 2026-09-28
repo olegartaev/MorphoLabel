@@ -369,7 +369,7 @@ class LandmarksSection(SectionView):
   if finished:
    self.canvas.clear_review_landmarks()
    title='Final data QC' if complex_qc else 'Landmark error check'
-   message='Complex QC review complete.' if complex_qc else 'Suspicious-landmark review complete.'
+   message='Final data QC review complete.' if complex_qc else 'Suspicious-landmark review complete.'
    messagebox.showinfo(title,message,parent=self.shell);self.shell._update_status();return True
   next_issue=suspicious_current(self.context.project);current=(self.context.current() or {}).get('image_id')
   if next_issue and next_issue.get('image_id')==current and self.canvas.ready_for(current):
