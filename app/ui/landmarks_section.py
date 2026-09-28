@@ -37,7 +37,7 @@ def _confirm_complex_qc_image(project,image_id):
  status=project.annotation_status(image_id)
  if not status.get("complete"):
   unresolved=tuple(status.get("unresolved_ids") or ())
-  raise ValueError("Resolve all landmarks before Checked & Next"+(f": {', '.join(map(str,unresolved))}" if unresolved else "."))
+  raise ValueError("Resolve all landmarks before Verify & Next"+(f": {', '.join(map(str,unresolved))}" if unresolved else "."))
  project.mark_checked(image_id)
  return project.annotation_status(image_id)
 
@@ -137,7 +137,7 @@ class LandmarksSection(SectionView):
   ttk.Label(controls,text='Click = place · drag = correct',style="Muted.TLabel").pack(side='right',padx=(6,8))
 
   batch=tk.IntVar(value=24);prediction=tk.IntVar(value=24)
-  guide='Why: Landmarks turns specimen anatomy into comparable point coordinates for morphometric analysis.\n\n1. Repeatability\nOptional. Mark the same control images twice, with a break between passes, to estimate your own placement error.\n\n2. Training batch\nMark every required point or choose Mark missing. Use Confirm & Next to finish each image.\n\n3. Train\nTrain from all human-confirmed images. Choose Bootstrap for the first model or a saved model as the parent.\n\n4. Apply and review\nApply the active model to new images. Check its points and confirm them before they can be used for training.'
+  guide='Why: Landmarks turns specimen anatomy into comparable point coordinates for morphometric analysis.\n\n1. Repeatability\nOptional. Mark the same control images twice, with a break between passes, to estimate your own placement error.\n\n2. Training data\nMark every required point or choose Mark missing. Use Verify & Next to finish each image.\n\n3. Train model\nTrain from all human-verified images. Choose Bootstrap for the first model or a saved model as the parent.\n\n4. Apply & review\nApply the active model to new images. Review worst ranks only complete, unverified AI predictions so you can inspect the riskiest first. Verify & Next confirms each reviewed image. Complex QC is a separate post-verification audit: it scans only final human-verified landmark sets for structural and dataset-wide outliers.'
   dock=self.workflow_dock(panel,help_title='Landmarks — quick guide',help_text=guide);dock.grid(row=2,column=0,sticky='ew',pady=(2,0))
 
   repeat_run=current_run(self.context.project)
@@ -176,7 +176,7 @@ class LandmarksSection(SectionView):
   self.button(three,'Train',lambda:self.preflight(None if parent_choice.get()=='Bootstrap / first model' else parent_choice.get()),'Check then run Landmark model training.',style='Primary.TButton').grid(row=2,column=0,columnspan=2,sticky='w',pady=(5,0))
   self.button(three,'Models…',lambda:self.shell.show_models('landmark'),'Compare and select saved Landmark models.').grid(row=2,column=2,sticky='e',padx=(5,0),pady=(5,0))
 
-  four=dock.add_card('4. Apply & review',icon='landmark_apply',help_text='Apply the active model to new images, then review and confirm its landmark predictions.')
+  four=dock.add_card('4. Apply & review',icon='landmark_apply',help_text='Apply the active model. Use Review worst for complete unverified AI predictions; use Complex QC later for final human-verified data.')
   ttk.Label(four,text='Batch').grid(row=0,column=0,sticky='w')
   ttk.Spinbox(four,from_=1,to=500,textvariable=prediction,width=5).grid(row=0,column=1,sticky='w',padx=4)
   ttk.Label(four,text='images',style='Muted.TLabel').grid(row=0,column=2,sticky='w')
@@ -187,13 +187,17 @@ class LandmarksSection(SectionView):
   self.button(predict_actions,'All remaining',lambda:self.predict(True,prediction.get()),'Apply the active model to all unannotated images and reapply it to AI-predicted images that are not yet human-verified. Human corrections are preserved.',state=prediction_state).grid(row=0,column=1,sticky='ew',padx=2)
   self.button(predict_actions,'Reapply',self.reapply_unverified,'Re-run the active model on already-annotated images that are not human-verified. Human-placed/corrected landmarks are preserved.',state=prediction_state).grid(row=0,column=2,sticky='ew',padx=(2,0))
   review_actions=ttk.Frame(four);review_actions.grid(row=2,column=0,columnspan=3,sticky='ew',pady=(5,0))
-  review_actions.columnconfigure(0,weight=2);review_actions.columnconfigure(1,weight=1)
+  review_actions.columnconfigure(0,weight=1,uniform='review_actions');review_actions.columnconfigure(1,weight=1,uniform='review_actions')
   self.button(
-   review_actions,'🛡 Complex QC',lambda:open_complex_qc(self),
-   'Scan all final verified landmarks for structural, distance, measurement and GM-shape outliers. The scan is read-only.',
-   style='ComplexQC.TButton'
+   review_actions,'Review worst',lambda:self.review_worst(prediction.get()),
+   'Before verification: rank only complete unverified AI predictions by risk, using confidence, geometry and patterns learned from earlier human corrections.',
+   icon='review_worst',style='ReviewAction.TButton'
   ).grid(row=0,column=0,sticky='ew',padx=(0,3))
-  self.button(review_actions,'Review worst',lambda:self.review_worst(prediction.get()),'Review the highest-risk unverified AI predictions. Batch size uses Prediction batch; reasons are shown on each image.').grid(row=0,column=1,sticky='ew',padx=(3,0))
+  self.button(
+   review_actions,'Complex QC',lambda:open_complex_qc(self),
+   'After verification: audit only final human-verified landmark sets for structural, distance, measurement and GM-shape outliers.',
+   icon='complex_qc',style='ReviewAction.TButton'
+  ).grid(row=0,column=1,sticky='ew',padx=(3,0))
 
   self.canvas.redraw_cached();self._refresh_landmark_sidebar();self._refresh_action_buttons()
  def _refresh_action_buttons(self,state=None):
@@ -326,7 +330,9 @@ class LandmarksSection(SectionView):
   current=(self.context.current() or {}).get('image_id')
   if issue and issue.get('image_id')==current:
    self.canvas.set_review_landmarks(issue.get('landmark_ids',()),issue.get('message','Check suspicious landmark placement'))
-   self._inline_status('Check suspicious landmarks: '+issue.get('message',''))
+   active=suspicious_active(self.context.project) or {}
+   prefix='Complex QC: ' if active.get('source')=='Complex QC' else 'Check suspicious landmarks: '
+   self._inline_status(prefix+issue.get('message',''))
   else:self.canvas.clear_review_landmarks()
 
  def _select_suspicious_issue(self):
@@ -811,7 +817,7 @@ class LandmarksSection(SectionView):
    session_id='review_worst_v2_'+hashlib.sha256(('\0'.join(ids)).encode('utf8')).hexdigest()[:16]
    create_review_session_for_ids(self.context.project,session_id,ids,kind='review_worst_v2',metadata=metadata)
    self._open_review_session(session_id)
-  self.shell._run_background_task('Review worst','Reading verified human corrections…',worker,done)
+  self.shell._run_background_task('Review worst','Ranking complete unverified AI predictions…',worker,done)
  def reapply_unverified(self):
   active=self.context.project.active_model_readonly('landmark') or {}
   if not active:messagebox.showwarning('Landmark prediction','No active landmark model.',parent=self.shell);return
