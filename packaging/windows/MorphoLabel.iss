@@ -46,5 +46,9 @@ Filename: "{app}\MorphoLabel.exe"; Description: "Start MorphoLabel (AI support i
 ; hardware/UI settings, caches and diagnostics. Scientific projects are stored
 ; wherever the user created them and are never placed here automatically.
 Type: filesandordirs; Name: "{localappdata}\MorphoLabel"
+; Remove the exact legacy SIMM machine-tuning cache left by older builds.
+; Do not remove the whole SIMM directory because it may contain unrelated legacy data.
+Type: files; Name: "{localappdata}\SIMM\performance_engine_tuning.json"
+Type: files; Name: "{localappdata}\SIMM\performance_engine_tuning.json.lock"
 ; Remove any app-owned leftovers not tracked by the installer manifest.
 Type: filesandordirs; Name: "{app}"
