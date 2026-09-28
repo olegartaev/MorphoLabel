@@ -36,7 +36,13 @@ RAW decoding is bundled in the Windows application. On the first launch after in
 
 ### Development from source
 
-For development, use Python 3.11 on Windows 10/11 x64:
+For development, use Python 3.11 on Windows 10/11 x64. The quickest supported source launch is:
+
+```text
+RUN_CANONICAL.cmd shell
+```
+
+If the current Python cannot see the core packages, this source-only launcher creates the gitignored repo-local `.venv` and installs `requirements.txt` there before starting. It does not modify the public installed build or project data. Manual setup is still possible:
 
 ```text
 python -m venv .venv

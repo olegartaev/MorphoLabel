@@ -149,7 +149,10 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         self.assertNotIn('python -I',canonical)
         self.assertIn('set "PYTHONPATH="',canonical)
         self.assertIn('set "PYTHONHOME="',canonical)
-        self.assertIn('tools\\canonical_exec.py',canonical)
+        self.assertIn('tools\\source_launcher.py',canonical)
+        source_launcher=(root/"tools"/"source_launcher.py").read_text(encoding="utf-8")
+        self.assertIn('"requirements.txt"',source_launcher)
+        self.assertIn('"canonical_exec.py"',source_launcher)
         self.assertNotIn('app\\gui.py',canonical)
 
     def test_provenance_checks_current_sources_without_isolating_site_packages(self):

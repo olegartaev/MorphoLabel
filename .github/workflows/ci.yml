@@ -26,4 +26,5 @@ jobs:
       - name: Full deterministic test suite
         run: python -m unittest discover -s tests -t . -p "test_*.py"
       - name: Canonical launcher provenance smoke test
-        run: python tools/canonical_exec.py provenance
+        shell: cmd
+        run: RUN_CANONICAL.cmd provenance
