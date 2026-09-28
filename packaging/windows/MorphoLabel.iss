@@ -1,5 +1,5 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "0.5.0-beta.7"
+  #define MyAppVersion "0.5.0-beta.8"
 #endif
 #ifndef MySourceDir
   #define MySourceDir "..\..\dist\MorphoLabel"
