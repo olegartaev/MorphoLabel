@@ -10,6 +10,9 @@ from .runtime_paths import app_state_dir
 
 LOG = app_state_dir() / "logs" / "app.log"
 TRACE = LOG
+LOG_MAX_BYTES = 8 * 1024**2
+LOG_BACKUP_BYTES = 8 * 1024**2
+_IO_LOCK = threading.RLock()
 
 def _log_paths():
  """Always retain the launcher log; mirror Project events when a project is open."""
@@ -30,11 +33,36 @@ def _log_path():
  return _log_paths()[-1]
 
 
+def _rotate_log(path_target, *, max_bytes=LOG_MAX_BYTES, backup_bytes=LOG_BACKUP_BYTES):
+ path_target=Path(path_target)
+ try:size=path_target.stat().st_size
+ except OSError:return False
+ if size<int(max_bytes):return False
+ backup=path_target.with_name(path_target.name+".1")
+ try:
+  with path_target.open("rb") as source:
+   keep=min(size,max(0,int(backup_bytes)))
+   source.seek(max(0,size-keep))
+   payload=source.read()
+  if payload:
+   newline=payload.find(b"\n")
+   if newline>=0 and size>keep:payload=payload[newline+1:]
+   backup.write_bytes(payload)
+  else:
+   backup.unlink(missing_ok=True)
+  path_target.unlink(missing_ok=True)
+  return True
+ except OSError:
+  return False
+
+
 def _append(line):
- for path_target in _log_paths():
-  path_target.parent.mkdir(parents=True, exist_ok=True)
-  with path_target.open("a", encoding="utf-8") as handle:
-   handle.write(line); handle.flush()
+ with _IO_LOCK:
+  for path_target in _log_paths():
+   path_target.parent.mkdir(parents=True, exist_ok=True)
+   _rotate_log(path_target)
+   with path_target.open("a", encoding="utf-8") as handle:
+    handle.write(line); handle.flush()
 
 
 def _stamp():
@@ -65,11 +93,14 @@ def error(image_id, operation, path, exc):
 
 def dump_threads(image_id, reason):
  log(image_id, "hang_trace", "START", detail=f"reason={reason}")
- for target in _log_paths():
-  with target.open("a", encoding="utf-8") as handle:
-   handle.write(f"\n=== {_stamp()} image_id={image_id} reason={reason} ===\n")
-   faulthandler.dump_traceback(file=handle, all_threads=True)
-   handle.flush()
+ with _IO_LOCK:
+  for target in _log_paths():
+   target.parent.mkdir(parents=True, exist_ok=True)
+   _rotate_log(target)
+   with target.open("a", encoding="utf-8") as handle:
+    handle.write(f"\n=== {_stamp()} image_id={image_id} reason={reason} ===\n")
+    faulthandler.dump_traceback(file=handle, all_threads=True)
+    handle.flush()
  log(image_id, "hang_trace", "END")
 
 
