@@ -14,6 +14,7 @@ from pathlib import Path
 
 from .ai_hardware import HardwareProfile, get_hardware_profile
 from .io import atomic_json_write
+from .runtime_paths import app_state_dir
 
 ENGINE_VERSION = "2"
 CACHE_FILENAME = "performance_engine_tuning.json"
@@ -160,8 +161,9 @@ def benchmark_candidates(candidates, probe, *, metric="items_per_sec",
 class PerformanceCache:
     """Atomic cache separate from the legacy ai_hardware tuning file."""
     def __init__(self, project=None):
-        root = os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")
-        self.path = Path(root) / "SIMM" / CACHE_FILENAME
+        # Machine tuning is MorphoLabel-owned application state, not project data.
+        # Keep it under the same app root so a clean uninstall is actually clean.
+        self.path = app_state_dir() / CACHE_FILENAME
 
     def read_with_status(self):
         """Read the cache without ever treating corrupt data as usable."""
