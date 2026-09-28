@@ -76,7 +76,9 @@ class FirstRunSetupTests(unittest.TestCase):
              patch("app.self_test.run_ai_self_test",return_value=bad):
             with self.assertRaises(RuntimeError):
                 first_run_setup.run_first_run_setup()
-            self.assertFalse(first_run_setup.setup_state_path().exists())
+            state=first_run_setup.read_setup_state()
+            self.assertEqual("PENDING",state["status"])
+            self.assertTrue(state["download_consent"])
 
 
 if __name__=="__main__":
