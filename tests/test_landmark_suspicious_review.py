@@ -27,6 +27,15 @@ class SuspiciousLandmarkReviewTests(unittest.TestCase):
         self.assertTrue(fresh['generation_id']);self.assertTrue(fresh['created_at'])
         self.assertIsNotNone(active(self.project))
 
+    def test_final_data_qc_source_is_current_and_legacy_complex_qc_is_supported(self):
+        issue={'image_id':self.ids[0],'kind':'complex_qc','message':'QC'}
+        current_state=start(self.project,[issue],source='Final data QC')
+        self.assertEqual('Final data QC',current_state['source'])
+        self.assertIsNotNone(active(self.project))
+        legacy=start(self.project,[issue],source='Complex QC')
+        self.assertEqual('Complex QC',legacy['source'])
+        self.assertIsNotNone(active(self.project))
+
     def test_excluding_current_review_image_removes_all_its_issues_and_advances(self):
         issues=[
             {'image_id':self.ids[0],'kind':'spatial_outlier','landmark_id':1,'message':'one'},
