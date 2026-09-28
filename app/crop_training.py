@@ -53,17 +53,45 @@ def _project_target(row,width,height):
  """Production Crop target: four normalized bounds plus circular rotation."""
  bounds=row['crop_bounds'];angle=normalize_rotation(row.get('rotation_degrees') or 0.0)
  return [bounds[0]/width,bounds[1]/height,bounds[2]/width,bounds[3]/height,math.sin(math.radians(angle)),math.cos(math.radians(angle))]
+def _decode_project_feature(row):
+ """Read the disposable developed PNG when present, otherwise decode the source directly.
+
+ This keeps Crop training independent of the large developed-image cache while
+ producing the same 32×24 feature from the same development path.
+ """
+ path=Path(row['developed_path'])
+ if path.is_file():
+  with Image.open(path) as image:
+   image.load();return _feature_image(image),image.width,image.height
+ source=Path(row.get('source_path') or "")
+ if source.is_file():
+  from .standardize import decode
+  image=decode(source);image.load()
+  try:return _feature_image(image),image.width,image.height
+  finally:image.close()
+ raise FileNotFoundError(f"crop training source is unavailable for {row.get('image_id')}")
 def _project_example(row):
  """One bounded decode supplies both the 32×24 feature and target dimensions."""
- with Image.open(Path(row['developed_path'])) as image:
-  image.load();width,height=image.size;feature=_feature_image(image)
+ feature,width,height=_decode_project_feature(row)
  return row['image_id'],feature,_project_target(row,width,height)
-_FEATURE_VERSION="crop_feature_gray32x24_v1"
-def _feature_signature(path):
- stat=Path(path).stat();return {"version":_FEATURE_VERSION,"size":stat.st_size,"mtime_ns":stat.st_mtime_ns}
+_FEATURE_VERSION="crop_feature_gray32x24_v2_source_identity"
+def _feature_signature(row):
+ """Key the tiny feature cache to source identity, not the disposable developed PNG."""
+ try:
+  from .normalization_pipeline import DEVELOPMENT
+  development=DEVELOPMENT.get("version")
+ except Exception:
+  development=None
+ source_sha=row.get("source_sha256") or row.get("image_source_sha256")
+ source_size=row.get("source_file_size")
+ source_mtime=row.get("source_mtime_ns")
+ if source_sha is not None or source_size is not None or source_mtime is not None:
+  return {"version":_FEATURE_VERSION,"development":development,"source_sha256":source_sha,"source_size":source_size,"source_mtime_ns":source_mtime}
+ path=Path(row['developed_path']);stat=path.stat()
+ return {"version":_FEATURE_VERSION,"development":development,"developed_size":stat.st_size,"developed_mtime_ns":stat.st_mtime_ns}
 def _load_project_feature_cache(project,row):
- """Return a valid cached feature without opening the developed PNG."""
- path=Path(row['developed_path']);cache=project.cache_root/'crop_features'/f"{row['image_id']}.npz";signature=_feature_signature(path)
+ """Return a valid cached feature without requiring the developed PNG to exist."""
+ cache=project.cache_root/'crop_features'/f"{row['image_id']}.npz";signature=_feature_signature(row)
  try:
   with np.load(cache,allow_pickle=False) as saved:
    if json.loads(str(saved['signature'].item()))==signature:
@@ -71,7 +99,7 @@ def _load_project_feature_cache(project,row):
  except (OSError,ValueError,KeyError,json.JSONDecodeError):pass
  return None
 def _save_project_feature_cache(project,row,feature,width,height):
- path=Path(row['developed_path']);cache=project.cache_root/'crop_features'/f"{row['image_id']}.npz";signature=_feature_signature(path)
+ cache=project.cache_root/'crop_features'/f"{row['image_id']}.npz";signature=_feature_signature(row)
  cache.parent.mkdir(parents=True,exist_ok=True)
  fd,tmp=tempfile.mkstemp(prefix=cache.stem,suffix='.npz',dir=cache.parent);os.close(fd)
  try:
@@ -79,12 +107,10 @@ def _save_project_feature_cache(project,row,feature,width,height):
  finally:
   if Path(tmp).exists():Path(tmp).unlink()
 def _project_feature_cache(project,row):
- """Load a disposable feature cache or decode the developed PNG exactly once."""
- path=Path(row['developed_path']);cache=project.cache_root/'crop_features'/f"{row['image_id']}.npz";signature=_feature_signature(path)
+ """Load a tiny feature cache or decode one available image source exactly once."""
  cached=_load_project_feature_cache(project,row)
  if cached:return *cached,True
- with Image.open(path) as image:
-  image.load();width,height=image.size;feature=_feature_image(image)
+ feature,width,height=_decode_project_feature(row)
  _save_project_feature_cache(project,row,feature,width,height)
  return feature,width,height,False
 def _iou(a,b):
@@ -143,8 +169,7 @@ def train_project(project,seed=42,ridge=1.0):
  config=auto_config()
  if misses:
   def probe_extract(row):
-   with Image.open(Path(row['developed_path'])) as image:
-    image.load();return _feature_image(image),image.width,image.height
+   return _decode_project_feature(row)
   sample=misses[:min(8,len(misses))]
   config,prepared=(tune_and_prepare(project,workload=f"crop_feature_extract_{_FEATURE_VERSION}",sample=sample,worker=probe_extract,fallback=config)
                    if len(sample)>=8 else (config,{}))
