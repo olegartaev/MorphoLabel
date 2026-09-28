@@ -24,6 +24,9 @@ class WindowsBrandBuildTests(unittest.TestCase):
         self.assertIn('Type: filesandordirs; Name: "{app}"',installer)
         self.assertNotIn("{userdocs}",installer)
         self.assertNotIn("{commondocs}",installer)
+        self.assertIn('Type: files; Name: "{localappdata}\\SIMM\\performance_engine_tuning.json"',installer)
+        self.assertIn('Type: files; Name: "{localappdata}\\SIMM\\performance_engine_tuning.json.lock"',installer)
+        self.assertNotIn('Type: filesandordirs; Name: "{localappdata}\\SIMM"',installer)
 
     def test_brand_asset_script_runs_directly_from_repository_root(self):
         with tempfile.TemporaryDirectory() as folder:
