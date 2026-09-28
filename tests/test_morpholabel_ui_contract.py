@@ -212,6 +212,15 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         self.assertEqual(100,ready)
         self.assertEqual("Setup complete",title)
 
+    def test_landmark_batch_navigation_uses_verify_next_with_green_verify_icon(self):
+        root=Path(__file__).parents[1]
+        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
+        self.assertIn("'Verify & Next ›'",shell)
+        self.assertIn("self.ui_icon('verify',CONTROL_ICON_SIZE)",shell)
+        self.assertIn('width=16',shell)
+        self.assertNotIn("'Checked & Next ›'",shell)
+        self.assertIn("kind in {'landmark','landmark_ai_review','landmark_suspicious'}",shell)
+
     def test_package_entrypoint_uses_same_morpholabel_shell(self):
         root=Path(__file__).parents[1]
         entry=(root/"app"/"__main__.py").read_text(encoding="utf-8")
