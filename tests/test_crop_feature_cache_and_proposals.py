@@ -54,13 +54,32 @@ class CropFeatureCacheAndProposalTests(unittest.TestCase):
         self.assertEqual(0, warm["timings"]["feature_cache_misses"])
         self.assertEqual(5, warm["timings"]["feature_cache_hits"])
 
-    def test_signature_change_invalidates_only_changed_feature(self):
+    def test_developed_cache_mutation_does_not_invalidate_source_keyed_feature(self):
         train_project(self.project)
         row = self.project.crop_training_rows()[0]
         Image.new("RGB", (120, 80), (200, 20, 20)).save(row["developed_path"])
+        with patch("app.crop_training._feature_image", side_effect=AssertionError("derived PNG changed cache identity")):
+            result = train_project(self.project)
+        self.assertEqual(0, result["timings"]["feature_cache_misses"])
+        self.assertEqual(5, result["timings"]["feature_cache_hits"])
+
+    def test_warm_feature_cache_survives_developed_png_deletion(self):
+        train_project(self.project)
+        for row in self.project.crop_training_rows():
+            Path(row["developed_path"]).unlink()
+        with patch("app.crop_training._feature_image", side_effect=AssertionError("warm cache decoded source")):
+            result = train_project(self.project)
+        self.assertEqual(0, result["timings"]["feature_cache_misses"])
+        self.assertEqual(5, result["timings"]["feature_cache_hits"])
+        self.assertFalse(any((self.project.cache_root / "developed").glob("*.png")))
+
+    def test_cold_training_can_decode_source_without_materializing_developed_png(self):
+        for row in self.project.crop_training_rows():
+            Path(row["developed_path"]).unlink()
         result = train_project(self.project)
-        self.assertEqual(1, result["timings"]["feature_cache_misses"])
-        self.assertEqual(4, result["timings"]["feature_cache_hits"])
+        self.assertTrue(result["trained"])
+        self.assertEqual(5, result["timings"]["feature_cache_misses"])
+        self.assertFalse(any((self.project.cache_root / "developed").glob("*.png")))
 
     def test_switching_crop_model_keeps_model_independent_feature_cache(self):
         train_project(self.project)
