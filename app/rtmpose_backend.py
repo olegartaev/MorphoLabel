@@ -209,6 +209,36 @@ def _read_finalization(artifact):
  try:return json.loads(_finalization_path(artifact).read_text(encoding="utf8"))
  except (OSError,json.JSONDecodeError):return {}
 def _write_finalization(artifact,state): atomic_json_write(_finalization_path(artifact),state)
+def _prune_completed_training_checkpoints(artifact,state):
+ """Remove only intermediate training checkpoints after a verified final model exists.
+
+ Validation metrics and lineage stay in finalization/model metadata; the portable
+ EMA checkpoint used by inference and by child-model training is always retained.
+ Cleanup is best-effort so a filesystem lock can never turn a valid trained model
+ into a failed training run.
+ """
+ artifact=Path(artifact);result=state.get("result") or {}
+ if state.get("stage")!="COMPLETE" or not state.get("registered"):
+  return {"pruned":False,"reason":"finalization_incomplete","removed_files":[],"removed_bytes":0}
+ final=artifact/"best_engineering_validation.pth";portable=artifact/"inference_config.py";model_json=artifact/"model.json"
+ if not final.is_file() or final.stat().st_size<=0 or not portable.is_file() or portable.stat().st_size<=0 or not model_json.is_file():
+  return {"pruned":False,"reason":"portable_model_incomplete","removed_files":[],"removed_bytes":0}
+ expected=str(result.get("checkpoint_sha256") or "").lower()
+ if not expected or __import__("hashlib").sha256(final.read_bytes()).hexdigest()!=expected:
+  return {"pruned":False,"reason":"final_checkpoint_checksum_unverified","removed_files":[],"removed_bytes":0}
+ candidates=list(sorted(artifact.glob("epoch_*.pth"),key=lambda path:path.name))
+ for name in ("latest.pth","last_checkpoint"):
+  path=artifact/name
+  if path.exists() or path.is_symlink():candidates.append(path)
+ removed=[];removed_bytes=0;errors=[]
+ for path in candidates:
+  try:
+   size=path.stat().st_size if path.is_file() else 0
+   path.unlink(missing_ok=True);removed.append(path.name);removed_bytes+=size
+  except OSError as exc:errors.append({"file":path.name,"error":str(exc)})
+ retention={"pruned":not errors,"reason":"completed_model_retention","removed_files":removed,"removed_bytes":removed_bytes,"errors":errors,"retained_checkpoint":final.name,"validation_metrics_retained":bool(result.get("validation_by_epoch"))}
+ state["retention"]=retention;_write_finalization(artifact,state)
+ return retention
 def _finalize_trained_artifact(project,artifact,backend,state,progress_callback=None):
  manifest=Path(state["dataset_manifest"]);config_path=state["config_path"]
  if progress_callback:progress_callback("VALIDATING CHECKPOINTS",len(state.get("validation_by_epoch",())),len(list(Path(artifact).glob("epoch_*.pth"))))
@@ -230,7 +260,7 @@ def _finalize_trained_artifact(project,artifact,backend,state,progress_callback=
  base_sha=__import__("hashlib").sha256(backend.spec.checkpoint_path.read_bytes()).hexdigest();model={"model_id":backend.model_id,"backend":"rtmpose","schema_sha256":backend.schema_sha256,"dataset_id":state["dataset_id"],"dataset_manifest":str(manifest.relative_to(project.data_root).as_posix()),"parent_model_id":state.get("parent_model_id"),"input_size":list(backend.spec.input_size),"smoke":bool(state.get("settings",{}).get("smoke",True)),"base_checkpoint_path":str(backend.spec.checkpoint_path),"base_checkpoint_sha256":base_sha,"parent_checkpoint_path":state.get("settings",{}).get("parent_checkpoint"),"result":result,"model_info":backend.model_info(),"training_settings":state.get("settings",{}),"hardware":state.get("settings",{}).get("hardware")}
  atomic_json_write(Path(artifact)/"model.json",model)
  if not project.model_metadata(backend.model_id): project.register_model(backend.model_id,"landmark",path=str(Path(artifact).relative_to(project.data_root).as_posix()),metrics=model,schema_digest=backend.schema_sha256,dataset_id=state["dataset_id"],parent_model_id=state.get("parent_model_id"),dataset_manifest_path=str(manifest.relative_to(project.data_root).as_posix()))
- state.update({"stage":"COMPLETE","registered":True});_write_finalization(artifact,state)
+ state.update({"stage":"COMPLETE","registered":True});_write_finalization(artifact,state);_prune_completed_training_checkpoints(artifact,state)
  return model
 def pending_finalization_artifact(project):
  artifacts=Path(project.data_root)/"ai"/"models"
