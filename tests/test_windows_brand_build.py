@@ -17,6 +17,14 @@ class WindowsBrandBuildTests(unittest.TestCase):
         self.assertIn("SetupIconFile=..\\..\\build\\brand\\MorphoLabel.ico",installer)
         self.assertIn("UninstallDisplayIcon={app}\\MorphoLabel.exe",installer)
 
+    def test_uninstaller_removes_only_app_owned_install_and_state_directories(self):
+        installer=(ROOT/"packaging"/"windows"/"MorphoLabel.iss").read_text(encoding="utf-8")
+        self.assertIn("[UninstallDelete]",installer)
+        self.assertIn('Type: filesandordirs; Name: "{localappdata}\\MorphoLabel"',installer)
+        self.assertIn('Type: filesandordirs; Name: "{app}"',installer)
+        self.assertNotIn("{userdocs}",installer)
+        self.assertNotIn("{commondocs}",installer)
+
     def test_brand_asset_script_runs_directly_from_repository_root(self):
         with tempfile.TemporaryDirectory() as folder:
             output=Path(folder)/"brand"
