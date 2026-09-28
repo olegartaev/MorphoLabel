@@ -6,7 +6,7 @@ import uuid
 
 _STATE_KEY = "landmark_suspicious_review"
 _FORMAT_VERSION = 2
-_COMPLEX_QC_SOURCE = "Complex QC"
+_COMPLEX_QC_SOURCES = {"Complex QC","Final data QC"}
 
 
 def _normalize_issue(item):
@@ -49,7 +49,7 @@ def active(project):
     # Old Complex-QC queues predate generation metadata and may survive across
     # code/algorithm changes. Never resume them implicitly; a fresh Complex QC
     # scan will replace the persisted state when Review all is pressed.
-    if value.get("source") == _COMPLEX_QC_SOURCE and int(value.get("format_version") or 0) != _FORMAT_VERSION:
+    if value.get("source") in _COMPLEX_QC_SOURCES and int(value.get("format_version") or 0) != _FORMAT_VERSION:
         return None
     issues = list(value.get("issues") or ())
     position = int(value.get("position") or 0)
