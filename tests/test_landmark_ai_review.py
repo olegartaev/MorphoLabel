@@ -105,6 +105,24 @@ class LandmarkAIReviewTests(unittest.TestCase):
         self.assertEqual(third,session["current_image_id"])
         self.assertFalse(self.project.landmark_ai_review_ready(third))
 
+    def test_reopening_ranked_session_prunes_already_verified_members(self):
+        first,second,third=self.ids
+        for image_id in self.ids:self._machine(image_id)
+        create_review_session_for_ids(self.project,"prune-ranked",(first,second,third),kind="review_worst_v2")
+        self.project.confirm_landmark_ai_review(second)
+        session=activate_review_session(self.project,"prune-ranked")
+        self.assertEqual([first,third],session["image_ids"])
+        self.assertEqual([first,second,third],session["original_image_ids"])
+        self.assertNotIn(second,session.get("review_meta",{}))
+
+    def test_new_ranked_review_supersedes_older_unfinished_ranked_session(self):
+        first,second,third=self.ids
+        for image_id in self.ids:self._machine(image_id)
+        create_review_session_for_ids(self.project,"older",(first,second),kind="review_worst_v2")
+        create_review_session_for_ids(self.project,"newer",(third,),kind="review_worst_v2")
+        self.assertEqual("newer",pending_review_session(self.project)["batch_id"])
+        self.assertIsNone(activate_review_session(self.project,"older"))
+
     def test_review_previous_does_not_enter_verified_member(self):
         first,second,third=self.ids
         for image_id in self.ids:self._machine(image_id)
@@ -122,14 +140,14 @@ class LandmarkAIReviewTests(unittest.TestCase):
     def test_review_worst_learns_error_magnitude_from_verified_predictions(self):
         class Snapshot:
             schema = ({'id': 1, 'abbr': 'A', 'name': 'Alpha', 'role': 'BOTH'},)
-            dimensions_by_id = {f'v{i}': (100, 100) for i in range(6)}
-            def catalog_rows(self): return [{'image_id': f'v{i}'} for i in range(6)]
+            dimensions_by_id = {f'v{i}': (100, 100) for i in range(16)}
+            def catalog_rows(self): return [{'image_id': f'v{i}'} for i in range(16)]
             def annotation_status(self, image_id): return {'verified': True}
             def load_landmarks(self, image_id):
                 i = int(image_id[1:])
                 # Low-confidence verified predictions needed larger human corrections.
-                confidence = .2 if i < 3 else .9
-                delta = 8.0 if i < 3 else 1.0
+                confidence = .2 if i < 8 else .9
+                delta = 8.0 if i < 8 else 1.0
                 return {1: {
                     'state': 'present', 'x_standardized': 10.0 + delta, 'y_standardized': 10.0,
                     'predicted_x': 10.0, 'predicted_y': 10.0, 'confidence': confidence,
@@ -138,12 +156,10 @@ class LandmarkAIReviewTests(unittest.TestCase):
         calibration = _verified_error_calibration(Snapshot())
         low, low_n = _empirical_point_risk(calibration, 1, {'model_id': 'm', 'confidence': .2})
         high, high_n = _empirical_point_risk(calibration, 1, {'model_id': 'm', 'confidence': .9})
-        self.assertEqual(calibration['sample_count'], 6)
+        self.assertEqual(calibration['sample_count'], 16)
         self.assertGreater(low, high)
-        # With six verified examples the risk estimator deliberately uses the
-        # three nearest-confidence examples rather than mixing both confidence groups.
-        self.assertEqual(low_n, 3)
-        self.assertEqual(high_n, 3)
+        self.assertEqual(low_n, 8)
+        self.assertEqual(high_n, 8)
 
     def test_review_worst_diversity_is_only_a_tie_break_inside_high_risk_window(self):
         ranked = [
