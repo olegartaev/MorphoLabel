@@ -15,6 +15,7 @@ class ToolbarIconContractTests(unittest.TestCase):
         self.assertEqual({"project","crop","landmarks","measurements","export"},{section.key for section in SECTIONS})
         self.assertTrue({section.key for section in SECTIONS}.issubset(ICON_NAMES))
         self.assertIn("modules",ICON_NAMES)
+        self.assertTrue({"review_worst","complex_qc"}.issubset(ICON_NAMES))
 
     def test_icons_render_at_compact_toolbar_sizes(self):
         self.assertEqual(26,TOPBAR_ICON_SIZE)
@@ -43,6 +44,13 @@ class ToolbarIconContractTests(unittest.TestCase):
         self.assertNotIn("'Undo'",toolbar)
         self.assertNotIn("'Redo'",toolbar)
 
+
+    def test_review_actions_have_distinct_icons_and_equal_layout(self):
+        source=open("app/ui/landmarks_section.py",encoding="utf-8").read()
+        self.assertIn("icon='review_worst'",source)
+        self.assertIn("icon='complex_qc'",source)
+        self.assertIn("uniform='review_actions'",source)
+        self.assertIn("style='ReviewAction.TButton'",source)
 
     def test_selected_workflow_icons_render_and_sections_use_exact_current_mapping(self):
         selected={
