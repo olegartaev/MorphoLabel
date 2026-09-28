@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.project_storage import Project, schema_hash
-from app.rtmpose_backend import RTMPoseRuntimeError, RTMPoseModelSpec, train_project
+from app.rtmpose_backend import RTMPoseRuntimeError, RTMPoseModelSpec, train_project, _prune_completed_training_checkpoints
 
 
 class _Backend:
@@ -61,6 +61,32 @@ class CheckpointFinalizationTests(unittest.TestCase):
   self.assertEqual(['epoch_10.pth'],state['retention']['removed_files']);self.assertGreater(state['retention']['removed_bytes'],0)
   self.assertEqual('best_engineering_validation.pth',state['retention']['retained_checkpoint'])
   self.assertEqual([{'epoch':10}],state['result']['validation_by_epoch'])
+ def test_completed_legacy_model_with_config_py_prunes_intermediate_epochs(self):
+  artifact=self.project.data_root/'ai/models/legacy';artifact.mkdir(parents=True)
+  final=artifact/'best_engineering_validation.pth';final.write_bytes(b'final')
+  (artifact/'config.py').write_text("default_scope='mmpose'\n",encoding='utf8')
+  (artifact/'model.json').write_text('{}',encoding='utf8')
+  (artifact/'epoch_1.pth').write_bytes(b'epoch')
+  (artifact/'last_checkpoint').write_text('epoch_1.pth',encoding='utf8')
+  state={'stage':'COMPLETE','registered':True,'result':{'checkpoint_sha256':hashlib.sha256(b'final').hexdigest(),'validation_by_epoch':[{'epoch':1}]}}
+  retention=_prune_completed_training_checkpoints(artifact,state)
+  self.assertTrue(retention['pruned'])
+  self.assertEqual('config.py',retention['retained_config'])
+  self.assertFalse((artifact/'epoch_1.pth').exists())
+  self.assertFalse((artifact/'last_checkpoint').exists())
+  self.assertTrue(final.exists())
+
+ def test_completed_model_without_any_usable_config_is_not_pruned(self):
+  artifact=self.project.data_root/'ai/models/no-config';artifact.mkdir(parents=True)
+  final=artifact/'best_engineering_validation.pth';final.write_bytes(b'final')
+  (artifact/'model.json').write_text('{}',encoding='utf8')
+  epoch=artifact/'epoch_1.pth';epoch.write_bytes(b'epoch')
+  state={'stage':'COMPLETE','registered':True,'result':{'checkpoint_sha256':hashlib.sha256(b'final').hexdigest()}}
+  retention=_prune_completed_training_checkpoints(artifact,state)
+  self.assertFalse(retention['pruned'])
+  self.assertEqual('portable_model_incomplete',retention['reason'])
+  self.assertTrue(epoch.exists())
+
  def test_selection_or_conversion_failure_prevents_model_registration(self):
   with self.assertRaises(RTMPoseRuntimeError): self.run_train(RTMPoseRuntimeError('selection failed'),lambda *_:None)
   artifact=self.project.data_root/'ai/models/rtmpose_finalization_test'
