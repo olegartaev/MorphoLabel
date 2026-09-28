@@ -220,9 +220,8 @@ def _prune_completed_training_checkpoints(artifact,state):
  artifact=Path(artifact);result=state.get("result") or {}
  if state.get("stage")!="COMPLETE" or not state.get("registered"):
   return {"pruned":False,"reason":"finalization_incomplete","removed_files":[],"removed_bytes":0}
- final=artifact/"best_engineering_validation.pth";portable=artifact/"inference_config.py";legacy_config=artifact/"config.py";model_json=artifact/"model.json"
- usable_config=portable if portable.is_file() and portable.stat().st_size>0 else legacy_config if legacy_config.is_file() and legacy_config.stat().st_size>0 else None
- if not final.is_file() or final.stat().st_size<=0 or usable_config is None or not model_json.is_file():
+ final=artifact/"best_engineering_validation.pth";portable=artifact/"inference_config.py";model_json=artifact/"model.json"
+ if not final.is_file() or final.stat().st_size<=0 or not portable.is_file() or portable.stat().st_size<=0 or not model_json.is_file():
   return {"pruned":False,"reason":"portable_model_incomplete","removed_files":[],"removed_bytes":0}
  expected=str(result.get("checkpoint_sha256") or "").lower()
  if not expected or __import__("hashlib").sha256(final.read_bytes()).hexdigest()!=expected:
@@ -237,7 +236,7 @@ def _prune_completed_training_checkpoints(artifact,state):
    size=path.stat().st_size if path.is_file() else 0
    path.unlink(missing_ok=True);removed.append(path.name);removed_bytes+=size
   except OSError as exc:errors.append({"file":path.name,"error":str(exc)})
- retention={"pruned":not errors,"reason":"completed_model_retention","removed_files":removed,"removed_bytes":removed_bytes,"errors":errors,"retained_checkpoint":final.name,"retained_config":usable_config.name,"validation_metrics_retained":bool(result.get("validation_by_epoch"))}
+ retention={"pruned":not errors,"reason":"completed_model_retention","removed_files":removed,"removed_bytes":removed_bytes,"errors":errors,"retained_checkpoint":final.name,"validation_metrics_retained":bool(result.get("validation_by_epoch"))}
  state["retention"]=retention;_write_finalization(artifact,state)
  return retention
 def _finalize_trained_artifact(project,artifact,backend,state,progress_callback=None):
