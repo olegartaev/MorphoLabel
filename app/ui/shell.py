@@ -88,8 +88,7 @@ class ProductionShell(tk.Tk):
         self.style.configure("P.TButton", padding=(10,7))
         self.style.configure("Icon.TButton", padding=(7,4), font=("Segoe UI",9))
         self.style.configure("Primary.TButton", padding=(10,6), font=("Segoe UI",9,"bold"))
-        self.style.configure("ComplexQC.TButton", padding=(12,7), font=("Segoe UI",9,"bold"), foreground=ACC, background="#e7f2f8")
-        self.style.map("ComplexQC.TButton", foreground=[("!disabled",ACC)], background=[("active","#d7eaf5"),("!disabled","#e7f2f8")])
+        self.style.configure("ReviewAction.TButton", padding=(8,5), font=("Segoe UI",9,"bold"))
         self.style.configure("CropNext.TButton", padding=(10,7), font=("Segoe UI",9,"bold"), foreground="black")
         self.style.map("CropNext.TButton", foreground=[("disabled","black"),("!disabled","black")])
         self.style.configure("Stage.TButton", padding=(10,5), font=("Segoe UI",9), foreground="#27313a")
@@ -509,9 +508,9 @@ class ProductionShell(tk.Tk):
         self.status_counts={}
         for key,value in self._section_counts().items():
             label=ttk.Label(self.status_count_host,text=f"{key}: {value}",style="StatusChip.TLabel"); label.pack(side="left",padx=(0,2)); self.status_counts[key]=label
-        self.status_previous=self.control_button(navigation,"‹ Previous",lambda:self._nav_image(-1),"Show the previous image.",style="Nav.TButton");self.status_previous.pack(side="left")
+        self.status_previous=self.control_button(navigation,"‹ Previous",lambda:self._nav_image(-1),"Show the previous image.",style="Nav.TButton",width=16);self.status_previous.pack(side="left")
         self.status_index=ttk.Label(navigation,text="",padding=(8,0),font=("Segoe UI",9,"bold"));self.status_index.pack(side="left")
-        self.status_next=self.control_button(navigation,"Next ›",lambda:self._nav_image(1),"Show the next image. Press Enter when not typing.",style="Nav.TButton");self.status_next.pack(side="left")
+        self.status_next=self.control_button(navigation,"Next ›",lambda:self._nav_image(1),"Show the next image. Press Enter when not typing.",style="Nav.TButton",width=16);self.status_next.pack(side="left")
         self._update_status()
 
     def _refresh_status_context(self):
@@ -588,12 +587,30 @@ class ProductionShell(tk.Tk):
             if crop_normal:self.status_navigation.grid_remove()
             else:self.status_navigation.grid()
             self.status_index.configure(text=batch.get('text') if batch else f"{self.context.selected+1 if self.context.rows else 0}")
-            suspicious=bool(batch and batch.get('kind')=='landmark_suspicious')
-            confirm=bool(batch and (batch.get('kind')=='landmark_ai_review' or self.context.section=='crop' or suspicious))
-            next_text='Checked & Next ›' if suspicious else 'Confirm & Next ›' if confirm else 'Next ›'
-            self.status_next.configure(text=next_text,style='NavPrimary.TButton' if confirm else 'Nav.TButton')
-            if suspicious:self.tip.bind(self.status_next,'Mark this suspicious placement as reviewed and continue to the next flagged issue.')
-            elif confirm:self.tip.bind(self.status_next,'Save this crop and continue to the next batch image.' if self.context.section=='crop' else 'Confirm this landmark set and continue to the next batch image.')
+            kind=batch.get('kind') if batch else None
+            landmark_confirm=bool(self.context.section=='landmarks' and kind in {'landmark','landmark_ai_review','landmark_suspicious'})
+            crop_confirm=bool(self.context.section=='crop' and batch)
+            confirm=landmark_confirm or crop_confirm
+            next_text='Verify & Next ›' if landmark_confirm else 'Confirm & Next ›' if crop_confirm else 'Next ›'
+            self.status_next.configure(
+                text=next_text,
+                style='NavPrimary.TButton' if confirm else 'Nav.TButton',
+                image=self.ui_icon('verify',CONTROL_ICON_SIZE) if landmark_confirm else '',
+                compound='left' if landmark_confirm else 'none',
+            )
+            if landmark_confirm:
+                source=batch.get('source') if batch else None
+                if kind=='landmark_ai_review':
+                    help_text='Verify this reviewed AI landmark set and continue to the next unverified prediction.'
+                elif kind=='landmark_suspicious' and source=='Complex QC':
+                    help_text='Verify or re-verify this final landmark set and continue to the next Complex QC outlier.'
+                elif kind=='landmark_suspicious':
+                    help_text='Verify this landmark set after checking the flagged placement and continue.'
+                else:
+                    help_text='Verify this completed landmark set and continue to the next training image.'
+                self.tip.bind(self.status_next,help_text)
+            elif crop_confirm:self.tip.bind(self.status_next,'Confirm this Crop and continue to the next batch image.')
+            else:self.tip.bind(self.status_next,'Show the next image. Press Enter when not typing.')
         for key,label in getattr(self,"status_counts",{}).items():
             label.configure(text=f"{key}: {self._section_counts().get(key,0)}")
 
@@ -613,7 +630,7 @@ class ProductionShell(tk.Tk):
             if suspicious:
                 summary=suspicious_summary(self.context.project)
                 if summary and current==summary.get('image_id'):
-                    return {'kind':'landmark_suspicious','text':compact(summary)}
+                    return {'kind':'landmark_suspicious','text':compact(summary),'source':summary.get('source')}
             from app.landmark_ai_review import active_review_session,review_summary
             review=active_review_session(self.context.project)
             if review and current in review.get('image_ids',()):
