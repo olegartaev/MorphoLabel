@@ -1,6 +1,7 @@
 """Bounded retention for disposable full-resolution developed image cache."""
 from __future__ import annotations
 from pathlib import Path
+import sqlite3
 
 DEVELOPED_HIGH_WATER_BYTES = 4 * 1024**3
 DEVELOPED_TARGET_BYTES = 3 * 1024**3
@@ -34,7 +35,9 @@ def prune_developed_cache(project, *, high_bytes=DEVELOPED_HIGH_WATER_BYTES,
     if total <= int(high_bytes):
         return {"removed_files": 0, "removed_bytes": 0, "before_bytes": before, "after_bytes": total}
 
-    with project.transaction() as connection:
+    connection=sqlite3.connect(Path(project.path).resolve().as_uri()+"?mode=ro",uri=True)
+    connection.row_factory=sqlite3.Row
+    try:
         rows = connection.execute("""
 SELECT cr.image_id,COALESCE(cr.reviewed_at,cr.updated_at) AS reviewed_at,
        i.relative_path,i.source_available
@@ -44,6 +47,8 @@ WHERE COALESCE(cr.human_verified,0)=1
   AND cr.provenance IN ('manual','ai_accepted','ai_corrected')
 ORDER BY COALESCE(cr.reviewed_at,cr.updated_at) DESC,cr.image_id
 """).fetchall()
+    finally:
+        connection.close()
 
     hot = {str(row["image_id"]) for row in rows[:max(0, int(keep_recent))]}
     candidates = [row for row in reversed(rows) if str(row["image_id"]) not in hot]
