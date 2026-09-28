@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0-beta.7
+
+- **Unverified AI review** now refreshes persisted review sessions to pending-only images and never reopens completed ranked sessions;
+- AI review risk ranking preserves score separation instead of saturating top candidates into one tie, with more stable history-based calibration;
+- **Final data QC** is explicitly separated from pre-verification AI review and reports landmark-distance, within-group measurement, and GPA/PCA shape checks more clearly;
+- uninstall now removes MorphoLabel-owned AI/runtime/state/cache data while leaving scientific project folders untouched;
+- finalized RTMPose training checkpoints and diagnostic logs are pruned to bounded retention;
+- Crop training no longer depends on keeping every developed PNG cache file, and missing developed cache is rebuilt on demand;
+- developed-image cache retention is bounded without mutating the scientific project database.
+
+
 ## 0.5.0-beta.6
 
 - first-run AI setup names the exact runtime/model components and shows explicit staged progress to 100%;

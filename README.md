@@ -1,6 +1,6 @@
 # MorphoLabel
 
-Development beta · 0.5.0-beta.6
+Development beta · 0.5.0-beta.7
 
 Open-source scientific software for biological morphology annotation, AI-assisted landmarking, quality control, measurements, and reproducible export.
 
