@@ -9,9 +9,9 @@ from __future__ import annotations
 import math
 from PIL import Image, ImageDraw
 
-TOPBAR_ICON_SIZE=24
-CONTROL_ICON_SIZE=18
-WORKFLOW_ICON_SIZE=20
+TOPBAR_ICON_SIZE=26
+CONTROL_ICON_SIZE=20
+WORKFLOW_ICON_SIZE=24
 
 OUTLINE="#465d73"
 MUTED="#91a1b2"

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0-beta.5
+
+- first launch explains the managed AI runtime and bootstrap model before any large download;
+- AI support downloads require one explicit user action and can be deferred without repeated startup nagging;
+- deferred installations cannot silently download the managed AI runtime on later AI use;
+- AI setup can be started later from the AI menu, with resumable verified downloads and clear progress;
+- compact UI icons are larger and easier to read without materially reducing the annotation workspace;
+- source launch is resilient to broken or redirected Python user-site environments.
+
+
 ## 0.5.0-beta.4
 
 - Landmarks workspace rendering no longer starts or downloads the AI runtime;

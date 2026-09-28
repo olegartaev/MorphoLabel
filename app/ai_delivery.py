@@ -312,9 +312,15 @@ def ensure_ai_runtime(*, project=None, explicit=None, configured=None, runner_pa
     if runtime.is_file():
         return runtime, runner
     # Source/developer checkouts remain side-effect free. Public frozen builds
-    # install the managed component automatically on first AI use.
+    # may download the managed component only after explicit user consent.
     if not is_frozen() or explicit is not None or configured is not None:
         return runtime, runner
+    from .first_run_setup import ai_download_consent_granted
+    if not ai_download_consent_granted():
+        raise AIDeliveryError(
+            "AI support is not installed yet. Open AI → Set up AI support… "
+            "to review and approve the required downloads."
+        )
     install_published_ai_component(progress=progress)
     runtime, runner = resolve_ai_runtime(project=project, runner_path=runner_path)
     if not runtime.is_file():
