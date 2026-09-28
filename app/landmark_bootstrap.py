@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .ai_component import component_manifest, component_root_for_runtime
 from .ai_delivery import ensure_ai_runtime
+from .runtime_paths import is_frozen
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,14 @@ def _download_verified_checkpoint(url, target, expected_sha256, progress_callbac
         if _sha256(target) == expected:
             return target
         target.unlink()
+
+    if is_frozen():
+        from .first_run_setup import ai_download_consent_granted
+        if not ai_download_consent_granted():
+            raise RuntimeError(
+                "AI bootstrap model is not installed yet. Open AI → Set up AI support… "
+                "to review and approve the required download."
+            )
 
     temporary = target.with_suffix(target.suffix + ".part")
     temporary.unlink(missing_ok=True)

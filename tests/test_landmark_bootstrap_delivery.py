@@ -55,6 +55,20 @@ class ManagedBootstrapDeliveryTests(unittest.TestCase):
             self.assertEqual(payload,checkpoint.read_bytes())
             self.assertEqual(hashlib.sha256(payload).hexdigest(),spec.checksum)
 
+    def test_frozen_missing_checkpoint_never_downloads_without_consent(self):
+        payload=b"expected"
+        with tempfile.TemporaryDirectory() as td:
+            component,_,checkpoint=self._component(td,payload)
+            with patch("app.landmark_bootstrap.ensure_ai_runtime",return_value=(component/"python.exe",Path("runner"))), \
+                 patch("app.landmark_bootstrap.component_root_for_runtime",return_value=component), \
+                 patch("app.landmark_bootstrap.is_frozen",return_value=True), \
+                 patch("app.first_run_setup.ai_download_consent_granted",return_value=False), \
+                 patch("urllib.request.urlopen") as urlopen:
+                with self.assertRaisesRegex(RuntimeError,"Set up AI support"):
+                    landmark_bootstrap.resolve_landmark_bootstrap(None)
+            urlopen.assert_not_called()
+            self.assertFalse(checkpoint.exists())
+
     def test_corrupt_checkpoint_is_rejected_without_final_file(self):
         expected=b"expected"
         bad=b"tampered"
