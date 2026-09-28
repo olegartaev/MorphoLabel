@@ -222,16 +222,16 @@ class ProductionShell(tk.Tk):
         self._first_run_setup_active=True
         dialog=tk.Toplevel(self);dialog.title("AI support setup");dialog.transient(self);dialog.resizable(False,False)
         frame=ttk.Frame(dialog,padding=18);frame.pack(fill="both",expand=True);frame.columnconfigure(0,weight=1)
-        ttk.Label(frame,text="One quick setup for AI features",style="PageTitle.TLabel").grid(row=0,column=0,sticky="w")
-        ttk.Label(frame,text="MorphoLabel is installed and ready for manual annotation. To use AI-assisted Crop/Landmarks and train models, it needs two additional components:",justify="left",wraplength=640).grid(row=1,column=0,sticky="w",pady=(7,10))
+        ttk.Label(frame,text="Set up AI features",style="PageTitle.TLabel").grid(row=0,column=0,sticky="w")
+        ttk.Label(frame,text="MorphoLabel works without AI. To use automatic crop and landmark placement, and to train models, install AI support:",justify="left",wraplength=640).grid(row=1,column=0,sticky="w",pady=(7,10))
         components=ttk.Frame(frame);components.grid(row=2,column=0,sticky="ew")
-        ttk.Label(components,text="1. AI runtime",style="SectionTitle.TLabel").grid(row=0,column=0,sticky="w")
-        ttk.Label(components,text="Managed Python + PyTorch/OpenMMLab/RTMPose support. It stays in MorphoLabel's private app data and does not change your system Python. The download is several GB.",style="Muted.TLabel",justify="left",wraplength=600).grid(row=1,column=0,sticky="w",pady=(2,8))
-        ttk.Label(components,text="2. Base landmark model",style="SectionTitle.TLabel").grid(row=2,column=0,sticky="w")
-        ttk.Label(components,text="The official upstream bootstrap model used to start landmark prediction. It is accepted only after SHA256 verification.",style="Muted.TLabel",justify="left",wraplength=600).grid(row=3,column=0,sticky="w",pady=(2,8))
-        ttk.Label(components,text="After installation MorphoLabel checks CPU/GPU/CUDA with one real prediction and a short training test. Project photos and project data are not uploaded.",justify="left",wraplength=620).grid(row=4,column=0,sticky="w")
+        ttk.Label(components,text="1. AI engine",style="SectionTitle.TLabel").grid(row=0,column=0,sticky="w")
+        ttk.Label(components,text="Required to run and train AI models. The download is several GB. It is installed only for MorphoLabel and does not change your system Python.",style="Muted.TLabel",justify="left",wraplength=600).grid(row=1,column=0,sticky="w",pady=(2,8))
+        ttk.Label(components,text="2. Pretrained landmark model",style="SectionTitle.TLabel").grid(row=2,column=0,sticky="w")
+        ttk.Label(components,text="A pretrained RTMPose model used as the starting point for landmark detection and for training your own models.",style="Muted.TLabel",justify="left",wraplength=600).grid(row=3,column=0,sticky="w",pady=(2,8))
+        ttk.Label(components,text="After installation, MorphoLabel checks your hardware and selects a suitable mode. Project images and data are not uploaded.",justify="left",wraplength=620).grid(row=4,column=0,sticky="w")
         stage=ttk.Label(frame,text="Nothing will be downloaded until you choose Install AI support.",style="SectionTitle.TLabel");stage.grid(row=3,column=0,sticky="w",pady=(14,0))
-        detail=ttk.Label(frame,text="You can use MorphoLabel without AI and set it up later from the AI menu.",style="Muted.TLabel",justify="left",wraplength=620);detail.grid(row=4,column=0,sticky="w",pady=(4,8))
+        detail=ttk.Label(frame,text="You can skip this now and set it up later from the AI menu.",style="Muted.TLabel",justify="left",wraplength=620);detail.grid(row=4,column=0,sticky="w",pady=(4,8))
         bar=ttk.Progressbar(frame,mode="indeterminate",length=580)
         result_label=ttk.Label(frame,text="",justify="left",wraplength=620);result_label.grid(row=6,column=0,sticky="w",pady=(10,0))
         actions=ttk.Frame(frame);actions.grid(row=7,column=0,sticky="e",pady=(14,0))
@@ -260,7 +260,7 @@ class ProductionShell(tk.Tk):
             except tk.TclError:pass
             dialog.destroy();log("GLOBAL","first_run_setup","DEFERRED",detail="user chose to continue without AI")
         def initial_actions():
-            self.control_button(actions,"Use without AI for now",continue_core,"Continue with manual annotation and set up AI later.").pack(side="right")
+            self.control_button(actions,"Continue without AI",continue_core,"Continue now and set up AI later.").pack(side="right")
             self.control_button(actions,"Install AI support",start_setup,"Approve the described AI downloads and test this computer.",primary=True).pack(side="right",padx=(0,6))
         def poll():
             try:
@@ -271,7 +271,7 @@ class ProductionShell(tk.Tk):
                         working["value"]=False;bar.stop();stage.configure(text="AI setup is incomplete")
                         detail.configure(text="MorphoLabel can still be used without AI. Partial downloads stay local and resume only if you choose Retry or start AI setup again.")
                         result_label.configure(text=f"{type(value[0]).__name__}: {value[0]}")
-                        self.control_button(actions,"Use without AI for now",continue_core,"Continue with manual tools.").pack(side="right")
+                        self.control_button(actions,"Continue without AI",continue_core,"Continue now and set up AI later.").pack(side="right")
                         self.control_button(actions,"Retry",start_setup,"Retry the approved AI setup.",primary=True).pack(side="right",padx=(0,6))
                     else:
                         working["value"]=False;bar.stop();payload=value[0];hardware=payload.get("hardware") or {};test=payload.get("ai_self_test") or {}
