@@ -1,6 +1,6 @@
 # MorphoLabel
 
-Development beta · 0.5.0-beta.5
+Development beta · 0.5.0-beta.6
 
 Open-source scientific software for biological morphology annotation, AI-assisted landmarking, quality control, measurements, and reproducible export.
 
@@ -32,7 +32,7 @@ The public Windows distribution is built as a standalone application: users do n
 3. Run the installer.
 4. Start **MorphoLabel** from the Start Menu (or the optional desktop shortcut).
 
-RAW decoding is bundled in the Windows application. On first launch, MorphoLabel explains the optional AI support before any large download begins. One explicit **Install AI support** action authorizes the versioned managed AI runtime and official bootstrap model; both are checksum-verified, followed by CPU/RAM/GPU/VRAM/CUDA detection, a real inference test and a short training qualification. The user can instead continue without AI and start setup later from the AI menu. No large AI component is downloaded silently. Workload-specific batch and worker tuning is measured later on real project images.
+RAW decoding is bundled in the Windows application. On first launch, MorphoLabel explains the optional AI support before any large download begins. One explicit **Install AI support** action installs the private Python 3.11.9 / PyTorch 2.1.0 (CUDA 12.1) / MMPose 1.3.2 runtime plus the OpenMMLab RTMPose-M AP-10K starter model. Setup shows the current stage and download progress, then checks CPU/GPU/CUDA, landmark prediction and a short training run. The user can instead continue without AI and start setup later from the AI menu. No large AI component is downloaded silently and project images/data are not uploaded.
 
 ### Development from source
 
