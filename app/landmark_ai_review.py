@@ -60,7 +60,7 @@ def _pending_target(project,ids,current_position,step=1):
 
 def activate_review_session(project,batch_id=None):
  doc=_load(project);session=_session(doc,batch_id) if batch_id else next((item for item in doc.get("sessions",()) if not item.get("complete")),None)
- if session is None:return None
+ if session is None or session.get("complete"):return None
  for item in doc.get("sessions",()):item["active"]=False
  ids=list(session.get("image_ids",()))
  if not ids:return None
