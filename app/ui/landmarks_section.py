@@ -331,8 +331,9 @@ class LandmarksSection(SectionView):
   if issue and issue.get('image_id')==current:
    self.canvas.set_review_landmarks(issue.get('landmark_ids',()),issue.get('message','Check suspicious landmark placement'))
    active=suspicious_active(self.context.project) or {}
-   prefix='Final data QC: ' if active.get('source')=='Final data QC' else 'Check suspicious landmarks: '
-   self._inline_status(prefix+issue.get('message',''))
+   if active.get('source')=='Final data QC':
+    self._inline_status('Final data QC — highlighted landmarks contribute to the outlier signal; they are not automatically errors. '+issue.get('message',''))
+   else:self._inline_status('Check suspicious landmarks: '+issue.get('message',''))
   else:self.canvas.clear_review_landmarks()
 
  def _select_suspicious_issue(self):
