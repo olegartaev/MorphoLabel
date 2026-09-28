@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0-beta.8
+
+- landmark training from legacy MorphoLabel RTMPose parents no longer inherits obsolete project-local `rtmpose_augmentations` imports;
+- machine performance tuning cache now lives under MorphoLabel application state, so a clean uninstall is actually clean;
+- uninstall removes the exact legacy SIMM performance-tuning cache left by older builds without deleting unrelated legacy data;
+- About now credits development assistance from OpenAI Codex.
+
+
 ## 0.5.0-beta.7
 
 - **Unverified AI review** now refreshes persisted review sessions to pending-only images and never reopens completed ranked sessions;
