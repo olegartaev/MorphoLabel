@@ -83,7 +83,10 @@ def _empirical_point_risk(calibration,landmark_id,row):
     finite_conf=isinstance(confidence,(int,float)) and math.isfinite(confidence)
     with_conf=[sample for sample in samples if sample[0] is not None]
     if finite_conf and len(with_conf)>=6:
-        window=max(3,min(12,(len(with_conf)+1)//2))
+        # Tiny nearest-neighbour windows made P90 collapse to one extreme example.
+        # Use at least eight verified examples when available, while still
+        # preserving confidence locality for larger histories.
+        window=min(len(with_conf),max(8,min(24,(len(with_conf)+1)//2)))
         nearest=sorted(with_conf,key=lambda sample:abs(sample[0]-float(confidence)))[:window]
     else:nearest=list(samples)
     return _percentile((sample[1] for sample in nearest),.9),len(nearest)
@@ -178,7 +181,10 @@ def select_ai_worst_first(project,size=None,progress=None):
             if risk is not None:point_risks.append((risk,int(landmark_id),count))
         point_risks.sort(reverse=True)
         learned_risk,learned_id,learned_n=(point_risks[0] if point_risks else (None,None,0))
-        learned_component=min(2.0,learned_risk/calibration["scale"]) if learned_risk is not None else 0.0
+        # Keep real separation among high-risk images. The previous 2.0 cap
+        # saturated most top candidates into one tie, after which diversity and
+        # confidence tie-breaks could make the queue look nearly random.
+        learned_component=max(0.0,learned_risk/calibration["scale"]) if learned_risk is not None else 0.0
 
         confidence=[(float(row["confidence"]),int(key)) for key,row in rows.items()
                     if isinstance(row.get("confidence"),(int,float)) and math.isfinite(row["confidence"])]
