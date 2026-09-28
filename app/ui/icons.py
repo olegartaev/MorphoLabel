@@ -24,7 +24,7 @@ YELLOW="#f5a623"
 
 ICON_NAMES=frozenset({
     "modules","project","crop","landmarks","measurements","export",
-    "missing","delete","clear","verify","display","exclude","restore",
+    "missing","delete","clear","verify","display","exclude","restore","review_worst","complex_qc",
     "crop_training","crop_train","crop_apply",
     "landmark_repeat","landmark_training","landmark_train","landmark_apply",
     "measurement_calibrate","measurement_define","measurement_export",
@@ -155,6 +155,15 @@ def render_icon(name:str,size:int=TOPBAR_ICON_SIZE):
     elif name=="restore":
         _image_card(draw,p,5,7,24,25,outline=OUTLINE,fill="#f4f7fa");_line(draw,p,[(26,20),(26,12),(18,12)],BLUE,2.4)
         draw.polygon([(p(18),p(12)),(p(22),p(8)),(p(22),p(16))],fill=BLUE)
+    elif name=="review_worst":
+        draw.polygon([(p(3),p(16)),(p(8),p(10)),(p(16),p(7)),(p(24),p(10)),(p(29),p(16)),(p(24),p(22)),(p(16),p(25)),(p(8),p(22))],fill="#f7fbff",outline=BLUE)
+        draw.ellipse(box((11,11,21,21)),fill=BLUE)
+        draw.ellipse(box((14,14,18,18)),fill="#ffffff")
+        _sparkle(draw,p,26,7,YELLOW)
+    elif name=="complex_qc":
+        shield=[(16,3),(27,7),(25,20),(16,29),(7,20),(5,7)]
+        draw.polygon([(p(x),p(y)) for x,y in shield],fill="#f7fbff",outline=BLUE)
+        _check(draw,p,16,16)
 
     # Crop workflow: selected A / B / A.
     elif name=="crop_training":
