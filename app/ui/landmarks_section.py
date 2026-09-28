@@ -189,13 +189,13 @@ class LandmarksSection(SectionView):
   review_actions=ttk.Frame(four);review_actions.grid(row=2,column=0,columnspan=3,sticky='ew',pady=(5,0))
   review_actions.columnconfigure(0,weight=1,uniform='review_actions');review_actions.columnconfigure(1,weight=1,uniform='review_actions')
   self.button(
-   review_actions,'Review worst',lambda:self.review_worst(prediction.get()),
-   'Before verification: rank only complete unverified AI predictions by risk, using confidence, geometry and patterns learned from earlier human corrections.',
+   review_actions,'Unverified AI review',lambda:self.review_worst(prediction.get()),
+   'Before verification only: review complete AI landmark predictions that have not yet been human-verified, starting with the highest-risk cases.',
    icon='review_worst',style='ReviewAction.TButton'
   ).grid(row=0,column=0,sticky='ew',padx=(0,3))
   self.button(
-   review_actions,'Complex QC',lambda:open_complex_qc(self),
-   'After verification: audit only final human-verified landmark sets for structural, distance, measurement and GM-shape outliers.',
+   review_actions,'Final data QC',lambda:open_complex_qc(self),
+   'After verification only: audit final human-verified landmark sets for structural, measurement and geometric-morphometric outliers.',
    icon='complex_qc',style='ReviewAction.TButton'
   ).grid(row=0,column=1,sticky='ew',padx=(3,0))
 
@@ -322,7 +322,7 @@ class LandmarksSection(SectionView):
   # Review worst ranks whole images. Do not visually imply that suggested
   # landmarks are necessarily the only wrong ones.
   self.canvas.clear_review_landmarks()
-  self._inline_status('Review worst: '+display_reason)
+  self._inline_status('Unverified AI review: '+display_reason)
   return True
 
  def _apply_suspicious_highlight(self):
@@ -331,7 +331,7 @@ class LandmarksSection(SectionView):
   if issue and issue.get('image_id')==current:
    self.canvas.set_review_landmarks(issue.get('landmark_ids',()),issue.get('message','Check suspicious landmark placement'))
    active=suspicious_active(self.context.project) or {}
-   prefix='Complex QC: ' if active.get('source')=='Complex QC' else 'Check suspicious landmarks: '
+   prefix='Final data QC: ' if active.get('source')=='Final data QC' else 'Check suspicious landmarks: '
    self._inline_status(prefix+issue.get('message',''))
   else:self.canvas.clear_review_landmarks()
 
@@ -346,7 +346,7 @@ class LandmarksSection(SectionView):
   review_state=suspicious_active(self.context.project)
   if not review_state:return False
   source=str(review_state.get('source') or '')
-  complex_qc=source=='Complex QC'
+  complex_qc=source=='Final data QC'
   issue=suspicious_current(self.context.project);current=(self.context.current() or {}).get('image_id')
   # Never confirm a queue item while the operator is looking at another image.
   if issue and issue.get('image_id')!=current:return self._select_suspicious_issue()
@@ -359,7 +359,7 @@ class LandmarksSection(SectionView):
      _confirm_complex_qc_image(self.context.project,current)
      self.context.refresh_landmark_state(current);self.context.update_landmark_counts(current);self.shell._update_status()
     except Exception as exc:
-     messagebox.showwarning('Complex QC',str(exc),parent=self.shell);return True
+     messagebox.showwarning('Final data QC',str(exc),parent=self.shell);return True
    if issue and issue.get('kind')!='complex_qc_routine':
     try:self.context.project.accept_review_warning(issue['image_id'],issue.get('payload') or issue)
     except Exception as exc:
@@ -368,7 +368,7 @@ class LandmarksSection(SectionView):
   else:_state,finished=move_suspicious_review(self.context.project,-1)
   if finished:
    self.canvas.clear_review_landmarks()
-   title='Complex QC' if complex_qc else 'Landmark error check'
+   title='Final data QC' if complex_qc else 'Landmark error check'
    message='Complex QC review complete.' if complex_qc else 'Suspicious-landmark review complete.'
    messagebox.showinfo(title,message,parent=self.shell);self.shell._update_status();return True
   next_issue=suspicious_current(self.context.project);current=(self.context.current() or {}).get('image_id')
@@ -805,7 +805,7 @@ class LandmarksSection(SectionView):
    return select_ai_worst_first(self.context.project,count,progress=progress)
   def done(items):
    if not items:
-    messagebox.showinfo('Review worst','No unverified AI landmark predictions are waiting for review.',parent=self.shell);return
+    messagebox.showinfo('Unverified AI review','No unverified AI landmark predictions are waiting for review.',parent=self.shell);return
    import hashlib
    ids=[item['image_id'] for item in items]
    metadata={item['image_id']:{
@@ -817,7 +817,7 @@ class LandmarksSection(SectionView):
    session_id='review_worst_v2_'+hashlib.sha256(('\0'.join(ids)).encode('utf8')).hexdigest()[:16]
    create_review_session_for_ids(self.context.project,session_id,ids,kind='review_worst_v2',metadata=metadata)
    self._open_review_session(session_id)
-  self.shell._run_background_task('Review worst','Ranking complete unverified AI predictions…',worker,done)
+  self.shell._run_background_task('Unverified AI review','Ranking complete unverified AI predictions…',worker,done)
  def reapply_unverified(self):
   active=self.context.project.active_model_readonly('landmark') or {}
   if not active:messagebox.showwarning('Landmark prediction','No active landmark model.',parent=self.shell);return
