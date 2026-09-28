@@ -145,6 +145,16 @@ class AIDeliveryTests(unittest.TestCase):
                 ai_delivery.install_published_ai_component(release_version="test")
             install.assert_not_called()
 
+    def test_frozen_missing_runtime_refuses_silent_download_without_consent(self):
+        with tempfile.TemporaryDirectory() as td, \
+             patch.dict(os.environ,{"LOCALAPPDATA":td},clear=False), \
+             patch("app.ai_delivery.is_frozen",return_value=True), \
+             patch("app.ai_delivery.resolve_ai_runtime",return_value=(Path(td)/"missing-python.exe",Path("runner.py"))), \
+             patch("app.ai_delivery.install_published_ai_component") as install:
+            with self.assertRaisesRegex(ai_delivery.AIDeliveryError,"Set up AI support"):
+                ai_delivery.ensure_ai_runtime()
+            install.assert_not_called()
+
     def test_source_checkout_ensure_remains_network_free(self):
         with tempfile.TemporaryDirectory() as td,              patch.dict(os.environ,{"LOCALAPPDATA":td},clear=False),              patch("app.ai_delivery.is_frozen",return_value=False),              patch("app.ai_delivery.install_published_ai_component") as install:
             runtime,_=ai_delivery.ensure_ai_runtime()

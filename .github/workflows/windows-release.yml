@@ -111,6 +111,7 @@ jobs:
           $setup = Get-ChildItem dist\installer\MorphoLabel-*-Setup-x64.exe | Select-Object -First 1
           gh release view "$env:GITHUB_REF_NAME" *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create "$env:GITHUB_REF_NAME" --prerelease --title "$env:GITHUB_REF_NAME" --notes "Development beta."
+            gh release create "$env:GITHUB_REF_NAME" --prerelease --title "$env:GITHUB_REF_NAME" --generate-notes
+            if ($LASTEXITCODE -ne 0) { gh release view "$env:GITHUB_REF_NAME" | Out-Null }
           }
           gh release upload "$env:GITHUB_REF_NAME" $setup.FullName dist\installer\SHA256SUMS.txt --clobber

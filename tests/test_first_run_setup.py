@@ -13,6 +13,13 @@ class FirstRunSetupTests(unittest.TestCase):
         with patch("app.first_run_setup.is_frozen",return_value=False):
             self.assertFalse(first_run_setup.first_run_setup_required())
 
+    def test_deferred_setup_suppresses_startup_prompt_without_granting_download_consent(self):
+        with tempfile.TemporaryDirectory() as td, patch.dict("os.environ",{"LOCALAPPDATA":td},clear=False), patch("app.first_run_setup.is_frozen",return_value=True):
+            first_run_setup.defer_first_run_setup()
+            self.assertTrue(first_run_setup.ai_setup_deferred())
+            self.assertFalse(first_run_setup.ai_download_consent_granted())
+            self.assertFalse(first_run_setup.first_run_setup_required())
+
     def test_completed_setup_requires_runtime_and_bootstrap_to_still_exist(self):
         with tempfile.TemporaryDirectory() as td, patch.dict("os.environ",{"LOCALAPPDATA":td},clear=False), patch("app.first_run_setup.is_frozen",return_value=True):
             runtime=Path(td)/"runtime.exe";runtime.write_bytes(b"x")
@@ -47,6 +54,7 @@ class FirstRunSetupTests(unittest.TestCase):
             events=[]
             result=first_run_setup.run_first_run_setup(progress=lambda stage,detail:events.append((stage,detail)))
             ensure.assert_called_once()
+            self.assertTrue(first_run_setup.ai_download_consent_granted())
             detect.assert_called_once()
             persist.assert_called_once_with(hardware)
             self_test.assert_called_once()
@@ -54,6 +62,7 @@ class FirstRunSetupTests(unittest.TestCase):
             self.assertEqual("PASS",result["status"])
             saved=json.loads(first_run_setup.setup_state_path().read_text(encoding="utf-8"))
             self.assertEqual("PASS",saved["status"])
+            self.assertTrue(saved["download_consent"])
             self.assertEqual("cuda:0",saved["recommended_defaults"]["training"]["device"])
             self.assertTrue(events)
 

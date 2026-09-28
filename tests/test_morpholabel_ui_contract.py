@@ -38,7 +38,7 @@ class _RowsProject:
 
 class MorphoLabelUIContractTests(unittest.TestCase):
     def test_package_and_identity_versions_are_consistent(self):
-        self.assertEqual("0.5.0-beta.4", PACKAGE_VERSION)
+        self.assertEqual("0.5.0-beta.5", PACKAGE_VERSION)
         self.assertEqual(PACKAGE_VERSION, APP_VERSION)
         root=Path(__file__).parents[1]
         self.assertIn(f"Development beta · {PACKAGE_VERSION}",(root/"README.md").read_text(encoding="utf-8"))
@@ -46,7 +46,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
 
     def test_identity_is_development_morpholabel_with_supplied_png(self):
         self.assertEqual("MorphoLabel",APP_NAME)
-        self.assertEqual("0.5.0-beta.4",APP_VERSION)
+        self.assertEqual("0.5.0-beta.5",APP_VERSION)
         self.assertEqual("Development beta",APP_STATUS)
         self.assertEqual("morpholabel@olegartaev.com",CONTACT_EMAIL)
         self.assertEqual("https://github.com/olegartaev/MorphoLabel",PUBLIC_REPOSITORY)
@@ -178,6 +178,20 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         self.assertIn('"Close"',about)
         self.assertNotIn('control_button(actions,"GitHub"',about)
         self.assertNotIn('control_button(actions,"Email"',about)
+
+    def test_installed_ai_setup_is_explicit_and_can_be_deferred(self):
+        root=Path(__file__).parents[1]
+        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
+        delivery=(root/"app"/"ai_delivery.py").read_text(encoding="utf-8")
+        self.assertIn('"Install AI support"',shell)
+        self.assertIn('"Use without AI for now"',shell)
+        self.assertIn('"Nothing will be downloaded until you choose Install AI support."',shell)
+        self.assertIn('label="Set up AI support..."',shell)
+        setup=shell[shell.index("    def _show_first_run_setup"):shell.index("    def _warm_ai_hardware")]
+        self.assertIn("initial_actions();poll()",setup)
+        self.assertNotIn("start_setup();poll()",setup)
+        self.assertIn("ai_download_consent_granted",delivery)
+        self.assertIn("review and approve the required downloads",delivery)
 
     def test_package_entrypoint_uses_same_morpholabel_shell(self):
         root=Path(__file__).parents[1]

@@ -91,7 +91,8 @@ jobs:
           if ($tagVersion -ne $sourceVersion) { throw "Release tag does not match application version" }
           gh release view "$env:GITHUB_REF_NAME" *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create "$env:GITHUB_REF_NAME" --prerelease --title "$env:GITHUB_REF_NAME" --notes "Development beta."
+            gh release create "$env:GITHUB_REF_NAME" --prerelease --title "$env:GITHUB_REF_NAME" --generate-notes
+            if ($LASTEXITCODE -ne 0) { gh release view "$env:GITHUB_REF_NAME" | Out-Null }
           }
           $assets = Get-ChildItem dist\ai-component\release-assets -File
           foreach ($asset in $assets) {

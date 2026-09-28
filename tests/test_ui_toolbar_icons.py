@@ -17,8 +17,8 @@ class ToolbarIconContractTests(unittest.TestCase):
         self.assertIn("modules",ICON_NAMES)
 
     def test_icons_render_at_compact_toolbar_sizes(self):
-        self.assertEqual(24,TOPBAR_ICON_SIZE)
-        self.assertEqual(18,CONTROL_ICON_SIZE)
+        self.assertEqual(26,TOPBAR_ICON_SIZE)
+        self.assertEqual(20,CONTROL_ICON_SIZE)
         for name in ICON_NAMES:
             for size in (CONTROL_ICON_SIZE,TOPBAR_ICON_SIZE):
                 image=render_icon(name,size)
@@ -51,7 +51,7 @@ class ToolbarIconContractTests(unittest.TestCase):
             "measurement_calibrate","measurement_define","measurement_export",
             "export_landmarks","export_measurements",
         }
-        self.assertEqual(20,WORKFLOW_ICON_SIZE)
+        self.assertEqual(24,WORKFLOW_ICON_SIZE)
         self.assertTrue(selected.issubset(ICON_NAMES))
         for name in selected:
             image=render_icon(name,WORKFLOW_ICON_SIZE)

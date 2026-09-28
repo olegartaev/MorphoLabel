@@ -1,5 +1,5 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "0.5.0-beta.2-dev"
+  #define MyAppVersion "0.5.0-beta.5"
 #endif
 #ifndef MySourceDir
   #define MySourceDir "..\..\dist\MorphoLabel"
@@ -39,4 +39,4 @@ Source: "{#MySourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdir
 Name: "{group}\MorphoLabel"; Filename: "{app}\MorphoLabel.exe"
 Name: "{autodesktop}\MorphoLabel"; Filename: "{app}\MorphoLabel.exe"; Tasks: desktopicon
 [Run]
-Filename: "{app}\MorphoLabel.exe"; Description: "Start MorphoLabel"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\MorphoLabel.exe"; Description: "Start MorphoLabel (AI support is offered before any large download)"; Flags: nowait postinstall skipifsilent
