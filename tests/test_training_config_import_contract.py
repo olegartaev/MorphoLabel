@@ -28,8 +28,37 @@ class TrainingConfigImportContractTests(unittest.TestCase):
                 base_checkpoint=root/"base.pth",
             ).read_text(encoding="utf-8")
             self.assertNotIn("rtmpose_augmentations",text)
-            self.assertNotIn("custom_imports",text)
+            self.assertIn("custom_imports = None",text)
 
+
+    def test_child_training_config_neutralizes_legacy_parent_custom_import(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            manifest=root/"dataset.json"
+            manifest.write_text(json.dumps({
+                "format_version":1,
+                "dataset_id":"legacy-parent",
+                "schema_sha256":"h",
+                "schema_landmarks":[{"landmark_id":1,"abbr":"P"}],
+                "images":[],
+            }),encoding="utf-8")
+            base=root/"legacy_config.py"
+            base.write_text(
+                "custom_imports = dict(imports=['rtmpose_augmentations'], allow_failed_imports=False)\n",
+                encoding="utf-8",
+            )
+            child=generate_smoke_config(
+                manifest,
+                data_root=root,
+                train_coco=root/"train.json",
+                val_coco=root/"val.json",
+                output_path=root/"child.py",
+                base_config=base,
+                base_checkpoint=root/"base.pth",
+            )
+            text=child.read_text(encoding="utf-8")
+            self.assertIn("custom_imports = None",text)
+            self.assertNotIn("imports=['rtmpose_augmentations']",text)
 
 if __name__=="__main__":
     unittest.main()
