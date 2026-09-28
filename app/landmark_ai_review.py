@@ -21,14 +21,21 @@ def create_review_session(project,batch, *, kind="prediction_batch"):
  _save(project,doc);return dict(session)
 def create_review_session_for_ids(project, session_id, image_ids, *, kind="review_worst", metadata=None):
  ids=tuple(str(image_id) for image_id in image_ids)
+ if kind=="review_worst_v2":
+  ids=tuple(image_id for image_id in ids if not project.landmark_ai_review_ready(image_id))
  if not ids: raise ValueError("AI review has no pending images")
  review_meta={str(key):dict(value) for key,value in (metadata or {}).items() if str(key) in ids}
  doc=_load(project);session=_session(doc,session_id)
+ if kind=="review_worst_v2":
+  # A fresh ranked review supersedes older unfinished ranked sessions. Keep
+  # them in history, but never let stale verified members hijack navigation.
+  for item in doc.get("sessions",()):
+   if item is session or item.get("complete") or item.get("kind")!="review_worst_v2":continue
+   item.update({"active":False,"complete":True,"superseded_at":_now()})
  if session is None:
   session={"kind":kind,"batch_id":str(session_id),"image_ids":list(ids),"current_position":0,"current_image_id":ids[0],"complete":False,"active":False,"created_at":_now(),"review_meta":review_meta};doc.setdefault("sessions",[]).append(session)
  else:
-  session["kind"]=kind
-  if review_meta:session["review_meta"]=review_meta
+  session.update({"kind":kind,"image_ids":list(ids),"current_position":0,"current_image_id":ids[0],"complete":False,"active":False,"refreshed_at":_now(),"review_meta":review_meta})
  _save(project,doc);return dict(session)
 def pending_review_session(project):
  doc=_load(project)
@@ -57,6 +64,15 @@ def activate_review_session(project,batch_id=None):
  for item in doc.get("sessions",()):item["active"]=False
  ids=list(session.get("image_ids",()))
  if not ids:return None
+ if session.get("kind")=="review_worst_v2":
+  pending=[image_id for image_id in ids if not project.landmark_ai_review_ready(image_id)]
+  if pending!=ids:
+   session.setdefault("original_image_ids",list(ids))
+   meta=dict(session.get("review_meta") or {})
+   session["review_meta"]={image_id:meta[image_id] for image_id in pending if image_id in meta}
+   ids=pending;session["image_ids"]=list(ids);session["current_position"]=0;session["current_image_id"]=ids[0] if ids else None
+  if not ids:
+   session.update({"complete":True,"active":False});_save(project,doc);return None
  position=max(0,min(int(session.get("current_position",0)),len(ids)-1))
  if project.landmark_ai_review_ready(ids[position]):
   target=_pending_target(project,ids,position,1)
