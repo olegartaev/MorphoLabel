@@ -56,6 +56,11 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         self.assertEqual(ICON_SOURCE_SHA256,hashlib.sha256(icon).hexdigest())
         self.assertEqual("08a59d18aa7a4198a4731040a4a6a778528762af485cea3acb8f5ec93e5a9c7b",ICON_SOURCE_SHA256)
 
+    def test_about_credits_codex_assistance(self):
+        root=Path(__file__).parents[1]
+        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
+        self.assertIn("Developed with the assistance of OpenAI Codex.",shell)
+
     def test_repository_contains_open_source_license_notice_and_citation(self):
         root=Path(__file__).parents[1]
         license_text=(root/"LICENSE").read_text(encoding="utf-8")
