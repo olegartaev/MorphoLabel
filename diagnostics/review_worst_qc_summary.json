@@ -1,0 +1,119 @@
+{
+  "repository": {
+    "branch": "main",
+    "head": "f4a2b888f82d380387f6fce739604af4be962189",
+    "origin_main": "b4bc96f1aab15832a309a43fc5c901f2cc622302",
+    "worktree_status": "clean",
+    "analysis_code_basis": "local HEAD; all three requested files differ from origin/main"
+  },
+  "installed_app": {
+    "version": "0.5.0-beta.4",
+    "exe_path": "D:\\MorphoLabel_Acceptance\\beta4\\installed\\MorphoLabel.exe"
+  },
+  "project": {
+    "detected": true,
+    "sqlite_quick_check": "ok",
+    "database_sha256_before": "a39e0809eecf19a1efae1751ab872fbbf1488c8728c7835636b228ff9f733a2b",
+    "database_sha256_after": "a39e0809eecf19a1efae1751ab872fbbf1488c8728c7835636b228ff9f733a2b",
+    "database_unchanged": true
+  },
+  "source_hashes": {
+    "app/active_learning.py": {
+      "local_sha256": "b34d725ca319c00016b541294b86a996a6422ce4694929941e7dd29b0b8e88bd",
+      "origin_main_sha256": "53334d7c33fa266312fbf410b00092fe6b9d8da385130066325d2331a7bbb5a8",
+      "identical": false
+    },
+    "app/landmark_ai_review.py": {
+      "local_sha256": "01d52177c58f985a084c5e6630f85158075eb516643af65aab8e5b835f2968c4",
+      "origin_main_sha256": "9770dfb0e30c826c984897c37fd9aca149b7c1d80d2f036b81d68694ffca50d2",
+      "identical": false
+    },
+    "app/complex_qc.py": {
+      "local_sha256": "18e3d2d3d7a2a6661cd599801886e91eff56fa1b65703652b55d9a4ba985b5cd",
+      "origin_main_sha256": "4bb6dc47cf99693b3c350ed0f735eb97c6de0d2d99ede98ac478dc4651961eb4",
+      "identical": false
+    }
+  },
+  "counts": {
+    "active_non_excluded_images": 2,
+    "complete_landmarks": 2,
+    "verified_landmarks": 2,
+    "complete_unverified": 0,
+    "complete_unverified_ai_origin_landmark_frame_ready_review_worst_eligible": 0
+  },
+  "persisted_review_sessions": [],
+  "review_worst": {
+    "eligible_total": 0,
+    "top_50": [],
+    "first_24_catalog_indices": [],
+    "gaps_between_adjacent_ranked_catalog_indices": [],
+    "adjacent_transitions_gap_1": 0,
+    "transition_count": 0
+  },
+  "correction_history_calibration": {
+    "verified_images": 0,
+    "sample_count": 0,
+    "usable": false,
+    "scale": 0.01,
+    "sample_counts_by_landmark": {},
+    "sample_counts_by_model_and_landmark": [],
+    "human_verified_ai_landmarks": {
+      "N": 0,
+      "verified_images": 0,
+      "median_correction_over_diagonal": null,
+      "p90_correction_over_diagonal": null,
+      "spearman_confidence_vs_correction": null,
+      "by_landmark": {}
+    }
+  },
+  "final_data_qc": {
+    "scanned": 2,
+    "flagged": 0,
+    "high": 0,
+    "methods": {
+      "basic": {
+        "used": true,
+        "issues": 0,
+        "dimensions_missing": 0
+      },
+      "established": {
+        "used": false,
+        "issues": 0,
+        "warnings": 0,
+        "candidate_images": 0,
+        "worker_count": 0,
+        "budget": 28,
+        "fast_candidates": 0
+      },
+      "distance": {
+        "used": true,
+        "reference_images": 2,
+        "candidate_images": 2,
+        "landmarks": 3
+      },
+      "measurements": {
+        "used": false,
+        "reference_images": 0,
+        "candidate_images": 0,
+        "definitions": 0
+      },
+      "gm": {
+        "used": false,
+        "reference_images": 0,
+        "landmarks": 3,
+        "reason": "Need at least 10 complete final images"
+      }
+    },
+    "group_sizes_without_labels": [
+      2
+    ],
+    "signal_counts_by_family": {
+      "basic": 0,
+      "established": 0,
+      "distance": 0,
+      "measurements": 0,
+      "gm": 0
+    },
+    "queue_first_30": []
+  }
+}
