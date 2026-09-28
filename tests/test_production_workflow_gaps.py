@@ -664,11 +664,11 @@ class ProductionWorkflowGapTests(unittest.TestCase):
  def test_review_worst_v2_is_background_bounded_and_explainable(self):
   source=(Path(__file__).parents[1]/'app'/'ui'/'landmarks_section.py').read_text(encoding='utf8')
   self.assertIn("lambda:self.review_worst(prediction.get())",source)
-  self.assertIn("self.shell._run_background_task('Review worst'",source)
+  self.assertIn("self.shell._run_background_task('Unverified AI review'",source)
   self.assertIn("'review_worst_v2'",source)
   self.assertIn("self.canvas.clear_review_landmarks()",source)
   self.assertIn("display_reason='Inspect all landmarks' if reason.startswith('Correction history:') else reason",source)
-  self.assertIn("self._inline_status('Review worst: '+display_reason)",source)
+  self.assertIn("self._inline_status('Unverified AI review: '+display_reason)",source)
 
  def test_landmark_loading_reports_preparation_stages(self):
   source=(Path(__file__).parents[1]/'app'/'ui'/'landmark_canvas.py').read_text(encoding='utf8')
