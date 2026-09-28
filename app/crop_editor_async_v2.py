@@ -16,10 +16,17 @@ from .project_runtime import active_project
 from .crop_training import current_label
 
 def load_project_developed(project, canonical_image_id):
- """Load only the Project developed cache; never stats or hashes the RAW source."""
+ """Use the fast developed cache when present; rebuild it from the linked source on a miss."""
  from PIL import Image
  target=project.cache_root/"developed"/f"{canonical_image_id}.png"
- if not target.exists(): raise FileNotFoundError("Original image is unavailable and no developed cache exists.")
+ if not target.exists():
+  source=project.image_path(canonical_image_id)
+  if not source or not Path(source).is_file():
+   raise FileNotFoundError("Original image is unavailable and no developed cache exists.")
+  from .normalization_pipeline import develop_full
+  develop_full(Path(source),project=project,image_id_value=canonical_image_id)
+ if not target.is_file():
+  raise FileNotFoundError("Developed cache could not be rebuilt from the original image.")
  with Image.open(target) as opened:
   opened.load(); full=opened.convert("RGB")
  proxy=full.copy(); proxy.thumbnail((1800,1800)); return full,proxy
