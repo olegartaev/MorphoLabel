@@ -1,4 +1,5 @@
 import hashlib
+import json
 import shutil
 import tempfile
 import unittest
@@ -54,12 +55,19 @@ class CheckpointFinalizationTests(unittest.TestCase):
   self.assertEqual(result['checkpoint_path'],str(checkpoint)); self.assertEqual(result['best_epoch'],10); self.assertEqual(result['engineering_validation']['p95_error_percent'],3); self.assertTrue(result['ema_used']); self.assertEqual(result['checkpoint_sha256'],hashlib.sha256(b'ema').hexdigest())
   portable=self.project.data_root/'ai/models/rtmpose_finalization_test/inference_config.py'
   self.assertTrue(portable.is_file()); self.assertEqual(result['inference_config'],'inference_config.py'); self.assertEqual(result['inference_config_sha256'],hashlib.sha256(portable.read_bytes()).hexdigest())
+  epoch=self.project.data_root/'ai/models/rtmpose_finalization_test/epoch_10.pth'
+  self.assertFalse(epoch.exists())
+  state=json.loads((self.project.data_root/'ai/models/rtmpose_finalization_test/finalization.json').read_text(encoding='utf8'))
+  self.assertEqual(['epoch_10.pth'],state['retention']['removed_files']);self.assertGreater(state['retention']['removed_bytes'],0)
+  self.assertEqual('best_engineering_validation.pth',state['retention']['retained_checkpoint'])
+  self.assertEqual([{'epoch':10}],state['result']['validation_by_epoch'])
  def test_selection_or_conversion_failure_prevents_model_registration(self):
   with self.assertRaises(RTMPoseRuntimeError): self.run_train(RTMPoseRuntimeError('selection failed'),lambda *_:None)
-  self.assertEqual(self.registered,[])
-  shutil.rmtree(self.project.data_root/'ai/models/rtmpose_finalization_test')
+  artifact=self.project.data_root/'ai/models/rtmpose_finalization_test'
+  self.assertEqual(self.registered,[]);self.assertTrue((artifact/'epoch_10.pth').exists())
+  shutil.rmtree(artifact)
   with self.assertRaises(RTMPoseRuntimeError): self.run_train({'best_epoch':10,'best_metrics':{},'validation_by_epoch':[]},RTMPoseRuntimeError('conversion failed'))
-  self.assertEqual(self.registered,[])
+  self.assertEqual(self.registered,[]);self.assertTrue((artifact/'epoch_10.pth').exists())
 
 
 if __name__=='__main__': unittest.main()
