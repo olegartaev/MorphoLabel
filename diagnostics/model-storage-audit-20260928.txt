@@ -1,0 +1,30 @@
+HEAD: 2477ee07d93b0a71438314b819ff50481a6a797b
+Project: D:\Phoxinus_25-26\Phoxinus_25-26
+Total model storage GB: 73.540733
+
+A SAFE_INTERMEDIATE_ONLY: 0 folders / 0.000000 GB
+B INCOMPLETE_TRAINING: 0 folders / 0.000000 GB
+C FINAL_MODEL_METADATA_INCOMPLETE: 0 folders / 0.000000 GB
+D REFERENCED_MODEL: 38 folders / 73.540733 GB
+E ORPHAN_CANDIDATE: 0 folders / 0.000000 GB
+
+epoch checkpoints GB: 71.569440
+latest.pth GB: 0.000000
+other checkpoints GB: 0.591313
+logs/tmp/cache GB: 0.112780
+final checkpoints GB: 1.266951
+
+Largest 10 folders:
+rtmpose_v028	4.512710 GB	D REFERENCED_MODEL
+rtmpose_v027	4.512050 GB	D REFERENCED_MODEL
+rtmpose_v031	4.511330 GB	D REFERENCED_MODEL
+rtmpose_v033	4.511047 GB	D REFERENCED_MODEL
+rtmpose_v032	4.510044 GB	D REFERENCED_MODEL
+rtmpose_v025	4.474380 GB	D REFERENCED_MODEL
+rtmpose_v026	4.474370 GB	D REFERENCED_MODEL
+rtmpose_v022	4.474342 GB	D REFERENCED_MODEL
+rtmpose_v021	4.474101 GB	D REFERENCED_MODEL
+rtmpose_v020	4.473877 GB	D REFERENCED_MODEL
+
+No files were copied, deleted, renamed, or modified.
+No commit/push performed.
