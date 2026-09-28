@@ -197,8 +197,14 @@ class PerformanceEngineTests(unittest.TestCase):
             self.assertEqual(first["chosen"], 2); self.assertTrue(second["cache_hit"]); self.assertEqual(calls, [1, 2])
             self.assertGreaterEqual(first["calibration_elapsed_seconds"],0)
             self.assertEqual(first["calibration_elapsed_seconds"],second["calibration_elapsed_seconds"])
-            self.assertTrue((Path(root) / "SIMM" / "performance_engine_tuning.json").is_file())
+            self.assertTrue((Path(root) / "MorphoLabel" / "performance_engine_tuning.json").is_file())
             self.assertEqual(PerformanceCache(project).get(first["tuning_key"])["chosen"], 2)
+    def test_performance_cache_is_owned_by_morpholabel_app_state(self):
+        with tempfile.TemporaryDirectory() as root, patch.dict(os.environ, {"LOCALAPPDATA": root}):
+            cache=PerformanceCache()
+            self.assertEqual(Path(root)/"MorphoLabel"/"performance_engine_tuning.json", cache.path)
+            self.assertNotIn("SIMM", cache.path.parts)
+
     def test_grouped_probe_shape_failure_does_not_cache(self):
         with tempfile.TemporaryDirectory() as root, patch.dict(os.environ,{"LOCALAPPDATA":root}):
             result=tune_batch_worker_workload(Project(root),workload="shape-failure",model="m",input_size=(512,256),hardware=profile(8,"GPU",12000,"CUDA"),batch_candidates=[{"batch_size":1,"workers":0},{"batch_size":2,"workers":0}],worker_candidates=(0,2),probe=lambda _config:None,probe_many=lambda _configs:[{"items_per_sec":1.0}],safe_fallback={"batch_size":1,"workers":0})
