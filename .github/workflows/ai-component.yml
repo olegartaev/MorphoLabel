@@ -46,11 +46,12 @@ jobs:
         shell: pwsh
         run: |
           $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP "MorphoLabel-managed-ai"
-          $hostPython = Join-Path $env:pythonLocation "python.exe"
-          & $hostPython --version
-          & $hostPython -m pip install -r requirements.txt
+          $active = Get-Content "$env:LOCALAPPDATA\MorphoLabel\components\ai\active.json" -Raw | ConvertFrom-Json
+          $managedPython = Join-Path "$env:LOCALAPPDATA\MorphoLabel\components\ai\$($active.version)" "python.exe"
+          if (-not (Test-Path -LiteralPath $managedPython -PathType Leaf)) { throw "Managed AI Python is missing" }
+          & $managedPython --version
           $report = "dist\ai-component\AI_SELF_TEST.json"
-          & $hostPython -m app --ai-self-test --include-training --diagnostic-report $report
+          & $managedPython -m app --ai-self-test --include-training --diagnostic-report $report
           if (-not (Test-Path $report)) { throw "AI self-test report missing" }
           $data = Get-Content $report -Raw | ConvertFrom-Json
           if ($data.status -ne "PASS") { throw "AI self-test did not pass" }
