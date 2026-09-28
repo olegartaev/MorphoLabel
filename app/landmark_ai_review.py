@@ -45,9 +45,11 @@ def _pending_target(project,ids,current_position,step=1):
  current_position=max(0,min(int(current_position),len(ids)-1))
  if int(step)<0:
   before=[index for index in pending if index<current_position]
-  return before[-1] if before else pending[-1]
+  if before:return before[-1]
+  return current_position if current_position in pending else pending[0]
  after=[index for index in pending if index>current_position]
- return after[0] if after else pending[0]
+ if after:return after[0]
+ return current_position if current_position in pending else pending[0]
 
 def activate_review_session(project,batch_id=None):
  doc=_load(project);session=_session(doc,batch_id) if batch_id else next((item for item in doc.get("sessions",()) if not item.get("complete")),None)
