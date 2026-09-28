@@ -1056,7 +1056,7 @@ class ProductionShell(tk.Tk):
         ttk.Label(frame,image=logo).grid(row=0,column=0,rowspan=4,sticky="n",padx=(0,16))
         ttk.Label(frame,text=APP_NAME,style="PageTitle.TLabel").grid(row=0,column=1,sticky="w")
         ttk.Label(frame,text=f"{APP_FULL_NAME}\nv{APP_VERSION} · {APP_STATUS}",style="PageSubtitle.TLabel",justify="left").grid(row=1,column=1,sticky="w",pady=(2,10))
-        ttk.Label(frame,text=f"{COPYRIGHT}\n{CONTACT_EMAIL}",justify="left").grid(row=2,column=1,sticky="w")
+        ttk.Label(frame,text=f"{COPYRIGHT}\n{CONTACT_EMAIL}\nDeveloped with the assistance of OpenAI Codex.",justify="left").grid(row=2,column=1,sticky="w")
         ttk.Label(frame,text=f"License: {LICENSE_NAME}\nRedistributed derivative works must retain the Apache-2.0 license and applicable NOTICE attribution.\nFor scientific software or models substantially based on MorphoLabel, please identify MorphoLabel as the source and cite it.",style="Muted.TLabel",justify="left",wraplength=560).grid(row=3,column=1,sticky="w",pady=(9,9))
         link=ttk.Label(frame,text=PUBLIC_REPOSITORY,foreground=ACC,cursor="hand2");link.grid(row=4,column=0,columnspan=2,sticky="w")
         link.bind("<Button-1>",lambda _e:webbrowser.open(PUBLIC_REPOSITORY))
