@@ -144,6 +144,10 @@ class ComplexQCTests(unittest.TestCase):
         self.assertNotIn('"Review selected"',dialog)
         self.assertNotIn('"Scan again"',dialog)
         self.assertIn("Outlier ≠ error",dialog)
+        self.assertIn("Shape (GPA/PCA)",dialog)
+        self.assertIn("Within-group measurements",dialog)
+        self.assertIn("Landmark distances",dialog)
+        self.assertIn('source="Final data QC"',dialog)
 
 
 if __name__=="__main__":
