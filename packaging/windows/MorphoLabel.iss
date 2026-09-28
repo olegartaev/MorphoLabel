@@ -40,3 +40,11 @@ Name: "{group}\MorphoLabel"; Filename: "{app}\MorphoLabel.exe"
 Name: "{autodesktop}\MorphoLabel"; Filename: "{app}\MorphoLabel.exe"; Tasks: desktopicon
 [Run]
 Filename: "{app}\MorphoLabel.exe"; Description: "Start MorphoLabel (AI support is offered before any large download)"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+; MorphoLabel-owned per-user state: managed AI runtime/model, setup state,
+; hardware/UI settings, caches and diagnostics. Scientific projects are stored
+; wherever the user created them and are never placed here automatically.
+Type: filesandordirs; Name: "{localappdata}\MorphoLabel"
+; Remove any app-owned leftovers not tracked by the installer manifest.
+Type: filesandordirs; Name: "{app}"
