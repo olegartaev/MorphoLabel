@@ -613,11 +613,21 @@ WHERE cr.image_id=?
     c.execute("UPDATE crops SET crop_json=?,transform_json=?,rotation_degrees=?,status=?,provenance=?,human_verified=1,human_changed=?,reviewed_at=?,updated_at=? WHERE image_id=?",(json.dumps(bounds),json.dumps(crop.get("transform")),crop.get("rotation_degrees"),crop.get("normalization_status","PASS"),provenance,int(changed),now(),now(),image_id))
    with self.transaction() as c:c.execute("INSERT INTO crop_verified_observations(image_id,verified_at) VALUES (?,?) ON CONFLICT(image_id) DO UPDATE SET verified_at=excluded.verified_at",(image_id,now()))
    self._auto_reserve_crop_holdout(image_id,crop)
+   try:
+    from .cache_retention import prune_developed_cache
+    prune_developed_cache(self,max_removals=4)
+   except Exception:
+    pass
    return {"provenance":provenance,"changed":changed,**invalidation}
   invalidation=self.save_crop(image_id,crop,provenance="manual",model_id=None,previous_frame_proven=previous_frame_proven)
   with self.transaction() as c:c.execute("UPDATE crops SET human_verified=1,human_changed=1,reviewed_at=? WHERE image_id=?",(now(),image_id))
   with self.transaction() as c:c.execute("INSERT INTO crop_verified_observations(image_id,verified_at) VALUES (?,?) ON CONFLICT(image_id) DO UPDATE SET verified_at=excluded.verified_at",(image_id,now()))
   self._auto_reserve_crop_holdout(image_id,crop)
+  try:
+   from .cache_retention import prune_developed_cache
+   prune_developed_cache(self,max_removals=4)
+  except Exception:
+   pass
   return {"provenance":"manual","changed":True,**invalidation}
  def crop_training_rows(self):
   """Canonical verified Crop rows; developed PNGs are optional disposable cache."""
@@ -793,6 +803,11 @@ ON CONFLICT(image_id) DO UPDATE SET verified_at=excluded.verified_at""",(image_i
   for image_id in accepted:
    record=self.crop_record(image_id)
    if record:self._auto_reserve_crop_holdout(image_id,record)
+  try:
+   from .cache_retention import prune_developed_cache
+   prune_developed_cache(self,max_removals=16)
+  except Exception:
+   pass
   return {"accepted":len(accepted),"skipped":len(skipped),"accepted_ids":tuple(accepted),"skipped_ids":tuple(skipped)}
  def crop_review_candidates(self,include_ok=True):
   # Review worst orders all pending AI work; severity is never a membership gate.
