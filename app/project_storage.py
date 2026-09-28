@@ -620,18 +620,26 @@ WHERE cr.image_id=?
   self._auto_reserve_crop_holdout(image_id,crop)
   return {"provenance":"manual","changed":True,**invalidation}
  def crop_training_rows(self):
-  """Canonical Project crops for the actual crop trainer; never legacy CSV."""
-  with self.transaction() as c:rows=c.execute("SELECT cr.*,i.image_id FROM crops cr JOIN images i ON i.image_id=cr.image_id WHERE cr.provenance IN ('manual','ai_accepted','ai_corrected') AND COALESCE(cr.human_verified,0)=1 AND COALESCE(i.excluded,0)=0 AND cr.crop_json IS NOT NULL AND NOT EXISTS(SELECT 1 FROM crop_holdout h WHERE h.image_id=cr.image_id)").fetchall()
+  """Canonical verified Crop rows; developed PNGs are optional disposable cache."""
+  with self.transaction() as c:rows=c.execute("""SELECT cr.*,i.image_id,i.relative_path,i.file_size AS source_file_size,
+i.mtime_ns AS source_mtime_ns,i.source_sha256 AS image_source_sha256,i.source_available
+FROM crops cr JOIN images i ON i.image_id=cr.image_id
+WHERE cr.provenance IN ('manual','ai_accepted','ai_corrected')
+  AND COALESCE(cr.human_verified,0)=1
+  AND COALESCE(i.excluded,0)=0
+  AND cr.crop_json IS NOT NULL
+  AND NOT EXISTS(SELECT 1 FROM crop_holdout h WHERE h.image_id=cr.image_id)""").fetchall()
   result=[]
   for row in rows:
    d=dict(row)
    try:bounds=json.loads(d['crop_json'])
    except Exception:continue
    if not isinstance(bounds,list) or len(bounds)!=4:continue
-   relpath=d.get('developed_relpath')
-   if not relpath:continue
+   relpath=d.get('developed_relpath') or f"cache/developed/{d['image_id']}.png"
    d['crop_bounds']=bounds;d['developed_path']=str(self.resolve_data_path(relpath))
-   if Path(d['developed_path']).is_file():result.append(d)
+   source=self.source_root/d['relative_path']
+   d['source_path']=str(source) if d.get('source_available') and source.is_file() else None
+   result.append(d)
   return tuple(result)
  def crop_model_lineage_ids(self,model_id):
   ids=set();current=model_id
