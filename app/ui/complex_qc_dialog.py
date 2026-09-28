@@ -33,15 +33,15 @@ def open_complex_qc(section):
     dialog=tk.Toplevel(section.shell);dialog.title("Complex QC");dialog.transient(section.shell);dialog.geometry("920x560");dialog.minsize(760,440)
     frame=ttk.Frame(dialog,padding=14);frame.pack(fill="both",expand=True);frame.rowconfigure(4,weight=1);frame.columnconfigure(0,weight=1)
 
-    ttk.Label(frame,text="🛡 Complex QC",font=("Segoe UI",12,"bold")).grid(row=0,column=0,sticky="w")
+    ttk.Label(frame,text="Complex QC",font=("Segoe UI",12,"bold")).grid(row=0,column=0,sticky="w")
     ttk.Label(
         frame,
-        text="Scan every annotated fish; only suspicious results enter one ranked review queue.",
+        text="Post-verification audit of final human-verified landmark sets. Unverified AI predictions are handled by Review worst.",
         style="Muted.TLabel",
     ).grid(row=1,column=0,sticky="w",pady=(2,0))
     ttk.Label(
         frame,
-        text="Outlier ≠ error. High-priority cases come first; Checked & Next confirms the current image as human-reviewed.",
+        text="Outlier ≠ error. High-priority cases come first; Verify & Next re-confirms the final landmark set after inspection or correction.",
         style="Muted.TLabel",
     ).grid(row=2,column=0,sticky="w",pady=(0,9))
 
@@ -67,7 +67,7 @@ def open_complex_qc(section):
     ttk.Label(frame,textvariable=detail,style="Muted.TLabel",wraplength=880,justify="left").grid(row=5,column=0,sticky="ew",pady=(8,0))
 
     actions=ttk.Frame(frame);actions.grid(row=6,column=0,sticky="ew",pady=(10,0));actions.columnconfigure(0,weight=1)
-    all_button=section.button(actions,"Review all — worst first",lambda:None,"Review every flagged Complex QC result from the strongest suspicion to the weakest.",primary=True,enabled=False)
+    all_button=section.button(actions,"Review flagged — worst first",lambda:None,"Review final verified images flagged by Complex QC, strongest suspicion first.",primary=True,enabled=False,icon='complex_qc')
     all_button.grid(row=0,column=0,sticky="ew")
 
     state={"result":None,"items":{},"running":False}
@@ -99,7 +99,7 @@ def open_complex_qc(section):
     def render_result(result):
         state["result"]=result;state["items"]={};table.delete(*table.get_children())
         flagged=int(result.get("flagged") or 0);high=int(result.get("high") or 0);scanned=int(result.get("scanned") or 0);review_total=int(result.get("review_total") or 0)
-        summary.set(f"Scanned {scanned} annotated images · Flagged {flagged} · High priority {high}")
+        summary.set(f"Scanned {scanned} verified images · Flagged {flagged} · High priority {high}")
         methods.set(_method_summary(result))
         abbrs={int(row["id"]):str(row.get("abbr") or row["id"]) for row in project.schema}
         for index,issue in enumerate(result.get("queue") or ()):
@@ -109,12 +109,12 @@ def open_complex_qc(section):
             table.insert("","end",iid=iid,values=values,tags=("high",) if issue.get("priority")=="High" else ())
             state["items"][iid]=issue
         all_button.configure(state="normal" if review_total else "disabled")
-        detail.set("Select a row to see why it was flagged." if review_total else "No unresolved QC outliers were found across the annotated images.")
+        detail.set("Select a row to see why it was flagged." if review_total else "No unresolved QC outliers were found across the verified final data.")
 
     def run_scan():
         if state["running"]:return
         state["running"]=True;all_button.configure(state="disabled")
-        table.delete(*table.get_children());state["items"]={};summary.set("Scanning all annotated images…");methods.set("");detail.set("")
+        table.delete(*table.get_children());state["items"]={};summary.set("Scanning verified final data…");methods.set("");detail.set("")
         progress.configure(mode="indeterminate");progress.start()
         def worker():
             try:
