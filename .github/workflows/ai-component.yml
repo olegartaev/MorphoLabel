@@ -46,9 +46,11 @@ jobs:
         shell: pwsh
         run: |
           $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP "MorphoLabel-managed-ai"
-          python -m pip install -r requirements.txt
+          $hostPython = Join-Path $env:pythonLocation "python.exe"
+          & $hostPython --version
+          & $hostPython -m pip install -r requirements.txt
           $report = "dist\ai-component\AI_SELF_TEST.json"
-          python -m app --ai-self-test --include-training --diagnostic-report $report
+          & $hostPython -m app --ai-self-test --include-training --diagnostic-report $report
           if (-not (Test-Path $report)) { throw "AI self-test report missing" }
           $data = Get-Content $report -Raw | ConvertFrom-Json
           if ($data.status -ne "PASS") { throw "AI self-test did not pass" }
