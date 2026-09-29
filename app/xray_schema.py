@@ -62,6 +62,26 @@ def phoxinus_vertebral_preset():
         "structures":structures,"traits":traits,
     }
 
+def preset_catalog():
+    """Small user-facing catalog; factories stay in code, projects store concrete scheme versions."""
+    scheme=phoxinus_vertebral_preset()
+    return ({
+        "id":scheme["scheme_id"],
+        "name":scheme["name"],
+        "description":scheme["description"],
+        "trait_count":len(scheme["traits"]),
+        "structure_count":len(scheme["structures"]),
+        "trait_abbrs":tuple(item.get("abbr") or item["id"] for item in scheme["traits"]),
+        "reference":deepcopy(scheme.get("reference") or {}),
+    },)
+
+
+def preset_scheme(preset_id):
+    if str(preset_id)=="phoxinus_vertebral_counts":
+        return phoxinus_vertebral_preset()
+    raise KeyError(f"Unknown X-ray trait preset: {preset_id}")
+
+
 def blank_scheme(name="Untitled X-ray trait scheme"):
     return {"format_version":SCHEMA_FORMAT_VERSION,"scheme_id":"custom","name":str(name),"description":"","reference":{},"structures":[],"traits":[]}
 
