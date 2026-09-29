@@ -109,7 +109,7 @@ class UIContext:
   ready=image_id in getattr(self,'_landmark_ready_ids',set())
   return {'Human verified':checked,'Training set':eligible,'New/changed':ready,'Incomplete':unresolved}
  def landmark_counts(self):
-  if not self.project:return {'Total':0,**{key:0 for key in _LANDMARK_KEYS}}
+  if not self.project:return {'Images':0,**{key:0 for key in _LANDMARK_KEYS}}
   if self._landmark_counts_cache is None:
    self._permanent_ids=self.project.permanent_test_image_ids()
    try:active=self.project.active_model_readonly("landmark") or {}
@@ -124,7 +124,7 @@ class UIContext:
    self._landmark_ready_ids={image_id for image_id in eligible if self._landmark_model_fingerprints.get(str(image_id))!=current_fingerprints.get(str(image_id))}
    self._landmark_classification={row['image_id']:self._classify_landmark(row) for row in self.rows}
    included={row['image_id'] for row in self.rows if not row.get('excluded')}
-   self._landmark_counts_cache={'Total':len(included),**{key:sum(int(flags[key]) for image_id,flags in self._landmark_classification.items() if image_id in included) for key in _LANDMARK_KEYS}}
+   self._landmark_counts_cache={'Images':len(included),**{key:sum(int(flags[key]) for image_id,flags in self._landmark_classification.items() if image_id in included) for key in _LANDMARK_KEYS}}
   return self._landmark_counts_cache
  def update_landmark_counts(self,image_id=None):
   """One-row delta only: never catalogue/status scan after a landmark gesture."""
