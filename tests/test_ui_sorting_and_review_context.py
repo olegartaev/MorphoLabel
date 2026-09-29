@@ -1,5 +1,6 @@
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from app.ui.project_section import sorted_project_samples
 from app.ui.landmarks_section import _prediction_context_text, _remaining_prediction_ids
@@ -31,7 +32,7 @@ class UISortingAndReviewContextTests(unittest.TestCase):
   class P:
    def annotation_status(self,image_id):
     return {"verified":False,"complete":image_id=="complete"}
-  with __import__('unittest').mock.patch('app.ui.landmarks_section.landmark_frame_ready',return_value=True):
+  with patch('app.ui.landmarks_section.landmark_frame_ready',return_value=True):
    self.assertEqual(("partial",),_remaining_prediction_ids(P(),rows))
 
  def test_landmarks_ui_reuses_established_overlay_and_has_no_reapply_button(self):
