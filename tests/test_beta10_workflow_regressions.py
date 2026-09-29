@@ -43,7 +43,7 @@ class _LegacyLoader:
 class _Canvas:
     def __init__(self):self.selected=[];self.seen=[]
     def selection_set(self,index):self.selected.append(index)
-    def see(self,index):self.seen.append(index)
+    def see(self,index,align_top=False):self.seen.append((index,bool(align_top)))
 
 
 class Beta10WorkflowRegressionTests(unittest.TestCase):
@@ -84,7 +84,7 @@ class Beta10WorkflowRegressionTests(unittest.TestCase):
         PhotoListPanel.sync_current(panel,reveal=True)
         self.assertEqual([False],refresh)
         self.assertEqual([1],panel.canvas.selected)
-        self.assertEqual([1],panel.canvas.seen)
+        self.assertEqual([(1,False)],panel.canvas.seen)
 
     def test_navigation_is_only_visible_for_persisted_batch_or_review(self):
         self.assertFalse(ProductionShell._workflow_navigation_visible(None))
