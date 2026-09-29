@@ -91,7 +91,8 @@ class XRayCountsRuntime:
         actions=ttk.Frame(top);actions.pack(side="right")
         self._button(actions,"Apply preset…",self._apply_preset,"Replace the active scheme with a ready-made scheme while keeping earlier project data.",image=self._icon(actions,"xray_project")).pack(side="left")
         self._button(actions,"Edit traits…",self._edit_scheme,"Change traits safely; earlier versions and annotations stay stored.",True).pack(side="left",padx=(6,0))
-        self._button(actions,"More…",self._scheme_more,"Start a blank scheme or import one from JSON.").pack(side="left",padx=(6,0))
+        self._button(actions,"New blank…",self._new_blank_scheme,"Start a new blank scheme version without deleting the old one.").pack(side="left",padx=(6,0))
+        self._button(actions,"Import…",self._import_scheme,"Import a MorphoLabel X-ray trait scheme from JSON.").pack(side="left",padx=(6,0))
         ttk.Label(info,text=scheme.get("description",""),style="Muted.TLabel",wraplength=920).pack(anchor="w",pady=(5,8))
         for trait in scheme["traits"]:
             method=METHOD_BY_ID[trait["method"]];row=ttk.Frame(info);row.pack(fill="x",pady=2)
@@ -223,12 +224,6 @@ class XRayCountsRuntime:
             with open(path,"r",encoding="utf-8") as handle:scheme=normalize_scheme(json.load(handle))
         except Exception as exc:messagebox.showerror("Import scheme",f"Could not read this trait scheme.\n\n{exc}",parent=root);return
         self._apply_scheme_version(scheme,f"Imported trait scheme: {scheme['name']}","Import scheme")
-
-    def _scheme_more(self):
-        root=self.host.container.winfo_toplevel()
-        if messagebox.askyesno("Trait scheme","Start a new blank trait scheme?\n\nChoose No to import a scheme from JSON instead.",parent=root,default="no"):
-            self._new_blank_scheme()
-        else:self._import_scheme()
 
     def _new_project(self):
         root=self.host.container.winfo_toplevel();name=simpledialog.askstring("New X-ray project","Project name:",parent=root)
