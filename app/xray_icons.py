@@ -110,6 +110,11 @@ def _document(d,p,x0=5,y0=4,x1=23,y1=28):
     _line(d,p,[(x0+4,y0+10),(x1-4,y0+10)],MUTED,.75)
     _line(d,p,[(x0+4,y0+14),(x1-4,y0+14)],MUTED,.75)
 
+def _export_arrow(d,p):
+    _line(d,p,[(24,23),(24,11)],GREEN,1.8)
+    d.polygon([(p(24),p(8)),(p(20.8),p(13)),(p(27.2),p(13))],fill=GREEN)
+    _line(d,p,[(19,21),(19,25),(29,25),(29,21)],XRAY_DARK,1.1)
+
 
 def render_xray_icon(name,size=XRAY_ICON_SIZE):
     if name not in XRAY_ICON_NAMES:raise KeyError(name)
@@ -119,20 +124,19 @@ def render_xray_icon(name,size=XRAY_ICON_SIZE):
     if name=="xray":
         _film(d,p);_fish_skeleton(d,p,scale=.92,accent=BLUE)
     elif name=="xray_project":
-        return render_icon("project",size)
+        _film(d,p,2.5,4,29.5,28.5,accent=BLUE);_fish_skeleton(d,p,scale=.72,accent=BLUE)
+        _folder(d,p);_line(d,p,[(8,14),(17,14)],GREEN,1.0);_line(d,p,[(8,18),(14,18)],GREEN,1.0)
     elif name=="xray_crops":
-        return render_icon("crop",size)
+        _film(d,p);_crop_brackets(d,p,BLUE);_fish_skeleton(d,p,scale=.70,accent=XRAY_DARK)
+        _line(d,p,[(7,23),(25,8)],GREEN,1.2)
     elif name=="xray_structures":
-        return render_icon("landmarks",size)
+        _film(d,p);_fish_skeleton(d,p,scale=.72,accent=XRAY_DARK);_structure_badges(d,p)
+        _line(d,p,[(10,25),(27,25)],BLUE,1.0)
     elif name=="xray_results":
-        # No direct Landmarks equivalent: use the same table geometry/palette.
-        _table(d,p,4,5,28.5,27)
-        _line(d,p,[(7,10),(18,10)],BLUE,1.1)
-        for x in (8,10.5,13,15.5,18):_node(d,p,x,10,fill="#ffffff",outline=BLUE,r=.85,width=.55)
-        _line(d,p,[(21.5,15),(25.5,15)],GREEN,1.5)
-        _line(d,p,[(21.5,21),(26.5,21)],BLUE,1.5)
+        _film(d,p,2.5,4,29.5,28.5,accent=GREEN);_fish_skeleton(d,p,cx=10.5,cy=16,scale=.42,accent=BLUE)
+        _table(d,p,15,7,29,25);_line(d,p,[(23,11),(27,11)],GREEN,1.0);_line(d,p,[(23,16),(27,16)],BLUE,1.0)
     elif name=="xray_export":
-        return render_icon("export",size)
+        _document(d,p,3,4,24,28);_fish_skeleton(d,p,cx=12,cy=17,scale=.48,accent=BLUE);_export_arrow(d,p)
 
     # Trait-method icons: scientific diagrams, compact and deliberately quieter.
     elif name in {"count","count_to","count_between","position"}:

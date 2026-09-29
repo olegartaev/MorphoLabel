@@ -31,6 +31,13 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertNotIn("Scheme file",source)
         self.assertNotIn("Apply preset",source)
 
+    def test_scheme_library_builds_action_controls_before_initial_selection(self):
+        source=(Path(__file__).resolve().parents[1]/"app/modules/xray_counts.py").read_text(encoding="utf-8")
+        build=source[source.index("    def _build(self):",source.index("class SchemeLibraryDialog")):]
+        self.assertLess(build.index("self.apply=ttk.Button"),build.index("if self._entries:"))
+        self.assertLess(build.index("self.edit_button=ttk.Button"),build.index("if self._entries:"))
+        self.assertIn("Scheme details",build)
+
     def test_trait_rows_are_editable_and_navigation_reuses_landmarks_stage_style(self):
         source=(Path(__file__).resolve().parents[1]/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         self.assertIn('self.tree.bind("<Double-1>",self._edit_selected',source)
@@ -71,11 +78,11 @@ class XRayModuleContractTests(unittest.TestCase):
         for name in required:
             image=render_xray_icon(name,26);self.assertEqual((26,26),image.size);self.assertIsNotNone(image.getbbox(),name)
         source=(Path(__file__).resolve().parents[1]/"app/xray_icons.py").read_text(encoding="utf-8")
-        self.assertIn("render_icon",source)
-        self.assertIn('return render_icon("project",size)',source)
-        self.assertIn('return render_icon("crop",size)',source)
-        self.assertIn('return render_icon("landmarks",size)',source)
-        self.assertIn('return render_icon("export",size)',source)
+        self.assertIn("_fish_skeleton",source)
+        self.assertNotIn('return render_icon("project",size)',source)
+        self.assertNotIn('return render_icon("crop",size)',source)
+        self.assertNotIn('return render_icon("landmarks",size)',source)
+        self.assertNotIn('return render_icon("export",size)',source)
         self.assertIn("def _fish_skeleton",source)
         self.assertNotIn('CYAN=',source)
         self.assertNotIn('PURPLE=',source)
