@@ -622,13 +622,21 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   self.assertNotIn("self.button(predict_actions,'Reapply AI pending'",source)
   self.assertIn("self.missing_button",source);self.assertIn("'Verify image'",source)
 
- def test_models_window_explains_manual_vs_ai_repeatability_compactly(self):
+ def test_landmark_models_window_is_plain_language_and_opens_accuracy_details(self):
   source=(Path(__file__).parents[1]/'app'/'ui'/'shell.py').read_text(encoding='utf8')
-  self.assertIn('"manual_p90":"Manual P90 %"',source)
-  self.assertIn('"ai_p90":"AI P90 %"',source)
-  self.assertIn('"human_ratio":"AI / manual"',source)
-  self.assertIn('Manual P90: your repeat-placement error.',source)
-  self.assertIn('style="Muted.TLabel"',source)
+  self.assertIn('text="Landmark models"',source)
+  self.assertIn('"Training images"',source)
+  self.assertIn('"Validation P90"',source)
+  self.assertIn('"Accuracy details…"',source)
+  self.assertIn('open_landmark_accuracy',source)
+  self.assertIn("same-image human comparison",source)
+
+ def test_landmark_header_uses_non_overlapping_meaningful_labels(self):
+  source=(Path(__file__).parents[1]/'app'/'ui'/'context.py').read_text(encoding='utf8')
+  self.assertIn('("Human verified", "Training set", "New/changed", "Incomplete")',source)
+  shell=(Path(__file__).parents[1]/'app'/'ui'/'shell.py').read_text(encoding='utf8')
+  self.assertIn('"Training set":"Verified, complete images currently eligible for model training.',shell)
+  self.assertIn('"New/changed":"Training-set images whose current Crop or landmarks are not yet represented',shell)
 
  def test_active_section_has_theme_independent_visual_marker(self):
   source=(Path(__file__).parents[1]/'app'/'ui'/'shell.py').read_text(encoding='utf8')
