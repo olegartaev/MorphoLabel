@@ -114,8 +114,10 @@ class LandmarkAccuracyDialog(tk.Toplevel):
         self.relative_value.configure(text=_ratio_text(ratio))
 
         self.table.delete(*self.table.get_children())
-        human_rows={int(k):v for k,v in (self.human.get("per_landmark") or {}).items()}
-        ai_rows={int(k):v for k,v in (self.model.get("per_landmark") or {}).items()}
+        human_source=((self.human.get("per_landmark_by_scope") or {}).get(scope) if scope!="all" else None) or self.human.get("per_landmark") or {}
+        ai_source=((self.model.get("per_landmark_by_scope") or {}).get(scope) if scope!="all" else None) or self.model.get("per_landmark") or {}
+        human_rows={int(k):v for k,v in human_source.items()}
+        ai_rows={int(k):v for k,v in ai_source.items()}
         rows=[]
         for schema_row in self.project.schema:
             ident=int(schema_row["id"]);role=str(schema_row.get("role") or "BOTH").upper()
@@ -125,11 +127,12 @@ class LandmarkAccuracyDialog(tk.Toplevel):
             rows.append((ident,schema_row.get("abbr") or str(ident),schema_row.get("name") or "",role,h,a,_ratio(h,a)))
         rows.sort(key=lambda item:(-(item[5] if item[5] is not None else -1),item[0]))
         for ident,abbr,name,role,h,a,ratio in rows:
-            self.table.insert("", "end", values=(abbr,name,role.title(),_fmt(h),_fmt(a),_ratio_text(ratio)))
+            use_label={"GM":"GM","CLASSICAL":"Classical","BOTH":"Both"}.get(role,role)
+            self.table.insert("", "end", values=(abbr,name,use_label,_fmt(h),_fmt(a),_ratio_text(ratio)))
         if scope=="gm":
             gm_count=sum(str(row.get("role") or "BOTH").upper() in {"GM","BOTH"} for row in self.project.schema)
             total=len(self.project.schema)
-            self.scope_note.configure(text=f"GM-only uses {gm_count} of {total} landmarks (roles GM + BOTH). CLASSICAL-only landmarks are excluded.")
+            self.scope_note.configure(text=f"GM-only uses {gm_count} of {total} landmarks (roles GM + BOTH). CLASSICAL-only landmarks are excluded, and normalization uses only the GM configuration.")
         else:
             self.scope_note.configure(text=f"All {len(self.project.schema)} landmarks are shown. Switch to GM-only to remove measurement-only / CLASSICAL landmarks from the comparison.")
 
