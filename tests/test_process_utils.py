@@ -9,6 +9,14 @@ class ProcessUtilsTests(unittest.TestCase):
         with patch.object(process_utils.sys, "platform", "linux"):
             self.assertEqual({}, process_utils.hidden_window_kwargs())
 
+    def test_ai_subprocess_entry_points_use_hidden_window_kwargs(self):
+        from pathlib import Path
+        root=Path(__file__).parents[1]
+        for rel in ("app/rtmpose_backend.py","app/ai_runtime_resolver.py","app/ai_hardware.py"):
+            source=(root/rel).read_text(encoding="utf-8")
+            self.assertIn("hidden_window_kwargs",source,rel)
+            self.assertIn("**hidden_window_kwargs()",source,rel)
+
     def test_windows_requests_hidden_child_process(self):
         class StartupInfo:
             def __init__(self):
