@@ -80,19 +80,18 @@ def _next_pending_ai_prediction_ids(project,rows,start_image_id,count):
  return tuple(image_id for image_id in order if image_id in pending)[:max(0,int(count))]
 
 def _repeatability_diagram(parent):
- """Small text-independent visual: annotate the same specimen twice, independently."""
+ """Small text-independent visual: the same specimen image is annotated twice."""
  canvas=tk.Canvas(parent,width=430,height=96,bg="#fbfcfd",highlightthickness=1,highlightbackground="#d8dde3")
- def fish(cx,cy,dots,accent):
-  canvas.create_oval(cx-66,cy-22,cx+54,cy+22,fill="#edf2f5",outline="#8b98a3",width=2)
-  canvas.create_polygon(cx+48,cy,cx+78,cy-22,cx+78,cy+22,fill="#edf2f5",outline="#8b98a3",width=2)
-  canvas.create_oval(cx-50,cy-6,cx-44,cy,fill="#66727d",outline="")
-  for x,y in dots:canvas.create_oval(cx+x-4,cy+y-4,cx+x+4,cy+y+4,fill=accent,outline="white",width=1)
- left=[(-38,-4),(-16,-13),(8,-10),(28,2),(45,10)]
- right=[(-36,-3),(-14,-12),(10,-8),(27,4),(44,8)]
- fish(105,50,left,"#256d9e");fish(325,50,right,"#256d9e")
- canvas.create_line(190,50,240,50,fill="#8b98a3",width=2,arrow="last")
- canvas.create_oval(92,8,116,32,fill="#ffffff",outline="#c6cdd3");canvas.create_text(104,20,text="1",fill="#27313a",font=("Segoe UI",9,"bold"))
- canvas.create_oval(312,8,336,32,fill="#ffffff",outline="#c6cdd3");canvas.create_text(324,20,text="2",fill="#27313a",font=("Segoe UI",9,"bold"))
+ def specimen(cx,cy,dots):
+  canvas.create_rectangle(cx-68,cy-26,cx+68,cy+26,fill="#f1f4f6",outline="#a5afb7",width=2)
+  canvas.create_line(cx-48,cy+9,cx-22,cy-10,cx+4,cy+4,cx+28,cy-15,cx+49,cy+8,fill="#b3bdc5",width=2,smooth=True)
+  for x,y in dots:canvas.create_oval(cx+x-4,cy+y-4,cx+x+4,cy+y+4,fill="#256d9e",outline="white",width=1)
+ left=[(-42,8),(-20,-8),(4,5),(27,-12),(48,7)]
+ right=[(-40,7),(-19,-7),(5,4),(29,-11),(47,8)]
+ specimen(105,51,left);specimen(325,51,right)
+ canvas.create_line(184,51,246,51,fill="#8b98a3",width=2,arrow="last")
+ canvas.create_oval(92,7,116,31,fill="#ffffff",outline="#c6cdd3");canvas.create_text(104,19,text="1",fill="#27313a",font=("Segoe UI",9,"bold"))
+ canvas.create_oval(312,7,336,31,fill="#ffffff",outline="#c6cdd3");canvas.create_text(324,19,text="2",fill="#27313a",font=("Segoe UI",9,"bold"))
  return canvas
 
 def _prediction_failure_summary(batch):
@@ -159,9 +158,7 @@ def _prediction_context_text(project,row):
    dt=datetime.fromisoformat(stamps[-1].replace("Z","+00:00")).astimezone()
    when=dt.strftime("%Y-%m-%d %H:%M")
   except ValueError:when=stamps[-1][:16].replace("T"," ")
- expected=int(row.get("expected_landmarks") or len(project.schema));unresolved=len(tuple(row.get("missing_ids") or ()));resolved=max(0,expected-unresolved)
- state=f"{resolved}/{expected} resolved · review pending" if not unresolved else f"{resolved}/{expected} resolved · {unresolved} unresolved"
- return "AI prediction · "+model+(f" · {when}" if when else "")+" · "+state
+ return "AI prediction · "+model+(f" · {when}" if when else "")
 
 class LandmarksSection(SectionView):
  def render(self):
@@ -780,7 +777,7 @@ class LandmarksSection(SectionView):
   if failures:
    first_id=next(iter(failures));selected=next((item for item in batch.get('selected_images',()) if str(item.get('image_id'))==str(first_id)),{})
    name=selected.get('display_name') or first_id;detail=_prediction_failure_summary(batch)
-   text=f"Predicted: {completed}. Could not predict: {len(failures)}.\n\nFirst failed image: {name}"
+   text=f"Predicted: {completed}. Needs attention: {len(failures)}.\n\nImage to check: {name}"
    if detail:text+=f"\nReason: {detail}"
    text+="\n\nIt remains Unresolved and has been opened. Check its Crop/image if needed, then run All remaining again. Successful predictions are already saved."
    messagebox.showwarning('Landmark prediction',text,parent=self.shell)

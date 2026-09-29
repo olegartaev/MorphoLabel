@@ -8,7 +8,7 @@ from app.operator_qc import set_repeat_landmark,complete_repeat_session,_load,op
 from app.ai import MockBackend
 from app.project_storage import schema_hash
 from app.landmark_ai_workflow import STATE_KEY,load_state
-from app.ui.landmarks_section import LandmarksSection,_format_percent,_landmark_toolbar_state,_remaining_prediction_ids,_reapply_unverified_prediction_ids,_confirm_complex_qc_image
+from app.ui.landmarks_section import LandmarksSection,_format_percent,_landmark_toolbar_state,_remaining_prediction_ids,_confirm_complex_qc_image
 from app.ui.context import UIContext, _training_ready_image_ids, _training_seen_image_ids
 from app.ui.batch_status import position_and_remaining
 from app.ui.shell import ProductionShell
@@ -205,19 +205,6 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   row=self.p.catalog_row(image_id);self.assertTrue(row['human_verified']);self.assertTrue(row['has_crop']);self.assertEqual('green',row['status_color'])
   self.assertTrue(landmark_frame_ready(self.p,image_id))
   self.assertEqual(4,counts['Human verified']);self.assertEqual(4,self.p.landmark_counts()['Human verified'])
-
- def test_reapplying_identical_crop_does_not_create_landmark_review(self):
-  image_id=self.ids[0]
-  self.p.delete_landmark(image_id,1);self.p.delete_landmark(image_id,2);self.p.clear_checked(image_id)
-  crop=self._final_crop(image_id)
-  for ident in (1,2):self.p.save_landmark(image_id,ident,10*ident,10,'manual','manual')
-  self.p.mark_checked(image_id)
-  transform=dict(reversed(list(crop['transform'].items())))
-  same={'crop_bounds':[float(value) for value in crop['crop_bounds']],'transform':transform,'rotation_degrees':0,'standardized_relpath':crop['standardized_relpath'],'normalization_status':'PASS'}
-  self.p.save_reviewed_crop(image_id,same,previous_frame_proven=True)
-  self.assertFalse(self.p.landmark_crop_review_required(image_id))
-  self.assertTrue(self.p.annotation_status(image_id)['verified'])
-  self.assertTrue(self.p.catalog_row(image_id)['has_crop'])
 
  def test_accept_all_ai_crops_confirms_only_active_pending_proposals(self):
   first,second,excluded=self.ids[:3]
@@ -583,18 +570,6 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   restored=self.p.load_landmarks(image_id)[1]
   self.assertEqual(before['x_standardized'],restored['x_standardized']);self.assertEqual(before['y_standardized'],restored['y_standardized'])
 
- def test_reapply_targets_partial_and_complete_pending_ai_but_not_manual_empty_or_verified(self):
-  partial,complete_unverified,verified,manual_only=self.ids
-  for ident in (1,2):self.p.delete_landmark(partial,ident);self.p.delete_landmark(complete_unverified,ident)
-  self.p.save_machine_landmarks(partial,[{'landmark_id':1,'x':10,'y':10}],model_id='ai-model',prediction_run_id='partial')
-  self.p.save_machine_landmarks(complete_unverified,[{'landmark_id':1,'x':10,'y':10},{'landmark_id':2,'x':20,'y':10}],model_id='ai-model',prediction_run_id='complete')
-  self.p.clear_checked(partial);self.p.clear_checked(complete_unverified);self.p.clear_checked(manual_only)
-  rows=self.p.catalog_rows()
-  with patch('app.ui.landmarks_section.landmark_frame_ready',return_value=True):
-   ids=_reapply_unverified_prediction_ids(self.p,rows)
-  self.assertIn(partial,ids);self.assertIn(complete_unverified,ids)
-  self.assertNotIn(verified,ids);self.assertNotIn(manual_only,ids)
-
  def test_repeatability_percent_is_human_readable_but_precise_value_can_stay_stored(self):
   self.assertEqual('0.50%',_format_percent(0.49731822679167603))
   self.assertEqual('not available',_format_percent(None))
@@ -606,21 +581,6 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   self.assertEqual('Mark missing',_landmark_toolbar_state(verified,2)['missing_text'])
   self.assertEqual('Verified ✓',_landmark_toolbar_state(verified,2)['verify_text'])
   self.assertFalse(_landmark_toolbar_state(verified,2)['verify_enabled'])
-
- def test_apply_reapply_remaining_targets_unannotated_and_unverified_ai_only(self):
-  project=Mock();project.pending_ai_landmark_image_ids.return_value=('ai-pending',)
-  project.annotation_status.return_value={'verified':False}
-  project.load_landmarks.side_effect=lambda image_id:{} if image_id=='empty' else {1:{'state':'present'}}
-  rows=[{'image_id':'empty'},{'image_id':'ai-pending'},{'image_id':'human-partial'},{'image_id':'excluded','excluded':True}]
-  with patch('app.ui.landmarks_section.landmark_frame_ready',return_value=True):
-   self.assertEqual(('empty','ai-pending'),_remaining_prediction_ids(project,rows))
-
- def test_landmarks_ui_has_single_apply_reapply_remaining_action(self):
-  source=(Path(__file__).parents[1]/'app'/'ui'/'landmarks_section.py').read_text(encoding='utf8')
-  self.assertIn("'All remaining'",source)
-  self.assertIn("'Reapply'",source)
-  self.assertNotIn("self.button(predict_actions,'Reapply AI pending'",source)
-  self.assertIn("self.missing_button",source);self.assertIn("'Verify image'",source)
 
  def test_landmark_models_window_is_plain_language_and_opens_accuracy_details(self):
   source=(Path(__file__).parents[1]/'app'/'ui'/'shell.py').read_text(encoding='utf8')

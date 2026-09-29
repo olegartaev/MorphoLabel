@@ -19,13 +19,13 @@ class UISortingAndReviewContextTests(unittest.TestCase):
   pending={"image_id":"x","human_verified":False,"status_color":"yellow","placed":2,"expected_landmarks":2}
   project=SimpleNamespace(load_landmarks=lambda _:{1:{"provenance":"machine","model_id":"m1","updated_at":"2026-09-29T12:00:00+00:00"},2:{"provenance":"machine","model_id":"m1","updated_at":"2026-09-29T12:00:00+00:00"}},schema=[1,2])
   value=_prediction_context_text(project,pending)
-  self.assertIn("m1",value);self.assertIn("2/2 resolved",value);self.assertIn("review pending",value)
+  self.assertIn("m1",value);self.assertIn("2026-",value);self.assertNotIn("resolved",value);self.assertNotIn("review pending",value)
 
  def test_prediction_context_does_not_call_marked_missing_unresolved(self):
   pending={"image_id":"x","human_verified":False,"status_color":"yellow","placed":24,"expected_landmarks":25,"missing_ids":[]}
   project=SimpleNamespace(load_landmarks=lambda _:{1:{"provenance":"machine","model_id":"m1","updated_at":"2026-09-29T12:00:00+00:00"}},schema=list(range(25)))
   value=_prediction_context_text(project,pending)
-  self.assertIn("25/25 resolved",value);self.assertNotIn("unresolved",value)
+  self.assertIn("m1",value);self.assertNotIn("unresolved",value);self.assertNotIn("resolved",value)
 
  def test_all_remaining_includes_partially_human_unresolved_image(self):
   rows=[{"image_id":"partial","excluded":False},{"image_id":"complete","excluded":False}]

@@ -7,7 +7,7 @@ from .io import atomic_json_write
 from dataclasses import dataclass, field
 from pathlib import Path
 from PIL import Image
-from .ai import ImagePrediction, InferenceRequest, LandmarkBackend
+from .ai import ImagePrediction, InferenceRequest, LandmarkBackend, LandmarkPrediction
 from .landmark_frames import restore_standardized_frame
 from .landmark_preparation import standardized_metadata, prepare_inference_metadata
 from .project_storage import Project, load_schema, schema_hash, landmark_model_schema_compatible
@@ -72,35 +72,58 @@ class LandmarkAIService:
         self._request_hashes[str(image_id)] = metadata.get("standardized_sha256")
         return InferenceRequest(str(image_id), path, schema, digest, width, height)
     @staticmethod
-    def _validate(prediction: ImagePrediction, request: InferenceRequest) -> None:
+    def _validated_prediction(prediction: ImagePrediction, request: InferenceRequest):
+        """Validate output and normalize only sub-pixel edge overflow.
+
+        RTMPose/MMPose may decode a point exactly on, or fractionally beyond,
+        the full-image bbox edge. Pixel storage is half-open [0, width) x
+        [0, height), so an overflow smaller than one pixel is clipped inward.
+        Larger excursions remain a real validation error and require review.
+        """
         if prediction.image_id != request.image_id: raise PredictionValidationError("prediction image_id does not match request")
         if prediction.schema_sha256 != request.schema_sha256: raise SchemaMismatchError("prediction schema hash does not match current landmark_schema.csv")
-        valid_ids = {int(row["id"]) for row in request.schema};seen = set()
+        valid_ids={int(row["id"]) for row in request.schema};seen=set();normalized=[];adjustments=[]
+        width=float(request.width);height=float(request.height)
+        max_x=math.nextafter(width,-math.inf);max_y=math.nextafter(height,-math.inf)
         for point in prediction.landmarks:
             if point.landmark_id not in valid_ids: raise PredictionValidationError(f"prediction landmark ID is not in schema: {point.landmark_id}")
             if point.landmark_id in seen: raise PredictionValidationError(f"duplicate prediction landmark ID: {point.landmark_id}")
             seen.add(point.landmark_id)
-            if not (math.isfinite(point.x) and math.isfinite(point.y)): raise PredictionValidationError(f"prediction coordinates must be finite for landmark {point.landmark_id}")
-            if not (0 <= point.x < request.width and 0 <= point.y < request.height): raise PredictionValidationError(f"prediction coordinates outside standardized image for landmark {point.landmark_id}")
-    def _write_run_manifest(self, request, prediction, skipped_ids):
+            x=float(point.x);y=float(point.y)
+            if not (math.isfinite(x) and math.isfinite(y)): raise PredictionValidationError(f"prediction coordinates must be finite for landmark {point.landmark_id}")
+            if not (-1.0 < x <= width and -1.0 < y <= height):
+                raise PredictionValidationError(f"prediction coordinates outside standardized image for landmark {point.landmark_id}")
+            nx=min(max(x,0.0),max_x);ny=min(max(y,0.0),max_y)
+            if nx!=x or ny!=y:
+                adjustments.append({"landmark_id":int(point.landmark_id),"raw_x":x,"raw_y":y,"stored_x":nx,"stored_y":ny,"reason":"subpixel_edge_clip"})
+            normalized.append(LandmarkPrediction(int(point.landmark_id),nx,ny,point.confidence))
+        return ImagePrediction(prediction.image_id,prediction.model_id,prediction.schema_sha256,tuple(normalized)),tuple(adjustments)
+    @staticmethod
+    def _validate(prediction: ImagePrediction, request: InferenceRequest) -> None:
+        LandmarkAIService._validated_prediction(prediction,request)
+    def _write_run_manifest(self, request, raw_prediction, stored_prediction, skipped_ids, adjustments=()):
         run_id=str(uuid.uuid4());path=self.project.data_root/"ai"/"predictions"/run_id/"manifest.json"
-        returned=[{"landmark_id":point.landmark_id,"x":point.x,"y":point.y,"confidence":point.confidence} for point in prediction.landmarks]
-        returned_ids={point["landmark_id"] for point in returned};required=[int(row["id"]) for row in request.schema]
+        returned=[{"landmark_id":point.landmark_id,"x":point.x,"y":point.y,"confidence":point.confidence} for point in raw_prediction.landmarks]
+        stored=[{"landmark_id":point.landmark_id,"x":point.x,"y":point.y,"confidence":point.confidence} for point in stored_prediction.landmarks]
+        returned_ids={point["landmark_id"] for point in stored};required=[int(row["id"]) for row in request.schema]
         digest=self._request_hashes.get(str(request.image_id)) or hashlib.sha256(request.standardized_image_path.read_bytes()).hexdigest()
-        manifest={"format_version":1,"prediction_run_id":run_id,"created_at":datetime.now(timezone.utc).isoformat(),"status":"success","image_id":request.image_id,"model_id":prediction.model_id,"schema_sha256":request.schema_sha256,"standardized_width":request.width,"standardized_height":request.height,"standardized_sha256":digest,"required_landmark_ids":required,"returned_predictions":returned,"omitted_landmark_ids":sorted(set(required)-returned_ids),"written_landmark_ids":sorted(returned_ids-set(skipped_ids)),"skipped_existing_human_ids":sorted(skipped_ids),"backend":self.backend.model_info()}
+        manifest={"format_version":1,"prediction_run_id":run_id,"created_at":datetime.now(timezone.utc).isoformat(),"status":"success","image_id":request.image_id,"model_id":raw_prediction.model_id,"schema_sha256":request.schema_sha256,"standardized_width":request.width,"standardized_height":request.height,"standardized_sha256":digest,"required_landmark_ids":required,"returned_predictions":returned,"omitted_landmark_ids":sorted(set(required)-returned_ids),"written_landmark_ids":sorted(returned_ids-set(skipped_ids)),"skipped_existing_human_ids":sorted(skipped_ids),"backend":self.backend.model_info()}
+        if adjustments:
+            manifest["stored_predictions"]=stored
+            manifest["coordinate_adjustments"]=list(adjustments)
         path.parent.mkdir(parents=True,exist_ok=False);atomic_json_write(path,manifest);return run_id,path
     def _persist_prediction(self, request, prediction):
         if prediction.model_id != self.backend.model_id: raise PredictionValidationError("prediction model_id does not match backend")
-        self._validate(prediction, request)
+        stored_prediction,adjustments=self._validated_prediction(prediction,request)
         existing=self.project.load_landmarks(request.image_id)
-        skipped_ids={point.landmark_id for point in prediction.landmarks if existing.get(point.landmark_id) and existing[point.landmark_id].get("provenance") in _HUMAN_PROVENANCE}
-        run_id,manifest_path=self._write_run_manifest(request,prediction,skipped_ids);saved=skipped=0
+        skipped_ids={point.landmark_id for point in stored_prediction.landmarks if existing.get(point.landmark_id) and existing[point.landmark_id].get("provenance") in _HUMAN_PROVENANCE}
+        run_id,manifest_path=self._write_run_manifest(request,prediction,stored_prediction,skipped_ids,adjustments);saved=skipped=0
         try:
             if hasattr(self.project, "save_machine_landmarks"):
-                payload=[{"landmark_id":point.landmark_id,"x":point.x,"y":point.y,"confidence":point.confidence} for point in prediction.landmarks]
+                payload=[{"landmark_id":point.landmark_id,"x":point.x,"y":point.y,"confidence":point.confidence} for point in stored_prediction.landmarks]
                 saved,skipped=self.project.save_machine_landmarks(request.image_id,payload,model_id=prediction.model_id,prediction_run_id=run_id)
             else:
-                for point in prediction.landmarks:
+                for point in stored_prediction.landmarks:
                     old=existing.get(point.landmark_id)
                     if old and old.get("provenance") in _HUMAN_PROVENANCE:
                         skipped+=1;continue

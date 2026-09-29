@@ -103,6 +103,17 @@ class LandmarkAIGateOneTests(unittest.TestCase):
     with self.assertRaises(PredictionValidationError): self.service(coordinate_overrides={1:coords}).predict_one(image_id)
     self.assertEqual(self.points(image_id),{})
 
+ def test_subpixel_edge_prediction_is_clipped_and_audited(self):
+  image_id=self.ids[0];result=self.service(coordinate_overrides={1:(100.0,40.0),2:(20.0,-0.25)}).predict_one(image_id)
+  rows=self.points(image_id)
+  self.assertGreaterEqual(rows[1]["x_standardized"],0);self.assertLess(rows[1]["x_standardized"],100)
+  self.assertEqual(rows[1]["y_standardized"],40.0)
+  self.assertEqual(rows[2]["x_standardized"],20.0);self.assertEqual(rows[2]["y_standardized"],0.0)
+  manifest=__import__("json").loads(result.manifest_path.read_text(encoding="utf8"))
+  self.assertEqual(2,len(manifest["coordinate_adjustments"]))
+  raw={row["landmark_id"]:row for row in manifest["returned_predictions"]}
+  self.assertEqual(100.0,raw[1]["x"]);self.assertEqual(-0.25,raw[2]["y"])
+
  def test_mock_prediction_survives_human_correction_through_runtime_path(self):
   image_id=self.ids[0];self.service().predict_one(image_id)
   with scoped_project(self.project):
