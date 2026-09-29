@@ -480,7 +480,7 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   image_id=self.ids[0];self.p.delete_landmark(image_id,1)
   with patch.object(self.p,'catalog_rows',side_effect=AssertionError('whole catalog scan')),patch('app.landmark_dataset.v2_human_final_eligible_image_ids',side_effect=AssertionError('whole trainer scan')):
    self.assertTrue(context.refresh_landmark_state(image_id));counts=context.update_landmark_counts(image_id)
-  self.assertEqual(1,counts['Remaining']);self.assertEqual(0,counts['New/changed'])
+  self.assertEqual(1,counts['Incomplete']);self.assertEqual(0,counts['New/changed'])
  def test_landmark_batch_counter_uses_cached_rows_without_status_scan(self):
   ids=self.ids[:3];self.p.set_ui_state(STATE_KEY,{'stage':'INITIAL_TRAINING','initial_image_ids':ids,'improvement_image_ids':[],'current_image_id':ids[0],'current_position':0})
   context=UIContext(self.p,'landmarks');context.refresh(force=True);shell=ProductionShell.__new__(ProductionShell);shell.context=context
