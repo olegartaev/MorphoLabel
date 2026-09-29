@@ -81,12 +81,13 @@ class ProjectSection(SectionView):
   self.shell.tip.bind(skip,"Go directly to landmarks while keeping existing crop data.")
 
   sample_rows=project_sample_rows(project,self.context.rows)
-  samples=ttk.LabelFrame(content,text="Samples",padding=8);samples.grid(row=2,column=0,columnspan=2,sticky="nsew")
+  lower=ttk.Frame(content);lower.grid(row=2,column=0,columnspan=2,sticky="nsew");lower.rowconfigure(0,weight=1);lower.columnconfigure(0,weight=3);lower.columnconfigure(1,weight=1)
+  samples=ttk.LabelFrame(lower,text="Samples",padding=8);samples.grid(row=0,column=0,sticky="nsew",padx=(0,7))
   samples.rowconfigure(1,weight=1);samples.columnconfigure(0,weight=1)
-  ttk.Label(samples,text=f"{len(sample_rows)} samples · {len(self.context.rows)} images · click a column title to sort",style="Muted.TLabel").grid(row=0,column=0,columnspan=2,sticky="w",pady=(0,5))
+  ttk.Label(samples,text=f"{len(sample_rows)} samples · click a column title to sort",style="Muted.TLabel").grid(row=0,column=0,columnspan=2,sticky="w",pady=(0,5))
   columns=("sample","images","calibrated");table=ttk.Treeview(samples,columns=columns,show="headings",selectmode="browse",height=11)
   labels={"sample":"Sample","images":"Images","calibrated":"Calibration"}
-  table.column("sample",width=420,stretch=True,anchor="w");table.column("images",width=90,stretch=False,anchor="e");table.column("calibrated",width=120,stretch=False,anchor="center")
+  table.column("sample",width=330,stretch=True,anchor="w");table.column("images",width=72,stretch=False,anchor="e");table.column("calibrated",width=96,stretch=False,anchor="center")
   table.tag_configure("alternate",background="#f6f8fa")
   state={"column":"sample","descending":False}
   def sort_by(column):
@@ -103,3 +104,11 @@ class ProjectSection(SectionView):
     table.heading(column,text=labels[column]+arrow,command=lambda c=column:sort_by(c))
   scroll=ttk.Scrollbar(samples,orient="vertical",command=table.yview);table.configure(yscrollcommand=scroll.set)
   table.grid(row=1,column=0,sticky="nsew");scroll.grid(row=1,column=1,sticky="ns");populate()
+
+  overview=ttk.LabelFrame(lower,text="Overview",padding=(14,10));overview.grid(row=0,column=1,sticky="nsew")
+  calibrated=sum(1 for item in sample_rows if item["calibrated"])
+  metrics=((str(len(self.context.rows)),"Images"),(str(len(sample_rows)),"Samples"),(f"{calibrated}/{len(sample_rows)}","Calibrated"),(str(len(project.schema)),"Landmarks"))
+  for index,(value,label) in enumerate(metrics):
+   block=ttk.Frame(overview);block.pack(fill="x",pady=(0,10 if index<len(metrics)-1 else 0))
+   ttk.Label(block,text=value,font=("Segoe UI",16,"bold")).pack(anchor="w")
+   ttk.Label(block,text=label,style="Muted.TLabel").pack(anchor="w")

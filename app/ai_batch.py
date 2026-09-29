@@ -101,7 +101,7 @@ def _progress_accepts_image_id(callback):
  except (TypeError,ValueError):return False
  return any(parameter.kind==inspect.Parameter.VAR_POSITIONAL for parameter in parameters) or sum(parameter.kind in {inspect.Parameter.POSITIONAL_ONLY,inspect.Parameter.POSITIONAL_OR_KEYWORD} for parameter in parameters)>=4
 
-def run_batch(project,batch_id_or_path,service,progress=None,status=None):
+def run_batch(project,batch_id_or_path,service,progress=None,status=None,retry_failures=False):
  data,path=load_batch(project,batch_id_or_path);started=time.perf_counter();progress_with_image_id=_progress_accepts_image_id(progress)
  if not data.get("prediction_started_at"):
   data["prediction_started_at"]=_now();atomic_json_write(path,data)
@@ -133,6 +133,18 @@ def run_batch(project,batch_id_or_path,service,progress=None,status=None):
     image_id=item["image_id"]
     try:result=service.predict_one(image_id);persisted(image_id,result,None)
     except Exception as exc:persisted(image_id,None,exc)
+ if retry_failures and data.get("failures"):
+  failed_ids=tuple(data["failures"])
+  if status:status(f"Retrying {len(failed_ids)} failed image"+("s" if len(failed_ids)!=1 else "")+" once…")
+  for image_id in failed_ids:
+   try:
+    result=service.predict_one(image_id)
+   except Exception as exc:
+    data["failures"][image_id]=str(exc)
+   else:
+    data["prediction_runs"][image_id]=result.prediction_run_id
+    data["failures"].pop(image_id,None)
+   atomic_json_write(path,data)
  data["completed_at"]=_now();atomic_json_write(path,data)
  return data,path
 def preflight_backend(project,backend,image_id):

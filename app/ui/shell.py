@@ -520,10 +520,11 @@ class ProductionShell(tk.Tk):
             "Human verified":"Images whose current landmark set has been explicitly confirmed by a person.",
             "Training set":"Verified, complete images currently eligible for model training. This is the full set used when training starts.",
             "New/changed":"Training-set images whose current Crop or landmarks are not yet represented by the active model lineage.",
-            "Incomplete":"Images that still have unresolved landmark positions or an incomplete landmark set.",
+            "Incomplete":"Images where one or more required landmarks are not yet placed or explicitly marked missing.",
         }
+        display_labels={"Incomplete":"Unresolved"}
         for key,value in self._section_counts().items():
-            label=ttk.Label(self.status_count_host,text=f"{key}: {value}",style="StatusChip.TLabel"); label.pack(side="left",padx=(0,2)); self.status_counts[key]=label
+            label=ttk.Label(self.status_count_host,text=f"{display_labels.get(key,key)}: {value}",style="StatusChip.TLabel"); label.pack(side="left",padx=(0,2)); self.status_counts[key]=label
             if key in status_help:self.tip.bind(label,status_help[key])
         self.status_previous=self.control_button(navigation,"‹ Previous",lambda:self._nav_image(-1),"Show the previous image.",style="Nav.TButton",width=16);self.status_previous.pack(side="left")
         self.status_index=ttk.Label(navigation,text="",padding=(8,0),font=("Segoe UI",9,"bold"));self.status_index.pack(side="left")
@@ -634,8 +635,9 @@ class ProductionShell(tk.Tk):
                 self.tip.bind(self.status_next,help_text)
             elif crop_confirm:self.tip.bind(self.status_next,'Confirm this Crop and continue to the next batch image.')
             else:self.tip.bind(self.status_next,'Show the next image. Press Enter when not typing.')
+        display_labels={"Incomplete":"Unresolved"}
         for key,label in getattr(self,"status_counts",{}).items():
-            label.configure(text=f"{key}: {self._section_counts().get(key,0)}")
+            label.configure(text=f"{display_labels.get(key,key)}: {self._section_counts().get(key,0)}")
 
     def _active_batch_summary(self):
         """Finite batch position from persisted IDs only; never the catalogue index."""

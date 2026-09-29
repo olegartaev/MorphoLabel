@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 
 from app.ui.project_section import sorted_project_samples
-from app.ui.landmarks_section import _prediction_context_text
+from app.ui.landmarks_section import _prediction_context_text, _remaining_prediction_ids
 
 
 class UISortingAndReviewContextTests(unittest.TestCase):
@@ -25,6 +25,30 @@ class UISortingAndReviewContextTests(unittest.TestCase):
   project=SimpleNamespace(load_landmarks=lambda _:{1:{"provenance":"machine","model_id":"m1","updated_at":"2026-09-29T12:00:00+00:00"}},schema=list(range(25)))
   value=_prediction_context_text(project,pending)
   self.assertIn("25/25 resolved",value);self.assertNotIn("unresolved",value)
+
+ def test_all_remaining_includes_partially_human_unresolved_image(self):
+  rows=[{"image_id":"partial","excluded":False},{"image_id":"complete","excluded":False}]
+  class P:
+   def annotation_status(self,image_id):
+    return {"verified":False,"complete":image_id=="complete"}
+  with __import__('unittest').mock.patch('app.ui.landmarks_section.landmark_frame_ready',return_value=True):
+   self.assertEqual(("partial",),_remaining_prediction_ids(P(),rows))
+
+ def test_landmarks_ui_reuses_established_overlay_and_has_no_reapply_button(self):
+  from pathlib import Path
+  root=Path(__file__).resolve().parents[1]
+  section=(root/"app"/"ui"/"landmarks_section.py").read_text(encoding="utf-8")
+  canvas=(root/"app"/"ui"/"landmark_canvas.py").read_text(encoding="utf-8")
+  shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
+  project=(root/"app"/"ui"/"project_section.py").read_text(encoding="utf-8")
+  self.assertNotIn("self.prediction_info=ttk.Label",section)
+  self.assertNotIn("predict_actions,'Reapply'",section)
+  self.assertIn("set_context_message",section)
+  self.assertIn('fill="#ffdf80",font=("Segoe UI",10,"bold")',canvas)
+  self.assertIn('"Incomplete":"Unresolved"',shell)
+  self.assertIn("def _repeatability_diagram",section)
+  self.assertIn('text="Overview"',project)
+
 
 
 if __name__=="__main__":unittest.main()

@@ -48,6 +48,7 @@ class LandmarkCanvasController:
         self._points = {}
         self.review_landmark_ids = set()
         self.review_message = ""
+        self.context_message = ""
         self.state = None
         self._state_fresh = False
         self.dragging = None
@@ -315,6 +316,11 @@ class LandmarkCanvasController:
                 tags=("landmark_overlay", f"landmark:{ident}"),
             )
             self._point_items[int(ident)] = (marker, label)
+        message_y=14
+        if self.context_message:
+            # Reuse the exact established Landmarks review-overlay style.
+            self.canvas.create_text(14,message_y,anchor="nw",text=self.context_message,fill="#ffdf80",font=("Segoe UI",10,"bold"),tags=("landmark_overlay","landmark_context_message"))
+            message_y+=22
         if self.review_landmark_ids:
             for ident in sorted(self.review_landmark_ids):
                 point=self._points.get(int(ident))
@@ -324,7 +330,12 @@ class LandmarkCanvasController:
                 radius=max(14,int(settings["size"])+9)
                 self.canvas.create_oval(x-radius,y-radius,x+radius,y+radius,outline="#ffb000",width=3,tags=("landmark_overlay","landmark_review_ring"))
             if self.review_message:
-                self.canvas.create_text(14,14,anchor="nw",text=self.review_message,fill="#ffdf80",font=("Segoe UI",10,"bold"),tags=("landmark_overlay","landmark_review_ring"))
+                self.canvas.create_text(14,message_y,anchor="nw",text=self.review_message,fill="#ffdf80",font=("Segoe UI",10,"bold"),tags=("landmark_overlay","landmark_review_ring"))
+
+    def set_context_message(self, message=""):
+        self.context_message=str(message or "")
+        if self.image:self._draw_overlays()
+        return self.context_message
 
     def set_review_landmarks(self, landmark_ids=(), message=""):
         self.review_landmark_ids={int(value) for value in landmark_ids if value is not None}

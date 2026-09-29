@@ -112,5 +112,18 @@ class AIBatchTests(unittest.TestCase):
   self.assertEqual(before['provenance'],after['provenance'])
   self.assertEqual(1,skipped)
 
+ def test_24_gui_retry_once_recovers_transient_failed_image(self):
+  data,path=create_batch(self.p,'v1',self.ids[0],1);image_id=data['selected_images'][0]['image_id']
+  class Flaky(FakeService):
+   def __init__(self,project):super().__init__(project);self.attempts=0
+   def predict_many(self,ids,progress=None,status=None):
+    self.attempts+=1
+    for ident in ids:progress(ident,None,RuntimeError('transient failure'))
+   def predict_one(self,ident):
+    self.attempts+=1
+    return super().predict_one(ident)
+  service=Flaky(self.p);done,_=run_batch(self.p,path,service,retry_failures=True)
+  self.assertIn(image_id,done['prediction_runs']);self.assertNotIn(image_id,done['failures']);self.assertEqual(2,service.attempts)
+
 if __name__=='__main__':unittest.main()
 

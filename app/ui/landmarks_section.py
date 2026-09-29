@@ -4,7 +4,7 @@ import tkinter as tk
 import threading, queue
 from app.landmark_training_workflow import available_training_parents, prepare_landmark_training, run_landmark_training, validation_metrics
 from app.landmark_ai_workflow import begin_improvement, control_set_summary, add_control_image, create_stage, stage_summary, workflow_current
-from app.ai_batch import BatchError, active_backend, create_batch, create_batch_for_ids, run_batch
+from app.ai_batch import BatchError, active_backend, create_batch_for_ids, run_batch
 from app.landmark_ai_review import (active_review_session, activate_review_session, complete_or_advance_review, create_review_session, pending_review_session, review_summary, create_review_session_for_ids)
 from app.landmark_ai_service import LandmarkAIService
 from app.active_learning import select_ai_worst_first
@@ -46,24 +46,28 @@ def _format_percent(value,digits=2):
  return f"{float(value):.{int(digits)}f}%"
 
 def _remaining_prediction_ids(project,rows):
- pending=set(project.pending_ai_landmark_image_ids())
+ """Every eligible image whose required landmark set is still unresolved.
+
+ Existing human points are intentionally included: save_machine_landmarks()
+ preserves them and fills only the remaining machine-editable positions.
+ """
  result=[]
  for item in rows:
   image_id=str(item['image_id'])
-  if item.get('excluded') or not landmark_frame_ready(project,image_id) or project.annotation_status(image_id).get('verified'):continue
-  points=project.load_landmarks(image_id)
-  if not points or image_id in pending:result.append(image_id)
+  if item.get('excluded') or not landmark_frame_ready(project,image_id):continue
+  status=project.annotation_status(image_id)
+  if status.get('verified') or status.get('complete'):continue
+  result.append(image_id)
  return tuple(result)
 
-def _reapply_unverified_prediction_ids(project,rows):
- # Reapply only current AI-origin work that still needs confirmation.
- candidates=set(project.pending_ai_landmark_image_ids())
- result=[]
- for item in rows:
-  image_id=str(item['image_id'])
-  if image_id not in candidates or item.get('excluded') or not landmark_frame_ready(project,image_id):continue
-  if project.load_landmarks(image_id):result.append(image_id)
- return tuple(result)
+def _next_remaining_prediction_ids(project,rows,start_image_id,count):
+ remaining=set(_remaining_prediction_ids(project,rows))
+ order=[str(item['image_id']) for item in rows if str(item['image_id']) in remaining]
+ if not order:return ()
+ start=str(start_image_id) if start_image_id is not None else None
+ if start in order:
+  position=order.index(start);order=order[position:]+order[:position]
+ return tuple(order[:max(0,int(count))])
 
 def _next_pending_ai_prediction_ids(project,rows,start_image_id,count):
  """Next current AI predictions that still need human confirmation."""
@@ -74,6 +78,22 @@ def _next_pending_ai_prediction_ids(project,rows,start_image_id,count):
  if start in order:
   position=order.index(start);order=order[position+1:]+order[:position+1]
  return tuple(image_id for image_id in order if image_id in pending)[:max(0,int(count))]
+
+def _repeatability_diagram(parent):
+ """Small text-independent visual: annotate the same specimen twice, independently."""
+ canvas=tk.Canvas(parent,width=430,height=96,bg="#fbfcfd",highlightthickness=1,highlightbackground="#d8dde3")
+ def fish(cx,cy,dots,accent):
+  canvas.create_oval(cx-66,cy-22,cx+54,cy+22,fill="#edf2f5",outline="#8b98a3",width=2)
+  canvas.create_polygon(cx+48,cy,cx+78,cy-22,cx+78,cy+22,fill="#edf2f5",outline="#8b98a3",width=2)
+  canvas.create_oval(cx-50,cy-6,cx-44,cy,fill="#66727d",outline="")
+  for x,y in dots:canvas.create_oval(cx+x-4,cy+y-4,cx+x+4,cy+y+4,fill=accent,outline="white",width=1)
+ left=[(-38,-4),(-16,-13),(8,-10),(28,2),(45,10)]
+ right=[(-36,-3),(-14,-12),(10,-8),(27,4),(44,8)]
+ fish(105,50,left,"#256d9e");fish(325,50,right,"#256d9e")
+ canvas.create_line(190,50,240,50,fill="#8b98a3",width=2,arrow="last")
+ canvas.create_oval(92,8,116,32,fill="#ffffff",outline="#c6cdd3");canvas.create_text(104,20,text="1",fill="#27313a",font=("Segoe UI",9,"bold"))
+ canvas.create_oval(312,8,336,32,fill="#ffffff",outline="#c6cdd3");canvas.create_text(324,20,text="2",fill="#27313a",font=("Segoe UI",9,"bold"))
+ return canvas
 
 def _prediction_failure_summary(batch):
  failures=list((batch.get('failures') or {}).values())
@@ -145,12 +165,10 @@ def _prediction_context_text(project,row):
 
 class LandmarksSection(SectionView):
  def render(self):
-  panel=self.frame(padding=(6,4));panel.pack(fill="both",expand=True);panel.rowconfigure(2,weight=1);panel.columnconfigure(0,weight=1)
+  panel=self.frame(padding=(6,4));panel.pack(fill="both",expand=True);panel.rowconfigure(1,weight=1);panel.columnconfigure(0,weight=1)
 
   controls=ttk.Frame(panel,style="Toolbar.TFrame");controls.grid(row=0,column=0,sticky="ew",pady=(0,4))
-  self.prediction_info=ttk.Label(panel,text="",style="StatusChip.TLabel",anchor="w")
-  self.prediction_info.grid(row=1,column=0,sticky="ew",pady=(0,4))
-  self.canvas_frame=ttk.Frame(panel);self.canvas_frame.grid(row=2,column=0,sticky="nsew")
+  self.canvas_frame=ttk.Frame(panel);self.canvas_frame.grid(row=1,column=0,sticky="nsew")
   # The image canvas must consume only the space left after the workflow dock.
   # A packed Tk Canvas otherwise propagates its requested height upward and can
   # push the second workflow-card row below the visible window.
@@ -167,7 +185,7 @@ class LandmarksSection(SectionView):
 
   batch=tk.IntVar(value=24);prediction=tk.IntVar(value=24)
   guide='Why: Landmarks turns specimen anatomy into comparable point coordinates for morphometric analysis.\n\n1. Repeatability\nOptional. Mark the same control images twice, with a break between passes, to estimate your own placement error.\n\n2. Training data\nMark every required point or choose Mark missing. Use Verify & Next to finish each image.\n\n3. Train model\nTrain from all human-verified images. Choose Bootstrap for the first model or a saved model as the parent.\n\n4. Apply & review\nApply the active model to new images. Review worst ranks only complete, unverified AI predictions so you can inspect the riskiest first. Verify & Next confirms each reviewed image. Complex QC is a separate post-verification audit: it scans only final human-verified landmark sets for structural and dataset-wide outliers.'
-  dock=self.workflow_dock(panel,help_title='Landmarks — quick guide',help_text=guide);dock.grid(row=3,column=0,sticky='ew',pady=(2,0))
+  dock=self.workflow_dock(panel,help_title='Landmarks — quick guide',help_text=guide);dock.grid(row=2,column=0,sticky='ew',pady=(2,0))
 
   repeat_run=current_run(self.context.project)
   if repeat_run is None:
@@ -205,20 +223,19 @@ class LandmarksSection(SectionView):
   self.button(three,'Train',lambda:self.preflight(None if parent_choice.get()=='Bootstrap / first model' else parent_choice.get()),'Check then run Landmark model training.',style='Primary.TButton').grid(row=2,column=0,columnspan=2,sticky='w',pady=(5,0))
   self.button(three,'Models…',lambda:self.shell.show_models('landmark'),'Compare and select saved Landmark models.').grid(row=2,column=2,sticky='e',padx=(5,0),pady=(5,0))
 
-  four=dock.add_card('4. Apply & review',icon='landmark_apply',help_text='Apply the active model. Use Review worst for complete unverified AI predictions; use Complex QC later for final human-verified data.')
-  ttk.Label(four,text='Batch').grid(row=0,column=0,sticky='w')
+  four=dock.add_card('4. Apply & review',icon='landmark_apply',help_text='Fill unresolved landmark sets with the active model, then review AI predictions before final data QC.')
+  ttk.Label(four,text='Next batch').grid(row=0,column=0,sticky='w')
   ttk.Spinbox(four,from_=1,to=500,textvariable=prediction,width=5).grid(row=0,column=1,sticky='w',padx=4)
   ttk.Label(four,text='images',style='Muted.TLabel').grid(row=0,column=2,sticky='w')
   predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,columnspan=3,sticky='ew',pady=(5,0))
   prediction_state='normal' if active else 'disabled'
-  for column in range(3):predict_actions.columnconfigure(column,weight=1,uniform='prediction_actions')
-  self.button(predict_actions,'Apply next',lambda:self.predict(False,prediction.get()),'Apply the active model to the next prediction batch.',state=prediction_state).grid(row=0,column=0,sticky='ew',padx=(0,2))
-  self.button(predict_actions,'All remaining',lambda:self.predict(True,prediction.get()),'Apply the active model to all unannotated images and reapply it to AI-predicted images that are not yet human-verified. Human corrections are preserved.',state=prediction_state).grid(row=0,column=1,sticky='ew',padx=2)
-  self.button(predict_actions,'Reapply',self.reapply_unverified,'Re-run the active model only on AI-predicted images still waiting for human confirmation. Human-placed/corrected landmarks are preserved.',state=prediction_state).grid(row=0,column=2,sticky='ew',padx=(2,0))
+  predict_actions.columnconfigure(0,weight=1,uniform='prediction_actions');predict_actions.columnconfigure(1,weight=1,uniform='prediction_actions')
+  self.button(predict_actions,'Apply next',lambda:self.predict(False,prediction.get()),'Fill the next unresolved eligible images. Existing human landmarks are preserved.',state=prediction_state).grid(row=0,column=0,sticky='ew',padx=(0,3))
+  self.button(predict_actions,'All remaining',lambda:self.predict(True,prediction.get()),'Fill every unresolved eligible image in the project. Existing human landmarks are preserved.',state=prediction_state).grid(row=0,column=1,sticky='ew',padx=(3,0))
   review_actions=ttk.Frame(four);review_actions.grid(row=2,column=0,columnspan=3,sticky='ew',pady=(5,0))
   review_actions.columnconfigure(0,weight=1,uniform='review_actions');review_actions.columnconfigure(1,weight=1,uniform='review_actions')
   self.button(
-   review_actions,'Unverified AI review',lambda:self.review_worst(prediction.get()),
+   review_actions,'Review AI predictions',lambda:self.review_worst(prediction.get()),
    'Before verification only: review complete AI landmark predictions that have not yet been human-verified, starting with the highest-risk cases.',
    icon='review_worst',style='ReviewAction.TButton'
   ).grid(row=0,column=0,sticky='ew',padx=(0,3))
@@ -230,13 +247,8 @@ class LandmarksSection(SectionView):
 
   self._refresh_prediction_info();self.canvas.redraw_cached();self._refresh_landmark_sidebar();self._refresh_action_buttons()
  def _refresh_prediction_info(self):
-  label=getattr(self,"prediction_info",None)
-  if not label or not label.winfo_exists():return
-  text=_prediction_context_text(self.context.project,self.context.current() or {})
-  if text:
-   label.configure(text=text);label.grid()
-  else:
-   label.configure(text="");label.grid_remove()
+  if not hasattr(self,"canvas"):return
+  self.canvas.set_context_message(_prediction_context_text(self.context.project,self.context.current() or {}))
  def _refresh_action_buttons(self,state=None):
   state=state or getattr(self.canvas,'state',None)
   selected=getattr(getattr(self.canvas,'choice',None),'get',lambda:None)()
@@ -465,11 +477,12 @@ class LandmarksSection(SectionView):
   dialog=tk.Toplevel(self.shell);dialog.title('Human repeatability');dialog.transient(self.shell);dialog.resizable(False,False)
   frame=ttk.Frame(dialog,padding=16);frame.pack(fill='both',expand=True);frame.columnconfigure(0,weight=1)
   ttk.Label(frame,text='Human repeatability',font=('Segoe UI',11,'bold')).grid(row=0,column=0,sticky='w')
-  ttk.Label(frame,text='Estimate your own landmark placement error from two independent annotations of the same images.',justify='left',wraplength=560).grid(row=1,column=0,sticky='w',pady=(5,2))
-  ttk.Label(frame,text='Complete Annotation 1, take a break, then do Annotation 2. The second pass never shows the first.',justify='left',wraplength=560,style='Muted.TLabel').grid(row=2,column=0,sticky='w',pady=(0,10))
+  diagram=_repeatability_diagram(frame);diagram.grid(row=1,column=0,sticky='ew',pady=(8,8))
+  ttk.Label(frame,text='Annotate the same images twice independently. The difference estimates your placement error.',justify='left',wraplength=560).grid(row=2,column=0,sticky='w',pady=(0,2))
+  ttk.Label(frame,text='Annotation 2 never shows Annotation 1.',justify='left',wraplength=560,style='Muted.TLabel').grid(row=3,column=0,sticky='w',pady=(0,10))
 
   available=len(available_control_image_ids(self.context.project));default=min(10,available);count=tk.IntVar(master=dialog,value=default or 0)
-  sample=ttk.LabelFrame(frame,text='Sample size',padding=(10,8));sample.grid(row=3,column=0,sticky='ew');sample.columnconfigure(3,weight=1)
+  sample=ttk.LabelFrame(frame,text='Sample size',padding=(10,8));sample.grid(row=4,column=0,sticky='ew');sample.columnconfigure(3,weight=1)
   ttk.Label(sample,text='Images').grid(row=0,column=0,sticky='w')
   spin=ttk.Spinbox(sample,from_=1,to=max(1,available),textvariable=count,width=5);spin.grid(row=0,column=1,sticky='w',padx=(8,10))
   sample_note=ttk.Label(sample,text='',style='Muted.TLabel');sample_note.grid(row=1,column=0,columnspan=4,sticky='w',pady=(5,0))
@@ -482,7 +495,7 @@ class LandmarksSection(SectionView):
   repair_button=self.button(repair,'Redo',lambda:None,'Replace only this image in Annotation 1 and Annotation 2; every other image stays unchanged.')
   repair_button.pack(side='left')
 
-  passes=ttk.Frame(frame);passes.grid(row=4,column=0,sticky='ew',pady=(10,0));passes.columnconfigure(0,weight=1);passes.columnconfigure(1,weight=1)
+  passes=ttk.Frame(frame);passes.grid(row=5,column=0,sticky='ew',pady=(10,0));passes.columnconfigure(0,weight=1);passes.columnconfigure(1,weight=1)
   one_box=ttk.LabelFrame(passes,text='Annotation 1',padding=(10,8));one_box.grid(row=0,column=0,sticky='nsew',padx=(0,5))
   two_box=ttk.LabelFrame(passes,text='Annotation 2',padding=(10,8));two_box.grid(row=0,column=1,sticky='nsew',padx=(5,0))
   one_status=ttk.Label(one_box,text='',style='Muted.TLabel');one_status.pack(anchor='w')
@@ -763,13 +776,20 @@ class LandmarksSection(SectionView):
    messagebox.showinfo('Prediction review','No unfinished prediction review is available.',parent=self.shell);return
   self._open_review_session(session['batch_id'])
  def _offer_prediction_review(self,batch):
+  completed=len(batch.get('prediction_runs',{}));failures=dict(batch.get('failures') or {})
+  if failures:
+   first_id=next(iter(failures));selected=next((item for item in batch.get('selected_images',()) if str(item.get('image_id'))==str(first_id)),{})
+   name=selected.get('display_name') or first_id;detail=_prediction_failure_summary(batch)
+   text=f"Predicted: {completed}. Could not predict: {len(failures)}.\n\nFirst failed image: {name}"
+   if detail:text+=f"\nReason: {detail}"
+   text+="\n\nIt remains Unresolved and has been opened. Check its Crop/image if needed, then run All remaining again. Successful predictions are already saved."
+   messagebox.showwarning('Landmark prediction',text,parent=self.shell)
+   if self.context.select_image(first_id):self.shell.render()
+   return
   try:session=create_review_session(self.context.project,batch)
   except ValueError:
-   completed=len(batch.get('prediction_runs',{}));failed=len(batch.get('failures',{}));detail=_prediction_failure_summary(batch)
-   text=f"Completed: {completed}; failed: {failed}."
-   if detail:text+=f"\n\n{detail}"
-   (messagebox.showerror if failed and not completed else messagebox.showinfo)('Landmark prediction',text,parent=self.shell);self.shell.render();return
-  count=len(session['image_ids']);answer=messagebox.askyesno('Landmark prediction',f"Completed: {len(batch['prediction_runs'])}; failed: {len(batch['failures'])}.\n\nReview this batch now?\nSuccessful predictions: {count}",parent=self.shell,default=messagebox.YES)
+   messagebox.showinfo('Landmark prediction',f"Predicted: {completed}. No prediction failures remain.",parent=self.shell);self.shell.render();return
+  count=len(session['image_ids']);answer=messagebox.askyesno('Landmark prediction',f"Predicted: {completed}.\n\nReview this batch now?\nReady for review: {count}",parent=self.shell,default=messagebox.YES)
   if answer:self._open_review_session(session['batch_id'])
   else:self.shell.render()
  def navigate_prediction_review(self,step):
@@ -860,21 +880,6 @@ class LandmarksSection(SectionView):
    create_review_session_for_ids(self.context.project,session_id,ids,kind='review_worst_v2',metadata=metadata)
    self._open_review_session(session_id)
   self.shell._run_background_task('Unverified AI review','Ranking complete unverified AI predictions…',worker,done)
- def reapply_unverified(self):
-  active=self.context.project.active_model_readonly('landmark') or {}
-  if not active:messagebox.showwarning('Landmark prediction','No active landmark model.',parent=self.shell);return
-  ids=_reapply_unverified_prediction_ids(self.context.project,self.context.rows)
-  if not ids:messagebox.showinfo('Landmark prediction','No already-annotated unverified images are available for reapplication.',parent=self.shell);return
-  self.predict(False,len(ids),explicit_ids=ids,title='Reapply unverified',selection_mode='reapply_unverified')
-
- def reapply_ai_pending(self):
-  active=self.context.project.active_model_readonly('landmark') or {}
-  if not active:messagebox.showwarning('Landmark prediction','No active landmark model.',parent=self.shell);return
-  pending=set(self.context.project.pending_ai_landmark_image_ids())
-  ids=[item['image_id'] for item in self.context.rows if item['image_id'] in pending and not item.get('excluded') and landmark_frame_ready(self.context.project,item['image_id'])]
-  if not ids:messagebox.showinfo('Landmark prediction','No AI-predicted landmark images are waiting for human confirmation.',parent=self.shell);return
-  self.predict(False,len(ids),explicit_ids=ids,title='Reapply AI pending',selection_mode='reapply_unverified')
-
  def predict(self,remaining,count,explicit_ids=None,title='Predict landmarks',selection_mode=None):
   row=self.context.current();active=self.context.project.active_model_readonly('landmark') or {}
   if not active or (explicit_ids is None and not row):messagebox.showwarning('Landmark prediction','No active landmark model.',parent=self.shell);return
@@ -884,23 +889,15 @@ class LandmarksSection(SectionView):
    try:
     model,backend=active_backend(self.context.project)
     if explicit_ids is not None:
-     data,path=create_batch_for_ids(self.context.project,model['model_id'],explicit_ids,selection_mode=selection_mode or 'explicit')
+     ids=explicit_ids;mode=selection_mode or 'explicit'
     elif remaining:
-     ids=_remaining_prediction_ids(self.context.project,self.context.rows)
-     if not ids:
-      events.put(('empty','No images need AI landmark prediction.'));return
-     data,path=create_batch_for_ids(self.context.project,model['model_id'],ids,selection_mode='mixed_remaining')
+     ids=_remaining_prediction_ids(self.context.project,self.context.rows);mode='all_unresolved'
     else:
-     try:
-      data,path=create_batch(self.context.project,model['model_id'],row['image_id'],int(count))
-     except BatchError as exc:
-      if 'no prospective unannotated candidates' not in str(exc):raise
-      ids=_next_pending_ai_prediction_ids(self.context.project,self.context.rows,row['image_id'],int(count))
-      if not ids:
-       events.put(('empty','No new unannotated images remain, and no AI-predicted images need reapplication.'));return
-      data,path=create_batch_for_ids(self.context.project,model['model_id'],ids,selection_mode='reapply_unverified')
-      events.put(('status',f'No new unannotated images remain. Reapplying the next {len(ids)} unverified AI images…'))
-    data,path=run_batch(self.context.project,path,LandmarkAIService(self.context.project,backend),progress=lambda done,total,name,image_id=None:events.put(('progress',done,total,name,image_id)),status=lambda text:events.put(('status',text)));events.put(('done',data))
+     ids=_next_remaining_prediction_ids(self.context.project,self.context.rows,row['image_id'],int(count));mode='next_unresolved'
+    if not ids:
+     events.put(('empty','No unresolved images need AI landmark prediction.'));return
+    data,path=create_batch_for_ids(self.context.project,model['model_id'],ids,selection_mode=mode)
+    data,path=run_batch(self.context.project,path,LandmarkAIService(self.context.project,backend),progress=lambda done,total,name,image_id=None:events.put(('progress',done,total,name,image_id)),status=lambda text:events.put(('status',text)),retry_failures=True);events.put(('done',data))
    except Exception as exc:events.put(('error',exc))
   threading.Thread(target=worker,daemon=True,name='production-landmark-predict').start()
   def poll():
