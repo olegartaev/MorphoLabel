@@ -144,9 +144,10 @@ class XRayCountsRuntime:
         if model["source"]:ttk.Label(scheme_box,text=f"Source: {model['source']}",style="Muted.TLabel").pack(anchor="w",pady=(2,0))
         self._render_reference(scheme_box,model,1200)
         actions=ttk.Frame(scheme_box);actions.pack(anchor="w",pady=(8,0))
-        self._button(actions,"Edit scheme...",self._edit_scheme,"Edit the active project copy. Earlier versions and annotations remain stored.").pack(side="left")
-        self._button(actions,"Choose / open scheme...",self._choose_scheme,"Choose a bundled scheme or open any compatible JSON scheme file.").pack(side="left",padx=(6,0))
-        self._button(actions,"New scheme...",self._new_scheme,"Create a new trait scheme from scratch.").pack(side="left",padx=(6,0))
+        self._button(actions,"Built-in schemes...",self._choose_scheme,"Choose a bundled starter scheme.",True).pack(side="left")
+        self._button(actions,"Open JSON...",self._open_scheme_json,"Open a scheme file directly.").pack(side="left",padx=(6,0))
+        self._button(actions,"Edit current...",self._edit_scheme,"Edit the active project scheme.").pack(side="left",padx=(6,0))
+        self._button(actions,"New blank...",self._new_scheme,"Create a new empty scheme.").pack(side="left",padx=(6,0))
         self._button(actions,"Save as JSON...",self._save_scheme_as,"Save the active scheme as the same portable JSON format used by bundled schemes.").pack(side="left",padx=(6,0))
 
         traits=ttk.LabelFrame(content,text="Traits",padding=8);traits.grid(row=2,column=0,columnspan=2,sticky="nsew")
@@ -248,8 +249,10 @@ class XRayCountsRuntime:
         ttk.Label(card,text=title,style="SectionTitle.TLabel").pack(anchor="w")
         ttk.Label(card,text=text,style="Muted.TLabel",wraplength=850).pack(anchor="w",pady=(2,9))
         actions=ttk.Frame(card);actions.pack(anchor="w")
-        self._button(actions,"Choose / open scheme...",self._choose_scheme,"Choose a bundled scheme or open a compatible JSON scheme file.",True).pack(side="left")
-        self._button(actions,"New scheme...",self._new_scheme,"Create a new scheme from scratch.").pack(side="left",padx=(6,0))
+        self._button(actions,"Built-in schemes...",self._choose_scheme,"Choose a bundled starter scheme.",True).pack(side="left")
+        self._button(actions,"Open JSON...",self._open_scheme_json,"Open a scheme file directly.").pack(side="left",padx=(6,0))
+        self._button(actions,"Edit current...",self._edit_scheme,"Edit the active project scheme.").pack(side="left",padx=(6,0))
+        self._button(actions,"New blank...",self._new_scheme,"Create a new empty scheme.").pack(side="left",padx=(6,0))
 
     def _apply_scheme_version(self,new_scheme,note,title):
         root=self.host.container.winfo_toplevel()
@@ -284,6 +287,14 @@ class XRayCountsRuntime:
         if not name:return
         dialog=TraitSchemeDialog(root,blank_scheme(name),{});self.host.container.wait_window(dialog)
         if dialog.result is not None:self._apply_scheme_version(dialog.result,"Created in MorphoLabel","New trait scheme")
+
+    def _open_scheme_json(self):
+        root=self.host.container.winfo_toplevel()
+        path=filedialog.askopenfilename(parent=root,title="Open trait scheme JSON",filetypes=(("MorphoLabel trait scheme","*.json"),("JSON files","*.json")))
+        if not path:return
+        try:scheme=load_scheme_file(path)
+        except Exception as exc:messagebox.showerror("Open JSON",f"Could not read this scheme.\n\n{exc}",parent=root);return
+        self._apply_scheme_version(scheme,f"Opened JSON scheme: {Path(path).name}","Open JSON")
 
     def _save_scheme_as(self):
         root=self.host.container.winfo_toplevel()

@@ -18,8 +18,8 @@ class XRayModuleContractTests(unittest.TestCase):
         source=(Path(__file__).resolve().parents[1]/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         for text in (
             "Project setup","Source X-rays","Trait scheme","Traits",
-            "Choose / open scheme...","New scheme...","Edit scheme...","Save as JSON...",
-            "Available schemes","Scheme details","Apply selected","Edit selected...",
+            "Built-in schemes...","Open JSON...","Edit current...","New blank...","Save as JSON...",
+            "Available schemes","Scheme details","Apply selected",
             "Bundled and saved JSON schemes use the same format.",
             "Existing annotations and earlier scheme versions will be kept.",
             "Active structure","Structure keys","Manual repeatability",
@@ -27,8 +27,7 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertIn("bundled_scheme_catalog()",source)
         self.assertIn("load_scheme_file(path)",source)
         self.assertIn("save_scheme_file(self.project.scheme,path)",source)
-        self.assertNotIn("Current scheme",source)
-        self.assertNotIn("Scheme file",source)
+        self.assertNotIn("Choose / open scheme...",source)
         self.assertNotIn("Apply preset",source)
 
     def test_scheme_library_builds_action_controls_before_initial_selection(self):
@@ -78,7 +77,8 @@ class XRayModuleContractTests(unittest.TestCase):
         for name in required:
             image=render_xray_icon(name,26);self.assertEqual((26,26),image.size);self.assertIsNotNone(image.getbbox(),name)
         source=(Path(__file__).resolve().parents[1]/"app/xray_icons.py").read_text(encoding="utf-8")
-        self.assertIn("_fish_skeleton",source)
+        self.assertIn("_vertebral_segment",source)
+        self.assertIn("Small, legible vertebral motif",source)
         self.assertIn('elif name=="xray_project"',source)
         self.assertIn('elif name=="xray_crops"',source)
         self.assertIn('elif name=="xray_structures"',source)

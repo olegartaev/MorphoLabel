@@ -115,6 +115,16 @@ def _export_arrow(d,p):
     d.polygon([(p(24),p(8)),(p(20.8),p(13)),(p(27.2),p(13))],fill=GREEN)
     _line(d,p,[(19,21),(19,25),(29,25),(29,21)],XRAY_DARK,1.1)
 
+def _vertebral_segment(d,p,cx=16,cy=16,scale=1.0,accent=BLUE,count=3):
+    """Small, legible vertebral motif for 24–30 px workflow icons."""
+    spacing=5.2*scale; start=cx-spacing*(count-1)/2
+    _line(d,p,[(start-2.2*scale,cy),(start+spacing*(count-1)+2.2*scale,cy)],XRAY_MID,.8)
+    for index in range(count):
+        x=start+spacing*index
+        d.ellipse((p(x-1.9*scale),p(cy-2.6*scale),p(x+1.9*scale),p(cy+2.6*scale)),fill=XRAY_FILM,outline=accent,width=max(1,p(1.1)))
+        _line(d,p,[(x,cy-2.2*scale),(x-.8*scale,cy-4.0*scale)],XRAY_MID,.65)
+        _line(d,p,[(x,cy+2.2*scale),(x+.8*scale,cy+4.0*scale)],XRAY_MID,.65)
+
 
 def render_xray_icon(name,size=XRAY_ICON_SIZE):
     if name not in XRAY_ICON_NAMES:raise KeyError(name)
@@ -122,36 +132,21 @@ def render_xray_icon(name,size=XRAY_ICON_SIZE):
 
     # Main workflow icons: different silhouette + shared visual language.
     if name=="xray":
-        # Module identity: a clean radiograph with the skeleton as the only focal object.
-        _film(d,p);_fish_skeleton(d,p,scale=.92,accent=BLUE)
+        _film(d,p);_vertebral_segment(d,p,cy=17,scale=.9,count=3)
     elif name=="xray_project":
-        # Project: folder sits behind a small radiograph; anatomy must remain visible.
-        _folder(d,p)
-        _film(d,p,11.0,9.0,30.0,27.5,accent=BLUE)
-        _fish_skeleton(d,p,cx=20.5,cy=18.2,scale=.52,accent=BLUE)
+        _folder(d,p);_vertebral_segment(d,p,cx=20,cy=18,scale=.75,count=3)
     elif name=="xray_crops":
-        # Crops: skeleton/radiograph plus the same corner-bracket language as MorphoLabel.
-        _film(d,p);_fish_skeleton(d,p,scale=.78,accent=XRAY_DARK)
-        _crop_brackets(d,p,BLUE)
+        _film(d,p);_crop_brackets(d,p,BLUE);_vertebral_segment(d,p,cy=17,scale=.72,count=3,accent=XRAY_DARK)
     elif name=="xray_structures":
-        # Structures: skeleton is central; coloured markers sit on anatomical positions.
-        _film(d,p);_fish_skeleton(d,p,scale=.80,accent=XRAY_DARK)
-        _node(d,p,12.4,16.0,fill=BLUE,outline="#ffffff",r=2.0,width=.7)
-        d.polygon([(p(19.0),p(12.5)),(p(21.5),p(17.7)),(p(16.5),p(17.7))],fill=GREEN,outline="#ffffff")
-        d.rectangle((p(22.8),p(15.0),p(27.0),p(19.2)),fill=ACCENT_ORANGE,outline="#ffffff",width=max(1,p(.7)))
+        _film(d,p);_vertebral_segment(d,p,cy=17,scale=.82,count=3,accent=XRAY_DARK)
+        _node(d,p,13,17,fill=BLUE,outline="#ffffff",r=2.0,width=.7);_node(d,p,22,17,fill=GREEN,outline="#ffffff",r=2.0,width=.7)
     elif name=="xray_results":
-        # Results: mini radiograph/skeleton feeding into a compact scientific table.
-        _film(d,p,2.5,4.0,15.2,27.5,accent=BLUE)
-        _fish_skeleton(d,p,cx=8.8,cy=16.2,scale=.34,accent=BLUE)
+        _film(d,p,2.5,4.0,15.2,27.5,accent=BLUE);_vertebral_segment(d,p,cx=8.5,cy=17,scale=.42,count=3)
         _table(d,p,14.5,6.5,29.5,26.0)
         _line(d,p,[(22.5,11.2),(27.0,11.2)],GREEN,1.1)
         _line(d,p,[(22.5,16.3),(27.0,16.3)],BLUE,1.1)
     elif name=="xray_export":
-        # Export: report containing the skeleton plus the shared outward-action cue.
-        _document(d,p,3.0,4.0,23.0,28.0)
-        _fish_skeleton(d,p,cx=12.0,cy=18.0,scale=.45,accent=BLUE,body=False)
-        _line(d,p,[(20.5,17.0),(29.0,17.0)],GREEN,2.4)
-        d.polygon([(p(30.0),p(17.0)),(p(25.2),p(13.5)),(p(25.2),p(20.5))],fill=GREEN)
+        _document(d,p,3.0,4.0,23.0,28.0);_vertebral_segment(d,p,cx=12,cy=18,scale=.42,count=3);_export_arrow(d,p)
 
     # Trait-method icons: scientific diagrams, compact and deliberately quieter.
     elif name in {"count","count_to","count_between","position"}:
