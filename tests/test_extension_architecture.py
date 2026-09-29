@@ -83,8 +83,7 @@ class ExtensionArchitectureTests(unittest.TestCase):
     def _shell(self):
         from app.ui.shell import ProductionShell
         with patch("app.extensions.discovery.entry_points",return_value=FakeEntryPoints()), \
-             patch("app.ui.shell.last_project",return_value=None), \
-             patch.object(ProductionShell,"_warm_ai_hardware",return_value=None):
+             patch("app.ui.shell.last_project",return_value=None):
             shell=ProductionShell()
         shell.withdraw()
         shell.module_registry=module_registry()
@@ -100,10 +99,10 @@ class ExtensionArchitectureTests(unittest.TestCase):
         registry = module_registry()
         self.assertEqual("Landmarks & measurements", registry.get("landmarks").display_name)
         self.assertEqual("builtin", registry.get("landmarks").source)
-        self.assertEqual("X-ray counts", registry.get("xray_counts").display_name)
+        self.assertEqual("X-ray traits", registry.get("xray_counts").display_name)
         self.assertEqual("Scales & meristics", registry.get("scales_meristics").display_name)
-        self.assertEqual(("landmarks",), tuple(item.module_id for item in registry.available()))
-        self.assertEqual(("xray_counts", "scales_meristics"), tuple(item.module_id for item in registry.planned()))
+        self.assertEqual(("landmarks", "xray_counts"), tuple(item.module_id for item in registry.available()))
+        self.assertEqual(("scales_meristics",), tuple(item.module_id for item in registry.planned()))
 
     def test_builtin_landmarks_factory_obeys_public_zero_argument_contract(self):
         spec = module_registry().get("landmarks")
@@ -146,8 +145,7 @@ class ExtensionArchitectureTests(unittest.TestCase):
             runtime=FakeRuntime(project.root)
             entries = FakeEntryPoints((FakeEntryPoint("external", provider=lambda: fake_module(factory=lambda: runtime)),))
             with patch("app.extensions.discovery.entry_points", return_value=entries), \
-                 patch("app.ui.shell.last_project", return_value=None), \
-                 patch.object(ProductionShell, "_warm_ai_hardware", return_value=None):
+                 patch("app.ui.shell.last_project", return_value=None):
                 shell = ProductionShell()
             try:
                 shell.withdraw()
@@ -235,7 +233,7 @@ class ExtensionArchitectureTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         hub = (root / "app/ui/module_hub.py").read_text(encoding="utf-8")
         shell = (root / "app/ui/shell.py").read_text(encoding="utf-8")
-        for name in ("Landmarks & measurements", "X-ray counts", "Scales & meristics"):
+        for name in ("Landmarks & measurements", "X-ray traits", "Scales & meristics"):
             self.assertNotIn(name, hub)
         self.assertIn("self.shell.open_module(key)", hub)
         self.assertIn("spec.factory()", shell)
@@ -262,8 +260,7 @@ class ExtensionArchitectureTests(unittest.TestCase):
             schema = root / "schema.csv"
             schema.write_text("id,abbr,name,role\n1,A,Alpha,BOTH\n", encoding="utf-8")
             project = Project.create("extension-smoke", source, root, schema, source_types=["png"], source_layout="direct")
-            with patch("app.ui.shell.last_project", return_value=None), \
-                 patch.object(ProductionShell, "_warm_ai_hardware", return_value=None):
+            with patch("app.ui.shell.last_project", return_value=None):
                 shell = ProductionShell()
             try:
                 shell.withdraw()

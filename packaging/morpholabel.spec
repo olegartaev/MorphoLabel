@@ -8,6 +8,7 @@ a = Analysis(
     binaries=[],
     datas=[
         (str(ROOT / "ai_runtime" / "rtmpose_runner.py"), "ai_runtime"),
+        (str(ROOT / "app" / "resources" / "xray_trait_schemes"), "app/resources/xray_trait_schemes"),
         (str(ROOT / "LICENSE"), "."),
         (str(ROOT / "NOTICE"), "."),
         (str(ROOT / "build" / "third_party" / "THIRD_PARTY_NOTICES.txt"), "."),
