@@ -4,6 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 import hashlib
 import json
+from pathlib import Path
 
 SCHEMA_FORMAT_VERSION = 1
 
@@ -21,6 +22,7 @@ METHOD_BY_ID = {item["id"]: item for item in TRAIT_METHODS}
 
 SHAPES = ("circle","triangle","diamond","square","cross","ring")
 MARKER_COLORS = ("#f28e2b","#22a06b","#3b82f6","#a855f7","#e15759","#7f8c8d")
+SCHEME_RESOURCE_DIR = Path(__file__).resolve().parent / "resources" / "xray_trait_schemes"
 
 def _structure(structure_id,name,*,repeated,hotkey,shape,color,description=""):
     return {
@@ -29,7 +31,14 @@ def _structure(structure_id,name,*,repeated,hotkey,shape,color,description=""):
     }
 
 def phoxinus_vertebral_preset():
-    """Built-in starter scheme reproducing the current legacy X-ray pipeline logic."""
+    """Load the bundled Phoxinus scheme from its versioned JSON resource."""
+    resource=SCHEME_RESOURCE_DIR / "phoxinus_vertebral_counts.json"
+    if resource.is_file():
+        return load_scheme_file(resource)
+    return _legacy_phoxinus_vertebral_preset()
+
+def _legacy_phoxinus_vertebral_preset():
+    """Compatibility fallback for source distributions missing resources."""
     structures=[
         _structure("vertebra","Vertebrae",repeated=True,hotkey="1",shape="circle",color="#f28e2b",
                    description="Repeated vertebral centres used as the ordered vertebral series."),
@@ -63,7 +72,7 @@ def phoxinus_vertebral_preset():
     }
 
 def preset_catalog():
-    """Small user-facing catalog; factories stay in code, projects store concrete scheme versions."""
+    """Return metadata for bundled, file-backed schemes."""
     scheme=phoxinus_vertebral_preset()
     return ({
         "id":scheme["scheme_id"],
@@ -73,13 +82,26 @@ def preset_catalog():
         "structure_count":len(scheme["structures"]),
         "trait_abbrs":tuple(item.get("abbr") or item["id"] for item in scheme["traits"]),
         "reference":deepcopy(scheme.get("reference") or {}),
+        "path":SCHEME_RESOURCE_DIR / "phoxinus_vertebral_counts.json",
     },)
 
 
 def preset_scheme(preset_id):
-    if str(preset_id)=="phoxinus_vertebral_counts":
-        return phoxinus_vertebral_preset()
+    for item in preset_catalog():
+        if str(preset_id)==item["id"]:
+            return load_scheme_file(item["path"])
     raise KeyError(f"Unknown X-ray trait preset: {preset_id}")
+
+def load_scheme_file(path):
+    """Read and normalize a JSON scheme from disk."""
+    with Path(path).open("r",encoding="utf-8") as handle:
+        return normalize_scheme(json.load(handle))
+
+def save_scheme_file(scheme,path):
+    """Write a normalized scheme as human-readable JSON."""
+    target=Path(path)
+    target.write_text(json.dumps(normalize_scheme(scheme),ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    return target
 
 
 def blank_scheme(name="Untitled X-ray trait scheme"):

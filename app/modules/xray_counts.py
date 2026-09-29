@@ -13,7 +13,7 @@ from app.xray_icons import XRAY_ICON_SIZE,TRAIT_ICON_SIZE,tk_xray_icon
 from app.xray_project import XRayProject
 from app.xray_schema import (
     MARKER_COLORS,METHOD_BY_ID,SHAPES,TRAIT_METHODS,blank_scheme,normalize_scheme,
-    phoxinus_vertebral_preset,preset_catalog,preset_scheme,scheme_change_impact,structure_usage,
+    load_scheme_file,phoxinus_vertebral_preset,preset_catalog,preset_scheme,save_scheme_file,scheme_change_impact,structure_usage,
 )
 
 STAGES=(
@@ -78,9 +78,9 @@ class XRayCountsRuntime:
             ttk.Label(words,text="No traits yet",style="ModuleTitle.TLabel").pack(anchor="w")
             ttk.Label(words,text="Apply a ready-made scheme or create traits from scratch. You can change the scheme later without deleting earlier project data.",style="Muted.TLabel",wraplength=850).pack(anchor="w",pady=(2,0))
             actions=ttk.Frame(empty);actions.pack(fill="x",pady=(14,0))
-            self._button(actions,"Apply preset…",self._apply_preset,"Choose a ready-made scientific trait scheme.",True,image=self._icon(actions,"xray_structures")).pack(side="left")
-            self._button(actions,"Create traits…",self._edit_scheme,"Create a custom trait scheme.").pack(side="left",padx=(7,0))
-            self._button(actions,"Import scheme…",self._import_scheme,"Import a MorphoLabel X-ray trait scheme from JSON.").pack(side="left",padx=(7,0))
+            self._button(actions,"Apply scheme…",self._apply_preset,"Choose a built-in trait scheme.",True,image=self._icon(actions,"xray_structures")).pack(side="left")
+            self._button(actions,"New scheme…",self._new_blank_scheme,"Create a new empty trait scheme.").pack(side="left",padx=(7,0))
+            self._button(actions,"Open scheme file…",self._import_scheme,"Open a JSON trait scheme from disk.").pack(side="left",padx=(7,0))
             ttk.Label(empty,text=f"Current scheme: {scheme['name']} · {len(self.project.schema_history())} saved version(s)",style="Muted.TLabel").pack(anchor="w",pady=(12,0))
             return
 
@@ -89,10 +89,11 @@ class XRayCountsRuntime:
         ttk.Label(top,image=self._icon(top,"xray_structures",34)).pack(side="left",padx=(0,8))
         ttk.Label(top,text=scheme["name"],style="ModuleTitle.TLabel").pack(side="left")
         actions=ttk.Frame(top);actions.pack(side="right")
-        self._button(actions,"Apply preset…",self._apply_preset,"Replace the active scheme with a ready-made scheme while keeping earlier project data.",image=self._icon(actions,"xray_project")).pack(side="left")
-        self._button(actions,"Edit traits…",self._edit_scheme,"Change traits safely; earlier versions and annotations stay stored.",True).pack(side="left",padx=(6,0))
-        self._button(actions,"New blank…",self._new_blank_scheme,"Start a new blank scheme version without deleting the old one.").pack(side="left",padx=(6,0))
-        self._button(actions,"Import…",self._import_scheme,"Import a MorphoLabel X-ray trait scheme from JSON.").pack(side="left",padx=(6,0))
+        self._button(actions,"Apply scheme…",self._apply_preset,"Apply a built-in scheme as a new version.",image=self._icon(actions,"xray_project")).pack(side="left")
+        self._button(actions,"Edit current scheme…",self._edit_scheme,"Edit the active scheme; earlier versions stay stored.",True).pack(side="left",padx=(6,0))
+        self._button(actions,"New scheme…",self._new_blank_scheme,"Start a new scheme version without deleting earlier data.").pack(side="left",padx=(6,0))
+        self._button(actions,"Open scheme file…",self._import_scheme,"Open a JSON scheme from disk.").pack(side="left",padx=(6,0))
+        self._button(actions,"Save current as…",self._save_scheme_as,"Save the active scheme to a JSON file.").pack(side="left",padx=(6,0))
         ttk.Label(info,text=scheme.get("description",""),style="Muted.TLabel",wraplength=920).pack(anchor="w",pady=(5,8))
         for trait in scheme["traits"]:
             method=METHOD_BY_ID[trait["method"]];row=ttk.Frame(info);row.pack(fill="x",pady=2)
@@ -180,8 +181,8 @@ class XRayCountsRuntime:
         ttk.Label(words,text=title,style="ModuleTitle.TLabel").pack(anchor="w")
         ttk.Label(words,text=text,style="Muted.TLabel",wraplength=850).pack(anchor="w",pady=(2,0))
         actions=ttk.Frame(card);actions.pack(anchor="w",pady=(12,0))
-        self._button(actions,"Apply preset…",self._apply_preset,"Choose a ready-made trait scheme.",True,image=self._icon(actions,"xray_structures")).pack(side="left")
-        self._button(actions,"Edit traits…",self._edit_scheme,"Create or edit a custom trait scheme.").pack(side="left",padx=(7,0))
+        self._button(actions,"Apply scheme…",self._apply_preset,"Choose a ready-made trait scheme.",True,image=self._icon(actions,"xray_structures")).pack(side="left")
+        self._button(actions,"Edit current scheme…",self._edit_scheme,"Create or edit the active trait scheme.").pack(side="left",padx=(7,0))
 
     def _apply_scheme_version(self,new_scheme,note,title):
         root=self.host.container.winfo_toplevel()
@@ -206,9 +207,11 @@ class XRayCountsRuntime:
     def _apply_preset(self):
         dialog=PresetDialog(self.host.container.winfo_toplevel());self.host.container.wait_window(dialog)
         if dialog.result is None:return
+        if dialog.result=="open":return self._import_scheme()
+        if dialog.result=="new":return self._new_blank_scheme()
         try:scheme=preset_scheme(dialog.result)
         except Exception as exc:messagebox.showerror("Apply preset",str(exc),parent=self.host.container.winfo_toplevel());return
-        self._apply_scheme_version(scheme,f"Applied preset: {scheme['name']}","Apply preset")
+        self._apply_scheme_version(scheme,f"Applied scheme: {scheme['name']}","Apply scheme")
 
     def _new_blank_scheme(self):
         root=self.host.container.winfo_toplevel()
@@ -218,19 +221,27 @@ class XRayCountsRuntime:
 
     def _import_scheme(self):
         root=self.host.container.winfo_toplevel()
-        path=filedialog.askopenfilename(parent=root,title="Import X-ray trait scheme",filetypes=(("JSON files","*.json"),("All files","*.*")))
+        path=filedialog.askopenfilename(parent=root,title="Open X-ray trait scheme",filetypes=(("JSON files","*.json"),("All files","*.*")))
         if not path:return
         try:
-            with open(path,"r",encoding="utf-8") as handle:scheme=normalize_scheme(json.load(handle))
-        except Exception as exc:messagebox.showerror("Import scheme",f"Could not read this trait scheme.\n\n{exc}",parent=root);return
-        self._apply_scheme_version(scheme,f"Imported trait scheme: {scheme['name']}","Import scheme")
+            scheme=load_scheme_file(path)
+        except Exception as exc:messagebox.showerror("Open scheme file",f"Could not read this trait scheme.\n\n{exc}",parent=root);return
+        self._apply_scheme_version(scheme,f"Opened scheme file: {scheme['name']}","Open scheme file")
+
+    def _save_scheme_as(self):
+        root=self.host.container.winfo_toplevel()
+        path=filedialog.asksaveasfilename(parent=root,title="Save current scheme as",defaultextension=".json",filetypes=(("JSON files","*.json"),("All files","*.*")))
+        if not path:return
+        try:save_scheme_file(self.project.scheme,path)
+        except Exception as exc:messagebox.showerror("Save scheme",f"Could not save this trait scheme.\n\n{exc}",parent=root);return
+        messagebox.showinfo("Save scheme",f"Scheme saved to:\n{path}",parent=root)
 
     def _new_project(self):
         root=self.host.container.winfo_toplevel();name=simpledialog.askstring("New X-ray project","Project name:",parent=root)
         if not name:return
         source=filedialog.askdirectory(parent=root,title="Folder with X-ray images");dest=filedialog.askdirectory(parent=root,title="Folder where the X-ray project will be created")
         if not source or not dest:return
-        choice=messagebox.askyesnocancel("Trait scheme","Start with the ready-made Phoxinus vertebral-count scheme?\n\nYes = recommended starter preset (7 traits)\nNo = blank custom scheme\n\nYou can apply a preset later at any time.",parent=root,default="yes")
+        choice=messagebox.askyesnocancel("Trait scheme","Start with the built-in Phoxinus vertebral-count scheme?\n\nYes = recommended starter scheme (7 traits)\nNo = blank custom scheme\n\nYou can apply another scheme later.",parent=root,default="yes")
         if choice is None:return
         try:self.project=XRayProject.create(name,source,dest,phoxinus_vertebral_preset() if choice else blank_scheme())
         except Exception as exc:messagebox.showerror("New X-ray project",str(exc),parent=root);return
@@ -251,17 +262,17 @@ class XRayCountsRuntime:
 
 class PresetDialog(tk.Toplevel):
     def __init__(self,parent):
-        super().__init__(parent);self.title("Apply trait preset");self.transient(parent);self.resizable(False,False);self.result=None
+        super().__init__(parent);self.title("Trait schemes");self.transient(parent);self.resizable(False,False);self.result=None
         self._catalog=preset_catalog();self.choice=tk.StringVar(value=self._catalog[0]["id"] if self._catalog else "");self._build();self.grab_set()
 
     def _build(self):
         outer=ttk.Frame(self,padding=16);outer.pack(fill="both",expand=True)
-        ttk.Label(outer,text="Ready-made trait schemes",style="PageTitle.TLabel").pack(anchor="w")
-        ttk.Label(outer,text="Choose a scientific starting scheme. Applying it creates a new project scheme version; earlier data stay stored.",style="PageSubtitle.TLabel",wraplength=680).pack(anchor="w",pady=(2,12))
+        ttk.Label(outer,text="Trait schemes",style="PageTitle.TLabel").pack(anchor="w")
+        ttk.Label(outer,text="Choose a scheme to apply. Earlier scheme versions and project data stay stored.",style="PageSubtitle.TLabel",wraplength=680).pack(anchor="w",pady=(2,12))
         for item in self._catalog:
             card=ttk.LabelFrame(outer,text=item["name"],padding=10);card.pack(fill="x",pady=(0,8))
             row=ttk.Frame(card);row.pack(fill="x")
-            ttk.Radiobutton(row,text="Use this preset",variable=self.choice,value=item["id"]).pack(side="left")
+            ttk.Radiobutton(row,text="Select scheme",variable=self.choice,value=item["id"]).pack(side="left")
             ttk.Label(row,text=f"{item['trait_count']} traits · {item['structure_count']} structure groups",style="Muted.TLabel").pack(side="right")
             ttk.Label(card,text=item["description"],style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(5,2))
             ttk.Label(card,text="Traits: "+", ".join(item["trait_abbrs"]),style="SectionTitle.TLabel").pack(anchor="w",pady=(3,0))
@@ -269,11 +280,16 @@ class PresetDialog(tk.Toplevel):
             if ref:ttk.Label(card,text=ref.get("label",""),style="Muted.TLabel").pack(anchor="w",pady=(4,0))
         actions=ttk.Frame(outer);actions.pack(fill="x",pady=(6,0))
         ttk.Button(actions,text="Cancel",command=self.destroy).pack(side="right")
-        ttk.Button(actions,text="Apply preset",command=self._apply,style="Primary.TButton").pack(side="right",padx=(0,6))
+        ttk.Button(actions,text="Apply",command=self._apply,style="Primary.TButton").pack(side="right",padx=(0,6))
+        ttk.Button(actions,text="Open file…",command=lambda:self._close_with("open")).pack(side="right",padx=(0,6))
+        ttk.Button(actions,text="New scheme…",command=lambda:self._close_with("new")).pack(side="right",padx=(0,6))
 
     def _apply(self):
         value=self.choice.get().strip()
         if not value:return
+        self.result=value;self.destroy()
+
+    def _close_with(self,value):
         self.result=value;self.destroy()
 
 

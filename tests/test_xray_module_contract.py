@@ -15,10 +15,12 @@ class XRayModuleContractTests(unittest.TestCase):
 
     def test_xray_ui_exposes_reusable_presets_and_clear_empty_states(self):
         source=open("app/modules/xray_counts.py",encoding="utf-8").read()
-        for text in ("Apply preset…","Create traits…","New blank…","Import…","No traits yet","No annotation structures","Nothing to export"):
+        for text in ("Apply scheme…","New scheme…","Open scheme file…","Edit current scheme…","Save current as…","No traits yet","No annotation structures","Nothing to export"):
             self.assertIn(text,source)
         self.assertIn("preset_catalog()",source)
         self.assertIn("preset_scheme(dialog.result)",source)
+        self.assertIn("load_scheme_file(path)",source)
+        self.assertIn("save_scheme_file(self.project.scheme,path)",source)
         self.assertIn("Existing project data and earlier scheme versions will be kept.",source)
         self.assertIn("active_marker.configure",source)
         self.assertIn("foreground=s.get(\"color\"",source)

@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from app.xray_project import XRayProject
-from app.xray_schema import METHOD_BY_ID, phoxinus_vertebral_preset, preset_catalog, preset_scheme, scheme_change_impact, scheme_hash
+from app.xray_schema import METHOD_BY_ID, load_scheme_file, phoxinus_vertebral_preset, preset_catalog, preset_scheme, scheme_change_impact, scheme_hash
 
 class XRaySchemaTests(unittest.TestCase):
     def test_phoxinus_preset_matches_legacy_trait_contract(self):
@@ -30,6 +30,11 @@ class XRaySchemaTests(unittest.TestCase):
         self.assertEqual(("tv","abdv","caudv","preDv","preAp","dac","formv"),item["trait_abbrs"])
         self.assertEqual(phoxinus_vertebral_preset(),preset_scheme(item["id"]))
         with self.assertRaises(KeyError):preset_scheme("missing")
+
+    def test_builtin_scheme_is_loaded_from_json_resource(self):
+        item=preset_catalog()[0]
+        self.assertTrue(str(item["path"]).endswith("phoxinus_vertebral_counts.json"))
+        self.assertEqual(phoxinus_vertebral_preset(),load_scheme_file(item["path"]))
 
     def test_scheme_change_reports_semantic_reannotation_without_deleting_data(self):
         old=phoxinus_vertebral_preset();new=phoxinus_vertebral_preset()
