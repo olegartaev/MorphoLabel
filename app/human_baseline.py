@@ -515,42 +515,56 @@ def finalize_repeatability_after_qc(project,run_id,issues,*,finished_with_warnin
  _,run=_run_by_id(project,run_id)
  return recompute_completed_run(project,run_id,backend=backend,include_model=include_model) if run.get('status')=='completed' else complete_run(project,run_id,backend=backend,include_model=include_model)
 
-def _evaluate_model_on_repeatability_run(project,run,model_id,*,backend=None,reference_pass=1):
- """Evaluate a model against the frozen human annotation from one repeatability pass.
+def _evaluate_model_on_repeatability_passes(project,run,model_id,*,backend=None,reference_passes=(1,)):
+ """Evaluate one model against one or both frozen blind human annotations.
 
- The comparison is intentionally independent of mutable canonical landmark status.
- The exact standardized image bytes used by the repeatability session must still
- match their stored SHA256/dimensions; otherwise the comparison is rejected.
+ When both passes are requested, the model is run once per image and its
+ discrepancy is pooled against both manual placements. This avoids choosing an
+ arbitrary human pass as the sole reference while keeping Human repeatability
+ itself as the separate pass-1 versus pass-2 quantity.
  """
  from .ai import InferenceRequest
  from .ai_batch import backend_for_model
  from .ai_hardware import auto_performance_config,is_cuda_oom
  from .landmark_ai_service import LandmarkAIService
  from .project_storage import landmark_model_schema_compatible
+ passes=tuple(dict.fromkeys(int(value) for value in reference_passes))
+ if not passes or any(value not in (1,2) for value in passes):raise ValueError("reference_passes must contain Annotation 1 and/or 2")
  if backend is None:_,backend=backend_for_model(project,model_id)
  if backend.model_id!=str(model_id):raise ValueError("repeatability evaluator prediction model_id does not match requested model")
  model=project.model_metadata(str(model_id))
  if not landmark_model_schema_compatible(project,model):raise ValueError("selected Landmark model is not compatible with the current landmark identities/order")
- sessions=pass_session_ids(run,int(reference_pass))
  image_ids=tuple(map(str,run.get("image_ids",())))
- if len(sessions)!=len(image_ids):raise ValueError(f"Human repeatability Annotation {reference_pass} does not contain the full saved image set")
- issue=repeatability_reference_frame_issue(project,run["run_id"],reference_pass)
- if issue:raise ValueError(repeatability_reference_frame_issue_message(issue))
+ sessions_by_pass={number:pass_session_ids(run,number) for number in passes}
+ for number,sessions in sessions_by_pass.items():
+  if len(sessions)!=len(image_ids):raise ValueError(f"Human repeatability Annotation {number} does not contain the full saved image set")
+  issue=repeatability_reference_frame_issue(project,run["run_id"],number)
+  if issue:raise ValueError(repeatability_reference_frame_issue_message(issue))
  current_identity=landmark_schema_identity(load_schema(project.schema_path));stored_identity=_run_schema_identity(project,run)
  if stored_identity and stored_identity!=current_identity:raise ValueError("Human repeatability landmark identities/order no longer match the project")
- schema=tuple(dict(row) for row in load_schema(project.schema_path));request_digest=str(backend.schema_sha256);records=[]
- for image_id,sid in zip(image_ids,sessions):
-  session=_load(project,sid)
-  if session.get("status")!="completed":raise ValueError(f"Human repeatability Annotation {reference_pass} is not completed for image {image_id}")
-  if str(session.get("image_id"))!=image_id:raise ValueError(f"Human repeatability session/image mismatch for {image_id}")
-  rel=session.get("standardized_relpath");path=project.data_root/rel
+ schema=tuple(dict(row) for row in load_schema(project.schema_path));request_digest=str(backend.schema_sha256);gm_ids=_gm_landmark_ids(project);records=[]
+ base_pass=passes[0]
+ for index,image_id in enumerate(image_ids):
+  base_session=_load(project,sessions_by_pass[base_pass][index])
+  if base_session.get("status")!="completed":raise ValueError(f"Human repeatability Annotation {base_pass} is not completed for image {image_id}")
+  if str(base_session.get("image_id"))!=image_id:raise ValueError(f"Human repeatability session/image mismatch for {image_id}")
+  rel=base_session.get("standardized_relpath");path=project.data_root/rel
   with Image.open(path) as image:width,height=image.width,image.height
-  points={int(point["landmark_id"]):point for point in session.get("repeat",())}
-  valid=[(ident,float(point["x"]),float(point["y"])) for ident,point in points.items() if point.get("state")=="present" and point.get("x") is not None and point.get("y") is not None and math.isfinite(float(point["x"])) and math.isfinite(float(point["y"]))]
-  if len(valid)<2:raise ValueError(f"Human repeatability Annotation {reference_pass} has too few comparable landmarks: {image_id}")
-  span=max(math.hypot(left[1]-right[1],left[2]-right[2]) for index,left in enumerate(valid) for right in valid[index+1:])
-  if span<=0:raise ValueError(f"Human repeatability Annotation {reference_pass} has zero reference span: {image_id}")
-  records.append((image_id,valid,span,InferenceRequest(image_id,path,schema,request_digest,width,height)))
+  points_by_pass={};base_digest=base_session.get("standardized_sha256")
+  for number in passes:
+   session=_load(project,sessions_by_pass[number][index])
+   if session.get("status")!="completed":raise ValueError(f"Human repeatability Annotation {number} is not completed for image {image_id}")
+   if str(session.get("image_id"))!=image_id:raise ValueError(f"Human repeatability session/image mismatch for {image_id}")
+   digest=session.get("standardized_sha256")
+   if base_digest and digest and digest!=base_digest:raise ValueError(f"Human repeatability annotations use different frozen images for {image_id}")
+   points={int(point["landmark_id"]):point for point in session.get("repeat",())}
+   valid=[(ident,float(point["x"]),float(point["y"])) for ident,point in points.items() if point.get("state")=="present" and point.get("x") is not None and point.get("y") is not None and math.isfinite(float(point["x"])) and math.isfinite(float(point["y"]))]
+   if len(valid)<2:raise ValueError(f"Human repeatability Annotation {number} has too few comparable landmarks: {image_id}")
+   points_by_pass[number]=valid
+  base_points={ident:{"state":"present","x":x,"y":y} for ident,x,y in points_by_pass[base_pass]}
+  span=_span(base_points)
+  if span<=0:raise ValueError(f"Human repeatability Annotation {base_pass} has zero reference span: {image_id}")
+  records.append((image_id,points_by_pass,span,InferenceRequest(image_id,path,schema,request_digest,width,height)))
  requests=[record[3] for record in records];predictions={}
  if hasattr(backend,"predict_readonly_many") and requests:
   performance=auto_performance_config(project,workload="control_evaluation",model=str(model_id),input_size=(requests[0].width,requests[0].height),training=False);size=max(1,int(performance["batch_size"]));offset=0
@@ -562,17 +576,25 @@ def _evaluate_model_on_repeatability_run(project,run,model_id,*,backend=None,ref
     raise
    predictions.update({prediction.image_id:prediction for prediction in returned});offset+=len(chunk)
  else:predictions={request.image_id:backend.predict(request) for request in requests}
- raw_errors=[];percent_errors=[];per_landmark={};evaluated=[]
- for image_id,valid,span,request in records:
+ raw_errors=[];percent_errors=[];gm_percent_errors=[];per_landmark={};evaluated=[]
+ for image_id,points_by_pass,span,request in records:
   prediction=predictions.get(image_id)
   if prediction is None:raise ValueError(f"model returned no prediction for Human repeatability image: {image_id}")
   LandmarkAIService._validate(prediction,request);returned={point.landmark_id:point for point in prediction.landmarks};image_raw=[];image_percent=[]
-  for landmark_id,x,y in valid:
-   predicted=returned.get(landmark_id)
-   if predicted is None:continue
-   error=math.hypot(predicted.x-x,predicted.y-y);percent=error/span*100;raw_errors.append(error);percent_errors.append(percent);per_landmark.setdefault(landmark_id,[]).append(percent);image_raw.append(error);image_percent.append(percent)
+  for number in passes:
+   for landmark_id,x,y in points_by_pass[number]:
+    predicted=returned.get(landmark_id)
+    if predicted is None:continue
+    error=math.hypot(predicted.x-x,predicted.y-y);percent=error/span*100;raw_errors.append(error);percent_errors.append(percent);per_landmark.setdefault(landmark_id,[]).append(percent);image_raw.append(error);image_percent.append(percent)
+    if int(landmark_id) in gm_ids:gm_percent_errors.append(percent)
   evaluated.append({"image_id":image_id,"reference_span_px":span,"n_landmarks":len(image_percent),"median_error_px":_pct(image_raw,.5),"median_error_percent":_pct(image_percent,.5)})
- return {"model_id":str(model_id),"schema_sha256":request_digest,"control_image_ids":tuple(item["image_id"] for item in evaluated),"reference_source":f"human_repeatability_annotation_{int(reference_pass)}","repeatability_run_id":run.get("run_id"),"per_image":evaluated,"per_landmark":{str(ident):{"landmark_id":ident,"median_error_percent":_pct(values,.5),"p90_error_percent":_pct(values,.9)} for ident,values in sorted(per_landmark.items())},"aggregate":{"n_images":len(evaluated),"n_comparable_landmarks":len(percent_errors),"median_error_percent":_pct(percent_errors,.5),"p90_error_percent":_pct(percent_errors,.9),"p95_error_percent":_pct(percent_errors,.95),"median_error_px":_pct(raw_errors,.5),"p90_error_px":_pct(raw_errors,.9),"p95_error_px":_pct(raw_errors,.95)}}
+ aggregate=_error_aggregate(percent_errors,len(evaluated));aggregate.update({"median_error_px":_pct(raw_errors,.5),"p90_error_px":_pct(raw_errors,.9),"p95_error_px":_pct(raw_errors,.95)})
+ source=f"human_repeatability_annotation_{passes[0]}" if len(passes)==1 else "human_repeatability_annotations_1_and_2"
+ return {"model_id":str(model_id),"schema_sha256":request_digest,"control_image_ids":tuple(item["image_id"] for item in evaluated),"reference_source":source,"repeatability_run_id":run.get("run_id"),"reference_passes":list(passes),"per_image":evaluated,"per_landmark":{str(ident):{"landmark_id":ident,"median_error_percent":_pct(values,.5),"p90_error_percent":_pct(values,.9)} for ident,values in sorted(per_landmark.items())},"aggregate":aggregate,"aggregate_by_scope":{"all":dict(aggregate),"gm":_error_aggregate(gm_percent_errors,len(evaluated))}}
+
+def _evaluate_model_on_repeatability_run(project,run,model_id,*,backend=None,reference_pass=1):
+ return _evaluate_model_on_repeatability_passes(project,run,model_id,backend=backend,reference_passes=(reference_pass,))
+
 
 def repeatability_reference_frame_issue(project,run_id,reference_pass=1):
  """Return the first saved reference-frame problem without running inference or changing project data."""
