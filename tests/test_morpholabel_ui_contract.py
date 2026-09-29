@@ -38,7 +38,6 @@ class _RowsProject:
 
 class MorphoLabelUIContractTests(unittest.TestCase):
     def test_package_and_identity_versions_are_consistent(self):
-        self.assertEqual("0.5.0-beta.8", PACKAGE_VERSION)
         self.assertEqual(PACKAGE_VERSION, APP_VERSION)
         root=Path(__file__).parents[1]
         self.assertIn(f"Development beta · {PACKAGE_VERSION}",(root/"README.md").read_text(encoding="utf-8"))
@@ -46,7 +45,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
 
     def test_identity_is_development_morpholabel_with_supplied_png(self):
         self.assertEqual("MorphoLabel",APP_NAME)
-        self.assertEqual("0.5.0-beta.8",APP_VERSION)
+        self.assertEqual(PACKAGE_VERSION,APP_VERSION)
         self.assertEqual("Development beta",APP_STATUS)
         self.assertEqual("morpholabel@olegartaev.com",CONTACT_EMAIL)
         self.assertEqual("https://github.com/olegartaev/MorphoLabel",PUBLIC_REPOSITORY)
