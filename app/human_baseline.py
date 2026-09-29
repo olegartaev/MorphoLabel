@@ -634,6 +634,20 @@ def evaluate_model_on_repeatability_run(project,run_id,model_id,*,backend=None,r
  _,run=_run_by_id(project,run_id)
  return _evaluate_model_on_repeatability_run(project,run,model_id,backend=backend,reference_pass=reference_pass)
 
+def evaluate_model_against_repeatability(project,run_id,model_id,*,backend=None):
+ """Compare AI with both blind human annotations on the same frozen images."""
+ _,run=_run_by_id(project,run_id)
+ if int(run.get("format_version",1))<2:raise ValueError("A two-pass Human repeatability run is required for symmetric AI comparison")
+ if not pass_progress(project,run,1).get("complete") or not pass_progress(project,run,2).get("complete"):raise ValueError("Finish both Human repeatability annotations before comparing model accuracy")
+ return _evaluate_model_on_repeatability_passes(project,run,model_id,backend=backend,reference_passes=(1,2))
+
+def human_repeatability_metrics(project,run_id):
+ """Recalculate current two-pass human repeatability read-only from saved sessions."""
+ _,run=_run_by_id(project,run_id)
+ if int(run.get("format_version",1))<2:raise ValueError("A two-pass Human repeatability run is required")
+ if not pass_progress(project,run,1).get("complete") or not pass_progress(project,run,2).get("complete"):raise ValueError("Finish both Human repeatability annotations first")
+ return _evaluate_pair(project,run,pass_session_ids(run,1),pass_session_ids(run,2))
+
 def evaluate_human_baseline(project,run,*,backend=None,include_model=True):
  if int(run.get("format_version",1))>=2:
   first,second=pass_session_ids(run,1),pass_session_ids(run,2)
