@@ -8,23 +8,27 @@ from app.human_baseline import _evaluate_pair, evaluate_model_against_repeatabil
 class LandmarkAccuracyTests(unittest.TestCase):
     def test_human_repeatability_has_gm_only_scope(self):
         project=SimpleNamespace(schema=[
-            {"id":1,"abbr":"GM","role":"BOTH"},
-            {"id":2,"abbr":"Tip","role":"CLASSICAL"},
+            {"id":1,"abbr":"GM1","role":"BOTH"},
+            {"id":2,"abbr":"GM2","role":"GM"},
+            {"id":3,"abbr":"Tip","role":"CLASSICAL"},
         ])
         run={"image_ids":["image"]}
         first={
             1:{"state":"present","x":0.0,"y":0.0},
             2:{"state":"present","x":100.0,"y":0.0},
+            3:{"state":"present","x":1000.0,"y":0.0},
         }
         second={
             1:{"state":"present","x":1.0,"y":0.0},
-            2:{"state":"present","x":130.0,"y":0.0},
+            2:{"state":"present","x":100.0,"y":0.0},
+            3:{"state":"present","x":1300.0,"y":0.0},
         }
         with patch("app.human_baseline._repeat_points",side_effect=[first,second]):
             result=_evaluate_pair(project,run,("a",),("b",))
-        self.assertEqual(2,result["aggregate"]["n_comparable_landmarks"])
-        self.assertEqual(1,result["aggregate_by_scope"]["gm"]["n_comparable_landmarks"])
-        self.assertLess(result["aggregate_by_scope"]["gm"]["p90_error_percent"],result["aggregate"]["p90_error_percent"])
+        self.assertEqual(3,result["aggregate"]["n_comparable_landmarks"])
+        self.assertEqual(2,result["aggregate_by_scope"]["gm"]["n_comparable_landmarks"])
+        self.assertAlmostEqual(1.0,result["per_landmark_by_scope"]["gm"]["1"]["p90_error_percent"],places=6)
+        self.assertGreater(result["aggregate"]["p90_error_percent"],result["aggregate_by_scope"]["gm"]["p90_error_percent"])
 
     def test_symmetric_model_comparison_uses_both_blind_annotations(self):
         run={"format_version":2,"run_id":"r","image_ids":["i"]}
