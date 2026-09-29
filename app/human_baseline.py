@@ -563,10 +563,10 @@ def _evaluate_model_on_repeatability_passes(project,run,model_id,*,backend=None,
    if len(valid)<2:raise ValueError(f"Human repeatability Annotation {number} has too few comparable landmarks: {image_id}")
    points_by_pass[number]=valid
   base_points={ident:{"state":"present","x":x,"y":y} for ident,x,y in points_by_pass[base_pass]}
-  span=_span(base_points)
+  span=_span(base_points);gm_span=_span({ident:point for ident,point in base_points.items() if int(ident) in gm_ids})
   if span<=0:raise ValueError(f"Human repeatability Annotation {base_pass} has zero reference span: {image_id}")
-  records.append((image_id,points_by_pass,span,InferenceRequest(image_id,path,schema,request_digest,width,height)))
- requests=[record[3] for record in records];predictions={}
+  records.append((image_id,points_by_pass,span,gm_span,InferenceRequest(image_id,path,schema,request_digest,width,height)))
+ requests=[record[4] for record in records];predictions={}
  if hasattr(backend,"predict_readonly_many") and requests:
   performance=auto_performance_config(project,workload="control_evaluation",model=str(model_id),input_size=(requests[0].width,requests[0].height),training=False);size=max(1,int(performance["batch_size"]));offset=0
   while offset<len(requests):
@@ -577,8 +577,8 @@ def _evaluate_model_on_repeatability_passes(project,run,model_id,*,backend=None,
     raise
    predictions.update({prediction.image_id:prediction for prediction in returned});offset+=len(chunk)
  else:predictions={request.image_id:backend.predict(request) for request in requests}
- raw_errors=[];percent_errors=[];gm_percent_errors=[];per_landmark={};evaluated=[]
- for image_id,points_by_pass,span,request in records:
+ raw_errors=[];percent_errors=[];gm_percent_errors=[];per_landmark={};gm_per_landmark={};evaluated=[]
+ for image_id,points_by_pass,span,gm_span,request in records:
   prediction=predictions.get(image_id)
   if prediction is None:raise ValueError(f"model returned no prediction for Human repeatability image: {image_id}")
   LandmarkAIService._validate(prediction,request);returned={point.landmark_id:point for point in prediction.landmarks};image_raw=[];image_percent=[]
@@ -587,11 +587,13 @@ def _evaluate_model_on_repeatability_passes(project,run,model_id,*,backend=None,
     predicted=returned.get(landmark_id)
     if predicted is None:continue
     error=math.hypot(predicted.x-x,predicted.y-y);percent=error/span*100;raw_errors.append(error);percent_errors.append(percent);per_landmark.setdefault(landmark_id,[]).append(percent);image_raw.append(error);image_percent.append(percent)
-    if int(landmark_id) in gm_ids:gm_percent_errors.append(percent)
-  evaluated.append({"image_id":image_id,"reference_span_px":span,"n_landmarks":len(image_percent),"median_error_px":_pct(image_raw,.5),"median_error_percent":_pct(image_percent,.5)})
+    if int(landmark_id) in gm_ids and gm_span>0:
+     gm_percent=error/gm_span*100;gm_percent_errors.append(gm_percent);gm_per_landmark.setdefault(landmark_id,[]).append(gm_percent)
+  evaluated.append({"image_id":image_id,"reference_span_px":span,"gm_reference_span_px":gm_span,"n_landmarks":len(image_percent),"median_error_px":_pct(image_raw,.5),"median_error_percent":_pct(image_percent,.5)})
  aggregate=_error_aggregate(percent_errors,len(evaluated));aggregate.update({"median_error_px":_pct(raw_errors,.5),"p90_error_px":_pct(raw_errors,.9),"p95_error_px":_pct(raw_errors,.95)})
  source=f"human_repeatability_annotation_{passes[0]}" if len(passes)==1 else "human_repeatability_annotations_1_and_2"
- return {"model_id":str(model_id),"schema_sha256":request_digest,"control_image_ids":tuple(item["image_id"] for item in evaluated),"reference_source":source,"repeatability_run_id":run.get("run_id"),"reference_passes":list(passes),"per_image":evaluated,"per_landmark":{str(ident):{"landmark_id":ident,"median_error_percent":_pct(values,.5),"p90_error_percent":_pct(values,.9)} for ident,values in sorted(per_landmark.items())},"aggregate":aggregate,"aggregate_by_scope":{"all":dict(aggregate),"gm":_error_aggregate(gm_percent_errors,len(evaluated))}}
+ per_all={str(ident):{"landmark_id":ident,"median_error_percent":_pct(values,.5),"p90_error_percent":_pct(values,.9)} for ident,values in sorted(per_landmark.items())};per_gm={str(ident):{"landmark_id":ident,"median_error_percent":_pct(values,.5),"p90_error_percent":_pct(values,.9)} for ident,values in sorted(gm_per_landmark.items())}
+ return {"model_id":str(model_id),"schema_sha256":request_digest,"control_image_ids":tuple(item["image_id"] for item in evaluated),"reference_source":source,"repeatability_run_id":run.get("run_id"),"reference_passes":list(passes),"per_image":evaluated,"per_landmark":per_all,"per_landmark_by_scope":{"all":dict(per_all),"gm":per_gm},"aggregate":aggregate,"aggregate_by_scope":{"all":dict(aggregate),"gm":_error_aggregate(gm_percent_errors,len(evaluated))}}
 
 def _evaluate_model_on_repeatability_run(project,run,model_id,*,backend=None,reference_pass=1):
  return _evaluate_model_on_repeatability_passes(project,run,model_id,backend=backend,reference_passes=(reference_pass,))
