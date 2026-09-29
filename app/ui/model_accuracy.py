@@ -38,6 +38,9 @@ class LandmarkAccuracyDialog(tk.Toplevel):
         self.human = human
         self.model = model
         self.scope = tk.StringVar(value="all")
+        self.sort_column = "ai"
+        self.sort_descending = True
+        self._accuracy_rows = []
         self.title(f"Landmark accuracy — {self.model_id}")
         self.transient(shell)
         self.geometry("980x650")
@@ -79,8 +82,9 @@ class LandmarkAccuracyDialog(tk.Toplevel):
         self.table=ttk.Treeview(table_frame,columns=columns,show="headings",selectmode="browse")
         labels={"abbr":"Landmark","name":"Name","role":"Use","human":"Human P90","ai":"AI ↔ human P90","ratio":"Relative"}
         widths={"abbr":90,"name":260,"role":90,"human":110,"ai":135,"ratio":90}
+        self._column_labels=labels
         for col in columns:
-            self.table.heading(col,text=labels[col])
+            self.table.heading(col,text=labels[col],command=lambda key=col:self.sort_by(key))
             self.table.column(col,width=widths[col],anchor="w",stretch=col=="name")
         scroll=ttk.Scrollbar(table_frame,orient="vertical",command=self.table.yview)
         self.table.configure(yscrollcommand=scroll.set)
@@ -93,6 +97,31 @@ class LandmarkAccuracyDialog(tk.Toplevel):
         ttk.Button(actions,text="Close",command=self.destroy,style="Primary.TButton").pack(side="right")
         self.refresh()
         center(shell,self)
+
+    def sort_by(self,column):
+        if self.sort_column==column:
+            self.sort_descending=not self.sort_descending
+        else:
+            self.sort_column=column
+            self.sort_descending=column in {"human","ai","ratio"}
+        self._render_sorted_rows()
+
+    def _render_sorted_rows(self):
+        columns=("abbr","name","role","human","ai","ratio")
+        index={"abbr":1,"name":2,"role":3,"human":4,"ai":5,"ratio":6}
+        numeric={"human","ai","ratio"}
+        def key(item):
+            value=item[index[self.sort_column]]
+            if self.sort_column in numeric:return float("-inf") if value is None else float(value)
+            return str(value or "").casefold()
+        rows=sorted(self._accuracy_rows,key=key,reverse=self.sort_descending)
+        self.table.delete(*self.table.get_children())
+        for ident,abbr,name,role,h,a,ratio in rows:
+            use_label={"GM":"GM","CLASSICAL":"Classical","BOTH":"Both"}.get(role,role)
+            self.table.insert("", "end", values=(abbr,name,use_label,_fmt(h),_fmt(a),_ratio_text(ratio)))
+        for column in columns:
+            arrow=" ↓" if column==self.sort_column and self.sort_descending else " ↑" if column==self.sort_column else ""
+            self.table.heading(column,text=self._column_labels[column]+arrow,command=lambda key=column:self.sort_by(key))
 
     def _card(self,column,title,subtitle):
         box=ttk.LabelFrame(self.cards,text=title,padding=(12,8));box.grid(row=0,column=column,sticky="ew",padx=(0 if column==0 else 5,0))
@@ -125,10 +154,8 @@ class LandmarkAccuracyDialog(tk.Toplevel):
             h=human_rows.get(ident,{}).get("p90_error_percent")
             a=ai_rows.get(ident,{}).get("p90_error_percent")
             rows.append((ident,schema_row.get("abbr") or str(ident),schema_row.get("name") or "",role,h,a,_ratio(h,a)))
-        rows.sort(key=lambda item:(-(item[5] if item[5] is not None else -1),item[0]))
-        for ident,abbr,name,role,h,a,ratio in rows:
-            use_label={"GM":"GM","CLASSICAL":"Classical","BOTH":"Both"}.get(role,role)
-            self.table.insert("", "end", values=(abbr,name,use_label,_fmt(h),_fmt(a),_ratio_text(ratio)))
+        self._accuracy_rows=rows
+        self._render_sorted_rows()
         if scope=="gm":
             gm_count=sum(str(row.get("role") or "BOTH").upper() in {"GM","BOTH"} for row in self.project.schema)
             total=len(self.project.schema)

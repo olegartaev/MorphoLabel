@@ -112,7 +112,7 @@ class ProductionShell(tk.Tk):
         self.style.configure("Muted.TLabel", foreground="#66727d")
         self.style.configure("StatusChip.TLabel", padding=(5,2), foreground="#39434c")
         self.root=ttk.Frame(self,padding=(8,6)); self.root.pack(fill="both",expand=True)
-        self.tip=Tooltip(self); self.photo_panel=None; self._selection_token=0; self.bind("<Return>", self._enter_next)
+        self.tip=Tooltip(self); self.photo_panel=None; self._selection_token=0; self._align_selected_top_once=False; self.bind("<Return>", self._enter_next)
         requested_label=(str(requested_project.root) if requested_project is not None else str(remembered_path or "none"))
         log("GLOBAL", "production_shell_start", "START", detail=f"project={requested_label}")
         self.render()
@@ -546,6 +546,11 @@ class ProductionShell(tk.Tk):
             self.photo_panel=PhotoListPanel(parent,self.context,self._selected_image,self.tip,on_exclusion=self._photo_exclusion_changed)
         self.photo_panel.pack(fill="both",expand=True)
         self.photo_panel.refresh()
+        if self._align_selected_top_once:
+            target=getattr(self.photo_panel,"photos",self.photo_panel)
+            sync=getattr(target,"sync_current",None)
+            if sync:sync(reveal=True,align_top=True)
+            self._align_selected_top_once=False
 
     def _restore_sidebar_sash(self, attempt=0):
         panes=getattr(self,"workspace_panes",None)
@@ -694,6 +699,7 @@ class ProductionShell(tk.Tk):
         if not self.context.project and key != "project": return
         if key == "crop" and not self.context.crop_enabled(): key="landmarks"
         image_id=(self.context.current() or {}).get("image_id")
+        self._align_selected_top_once=(key!=self.context.section)
         self.context.section=key
         if image_id:self.context.select_image(image_id)
         self.render()

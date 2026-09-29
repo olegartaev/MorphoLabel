@@ -20,11 +20,13 @@ class PhotoListCanvas(tk.Canvas):
  def selection_clear(self,_first,_last=None):self._selection=();self._draw()
  def selection_set(self,index,_last=None):
   if self.rows:self._selection=(max(0,min(int(index),len(self.rows)-1)),);self._draw()
- def see(self,index):
+ def see(self,index,align_top=False):
   if not self.rows:return
-  index=max(0,min(int(index),len(self.rows)-1));top=self.canvasy(0);bottom=top+self.winfo_height();y=index*self.row_height
-  if y<top:super().yview_moveto(y/max(1,len(self.rows)*self.row_height))
-  elif y+self.row_height>bottom:super().yview_moveto(max(0,y+self.row_height-self.winfo_height())/max(1,len(self.rows)*self.row_height))
+  index=max(0,min(int(index),len(self.rows)-1));content=max(1,len(self.rows)*self.row_height);height=max(1,self.winfo_height());top=self.canvasy(0);bottom=top+height;y=index*self.row_height
+  if align_top:
+   target=min(y,max(0,content-height));super().yview_moveto(target/content)
+  elif y<top:super().yview_moveto(y/content)
+  elif y+self.row_height>bottom:super().yview_moveto(max(0,y+self.row_height-height)/content)
   self._draw();self._notify_scroll()
  def yview(self,*args):
   result=super().yview(*args);self._draw();self._notify_scroll();return result

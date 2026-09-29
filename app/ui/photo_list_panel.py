@@ -72,13 +72,13 @@ class PhotoListPanel(ttk.Frame):
   if yview is not None:self.canvas.yview_moveto(yview)
   elif self.context.selected in self.visible_indices:self.canvas.see(self.visible_indices.index(self.context.selected))
   row=self.context.current() or {};excluded=bool(row.get('excluded'));self.exclude_button.configure(text='Restore' if excluded else 'Exclude',image=self._action_icon('restore' if excluded else 'exclude'),state='normal' if row else 'disabled')
- def sync_current(self,reveal=True):
+ def sync_current(self,reveal=True,align_top=False):
   # Refresh first. Restoring the old y-position after see() could hide the
   # selected image again when another workflow changed the current specimen.
   self.refresh(preserve_scroll=not reveal)
   if self.context.selected in self.visible_indices:
    visible=self.visible_indices.index(self.context.selected);self.canvas.selection_set(visible)
-   if reveal:self.canvas.see(visible)
+   if reveal:self.canvas.see(visible,align_top=align_top)
  def _selected(self,_event=None):
   selection=self.canvas.curselection()
   if selection and 0<=selection[0]<len(self.visible_indices):self.context.selected=self.visible_indices[selection[0]];self._notify(True);self.refresh(preserve_scroll=True)

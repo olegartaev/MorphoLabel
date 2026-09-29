@@ -56,7 +56,8 @@ def _remaining_prediction_ids(project,rows):
  return tuple(result)
 
 def _reapply_unverified_prediction_ids(project,rows):
- candidates=set(project.unverified_landmark_image_ids())
+ # Reapply only current AI-origin work that still needs confirmation.
+ candidates=set(project.pending_ai_landmark_image_ids())
  result=[]
  for item in rows:
   image_id=str(item['image_id'])
@@ -123,12 +124,33 @@ def _repeatability_pass_controls(run,p1,p2,available):
   'two_enabled':bool(run) and p1_complete and (p1_checked or p2_exists),
  }
 
+def _prediction_context_text(project,row):
+ if not row or row.get("human_verified") or row.get("status_color")=="green":return ""
+ points=project.load_landmarks(str(row.get("image_id")))
+ ai=[point for point in points.values() if point.get("provenance")=="machine" or point.get("model_id") or point.get("prediction_run_id")]
+ if not ai:return ""
+ models=sorted({str(point.get("model_id")) for point in ai if point.get("model_id")})
+ model=", ".join(models) if models else "AI model"
+ stamps=sorted(str(point.get("updated_at")) for point in ai if point.get("updated_at"))
+ when=""
+ if stamps:
+  try:
+   from datetime import datetime
+   dt=datetime.fromisoformat(stamps[-1].replace("Z","+00:00")).astimezone()
+   when=dt.strftime("%Y-%m-%d %H:%M")
+  except ValueError:when=stamps[-1][:16].replace("T"," ")
+ expected=int(row.get("expected_landmarks") or len(project.schema));placed=int(row.get("placed") or 0);remaining=max(0,expected-placed)
+ state=f"{placed}/{expected} landmarks · review pending" if not remaining else f"{placed}/{expected} landmarks · {remaining} unresolved"
+ return "AI prediction · "+model+(f" · {when}" if when else "")+" · "+state
+
 class LandmarksSection(SectionView):
  def render(self):
-  panel=self.frame(padding=(6,4));panel.pack(fill="both",expand=True);panel.rowconfigure(1,weight=1);panel.columnconfigure(0,weight=1)
+  panel=self.frame(padding=(6,4));panel.pack(fill="both",expand=True);panel.rowconfigure(2,weight=1);panel.columnconfigure(0,weight=1)
 
   controls=ttk.Frame(panel,style="Toolbar.TFrame");controls.grid(row=0,column=0,sticky="ew",pady=(0,4))
-  self.canvas_frame=ttk.Frame(panel);self.canvas_frame.grid(row=1,column=0,sticky="nsew")
+  self.prediction_info=ttk.Label(panel,text="",style="StatusChip.TLabel",anchor="w")
+  self.prediction_info.grid(row=1,column=0,sticky="ew",pady=(0,4))
+  self.canvas_frame=ttk.Frame(panel);self.canvas_frame.grid(row=2,column=0,sticky="nsew")
   # The image canvas must consume only the space left after the workflow dock.
   # A packed Tk Canvas otherwise propagates its requested height upward and can
   # push the second workflow-card row below the visible window.
@@ -145,7 +167,7 @@ class LandmarksSection(SectionView):
 
   batch=tk.IntVar(value=24);prediction=tk.IntVar(value=24)
   guide='Why: Landmarks turns specimen anatomy into comparable point coordinates for morphometric analysis.\n\n1. Repeatability\nOptional. Mark the same control images twice, with a break between passes, to estimate your own placement error.\n\n2. Training data\nMark every required point or choose Mark missing. Use Verify & Next to finish each image.\n\n3. Train model\nTrain from all human-verified images. Choose Bootstrap for the first model or a saved model as the parent.\n\n4. Apply & review\nApply the active model to new images. Review worst ranks only complete, unverified AI predictions so you can inspect the riskiest first. Verify & Next confirms each reviewed image. Complex QC is a separate post-verification audit: it scans only final human-verified landmark sets for structural and dataset-wide outliers.'
-  dock=self.workflow_dock(panel,help_title='Landmarks — quick guide',help_text=guide);dock.grid(row=2,column=0,sticky='ew',pady=(2,0))
+  dock=self.workflow_dock(panel,help_title='Landmarks — quick guide',help_text=guide);dock.grid(row=3,column=0,sticky='ew',pady=(2,0))
 
   repeat_run=current_run(self.context.project)
   if repeat_run is None:
@@ -192,7 +214,7 @@ class LandmarksSection(SectionView):
   for column in range(3):predict_actions.columnconfigure(column,weight=1,uniform='prediction_actions')
   self.button(predict_actions,'Apply next',lambda:self.predict(False,prediction.get()),'Apply the active model to the next prediction batch.',state=prediction_state).grid(row=0,column=0,sticky='ew',padx=(0,2))
   self.button(predict_actions,'All remaining',lambda:self.predict(True,prediction.get()),'Apply the active model to all unannotated images and reapply it to AI-predicted images that are not yet human-verified. Human corrections are preserved.',state=prediction_state).grid(row=0,column=1,sticky='ew',padx=2)
-  self.button(predict_actions,'Reapply',self.reapply_unverified,'Re-run the active model on already-annotated images that are not human-verified. Human-placed/corrected landmarks are preserved.',state=prediction_state).grid(row=0,column=2,sticky='ew',padx=(2,0))
+  self.button(predict_actions,'Reapply',self.reapply_unverified,'Re-run the active model only on AI-predicted images still waiting for human confirmation. Human-placed/corrected landmarks are preserved.',state=prediction_state).grid(row=0,column=2,sticky='ew',padx=(2,0))
   review_actions=ttk.Frame(four);review_actions.grid(row=2,column=0,columnspan=3,sticky='ew',pady=(5,0))
   review_actions.columnconfigure(0,weight=1,uniform='review_actions');review_actions.columnconfigure(1,weight=1,uniform='review_actions')
   self.button(
@@ -206,7 +228,15 @@ class LandmarksSection(SectionView):
    icon='complex_qc',style='ReviewAction.TButton'
   ).grid(row=0,column=1,sticky='ew',padx=(3,0))
 
-  self.canvas.redraw_cached();self._refresh_landmark_sidebar();self._refresh_action_buttons()
+  self._refresh_prediction_info();self.canvas.redraw_cached();self._refresh_landmark_sidebar();self._refresh_action_buttons()
+ def _refresh_prediction_info(self):
+  label=getattr(self,"prediction_info",None)
+  if not label or not label.winfo_exists():return
+  text=_prediction_context_text(self.context.project,self.context.current() or {})
+  if text:
+   label.configure(text=text);label.grid()
+  else:
+   label.configure(text="");label.grid_remove()
  def _refresh_action_buttons(self,state=None):
   state=state or getattr(self.canvas,'state',None)
   selected=getattr(getattr(self.canvas,'choice',None),'get',lambda:None)()
@@ -295,7 +325,7 @@ class LandmarksSection(SectionView):
 
  def refresh(self):
   # A persisted landmark edit refreshes one authoritative list row, never the catalogue.
-  image_id=self.canvas.image_id or (self.context.current() or {}).get("image_id");self.context.refresh_landmark_state(image_id);self.context.update_landmark_counts(image_id);self.shell._update_status();panel=getattr(self.shell,"photo_panel",None);panel and panel.refresh(preserve_scroll=True);state=self.canvas.take_fresh_state() or self.canvas.refresh_authoritative(notify=False);self._refresh_landmark_sidebar(state);self._refresh_action_buttons(state)
+  image_id=self.canvas.image_id or (self.context.current() or {}).get("image_id");self.context.refresh_landmark_state(image_id);self.context.update_landmark_counts(image_id);self.shell._update_status();panel=getattr(self.shell,"photo_panel",None);panel and panel.refresh(preserve_scroll=True);state=self.canvas.take_fresh_state() or self.canvas.refresh_authoritative(notify=False);self._refresh_prediction_info();self._refresh_landmark_sidebar(state);self._refresh_action_buttons(state)
  def cancel_pending_for_target(self,image_id):
   """Discard a deferred Next unless it belongs to this exact target image."""
   pending=getattr(self,'_pending_next_image_id',None)
@@ -304,6 +334,7 @@ class LandmarksSection(SectionView):
   # ProductionShell calls this after idle, after the photo-list selection has painted.
   current=(self.context.current() or {}).get('image_id')
   self.cancel_pending_for_target(current)
+  self._refresh_prediction_info()
   self.canvas.on_image_ready=self._image_ready
   request_epoch=getattr(self.shell,'selection_request_epoch',getattr(self.canvas,'requested_request_epoch',0))
   self.canvas.load_current(request_epoch)

@@ -583,17 +583,17 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   restored=self.p.load_landmarks(image_id)[1]
   self.assertEqual(before['x_standardized'],restored['x_standardized']);self.assertEqual(before['y_standardized'],restored['y_standardized'])
 
- def test_reapply_unverified_includes_partial_and_complete_unverified_but_not_empty_or_verified(self):
-  partial,complete_unverified,verified,empty=self.ids
-  self.p.delete_landmark(partial,2);self.p.clear_checked(partial)
-  self.p.clear_checked(complete_unverified)
-  for ident in (1,2):self.p.delete_landmark(empty,ident)
-  self.p.clear_checked(empty)
+ def test_reapply_targets_partial_and_complete_pending_ai_but_not_manual_empty_or_verified(self):
+  partial,complete_unverified,verified,manual_only=self.ids
+  for ident in (1,2):self.p.delete_landmark(partial,ident);self.p.delete_landmark(complete_unverified,ident)
+  self.p.save_machine_landmarks(partial,[{'landmark_id':1,'x':10,'y':10}],model_id='ai-model',prediction_run_id='partial')
+  self.p.save_machine_landmarks(complete_unverified,[{'landmark_id':1,'x':10,'y':10},{'landmark_id':2,'x':20,'y':10}],model_id='ai-model',prediction_run_id='complete')
+  self.p.clear_checked(partial);self.p.clear_checked(complete_unverified);self.p.clear_checked(manual_only)
   rows=self.p.catalog_rows()
   with patch('app.ui.landmarks_section.landmark_frame_ready',return_value=True):
    ids=_reapply_unverified_prediction_ids(self.p,rows)
   self.assertIn(partial,ids);self.assertIn(complete_unverified,ids)
-  self.assertNotIn(verified,ids);self.assertNotIn(empty,ids)
+  self.assertNotIn(verified,ids);self.assertNotIn(manual_only,ids)
 
  def test_repeatability_percent_is_human_readable_but_precise_value_can_stay_stored(self):
   self.assertEqual('0.50%',_format_percent(0.49731822679167603))
