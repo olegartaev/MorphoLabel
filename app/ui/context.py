@@ -4,7 +4,7 @@ from app.project_storage import Project
 from app.landmark_dataset import v2_human_final_eligible, v2_human_final_eligible_image_ids, model_seen_image_ids, model_training_state_fingerprints, current_training_state_fingerprint, current_training_state_fingerprints, training_ready_image_ids
 
 _KEYS = ("Manual", "Auto", "Checked", "Remaining", "Needs review")
-_LANDMARK_KEYS = ("Human reviewed / Checked", "Remaining", "Train ready")
+_LANDMARK_KEYS = ("Human verified", "Training set", "New/changed", "Incomplete")
 
 
 def _training_seen_image_ids(project):
@@ -40,6 +40,7 @@ class UIContext:
  _permanent_ids: frozenset = field(default_factory=frozenset)
  _landmark_seen_ids: frozenset = field(default_factory=frozenset)
  _landmark_model_fingerprints: dict = field(default_factory=dict)
+ _landmark_eligible_ids: set = field(default_factory=set)
  def refresh(self, force=False):
   current_id=(self.current() or {}).get("image_id")
   if self.project and (force or not self._catalog_valid):
@@ -58,7 +59,7 @@ class UIContext:
  def invalidate_catalog(self):
   self._catalog_valid=False;self._counts_cache=None;self._image_classification.clear();self._landmark_counts_cache=None;self._landmark_classification.clear()
  def invalidate_counts(self):
-  self._counts_cache=None;self._image_classification.clear();self._landmark_counts_cache=None;self._landmark_classification.clear();self._landmark_seen_ids=frozenset();self._landmark_model_fingerprints={}
+  self._counts_cache=None;self._image_classification.clear();self._landmark_counts_cache=None;self._landmark_classification.clear();self._landmark_seen_ids=frozenset();self._landmark_model_fingerprints={};self._landmark_eligible_ids=set()
  def refresh_landmark_state(self,image_id):
   """Replace one cached landmark row from Project authority after a persisted edit."""
   if not self.project:return False
@@ -103,8 +104,10 @@ class UIContext:
   """Exact v2 trainer predicate from this already-authoritative catalog row."""
   unresolved=bool(row.get('missing_ids') or row.get('extra_ids') or row.get('placed',0)<row.get('expected_landmarks',0))
   checked=bool(row.get('human_verified'))
-  ready=row.get('image_id') in getattr(self,'_landmark_ready_ids',set())
-  return {'Human reviewed / Checked':checked,'Remaining':unresolved,'Train ready':ready}
+  image_id=row.get('image_id')
+  eligible=image_id in getattr(self,'_landmark_eligible_ids',set())
+  ready=image_id in getattr(self,'_landmark_ready_ids',set())
+  return {'Human verified':checked,'Training set':eligible,'New/changed':ready,'Incomplete':unresolved}
  def landmark_counts(self):
   if not self.project:return {'Total':0,**{key:0 for key in _LANDMARK_KEYS}}
   if self._landmark_counts_cache is None:
@@ -116,6 +119,7 @@ class UIContext:
    except Exception:self._landmark_model_fingerprints={}
    self._landmark_seen_ids=frozenset(self._landmark_model_fingerprints)
    eligible=set(v2_human_final_eligible_image_ids(self.project))
+   self._landmark_eligible_ids=set(eligible)
    current_fingerprints=current_training_state_fingerprints(self.project,eligible)
    self._landmark_ready_ids={image_id for image_id in eligible if self._landmark_model_fingerprints.get(str(image_id))!=current_fingerprints.get(str(image_id))}
    self._landmark_classification={row['image_id']:self._classify_landmark(row) for row in self.rows}
@@ -127,7 +131,10 @@ class UIContext:
   if self._landmark_counts_cache is None:return self.landmark_counts()
   target=image_id or (self.current() or {}).get('image_id');row=next((item for item in self.rows if item.get('image_id')==target),None)
   if not row:return self._landmark_counts_cache
-  ready=(v2_human_final_eligible(self.project,target) and self._landmark_model_fingerprints.get(str(target))!=current_training_state_fingerprint(self.project,str(target)))
+  eligible=v2_human_final_eligible(self.project,target)
+  if eligible:self._landmark_eligible_ids.add(target)
+  else:self._landmark_eligible_ids.discard(target)
+  ready=(eligible and self._landmark_model_fingerprints.get(str(target))!=current_training_state_fingerprint(self.project,str(target)))
   if ready:self._landmark_ready_ids.add(target)
   else:self._landmark_ready_ids.discard(target)
   old=self._landmark_classification.get(target,{key:False for key in _LANDMARK_KEYS});new=self._classify_landmark(row)
