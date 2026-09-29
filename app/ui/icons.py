@@ -23,7 +23,7 @@ GREEN="#20a447"
 YELLOW="#f5a623"
 
 ICON_NAMES=frozenset({
-    "modules","project","crop","landmarks","measurements","export",
+    "modules","project","crop","landmarks","measurements","export","structures","results",\n    "trait_count","trait_count_to","trait_count_from","trait_position","trait_presence","trait_distance","trait_angle","trait_formula",
     "missing","delete","clear","verify","display","exclude","restore","review_worst","complex_qc",
     "crop_training","crop_train","crop_apply",
     "landmark_repeat","landmark_training","landmark_train","landmark_apply",
