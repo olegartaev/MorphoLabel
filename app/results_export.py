@@ -5,6 +5,8 @@ from pathlib import Path
 from .landmark_state import load_current_landmark_state
 
 MISSING_TPS=(-1.0,-1.0) # standard negative missing coordinates (e.g. geomorph negNA=TRUE)
+COORDINATE_DECIMALS=5
+SCALE_DECIMALS=6
 
 def _atomic_text(path:Path,text:str):
  path.parent.mkdir(parents=True,exist_ok=True)
@@ -17,7 +19,7 @@ def _scale_mm_per_px(project,row):
  if not calibration or not calibration.get("scale"):return "",None
  # Stored calibration scale is pixels/mm; exported SCALE and CSV are mm/pixel.
  value=1.0/float(calibration["scale"])
- return f"{value:.12g}",value
+ return f"{value:.{SCALE_DECIMALS}f}",value
 
 def _attributes(project,image_id): return project.attributes_for_image(image_id)
 
@@ -40,7 +42,7 @@ def export_project_results(project):
     point=canonical.get(ident)
     if point is None:raise ValueError(f"complete landmark state has no canonical coordinate for {row['image_id']} landmark {ident}")
     x,y=float(point[0]),float(point[1])
-   tps.append(f"{x:.12g} {y:.12g}")
+   tps.append(f"{x:.{COORDINATE_DECIMALS}f} {y:.{COORDINATE_DECIMALS}f}")
   tps.append(f"IMAGE={row['original_name']}");tps.append(f"ID={row['image_id']}")
   if scale_text:tps.append(f"SCALE={scale_text}")
   tps.append("")

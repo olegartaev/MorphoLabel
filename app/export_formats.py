@@ -4,6 +4,11 @@ from pathlib import Path
 from app.landmark_state import load_current_landmark_state
 from app.results_export import MISSING_TPS
 
+COORDINATE_DECIMALS=5
+SCALE_DECIMALS=6
+
+def _coord(value):return f"{float(value):.{COORDINATE_DECIMALS}f}"
+
 def group_label(item):
  """Use real schema category first; role is the canonical fallback for older schemes."""
  return str(item.get('category') or item.get('role') or item.get('morphometry_role') or '').strip()
@@ -22,7 +27,7 @@ def _scale_mm_per_px_text(project,image):
  if not calibration or not calibration.get("scale"):return None
  try:value=1.0/float(calibration["scale"])
  except (TypeError,ValueError,ZeroDivisionError):return None
- return f"{value:.12g}" if math.isfinite(value) and value>0 else None
+ return f"{value:.{SCALE_DECIMALS}f}" if math.isfinite(value) and value>0 else None
 
 def _selected_complete_coordinates(project,image_id,schema):
  """Return ordered numeric coordinates when every selected landmark is present."""
@@ -58,7 +63,7 @@ def export_landmark_tps(project,groups=(),filename='landmarks.tps',target=None):
   coords=_selected_tps_coordinates(project,image['image_id'],schema)
   if coords is None:continue
   lines.append(f'LM={len(schema)}')
-  for x,y in coords:lines.append(f'{x:.12g} {y:.12g}')
+  for x,y in coords:lines.append(f'{_coord(x)} {_coord(y)}')
   lines.extend((f"IMAGE={image.get('original_name','')}",f"ID={image['image_id']}"))
   scale=_scale_mm_per_px_text(project,image)
   if scale:lines.append(f"SCALE={scale}")
@@ -71,7 +76,7 @@ def export_landmark_csv_long(project,groups=(),target=None):
   for image in project.catalog_rows():
    if image.get('excluded'):continue
    for ident,point in sorted(project.load_landmarks(image['image_id']).items()):
-    if int(ident) in allowed:writer.writerow({'image_id':image['image_id'],'locality':image.get('locality',image.get('sample_id','')),'filename':image.get('original_name',''),'landmark_id':ident,'category':labels.get(int(ident),''),'x_standardized':point.get('x_standardized'),'y_standardized':point.get('y_standardized'),'state':point.get('state'),'provenance':point.get('provenance'),'model_id':point.get('model_id'),'confidence':point.get('confidence'),'updated_at':point.get('updated_at')})
+    if int(ident) in allowed:writer.writerow({'image_id':image['image_id'],'locality':image.get('locality',image.get('sample_id','')),'filename':image.get('original_name',''),'landmark_id':ident,'category':labels.get(int(ident),''),'x_standardized':'' if point.get('x_standardized') is None else _coord(point.get('x_standardized')),'y_standardized':'' if point.get('y_standardized') is None else _coord(point.get('y_standardized')),'state':point.get('state'),'provenance':point.get('provenance'),'model_id':point.get('model_id'),'confidence':point.get('confidence'),'updated_at':point.get('updated_at')})
  return target
 def export_landmark_wide(project,groups=(),filename='landmarks_wide.csv',delimiter=',',target=None):
  schema=_allowed(project,groups);target=Path(target) if target else Path(project.results_root)/filename;target.parent.mkdir(parents=True,exist_ok=True);fields=['specimen_id']+[item for point in schema for item in (f"x{point['id']}",f"y{point['id']}")]
@@ -81,7 +86,7 @@ def export_landmark_wide(project,groups=(),filename='landmarks_wide.csv',delimit
    if image.get('excluded'):continue
    points=project.load_landmarks(image['image_id']);row={'specimen_id':image.get('specimen_id') or image['image_id']}
    for point in schema:
-    saved=points.get(int(point['id']),{});row[f"x{point['id']}"]='' if saved.get('state')=='missing' else saved.get('x_standardized','');row[f"y{point['id']}"]='' if saved.get('state')=='missing' else saved.get('y_standardized','')
+    saved=points.get(int(point['id']),{});row[f"x{point['id']}"]='' if saved.get('state')=='missing' or saved.get('x_standardized') is None else _coord(saved.get('x_standardized'));row[f"y{point['id']}"]='' if saved.get('state')=='missing' or saved.get('y_standardized') is None else _coord(saved.get('y_standardized'))
    writer.writerow(row)
  return target
 def export_morphoj_text(project,groups=(),target=None):
@@ -100,5 +105,5 @@ def export_morphoj_text(project,groups=(),target=None):
    if image.get('excluded'):continue
    coords=_selected_complete_coordinates(project,image['image_id'],schema)
    if coords is None:continue
-   writer.writerow([_morphoj_identifier(image),*[f'{value:.12g}' for value in coords]])
+   writer.writerow([_morphoj_identifier(image),*[_coord(value) for value in coords]])
  return target

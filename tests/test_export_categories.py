@@ -23,7 +23,7 @@ class ExportCategoryTests(unittest.TestCase):
    morphoj_target=root/'chosen_morphoj.txt';morphoj=export_morphoj_text(project,target=morphoj_target)
    self.assertEqual(morphoj_target,morphoj)
    lines=morphoj.read_text(encoding='utf-8').splitlines();self.assertEqual('ID\tx1\ty1\tx2\ty2',lines[0]);self.assertEqual(2,len(lines))
-   fields=lines[1].split('\t');self.assertEqual(a,fields[0]);self.assertEqual(['3','4','8','4'],fields[1:])
+   fields=lines[1].split('\t');self.assertEqual(a,fields[0]);self.assertEqual(['3.00000','4.00000','8.00000','4.00000'],fields[1:])
  def test_group_filtered_tps_keeps_schema_order(self):
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);src=root/'source';src.mkdir();Image.new('RGB',(20,10)).save(src/'fish.jpg')
@@ -43,7 +43,7 @@ class ExportCategoryTests(unittest.TestCase):
    project.save_landmark(image_id,1,3,4,'manual','manual');project.save_landmark(image_id,2,8,4,'manual','manual')
    project.set_locality_calibration('L',image_id,2.0,'mm',{'mm_per_pixel':0.5})
    block=parse_tps(export_landmark_tps(project,target=root/'coords.tps'))[0]
-   self.assertEqual([(5.0,5.0),(10.0,5.0)],block['coordinates']);self.assertEqual('0.5',block['SCALE']);self.assertEqual('fish.jpg',block['IMAGE'])
+   self.assertEqual([(5.0,5.0),(10.0,5.0)],block['coordinates']);self.assertEqual('0.500000',block['SCALE']);self.assertEqual('fish.jpg',block['IMAGE'])
  def test_export_dialog_extension_tracks_selected_format(self):
   section=ExportSection.__new__(ExportSection)
   self.assertTrue(section._format_target('landmarks.tps','CSV wide (*.csv)').endswith('.csv'))

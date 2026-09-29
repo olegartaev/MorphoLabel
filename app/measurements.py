@@ -5,6 +5,8 @@ from pathlib import Path
 from .transforms import Transform
 
 FIELDS=("Use","Abbr","Name","Point1","Point2","Point1Abbr","Point2Abbr")
+MEASUREMENT_DECIMALS=2
+SCALE_DECIMALS=6
 
 def schema_path(project): return Path(project.root)/"measurement_schema.csv"
 def _atomic(path,text):
@@ -98,6 +100,6 @@ def export_measurements(project,target=None,delimiter=","):
  for row in rows:
   values,mpp=values_for_image(project,row,definitions); locality=row.get("locality") or row.get("sample_id") or ""; calibrated.add(locality) if mpp is not None else None
   complete_here=bool(definitions) and all(v!="NA" for v in values.values()); complete+=int(complete_here);na+=int(not complete_here)
-  w.writerow({"image_id":row["image_id"],"locality":locality,"filename":row.get("original_name","") or row.get("filename","") ,"source_relative_path":row.get("relative_path","") ,"mm_per_pixel":"NA" if mpp is None else f"{mpp:.12g}",**{f'{k}_mm':v if v=="NA" else f"{v:.12g}" for k,v in values.items()}})
+  w.writerow({"image_id":row["image_id"],"locality":locality,"filename":row.get("original_name","") or row.get("filename","") ,"source_relative_path":row.get("relative_path","") ,"mm_per_pixel":"NA" if mpp is None else f"{mpp:.{SCALE_DECIMALS}f}",**{f'{k}_mm':v if v=="NA" else f"{v:.{MEASUREMENT_DECIMALS}f}" for k,v in values.items()}})
  target=Path(target) if target else Path(project.root)/"measurements.csv";_atomic(target,out.getvalue())
  summary=measurement_summary(project);summary["path"]=target;return summary
