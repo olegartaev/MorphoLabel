@@ -793,6 +793,7 @@ class ProductionShell(tk.Tk):
 
     def show_models(self,kind=None):
         if not self.context.project:return
+        if kind=="landmark":return self._show_landmark_models()
         kinds=(kind,) if kind else ("crop","landmark")
         landmark_only=kinds==("landmark",)
         dialog=tk.Toplevel(self);dialog.title("Models");dialog.transient(self);dialog.geometry("1220x440" if landmark_only else "980x420");dialog.minsize(760 if landmark_only else 660,260)
@@ -934,6 +935,116 @@ class ProductionShell(tk.Tk):
         self.control_button(actions,"Close",dialog.destroy,"Close this model list.").pack(side="right")
         if kinds==("crop",): use.pack(side="right",padx=(0,8))
         center(self,dialog)
+    def _show_landmark_models(self):
+        """Friendly Landmark model list with accuracy details kept one click away."""
+        if not self.context.project:return
+        import json
+        dialog=tk.Toplevel(self);dialog.title("Landmark models");dialog.transient(self);dialog.geometry("1060x570");dialog.minsize(860,470)
+        outer=ttk.Frame(dialog,padding=16);outer.pack(fill="both",expand=True);outer.rowconfigure(2,weight=1);outer.columnconfigure(0,weight=1)
+
+        header=ttk.Frame(outer);header.grid(row=0,column=0,sticky="ew")
+        ttk.Label(header,text="Landmark models",style="PageTitle.TLabel").pack(anchor="w")
+        ttk.Label(
+            header,
+            text="Choose the model used for prediction. Accuracy details compares any saved model with your own blind repeatability on the same images.",
+            style="PageSubtitle.TLabel",wraplength=960,justify="left",
+        ).pack(anchor="w",pady=(2,10))
+
+        note=ttk.Label(
+            outer,
+            text="Validation P90 comes from that model's held-out training split. It is useful for model development, but it is not directly comparable across different datasets. Use Accuracy details for the same-image human comparison.",
+            style="Muted.TLabel",wraplength=960,justify="left",
+        )
+        note.grid(row=1,column=0,sticky="ew",pady=(0,10))
+
+        table_frame=ttk.Frame(outer);table_frame.grid(row=2,column=0,sticky="nsew");table_frame.rowconfigure(0,weight=1);table_frame.columnconfigure(0,weight=1)
+        columns=("active","model","parent","dataset","validation","created")
+        table=ttk.Treeview(table_frame,columns=columns,show="headings",selectmode="browse")
+        labels={"active":"Active","model":"Model","parent":"Parent","dataset":"Training images","validation":"Validation P90","created":"Created"}
+        widths={"active":65,"model":190,"parent":180,"dataset":110,"validation":120,"created":170}
+        for col in columns:
+            table.heading(col,text=labels[col]);table.column(col,width=widths[col],anchor="w",stretch=col=="model")
+        table.tag_configure("active",foreground="#188038")
+        scroll=ttk.Scrollbar(table_frame,orient="vertical",command=table.yview);table.configure(yscrollcommand=scroll.set)
+        table.grid(row=0,column=0,sticky="nsew");scroll.grid(row=0,column=1,sticky="ns")
+
+        details=tk.StringVar(value="Select a model to see its details.")
+        ttk.Label(outer,textvariable=details,style="Muted.TLabel",wraplength=960,justify="left").grid(row=3,column=0,sticky="ew",pady=(8,0))
+
+        records={}
+        def manifest_count(item):
+            path=item.get("dataset_manifest_path")
+            if not path:return "—"
+            try:
+                data=json.loads((self.context.project.data_root/path).read_text(encoding="utf-8"))
+                return str(len(data.get("images",data.get("selected_images",()))))
+            except (OSError,ValueError,TypeError):return "—"
+
+        def model_details(item,metrics):
+            payload={}
+            try:
+                model_path=self.context.project.data_root/(item.get("path") or "")/"model.json"
+                payload=json.loads(model_path.read_text(encoding="utf-8")) if model_path.is_file() else {}
+            except (OSError,ValueError,TypeError):pass
+            result=payload.get("result",{});engineering=result.get("engineering_validation",payload.get("engineering_validation",{})) or {}
+            p90=engineering.get("p90_error_percent",metrics.get("p90_error_percent"))
+            best=result.get("best_epoch",payload.get("best_epoch",metrics.get("best_epoch")))
+            return p90,best
+
+        def populate():
+            selected_id=selected_model_id()
+            table.delete(*table.get_children());records.clear()
+            with self.context.project.transaction() as c:
+                current=c.execute("SELECT model_id,active,metrics_json,dataset_manifest_path,parent_model_id,path,created_at FROM models WHERE kind='landmark' ORDER BY created_at DESC,model_id DESC").fetchall()
+            selected_item=None
+            for row in current:
+                item=dict(row);metrics=json.loads(item.get("metrics_json") or "{}");p90,best=model_details(item,metrics);item["_best_epoch"]=best;item["_p90"]=p90;records[item["model_id"]]=item
+                values=("✓" if item["active"] else "",item["model_id"],item.get("parent_model_id") or "Bootstrap",manifest_count(item),"—" if p90 is None else f"{float(p90):.3f}%",item.get("created_at") or "—")
+                iid=table.insert("","end",values=values,tags=("active",) if item["active"] else ())
+                if selected_id==item["model_id"]:selected_item=iid
+            if selected_item:table.selection_set(selected_item);table.focus(selected_item)
+            elif table.get_children():
+                first=table.get_children()[0];table.selection_set(first);table.focus(first)
+            refresh_selection()
+
+        def selected_model_id():
+            selected=table.selection()
+            return None if not selected else str(table.item(selected[0],"values")[1])
+
+        def refresh_selection(_event=None):
+            model_id=selected_model_id();item=records.get(model_id or "")
+            if not item:
+                details.set("Select a model to see its details.");set_button.configure(state="disabled");accuracy_button.configure(state="disabled");return
+            best=item.get("_best_epoch");active="Active model" if item.get("active") else "Saved model"
+            details.set(f"{active} · Parent: {item.get('parent_model_id') or 'Bootstrap / first model'} · Best epoch: {'—' if best is None else best}")
+            set_button.configure(state="disabled" if item.get("active") else "normal")
+            accuracy_button.configure(state="normal")
+
+        def set_active():
+            model_id=selected_model_id()
+            if not model_id:return
+            try:
+                from app.landmark_training_workflow import activate_landmark_model
+                activate_landmark_model(self.context.project,model_id)
+                self.context.invalidate_counts();populate();self.render()
+            except Exception as exc:messagebox.showerror("Set active Landmark model",str(exc),parent=dialog)
+
+        def accuracy():
+            model_id=selected_model_id()
+            if not model_id:return
+            from .model_accuracy import open_landmark_accuracy
+            open_landmark_accuracy(self,self.context.project,model_id)
+
+        actions=ttk.Frame(outer);actions.grid(row=4,column=0,sticky="ew",pady=(12,0))
+        set_button=self.control_button(actions,"Set active",set_active,"Use the selected saved model for future Landmark predictions.",style="Primary.TButton")
+        set_button.pack(side="left")
+        accuracy_button=self.control_button(actions,"Accuracy details…",accuracy,"Compare manual repeatability with AI landmark placement on the same images, including a GM-only view.")
+        accuracy_button.configure(image=self.ui_icon("landmark_repeat",CONTROL_ICON_SIZE),compound="left")
+        accuracy_button.pack(side="left",padx=(7,0))
+        self.control_button(actions,"Close",dialog.destroy,"Close this model list.").pack(side="right")
+        table.bind("<<TreeviewSelect>>",refresh_selection,add="+")
+        populate();center(self,dialog);return dialog
+
     def _photo_exclusion_changed(self,image_id):
         """Synchronize one exclusion with every live workflow membership.
 
