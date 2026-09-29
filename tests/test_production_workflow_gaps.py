@@ -634,7 +634,9 @@ class ProductionWorkflowGapTests(unittest.TestCase):
  def test_landmark_header_uses_non_overlapping_meaningful_labels(self):
   source=(Path(__file__).parents[1]/'app'/'ui'/'context.py').read_text(encoding='utf8')
   self.assertIn('("Human verified", "Training set", "New/changed", "Incomplete")',source)
+  self.assertIn("'Images':len(included)",source)
   shell=(Path(__file__).parents[1]/'app'/'ui'/'shell.py').read_text(encoding='utf8')
+  self.assertIn('"Images":"Images currently included in the Landmarks workflow."',shell)
   self.assertIn('"Training set":"Verified, complete images currently eligible for model training.',shell)
   self.assertIn('"New/changed":"Training-set images whose current Crop or landmarks are not yet represented',shell)
 
