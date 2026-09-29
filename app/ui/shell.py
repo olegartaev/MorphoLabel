@@ -506,8 +506,16 @@ class ProductionShell(tk.Tk):
         self.status_context=ttk.Label(left,text="",style="SectionTitle.TLabel",anchor="w",width=1);self.status_context.pack(side="left",fill="x",expand=True,padx=(0,7));self.status_context.bind("<Configure>",lambda _event:self._refresh_status_context(),add="+")
         self.status_count_host=ttk.Frame(left);self.status_count_host.pack(side="right")
         self.status_counts={}
+        status_help={
+            "Total":"Images currently included in this project view.",
+            "Human verified":"Images whose current landmark set has been explicitly confirmed by a person.",
+            "Training set":"Verified, complete images currently eligible for model training. This is the full set used when training starts.",
+            "New/changed":"Training-set images whose current Crop or landmarks are not yet represented by the active model lineage.",
+            "Incomplete":"Images that still have unresolved landmark positions or an incomplete landmark set.",
+        }
         for key,value in self._section_counts().items():
             label=ttk.Label(self.status_count_host,text=f"{key}: {value}",style="StatusChip.TLabel"); label.pack(side="left",padx=(0,2)); self.status_counts[key]=label
+            if key in status_help:self.tip.bind(label,status_help[key])
         self.status_previous=self.control_button(navigation,"‹ Previous",lambda:self._nav_image(-1),"Show the previous image.",style="Nav.TButton",width=16);self.status_previous.pack(side="left")
         self.status_index=ttk.Label(navigation,text="",padding=(8,0),font=("Segoe UI",9,"bold"));self.status_index.pack(side="left")
         self.status_next=self.control_button(navigation,"Next ›",lambda:self._nav_image(1),"Show the next image. Press Enter when not typing.",style="Nav.TButton",width=16);self.status_next.pack(side="left")
