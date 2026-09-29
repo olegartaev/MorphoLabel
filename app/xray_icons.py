@@ -7,7 +7,7 @@ stages are recognisable at a glance.
 from __future__ import annotations
 
 from PIL import Image, ImageDraw, ImageTk
-from app.ui.icons import OUTLINE, MUTED, PALE, PALE_BLUE, BLUE, GREEN, RED, YELLOW, render_icon
+from app.ui.icons import OUTLINE, MUTED, PALE, PALE_BLUE, BLUE, GREEN, RED, YELLOW
 
 XRAY_ICON_SIZE=30
 TRAIT_ICON_SIZE=26
@@ -110,6 +110,11 @@ def _document(d,p,x0=5,y0=4,x1=23,y1=28):
     _line(d,p,[(x0+4,y0+10),(x1-4,y0+10)],MUTED,.75)
     _line(d,p,[(x0+4,y0+14),(x1-4,y0+14)],MUTED,.75)
 
+def _export_arrow(d,p):
+    _line(d,p,[(24,23),(24,11)],GREEN,1.8)
+    d.polygon([(p(24),p(8)),(p(20.8),p(13)),(p(27.2),p(13))],fill=GREEN)
+    _line(d,p,[(19,21),(19,25),(29,25),(29,21)],XRAY_DARK,1.1)
+
 
 def render_xray_icon(name,size=XRAY_ICON_SIZE):
     if name not in XRAY_ICON_NAMES:raise KeyError(name)
@@ -117,22 +122,36 @@ def render_xray_icon(name,size=XRAY_ICON_SIZE):
 
     # Main workflow icons: different silhouette + shared visual language.
     if name=="xray":
+        # Module identity: a clean radiograph with the skeleton as the only focal object.
         _film(d,p);_fish_skeleton(d,p,scale=.92,accent=BLUE)
     elif name=="xray_project":
-        return render_icon("project",size)
+        # Project: folder sits behind a small radiograph; anatomy must remain visible.
+        _folder(d,p)
+        _film(d,p,11.0,9.0,30.0,27.5,accent=BLUE)
+        _fish_skeleton(d,p,cx=20.5,cy=18.2,scale=.52,accent=BLUE)
     elif name=="xray_crops":
-        return render_icon("crop",size)
+        # Crops: skeleton/radiograph plus the same corner-bracket language as MorphoLabel.
+        _film(d,p);_fish_skeleton(d,p,scale=.78,accent=XRAY_DARK)
+        _crop_brackets(d,p,BLUE)
     elif name=="xray_structures":
-        return render_icon("landmarks",size)
+        # Structures: skeleton is central; coloured markers sit on anatomical positions.
+        _film(d,p);_fish_skeleton(d,p,scale=.80,accent=XRAY_DARK)
+        _node(d,p,12.4,16.0,fill=BLUE,outline="#ffffff",r=2.0,width=.7)
+        d.polygon([(p(19.0),p(12.5)),(p(21.5),p(17.7)),(p(16.5),p(17.7))],fill=GREEN,outline="#ffffff")
+        d.rectangle((p(22.8),p(15.0),p(27.0),p(19.2)),fill=ACCENT_ORANGE,outline="#ffffff",width=max(1,p(.7)))
     elif name=="xray_results":
-        # No direct Landmarks equivalent: use the same table geometry/palette.
-        _table(d,p,4,5,28.5,27)
-        _line(d,p,[(7,10),(18,10)],BLUE,1.1)
-        for x in (8,10.5,13,15.5,18):_node(d,p,x,10,fill="#ffffff",outline=BLUE,r=.85,width=.55)
-        _line(d,p,[(21.5,15),(25.5,15)],GREEN,1.5)
-        _line(d,p,[(21.5,21),(26.5,21)],BLUE,1.5)
+        # Results: mini radiograph/skeleton feeding into a compact scientific table.
+        _film(d,p,2.5,4.0,15.2,27.5,accent=BLUE)
+        _fish_skeleton(d,p,cx=8.8,cy=16.2,scale=.34,accent=BLUE)
+        _table(d,p,14.5,6.5,29.5,26.0)
+        _line(d,p,[(22.5,11.2),(27.0,11.2)],GREEN,1.1)
+        _line(d,p,[(22.5,16.3),(27.0,16.3)],BLUE,1.1)
     elif name=="xray_export":
-        return render_icon("export",size)
+        # Export: report containing the skeleton plus the shared outward-action cue.
+        _document(d,p,3.0,4.0,23.0,28.0)
+        _fish_skeleton(d,p,cx=12.0,cy=18.0,scale=.45,accent=BLUE,body=False)
+        _line(d,p,[(20.5,17.0),(29.0,17.0)],GREEN,2.4)
+        d.polygon([(p(30.0),p(17.0)),(p(25.2),p(13.5)),(p(25.2),p(20.5))],fill=GREEN)
 
     # Trait-method icons: scientific diagrams, compact and deliberately quieter.
     elif name in {"count","count_to","count_between","position"}:
