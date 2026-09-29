@@ -359,17 +359,17 @@ class SchemeLibraryDialog(tk.Toplevel):
         self.list.grid(row=0,column=0,sticky="nsew");scroll.grid(row=0,column=1,sticky="ns")
         self.list.bind("<<TreeviewSelect>>",lambda _e:self._show_selection());self.list.bind("<Double-1>",lambda _e:self._apply())
         self.detail=ttk.Frame(right);self.detail.pack(fill="both",expand=True)
-        for item in bundled_scheme_catalog():
-            self._add_entry(bundled_scheme(item["id"]),f"Built-in · {Path(item['path']).name}",entry_id="bundled:"+item["id"],select=False)
-        if self._entries:
-            first=next(iter(self._entries));self.list.selection_set(first);self.list.focus(first);self._show_selection()
-        else:ttk.Label(self.detail,text="No bundled scheme files are available.",style="Muted.TLabel").pack(anchor="w")
         actions=ttk.Frame(outer);actions.grid(row=3,column=0,sticky="ew",pady=(10,0))
         ttk.Button(actions,text="Open JSON...",command=self._open_file).pack(side="left")
         ttk.Button(actions,text="New scheme...",command=self._new_scheme).pack(side="left",padx=(6,0))
         self.edit_button=ttk.Button(actions,text="Edit selected...",command=self._edit_selected);self.edit_button.pack(side="left",padx=(6,0))
         ttk.Button(actions,text="Cancel",command=self.destroy).pack(side="right")
         self.apply=ttk.Button(actions,text="Apply selected",command=self._apply,style="Primary.TButton");self.apply.pack(side="right",padx=(0,6))
+        for item in bundled_scheme_catalog():
+            self._add_entry(bundled_scheme(item["id"]),f"Built-in · {Path(item['path']).name}",entry_id="bundled:"+item["id"],select=False)
+        if self._entries:
+            first=next(iter(self._entries));self.list.selection_set(first);self.list.focus(first);self._show_selection()
+        else:ttk.Label(self.detail,text="No bundled scheme files are available.",style="Muted.TLabel").pack(anchor="w")
         self._sync_actions()
 
     def _selected_entry(self):
