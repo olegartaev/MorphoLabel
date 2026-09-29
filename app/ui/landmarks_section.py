@@ -755,8 +755,8 @@ class LandmarksSection(SectionView):
    self.refresh()
    session,completed=complete_or_advance_review(self.context.project,session['batch_id'],current)
    if completed:
-    ready_count=self.context.landmark_counts().get('Train ready',0)
-    summary=f"Prediction batch review complete.\nReviewed: {len(session['image_ids'])} / {len(session['image_ids'])}\nTrain ready: {ready_count}"
+    ready_count=self.context.landmark_counts().get('New/changed',0)
+    summary=f"Prediction batch review complete.\nReviewed: {len(session['image_ids'])} / {len(session['image_ids'])}\nNew/changed for next training: {ready_count}"
     self.shell._update_status()
     self._offer_batch_error_review(session['image_ids'],'Prediction review complete',summary)
     return True
@@ -795,7 +795,7 @@ class LandmarksSection(SectionView):
   position=ids.index(current);target=max(0,min(len(ids)-1,position+int(step)))
   if target==position and int(step)>0:
    state_doc['current_image_id']=current;state_doc['current_position']=position;state_doc['finite_editing_complete']=True;save_state(self.context.project,state_doc)
-   ready=self.context.landmark_counts().get('Train ready',0);title='Training batch complete' if stage=='INITIAL_TRAINING' else 'Improvement batch complete';message=f"{title}.\nReviewed: {len(ids)} / {len(ids)}\nTrain ready: {ready}";self.shell._update_status();self._offer_batch_error_review(ids,title,message);return True
+   ready=self.context.landmark_counts().get('New/changed',0);title='Training batch complete' if stage=='INITIAL_TRAINING' else 'Improvement batch complete';message=f"{title}.\nReviewed: {len(ids)} / {len(ids)}\nNew/changed for next training: {ready}";self.shell._update_status();self._offer_batch_error_review(ids,title,message);return True
   self.context.selected=next(i for i,row in enumerate(self.context.rows) if row['image_id']==ids[target])
   state_doc['current_image_id']=ids[target];state_doc['current_position']=target
   save_state(self.context.project,state_doc);self._sync_photo_selection();self.shell._selected_image(False);return True
@@ -948,7 +948,8 @@ class LandmarksSection(SectionView):
   poll()
  def _confirm_training(self,plan):
   settings=plan.training_settings;auto_seconds=float((settings.get('preparation_timings_seconds') or {}).get('auto_performance',0.0) or 0.0);source=settings.get('tuning_source','heuristic');source_label={'probe':'measured now','cache':'cached for this machine','heuristic':'safe default','fallback':'safe fallback — calibration failed'}.get(source,str(source));device=settings.get('device','cpu');amp='on' if settings.get('mixed_precision') else 'off';errors=settings.get('tuning_errors') or ();cache_saved=settings.get('cache_saved');issue=(f"\nCalibration issue: {errors[0][:180]}" if errors else "");cache_note=("\nCache: saved" if source=='probe' and cache_saved is True else "\nCache: SAVE FAILED — next run will recalibrate" if source=='probe' and cache_saved is False else "")
-  summary=f"Eligible human-verified images: {len(plan.image_ids)}\nNew model: {plan.model_id}\n\nAuto performance\nDevice: {device}\nBatch: {settings.get('batch_size')}\nWorkers: {settings.get('workers')}\nAMP: {amp}\nSelection: {source_label}\nCalibration time: {auto_seconds:.1f} s{cache_note}{issue}\n\nTraining saves a new model and does not change human annotations."
+  counts=self.context.landmark_counts();new_or_changed=counts.get('New/changed',0)
+  summary=f"Training set: {len(plan.image_ids)} verified images\nNew or changed since the active model: {new_or_changed}\nNew model: {plan.model_id}\n\nPerformance settings\nDevice: {device}\nBatch: {settings.get('batch_size')}\nWorkers: {settings.get('workers')}\nAMP: {amp}\nSelection: {source_label}\nCalibration time: {auto_seconds:.1f} s{cache_note}{issue}\n\nThe new model is trained on the full current training set. The 'new or changed' count only shows how much of that set is not yet represented by the active model. Human annotations are not changed."
   dialog=tk.Toplevel(self.shell);dialog.title('Start landmark training');dialog.transient(self.shell);frame=ttk.Frame(dialog,padding=14);frame.pack(fill='both',expand=True);ttk.Label(frame,text=summary,justify='left',wraplength=460).pack(anchor='w');actions=ttk.Frame(frame);actions.pack(anchor='e',pady=(12,0));self.button(actions,'Cancel',dialog.destroy,'Return without starting training.').pack(side='right');self.button(actions,'Start training',lambda:(dialog.destroy(),self._run_training(plan)),'Start the prepared landmark model training.').pack(side='right',padx=(0,6));center(self.shell,dialog)
  def _run_training(self,plan):
   dialog=tk.Toplevel(self.shell);dialog.title('Train landmark model');dialog.transient(self.shell);frame=ttk.Frame(dialog,padding=14);frame.pack(fill='both',expand=True);label=ttk.Label(frame,text='Creating the training dataset…',justify='left');label.pack(anchor='w');bar=ttk.Progressbar(frame,mode='indeterminate');bar.pack(fill='x',pady=(8,0));bar.start();events=queue.Queue();center(self.shell,dialog)
