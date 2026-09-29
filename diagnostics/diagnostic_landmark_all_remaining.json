@@ -1,0 +1,582 @@
+{
+  "repo": {
+    "branch": "",
+    "head": "4989c1a3d850b79a4aad7c5e8fb03f6a0ee2ca66",
+    "status": "",
+    "source_sha256": {
+      "app\\ai_batch.py": "1356044574d1af382838314011d9f3c2ea3e968d4a449770cd950014f31e84a5",
+      "app\\landmark_ai_service.py": "1309eb555b5490abc45eabb8070e0f805cd318ec9dc3f05245d2e8573d387182",
+      "app\\rtmpose_backend.py": "687ee883140a9dc8843c1d091e57390506ea62f45a42b63087e3a288f9bcd763",
+      "app\\ai_hardware.py": "ff0304afd95059cddc34d322a0bbb5aa16d74b58bafd51d4fb550362c6fc5c0a",
+      "app\\ui\\landmarks_section.py": "8f2ed85141c4d8623b6ac03cc71d9c3529344ac888d36fcb130176b50ed25efe"
+    }
+  },
+  "installed_exe": [
+    {
+      "path": "C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\MorphoLabel.exe",
+      "exists": true,
+      "sha256": "f33f11b11f0ef5de29f3cf5f433e15f246a7513e7b20f22e9f1bf44ab3a68105",
+      "size": 6443429,
+      "version_output": "0.5.0-beta.9"
+    }
+  ],
+  "batch": {
+    "batch_id": "rtmpose_v032_batch_20260929T120931Z_369d9f54",
+    "created_at": "2026-09-29T12:09:31.514848+00:00",
+    "completed_at": "2026-09-29T12:11:44.195185+00:00",
+    "model_id": "rtmpose_v032",
+    "selection_mode": "mixed_remaining",
+    "selected_count": 862,
+    "prediction_runs_count": 0,
+    "failure_count": 862,
+    "failure_counts": [
+      {
+        "message": "RTMPose rank failed (return code 1)\nFULL STDOUT:\n\nFULL STDERR:\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 77, in import_modules_from_strings\n    imported_tmp = import_module(imp)\n                   ^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\importlib\\__init__.py\", line 126, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1204, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1176, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1140, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'rtmpose_augmentations'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 466, in fromfile\n    import_modules_from_strings(**cfg_dict['custom_imports'])\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 84, in import_modules_from_strings\n    raise ImportError(f'Failed to import {imp}')\nImportError: Failed to import rtmpose_augmentations\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 505, in <module>\n    if __name__=='__main__':main()\n                            ^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 205, in main\n    init_started=time.perf_counter();model=inference_model(request);model_init_seconds=time.perf_counter()-init_started\n                                           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 80, in inference_model\n    return init_model(prepare_inference_config(request[\"config_path\"]),request[\"checkpoint_path\"],device=request.get(\"device\",\"cuda:0\"))\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 62, in prepare_inference_config\n    cfg=config_loader.fromfile(config_path)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 478, in fromfile\n    raise ImportError(err_msg) from e\nImportError: Failed to import custom modules from {'allow_failed_imports': False, 'imports': ['rtmpose_augmentations']}, the current sys.path is: \n    C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\python311.zip\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\DLLs\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\nYou should set `PYTHONPATH` to make `sys.path` include the directory which contains your custom module\n",
+        "count": 862
+      }
+    ],
+    "examples": [
+      {
+        "image_id": "915ec51252c8e354",
+        "failure_message": "RTMPose rank failed (return code 1)\nFULL STDOUT:\n\nFULL STDERR:\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 77, in import_modules_from_strings\n    imported_tmp = import_module(imp)\n                   ^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\importlib\\__init__.py\", line 126, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1204, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1176, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1140, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'rtmpose_augmentations'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 466, in fromfile\n    import_modules_from_strings(**cfg_dict['custom_imports'])\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 84, in import_modules_from_strings\n    raise ImportError(f'Failed to import {imp}')\nImportError: Failed to import rtmpose_augmentations\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 505, in <module>\n    if __name__=='__main__':main()\n                            ^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 205, in main\n    init_started=time.perf_counter();model=inference_model(request);model_init_seconds=time.perf_counter()-init_started\n                                           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 80, in inference_model\n    return init_model(prepare_inference_config(request[\"config_path\"]),request[\"checkpoint_path\"],device=request.get(\"device\",\"cuda:0\"))\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 62, in prepare_inference_config\n    cfg=config_loader.fromfile(config_path)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 478, in fromfile\n    raise ImportError(err_msg) from e\nImportError: Failed to import custom modules from {'allow_failed_imports': False, 'imports': ['rtmpose_augmentations']}, the current sys.path is: \n    C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\python311.zip\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\DLLs\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\nYou should set `PYTHONPATH` to make `sys.path` include the directory which contains your custom module\n"
+      },
+      {
+        "image_id": "9f87067229f4cf69",
+        "failure_message": "RTMPose rank failed (return code 1)\nFULL STDOUT:\n\nFULL STDERR:\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 77, in import_modules_from_strings\n    imported_tmp = import_module(imp)\n                   ^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\importlib\\__init__.py\", line 126, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1204, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1176, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1140, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'rtmpose_augmentations'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 466, in fromfile\n    import_modules_from_strings(**cfg_dict['custom_imports'])\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 84, in import_modules_from_strings\n    raise ImportError(f'Failed to import {imp}')\nImportError: Failed to import rtmpose_augmentations\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 505, in <module>\n    if __name__=='__main__':main()\n                            ^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 205, in main\n    init_started=time.perf_counter();model=inference_model(request);model_init_seconds=time.perf_counter()-init_started\n                                           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 80, in inference_model\n    return init_model(prepare_inference_config(request[\"config_path\"]),request[\"checkpoint_path\"],device=request.get(\"device\",\"cuda:0\"))\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 62, in prepare_inference_config\n    cfg=config_loader.fromfile(config_path)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 478, in fromfile\n    raise ImportError(err_msg) from e\nImportError: Failed to import custom modules from {'allow_failed_imports': False, 'imports': ['rtmpose_augmentations']}, the current sys.path is: \n    C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\python311.zip\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\DLLs\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\nYou should set `PYTHONPATH` to make `sys.path` include the directory which contains your custom module\n"
+      },
+      {
+        "image_id": "7b1b487442c352fb",
+        "failure_message": "RTMPose rank failed (return code 1)\nFULL STDOUT:\n\nFULL STDERR:\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 77, in import_modules_from_strings\n    imported_tmp = import_module(imp)\n                   ^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\importlib\\__init__.py\", line 126, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1204, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1176, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1140, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'rtmpose_augmentations'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 466, in fromfile\n    import_modules_from_strings(**cfg_dict['custom_imports'])\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 84, in import_modules_from_strings\n    raise ImportError(f'Failed to import {imp}')\nImportError: Failed to import rtmpose_augmentations\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 505, in <module>\n    if __name__=='__main__':main()\n                            ^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 205, in main\n    init_started=time.perf_counter();model=inference_model(request);model_init_seconds=time.perf_counter()-init_started\n                                           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 80, in inference_model\n    return init_model(prepare_inference_config(request[\"config_path\"]),request[\"checkpoint_path\"],device=request.get(\"device\",\"cuda:0\"))\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 62, in prepare_inference_config\n    cfg=config_loader.fromfile(config_path)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 478, in fromfile\n    raise ImportError(err_msg) from e\nImportError: Failed to import custom modules from {'allow_failed_imports': False, 'imports': ['rtmpose_augmentations']}, the current sys.path is: \n    C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\python311.zip\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\DLLs\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\nYou should set `PYTHONPATH` to make `sys.path` include the directory which contains your custom module\n"
+      },
+      {
+        "image_id": "fde86b0ddcb8ab4d",
+        "failure_message": "RTMPose rank failed (return code 1)\nFULL STDOUT:\n\nFULL STDERR:\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 77, in import_modules_from_strings\n    imported_tmp = import_module(imp)\n                   ^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\importlib\\__init__.py\", line 126, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1204, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1176, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1140, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'rtmpose_augmentations'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 466, in fromfile\n    import_modules_from_strings(**cfg_dict['custom_imports'])\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 84, in import_modules_from_strings\n    raise ImportError(f'Failed to import {imp}')\nImportError: Failed to import rtmpose_augmentations\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 505, in <module>\n    if __name__=='__main__':main()\n                            ^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 205, in main\n    init_started=time.perf_counter();model=inference_model(request);model_init_seconds=time.perf_counter()-init_started\n                                           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 80, in inference_model\n    return init_model(prepare_inference_config(request[\"config_path\"]),request[\"checkpoint_path\"],device=request.get(\"device\",\"cuda:0\"))\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 62, in prepare_inference_config\n    cfg=config_loader.fromfile(config_path)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 478, in fromfile\n    raise ImportError(err_msg) from e\nImportError: Failed to import custom modules from {'allow_failed_imports': False, 'imports': ['rtmpose_augmentations']}, the current sys.path is: \n    C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\python311.zip\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\DLLs\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\nYou should set `PYTHONPATH` to make `sys.path` include the directory which contains your custom module\n"
+      },
+      {
+        "image_id": "13243b4bb7733d81",
+        "failure_message": "RTMPose rank failed (return code 1)\nFULL STDOUT:\n\nFULL STDERR:\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 77, in import_modules_from_strings\n    imported_tmp = import_module(imp)\n                   ^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\importlib\\__init__.py\", line 126, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1204, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1176, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1140, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'rtmpose_augmentations'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 466, in fromfile\n    import_modules_from_strings(**cfg_dict['custom_imports'])\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 84, in import_modules_from_strings\n    raise ImportError(f'Failed to import {imp}')\nImportError: Failed to import rtmpose_augmentations\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 505, in <module>\n    if __name__=='__main__':main()\n                            ^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 205, in main\n    init_started=time.perf_counter();model=inference_model(request);model_init_seconds=time.perf_counter()-init_started\n                                           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 80, in inference_model\n    return init_model(prepare_inference_config(request[\"config_path\"]),request[\"checkpoint_path\"],device=request.get(\"device\",\"cuda:0\"))\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 62, in prepare_inference_config\n    cfg=config_loader.fromfile(config_path)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 478, in fromfile\n    raise ImportError(err_msg) from e\nImportError: Failed to import custom modules from {'allow_failed_imports': False, 'imports': ['rtmpose_augmentations']}, the current sys.path is: \n    C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\python311.zip\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\DLLs\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\nYou should set `PYTHONPATH` to make `sys.path` include the directory which contains your custom module\n"
+      },
+      {
+        "image_id": "913eea6e1e216e48",
+        "failure_message": "RTMPose rank failed (return code 1)\nFULL STDOUT:\n\nFULL STDERR:\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 77, in import_modules_from_strings\n    imported_tmp = import_module(imp)\n                   ^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\importlib\\__init__.py\", line 126, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1204, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1176, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1140, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'rtmpose_augmentations'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 466, in fromfile\n    import_modules_from_strings(**cfg_dict['custom_imports'])\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 84, in import_modules_from_strings\n    raise ImportError(f'Failed to import {imp}')\nImportError: Failed to import rtmpose_augmentations\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 505, in <module>\n    if __name__=='__main__':main()\n                            ^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 205, in main\n    init_started=time.perf_counter();model=inference_model(request);model_init_seconds=time.perf_counter()-init_started\n                                           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 80, in inference_model\n    return init_model(prepare_inference_config(request[\"config_path\"]),request[\"checkpoint_path\"],device=request.get(\"device\",\"cuda:0\"))\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 62, in prepare_inference_config\n    cfg=config_loader.fromfile(config_path)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 478, in fromfile\n    raise ImportError(err_msg) from e\nImportError: Failed to import custom modules from {'allow_failed_imports': False, 'imports': ['rtmpose_augmentations']}, the current sys.path is: \n    C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\python311.zip\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\DLLs\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\nYou should set `PYTHONPATH` to make `sys.path` include the directory which contains your custom module\n"
+      },
+      {
+        "image_id": "780d7e30c6e3abf7",
+        "failure_message": "RTMPose rank failed (return code 1)\nFULL STDOUT:\n\nFULL STDERR:\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 77, in import_modules_from_strings\n    imported_tmp = import_module(imp)\n                   ^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\importlib\\__init__.py\", line 126, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1204, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1176, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1140, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'rtmpose_augmentations'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 466, in fromfile\n    import_modules_from_strings(**cfg_dict['custom_imports'])\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 84, in import_modules_from_strings\n    raise ImportError(f'Failed to import {imp}')\nImportError: Failed to import rtmpose_augmentations\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 505, in <module>\n    if __name__=='__main__':main()\n                            ^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 205, in main\n    init_started=time.perf_counter();model=inference_model(request);model_init_seconds=time.perf_counter()-init_started\n                                           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 80, in inference_model\n    return init_model(prepare_inference_config(request[\"config_path\"]),request[\"checkpoint_path\"],device=request.get(\"device\",\"cuda:0\"))\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 62, in prepare_inference_config\n    cfg=config_loader.fromfile(config_path)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 478, in fromfile\n    raise ImportError(err_msg) from e\nImportError: Failed to import custom modules from {'allow_failed_imports': False, 'imports': ['rtmpose_augmentations']}, the current sys.path is: \n    C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\python311.zip\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\DLLs\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\nYou should set `PYTHONPATH` to make `sys.path` include the directory which contains your custom module\n"
+      },
+      {
+        "image_id": "c0de9587d364f4c8",
+        "failure_message": "RTMPose rank failed (return code 1)\nFULL STDOUT:\n\nFULL STDERR:\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 77, in import_modules_from_strings\n    imported_tmp = import_module(imp)\n                   ^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\importlib\\__init__.py\", line 126, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1204, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1176, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1140, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'rtmpose_augmentations'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 466, in fromfile\n    import_modules_from_strings(**cfg_dict['custom_imports'])\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 84, in import_modules_from_strings\n    raise ImportError(f'Failed to import {imp}')\nImportError: Failed to import rtmpose_augmentations\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 505, in <module>\n    if __name__=='__main__':main()\n                            ^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 205, in main\n    init_started=time.perf_counter();model=inference_model(request);model_init_seconds=time.perf_counter()-init_started\n                                           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 80, in inference_model\n    return init_model(prepare_inference_config(request[\"config_path\"]),request[\"checkpoint_path\"],device=request.get(\"device\",\"cuda:0\"))\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 62, in prepare_inference_config\n    cfg=config_loader.fromfile(config_path)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 478, in fromfile\n    raise ImportError(err_msg) from e\nImportError: Failed to import custom modules from {'allow_failed_imports': False, 'imports': ['rtmpose_augmentations']}, the current sys.path is: \n    C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\python311.zip\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\DLLs\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\nYou should set `PYTHONPATH` to make `sys.path` include the directory which contains your custom module\n"
+      },
+      {
+        "image_id": "ed7c4f7ec44d130f",
+        "failure_message": "RTMPose rank failed (return code 1)\nFULL STDOUT:\n\nFULL STDERR:\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 77, in import_modules_from_strings\n    imported_tmp = import_module(imp)\n                   ^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\importlib\\__init__.py\", line 126, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1204, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1176, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1140, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'rtmpose_augmentations'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 466, in fromfile\n    import_modules_from_strings(**cfg_dict['custom_imports'])\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 84, in import_modules_from_strings\n    raise ImportError(f'Failed to import {imp}')\nImportError: Failed to import rtmpose_augmentations\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 505, in <module>\n    if __name__=='__main__':main()\n                            ^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 205, in main\n    init_started=time.perf_counter();model=inference_model(request);model_init_seconds=time.perf_counter()-init_started\n                                           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 80, in inference_model\n    return init_model(prepare_inference_config(request[\"config_path\"]),request[\"checkpoint_path\"],device=request.get(\"device\",\"cuda:0\"))\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 62, in prepare_inference_config\n    cfg=config_loader.fromfile(config_path)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 478, in fromfile\n    raise ImportError(err_msg) from e\nImportError: Failed to import custom modules from {'allow_failed_imports': False, 'imports': ['rtmpose_augmentations']}, the current sys.path is: \n    C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\python311.zip\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\DLLs\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\nYou should set `PYTHONPATH` to make `sys.path` include the directory which contains your custom module\n"
+      },
+      {
+        "image_id": "c3bd243a0f8a5d3d",
+        "failure_message": "RTMPose rank failed (return code 1)\nFULL STDOUT:\n\nFULL STDERR:\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 77, in import_modules_from_strings\n    imported_tmp = import_module(imp)\n                   ^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\importlib\\__init__.py\", line 126, in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<frozen importlib._bootstrap>\", line 1204, in _gcd_import\n  File \"<frozen importlib._bootstrap>\", line 1176, in _find_and_load\n  File \"<frozen importlib._bootstrap>\", line 1140, in _find_and_load_unlocked\nModuleNotFoundError: No module named 'rtmpose_augmentations'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 466, in fromfile\n    import_modules_from_strings(**cfg_dict['custom_imports'])\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\utils\\misc.py\", line 84, in import_modules_from_strings\n    raise ImportError(f'Failed to import {imp}')\nImportError: Failed to import rtmpose_augmentations\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 505, in <module>\n    if __name__=='__main__':main()\n                            ^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 205, in main\n    init_started=time.perf_counter();model=inference_model(request);model_init_seconds=time.perf_counter()-init_started\n                                           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 80, in inference_model\n    return init_model(prepare_inference_config(request[\"config_path\"]),request[\"checkpoint_path\"],device=request.get(\"device\",\"cuda:0\"))\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\\rtmpose_runner.py\", line 62, in prepare_inference_config\n    cfg=config_loader.fromfile(config_path)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\\mmengine\\config\\config.py\", line 478, in fromfile\n    raise ImportError(err_msg) from e\nImportError: Failed to import custom modules from {'allow_failed_imports': False, 'imports': ['rtmpose_augmentations']}, the current sys.path is: \n    C:\\Users\\artae\\AppData\\Local\\Programs\\MorphoLabel\\_internal\\ai_runtime\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\python311.zip\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\DLLs\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\n    C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\Lib\\site-packages\nYou should set `PYTHONPATH` to make `sys.path` include the directory which contains your custom module\n"
+      }
+    ],
+    "manifest_path": "D:\\Phoxinus_25-26\\Phoxinus_25-26\\project_data\\ai\\batches\\rtmpose_v032_batch_20260929T120931Z_369d9f54\\manifest.json"
+  },
+  "active_models": [
+    {
+      "model_id": "crop_model_v006",
+      "parent_model_id": "crop_model_v002",
+      "kind": "crop",
+      "active": 1,
+      "pinned": 0,
+      "path": "models/crop_model_v006",
+      "dataset_id": null,
+      "dataset_manifest_path": null,
+      "backend": null,
+      "provider": null,
+      "schema_sha256": null,
+      "schema_identity": null,
+      "input_size": null,
+      "checkpoint_filename": "best_engineering_validation.pth",
+      "checkpoint_exists": false,
+      "checkpoint_size": 0,
+      "checkpoint_sha256": null,
+      "model_json": {}
+    },
+    {
+      "model_id": "rtmpose_v032",
+      "parent_model_id": "rtmpose_v027",
+      "kind": "landmark",
+      "active": 1,
+      "pinned": 0,
+      "path": "ai/models/rtmpose_v032",
+      "dataset_id": "rtmpose_v032_engineering_20260924_20260924_105656_153422",
+      "dataset_manifest_path": "ai/datasets/rtmpose_v032_engineering_20260924_20260924_105656_153422/manifest.json",
+      "backend": "rtmpose",
+      "provider": null,
+      "schema_sha256": "2c1237b07c1bda03657284c97572aad9e9c058639eb943e689cfc26f7324e82d",
+      "schema_identity": null,
+      "input_size": [
+        640,
+        320
+      ],
+      "checkpoint_filename": "best_engineering_validation.pth",
+      "checkpoint_exists": true,
+      "checkpoint_size": 57000118,
+      "checkpoint_sha256": "52dcca30a8afae74241d9e673940efe491cbe5d154a7c07a3fb4ca971d3592bc",
+      "model_json": {
+        "model_id": "rtmpose_v032",
+        "backend": "rtmpose",
+        "schema_sha256": "2c1237b07c1bda03657284c97572aad9e9c058639eb943e689cfc26f7324e82d",
+        "dataset_id": "rtmpose_v032_engineering_20260924_20260924_105656_153422",
+        "dataset_manifest": "ai/datasets/rtmpose_v032_engineering_20260924_20260924_105656_153422/manifest.json",
+        "parent_model_id": "rtmpose_v027",
+        "input_size": [
+          640,
+          320
+        ],
+        "base_checkpoint_path": "D:\\Phoxinus_25-26\\Phoxinus_25-26\\project_data\\ai\\models\\rtmpose_v027\\best_engineering_validation.pth",
+        "result": {
+          "status": "trained",
+          "checkpoint_path": "D:\\Phoxinus_25-26\\Phoxinus_25-26\\project_data\\ai\\models\\rtmpose_v032\\best_engineering_validation.pth",
+          "checkpoint_sha256": "52dcca30a8afae74241d9e673940efe491cbe5d154a7c07a3fb4ca971d3592bc",
+          "duration_seconds": 938.0417051315308,
+          "command": [
+            "D:\\Morphology_Pipeline\\ai_runtime\\Scripts\\python.exe",
+            "-u",
+            "D:\\Morphology_Pipeline\\ai_runtime\\vendor\\mmpose\\tools\\train.py",
+            "D:\\Phoxinus_25-26\\Phoxinus_25-26\\project_data\\ai\\models\\rtmpose_v032\\config.py",
+            "--work-dir",
+            "D:\\Phoxinus_25-26\\Phoxinus_25-26\\project_data\\ai\\models\\rtmpose_v032"
+          ],
+          "best_epoch": 80,
+          "engineering_validation": {
+            "epoch": 80,
+            "median_error_percent": 0.22428897274181667,
+            "p90_error_percent": 0.5270032226345597,
+            "p95_error_percent": 0.6631007218630046
+          },
+          "validation_by_epoch": [
+            {
+              "epoch": 10,
+              "median_error_percent": 0.21393589703167432,
+              "p90_error_percent": 0.47999950051343215,
+              "p95_error_percent": 0.7028053447602549
+            },
+            {
+              "epoch": 20,
+              "median_error_percent": 0.21390374331550802,
+              "p90_error_percent": 0.4880518705764335,
+              "p95_error_percent": 0.718075078776021
+            },
+            {
+              "epoch": 30,
+              "median_error_percent": 0.21390374331550802,
+              "p90_error_percent": 0.5219604863113345,
+              "p95_error_percent": 0.6925274741318123
+            },
+            {
+              "epoch": 40,
+              "median_error_percent": 0.23112282313171947,
+              "p90_error_percent": 0.5093540231844378,
+              "p95_error_percent": 0.679700161082833
+            },
+            {
+              "epoch": 50,
+              "median_error_percent": 0.22428897274181667,
+              "p90_error_percent": 0.5212237427412512,
+              "p95_error_percent": 0.7471353639324577
+            },
+            {
+              "epoch": 60,
+              "median_error_percent": 0.24135986955505767,
+              "p90_error_percent": 0.53475935828877,
+              "p95_error_percent": 0.6874564321218672
+            },
+            {
+              "epoch": 70,
+              "median_error_percent": 0.21973710448411482,
+              "p90_error_percent": 0.4926446007422698,
+              "p95_error_percent": 0.713704124173692
+            },
+            {
+              "epoch": 80,
+              "median_error_percent": 0.22428897274181667,
+              "p90_error_percent": 0.5270032226345597,
+              "p95_error_percent": 0.6631007218630046
+            },
+            {
+              "epoch": 90,
+              "median_error_percent": 0.24135986955505767,
+              "p90_error_percent": 0.526872543268281,
+              "p95_error_percent": 0.7378979821411467
+            },
+            {
+              "epoch": 100,
+              "median_error_percent": 0.237212663307997,
+              "p90_error_percent": 0.502595091633465,
+              "p95_error_percent": 0.7707118618127029
+            },
+            {
+              "epoch": 110,
+              "median_error_percent": 0.2328389278795328,
+              "p90_error_percent": 0.5092206963663624,
+              "p95_error_percent": 0.7121549643736051
+            },
+            {
+              "epoch": 120,
+              "median_error_percent": 0.21916253475807748,
+              "p90_error_percent": 0.502595091633465,
+              "p95_error_percent": 0.6925274741318123
+            },
+            {
+              "epoch": 130,
+              "median_error_percent": 0.23915165534757107,
+              "p90_error_percent": 0.5148570145055711,
+              "p95_error_percent": 0.7118662722144081
+            },
+            {
+              "epoch": 140,
+              "median_error_percent": 0.24192659430186506,
+              "p90_error_percent": 0.5114741534445274,
+              "p95_error_percent": 0.6910111648281327
+            },
+            {
+              "epoch": 150,
+              "median_error_percent": 0.23214326035770394,
+              "p90_error_percent": 0.5076974270206767,
+              "p95_error_percent": 0.7014397684663668
+            },
+            {
+              "epoch": 160,
+              "median_error_percent": 0.23915165534757107,
+              "p90_error_percent": 0.5015253896542994,
+              "p95_error_percent": 0.6907601830618922
+            },
+            {
+              "epoch": 170,
+              "median_error_percent": 0.2234940178131843,
+              "p90_error_percent": 0.5148570145055711,
+              "p95_error_percent": 0.6954242001885919
+            },
+            {
+              "epoch": 180,
+              "median_error_percent": 0.2405156978178246,
+              "p90_error_percent": 0.5437850255435305,
+              "p95_error_percent": 0.7121549643736051
+            },
+            {
+              "epoch": 190,
+              "median_error_percent": 0.23924740661144583,
+              "p90_error_percent": 0.5112682239913386,
+              "p95_error_percent": 0.7518477157184109
+            },
+            {
+              "epoch": 200,
+              "median_error_percent": 0.23694398698875063,
+              "p90_error_percent": 0.5270032226345597,
+              "p95_error_percent": 0.7144052498129505
+            },
+            {
+              "epoch": 210,
+              "median_error_percent": 0.23924740661144583,
+              "p90_error_percent": 0.5015253896542994,
+              "p95_error_percent": 0.740911731271575
+            }
+          ],
+          "ema_used": true
+        },
+        "training_settings": {
+          "device": "cuda:0",
+          "batch_size": 8,
+          "workers": 2,
+          "mixed_precision": true,
+          "pin_memory": true,
+          "persistent_workers": true,
+          "profile": "auto",
+          "tuning_source": "cache",
+          "tuning_key": "{\"engine_version\":\"2\",\"hardware_fingerprint\":\"fd75c5e3069839970e8ec3a851d12a267469e87c25cd4946b891c8260d574a4d\",\"input_size\":[640,320],\"model\":\"rtmpose_arch_v2:config.py:0daec576406f5950:landmarks=25\",\"variant\":\"landmark_training_architecture_v12:rtmpose_arch_v2:config.py:0daec576406f5950:landmarks=25\",\"workload\":\"landmark_training\"}",
+          "tuning_errors": [],
+          "cache_saved": true,
+          "photometric_augmentation": false,
+          "max_epochs": 210,
+          "input_size": [
+            640,
+            320
+          ],
+          "hardware": {
+            "cpu_model": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+            "physical_cores": 20,
+            "logical_cores": 28,
+            "ram_bytes": 68542550016,
+            "gpu_model": "NVIDIA GeForce RTX 3060",
+            "gpu_vram_mib": 12288,
+            "gpu_driver": "616.56",
+            "cuda_available": true,
+            "cuda_runtime": "12.1",
+            "acceleration": "CUDA",
+            "gpu_free_mib": 7600
+          },
+          "bootstrap": null,
+          "prepared_snapshot_path": "D:\\Phoxinus_25-26\\Phoxinus_25-26\\project_data\\ai\\cache\\landmark_prepared_snapshot.json",
+          "prepared_snapshot_workers": 1,
+          "preparation_timings_seconds": {
+            "eligible_query": 1.6220247000164818,
+            "prepared_snapshot": 0.7625337000063155,
+            "probe_assets": 0.0,
+            "auto_performance": 0.02777700001024641
+          },
+          "architecture_tuning_identity": "rtmpose_arch_v2:config.py:0daec576406f5950:landmarks=25",
+          "checkpoint_interval": 10,
+          "max_keep_ckpts": 21,
+          "smoke": false,
+          "parent_checkpoint": "D:\\Phoxinus_25-26\\Phoxinus_25-26\\project_data\\ai\\models\\rtmpose_v027\\best_engineering_validation.pth",
+          "config_path": "D:\\Phoxinus_25-26\\Phoxinus_25-26\\project_data\\ai\\models\\rtmpose_v032\\config.py"
+        },
+        "hardware": {
+          "cpu_model": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+          "physical_cores": 20,
+          "logical_cores": 28,
+          "ram_bytes": 68542550016,
+          "gpu_model": "NVIDIA GeForce RTX 3060",
+          "gpu_vram_mib": 12288,
+          "gpu_driver": "616.56",
+          "cuda_available": true,
+          "cuda_runtime": "12.1",
+          "acceleration": "CUDA",
+          "gpu_free_mib": 7600
+        }
+      }
+    }
+  ],
+  "runtime": {
+    "active_component_version": "1.0.0-dev6",
+    "runtime_python": "C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\python.exe",
+    "runtime_exists": true,
+    "runner_paths": [
+      {
+        "path": "D:\\MorphoLabel\\app\\rtmpose_runner.py",
+        "exists": true
+      },
+      {
+        "path": "D:\\MorphoLabel\\ai_runtime\\rtmpose_runner.py",
+        "exists": true
+      }
+    ],
+    "python_runtime_output": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]\n2.1.0+cu121\n1.3.2\nTrue\nNVIDIA GeForce RTX 3060\n12.1",
+    "python_runtime_error": null,
+    "runner_info_result": "failed_read_only_runner_info: app/rtmpose_runner.py imports error: AttributeError: module profile has no attribute run"
+  },
+  "setup": {
+    "first_run_setup": {
+      "setup_contract_version": 2,
+      "status": "PASS",
+      "app_version": "0.5.0-beta.8",
+      "completed_at": "2026-09-28T21:39:40.025528+00:00",
+      "runtime_python": "C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\components\\ai\\1.0.0-dev6\\python.exe",
+      "hardware": {
+        "cpu_model": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+        "physical_cores": 20,
+        "logical_cores": 28,
+        "ram_bytes": 68542550016,
+        "gpu_model": "NVIDIA GeForce RTX 3060",
+        "gpu_vram_mib": 12288,
+        "gpu_driver": "616.56",
+        "cuda_available": true,
+        "cuda_runtime": "12.1",
+        "acceleration": "CUDA",
+        "gpu_free_mib": 6031
+      },
+      "recommended_defaults": {
+        "inference": {
+          "device": "cuda:0",
+          "batch_size": 8,
+          "workers": 8,
+          "mixed_precision": true,
+          "pin_memory": true,
+          "persistent_workers": true,
+          "profile": "auto"
+        },
+        "training": {
+          "device": "cuda:0",
+          "batch_size": 8,
+          "workers": 8,
+          "mixed_precision": true,
+          "pin_memory": true,
+          "persistent_workers": true,
+          "profile": "auto"
+        }
+      },
+      "ai_self_test": {
+        "status": "PASS",
+        "device": "cuda:0",
+        "cuda_available": true,
+        "cuda_device_name": "NVIDIA GeForce RTX 3060",
+        "landmarks": 17,
+        "training_smoke": {
+          "status": "trained",
+          "duration_seconds": 8.653899431228638,
+          "checkpoint_sha256": "1ead8adc9be6a01e8cf9f372a383a865e25cf359ff63e0c601ddf780928b9800"
+        },
+        "bootstrap_sha256": "896e3665d849ef7eb9b6ec0995955796cc9810f024fa0aa0bdc18acb0d68bf52"
+      }
+    },
+    "hardware_profile": {
+      "hardware": {
+        "cpu_model": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+        "physical_cores": 20,
+        "logical_cores": 28,
+        "ram_bytes": 68542550016,
+        "gpu_model": "NVIDIA GeForce RTX 3060",
+        "gpu_vram_mib": 12288,
+        "gpu_driver": "616.56",
+        "cuda_available": false,
+        "cuda_runtime": null,
+        "acceleration": "CPU",
+        "gpu_free_mib": 8313
+      },
+      "training_default": {
+        "device": "cpu",
+        "batch_size": 1,
+        "workers": 4,
+        "mixed_precision": false,
+        "pin_memory": false,
+        "persistent_workers": true,
+        "profile": "auto"
+      },
+      "inference_default": {
+        "device": "cpu",
+        "batch_size": 1,
+        "workers": 4,
+        "mixed_precision": false,
+        "pin_memory": false,
+        "persistent_workers": true,
+        "profile": "auto"
+      }
+    },
+    "active_component": {
+      "version": "1.0.0-dev6"
+    }
+  },
+  "logs": {
+    "path": "C:\\Users\\artae\\AppData\\Local\\MorphoLabel\\logs\\app.log",
+    "line_count": 493,
+    "last_relevant_lines": [
+      "2026-09-27T14:36:23.020 thread=MainThread/35412 image_id=GLOBAL op=ui_preference_last_project state=ERROR elapsed_s=0.000 path=D:\\_Temp\\User\\tmpqrm35gez\\external-host [WinError 3] Системе не удается найти указанный путь: 'D:\\\\_Temp\\\\User\\\\tmpqrm35gez\\\\external-host'",
+      "2026-09-27T14:36:23.137 thread=simm-hardware-profile/25368 image_id=GLOBAL op=hardware_profile state=END elapsed_s=0.000 path= cpu=Intel64 Family 6 Model 183 Stepping 1, GenuineIntel; logical=28; gpu=NVIDIA GeForce RTX 3060; vram_mib=12288; cuda=False",
+      "2026-09-27T14:37:21.886 thread=production-landmark-load-304bac790c84f491/17660 image_id=304bac790c84f491 op=production_landmark_load_worker state=START elapsed_s=0.000 path= token=1",
+      "2026-09-27T14:37:21.887 thread=production-landmark-load-304bac790c84f491/17660 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=worker start; elapsed_s=0.001",
+      "2026-09-27T14:37:21.888 thread=production-landmark-load-304bac790c84f491/17660 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Checking saved crop frame; elapsed_s=0.001",
+      "2026-09-27T14:37:21.900 thread=production-landmark-load-304bac790c84f491/17660 image_id=304bac790c84f491 op=png_integrity_check state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\304bac790c84f491.png.636fee1a0072445a9f4eeb0cb7492a6b.tmp.png valid=True reason=ok",
+      "2026-09-27T14:37:21.901 thread=production-landmark-load-304bac790c84f491/17660 image_id=304bac790c84f491 op=atomic_png_replace state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\304bac790c84f491.png published=true",
+      "2026-09-27T14:37:21.906 thread=production-landmark-load-304bac790c84f491/17660 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Preparing saved crop frame; elapsed_s=0.018",
+      "2026-09-27T14:37:21.907 thread=production-landmark-load-304bac790c84f491/17660 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Opening rebuilt crop image; elapsed_s=0.002",
+      "2026-09-27T14:37:21.907 thread=production-landmark-load-304bac790c84f491/17660 image_id=304bac790c84f491 op=production_landmark_load_worker state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\304bac790c84f491.png elapsed_s=0.021",
+      "2026-09-27T14:37:21.936 thread=MainThread/35412 image_id=304bac790c84f491 op=production_landmark_lm1_loaded state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\304bac790c84f491.png state=manual provenance=manual x=663.3813559322034 y=261.40677966101697 model_id=None prediction_run_id=None updated_at=2026-09-27T10:59:11.175741+00:00",
+      "2026-09-27T15:19:39.006 thread=simm-hardware-profile/7492 image_id=GLOBAL op=hardware_profile state=END elapsed_s=0.000 path= cpu=Intel64 Family 6 Model 183 Stepping 1, GenuineIntel; logical=28; gpu=NVIDIA GeForce RTX 3060; vram_mib=12288; cuda=False",
+      "2026-09-27T15:20:05.271 thread=production-landmark-load-7fb32eb31ca8525b/34036 image_id=7fb32eb31ca8525b op=production_landmark_load_worker state=START elapsed_s=0.000 path= token=1",
+      "2026-09-27T15:20:05.271 thread=production-landmark-load-7fb32eb31ca8525b/34036 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=worker start; elapsed_s=0.001",
+      "2026-09-27T15:20:05.272 thread=production-landmark-load-7fb32eb31ca8525b/34036 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Checking saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:05.283 thread=production-landmark-load-7fb32eb31ca8525b/34036 image_id=7fb32eb31ca8525b op=png_integrity_check state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\7fb32eb31ca8525b.png.1545fa3bceb64c368be88edd66e39210.tmp.png valid=True reason=ok",
+      "2026-09-27T15:20:05.284 thread=production-landmark-load-7fb32eb31ca8525b/34036 image_id=7fb32eb31ca8525b op=atomic_png_replace state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\7fb32eb31ca8525b.png published=true",
+      "2026-09-27T15:20:05.290 thread=production-landmark-load-7fb32eb31ca8525b/34036 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Preparing saved crop frame; elapsed_s=0.017",
+      "2026-09-27T15:20:05.291 thread=production-landmark-load-7fb32eb31ca8525b/34036 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Opening rebuilt crop image; elapsed_s=0.001",
+      "2026-09-27T15:20:05.291 thread=production-landmark-load-7fb32eb31ca8525b/34036 image_id=7fb32eb31ca8525b op=production_landmark_load_worker state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\7fb32eb31ca8525b.png elapsed_s=0.020",
+      "2026-09-27T15:20:05.314 thread=MainThread/36036 image_id=7fb32eb31ca8525b op=production_landmark_lm1_loaded state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\7fb32eb31ca8525b.png state=manual provenance=manual x=935.8519221642146 y=309.82439487422874 model_id=None prediction_run_id=None updated_at=2026-09-27T10:59:35.863957+00:00",
+      "2026-09-27T15:20:06.249 thread=production-landmark-load-53acd1fd3541e99b/36372 image_id=53acd1fd3541e99b op=production_landmark_load_worker state=START elapsed_s=0.000 path= token=2",
+      "2026-09-27T15:20:06.250 thread=production-landmark-load-53acd1fd3541e99b/36372 image_id=53acd1fd3541e99b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=worker start; elapsed_s=0.001",
+      "2026-09-27T15:20:06.251 thread=production-landmark-load-53acd1fd3541e99b/36372 image_id=53acd1fd3541e99b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Checking saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:06.259 thread=production-landmark-load-53acd1fd3541e99b/36372 image_id=53acd1fd3541e99b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Preparing saved crop frame; elapsed_s=0.009",
+      "2026-09-27T15:20:06.261 thread=production-landmark-load-53acd1fd3541e99b/36372 image_id=53acd1fd3541e99b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Opening crop image; elapsed_s=0.001",
+      "2026-09-27T15:20:06.261 thread=production-landmark-load-53acd1fd3541e99b/36372 image_id=53acd1fd3541e99b op=production_landmark_load_worker state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\53acd1fd3541e99b.png elapsed_s=0.012",
+      "2026-09-27T15:20:06.293 thread=MainThread/36036 image_id=53acd1fd3541e99b op=production_landmark_lm1_loaded state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\53acd1fd3541e99b.png state=manual provenance=manual x=592.4328429046037 y=78.48125296630279 model_id=None prediction_run_id=None updated_at=2026-09-27T10:59:40.928151+00:00",
+      "2026-09-27T15:20:06.953 thread=production-landmark-load-7fb32eb31ca8525b/31116 image_id=7fb32eb31ca8525b op=production_landmark_load_worker state=START elapsed_s=0.000 path= token=3",
+      "2026-09-27T15:20:06.954 thread=production-landmark-load-7fb32eb31ca8525b/31116 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=worker start; elapsed_s=0.001",
+      "2026-09-27T15:20:06.955 thread=production-landmark-load-7fb32eb31ca8525b/31116 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Checking saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:06.960 thread=production-landmark-load-7fb32eb31ca8525b/31116 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Preparing saved crop frame; elapsed_s=0.005",
+      "2026-09-27T15:20:06.961 thread=production-landmark-load-7fb32eb31ca8525b/31116 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Opening crop image; elapsed_s=0.002",
+      "2026-09-27T15:20:06.963 thread=production-landmark-load-7fb32eb31ca8525b/31116 image_id=7fb32eb31ca8525b op=production_landmark_load_worker state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\7fb32eb31ca8525b.png elapsed_s=0.009",
+      "2026-09-27T15:20:06.996 thread=MainThread/36036 image_id=7fb32eb31ca8525b op=production_landmark_lm1_loaded state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\7fb32eb31ca8525b.png state=manual provenance=manual x=935.8519221642146 y=309.82439487422874 model_id=None prediction_run_id=None updated_at=2026-09-27T10:59:35.863957+00:00",
+      "2026-09-27T15:20:07.353 thread=production-landmark-load-304bac790c84f491/36108 image_id=304bac790c84f491 op=production_landmark_load_worker state=START elapsed_s=0.000 path= token=4",
+      "2026-09-27T15:20:07.354 thread=production-landmark-load-304bac790c84f491/36108 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=worker start; elapsed_s=0.001",
+      "2026-09-27T15:20:07.355 thread=production-landmark-load-304bac790c84f491/36108 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Checking saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:07.366 thread=production-landmark-load-304bac790c84f491/36108 image_id=304bac790c84f491 op=png_integrity_check state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\304bac790c84f491.png.bde2067782914bec9d8bda2b480b7a69.tmp.png valid=True reason=ok",
+      "2026-09-27T15:20:07.368 thread=production-landmark-load-304bac790c84f491/36108 image_id=304bac790c84f491 op=atomic_png_replace state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\304bac790c84f491.png published=true",
+      "2026-09-27T15:20:07.372 thread=production-landmark-load-304bac790c84f491/36108 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Preparing saved crop frame; elapsed_s=0.018",
+      "2026-09-27T15:20:07.374 thread=production-landmark-load-304bac790c84f491/36108 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Opening rebuilt crop image; elapsed_s=0.001",
+      "2026-09-27T15:20:07.374 thread=production-landmark-load-304bac790c84f491/36108 image_id=304bac790c84f491 op=production_landmark_load_worker state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\304bac790c84f491.png elapsed_s=0.022",
+      "2026-09-27T15:20:07.397 thread=MainThread/36036 image_id=304bac790c84f491 op=production_landmark_lm1_loaded state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\304bac790c84f491.png state=manual provenance=manual x=663.3813559322034 y=261.40677966101697 model_id=None prediction_run_id=None updated_at=2026-09-27T10:59:11.175741+00:00",
+      "2026-09-27T15:20:07.728 thread=production-landmark-load-7fb32eb31ca8525b/26616 image_id=7fb32eb31ca8525b op=production_landmark_load_worker state=START elapsed_s=0.000 path= token=5",
+      "2026-09-27T15:20:07.730 thread=production-landmark-load-7fb32eb31ca8525b/26616 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=worker start; elapsed_s=0.001",
+      "2026-09-27T15:20:07.730 thread=production-landmark-load-7fb32eb31ca8525b/26616 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Checking saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:07.732 thread=production-landmark-load-7fb32eb31ca8525b/26616 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Preparing saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:07.734 thread=production-landmark-load-7fb32eb31ca8525b/26616 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Opening crop image; elapsed_s=0.001",
+      "2026-09-27T15:20:07.734 thread=production-landmark-load-7fb32eb31ca8525b/26616 image_id=7fb32eb31ca8525b op=production_landmark_load_worker state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\7fb32eb31ca8525b.png elapsed_s=0.005",
+      "2026-09-27T15:20:07.774 thread=MainThread/36036 image_id=7fb32eb31ca8525b op=production_landmark_lm1_loaded state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\7fb32eb31ca8525b.png state=manual provenance=manual x=935.8519221642146 y=309.82439487422874 model_id=None prediction_run_id=None updated_at=2026-09-27T10:59:35.863957+00:00",
+      "2026-09-27T15:20:08.033 thread=production-landmark-load-53acd1fd3541e99b/29644 image_id=53acd1fd3541e99b op=production_landmark_load_worker state=START elapsed_s=0.000 path= token=6",
+      "2026-09-27T15:20:08.034 thread=production-landmark-load-53acd1fd3541e99b/29644 image_id=53acd1fd3541e99b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=worker start; elapsed_s=0.001",
+      "2026-09-27T15:20:08.035 thread=production-landmark-load-53acd1fd3541e99b/29644 image_id=53acd1fd3541e99b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Checking saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:08.035 thread=production-landmark-load-53acd1fd3541e99b/29644 image_id=53acd1fd3541e99b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Preparing saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:08.036 thread=production-landmark-load-53acd1fd3541e99b/29644 image_id=53acd1fd3541e99b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Opening crop image; elapsed_s=0.001",
+      "2026-09-27T15:20:08.037 thread=production-landmark-load-53acd1fd3541e99b/29644 image_id=53acd1fd3541e99b op=production_landmark_load_worker state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\53acd1fd3541e99b.png elapsed_s=0.003",
+      "2026-09-27T15:20:08.069 thread=MainThread/36036 image_id=53acd1fd3541e99b op=production_landmark_lm1_loaded state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\53acd1fd3541e99b.png state=manual provenance=manual x=592.4328429046037 y=78.48125296630279 model_id=None prediction_run_id=None updated_at=2026-09-27T10:59:40.928151+00:00",
+      "2026-09-27T15:20:08.585 thread=production-landmark-load-7fb32eb31ca8525b/22492 image_id=7fb32eb31ca8525b op=production_landmark_load_worker state=START elapsed_s=0.000 path= token=7",
+      "2026-09-27T15:20:08.586 thread=production-landmark-load-7fb32eb31ca8525b/22492 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=worker start; elapsed_s=0.001",
+      "2026-09-27T15:20:08.587 thread=production-landmark-load-7fb32eb31ca8525b/22492 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Checking saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:08.588 thread=production-landmark-load-7fb32eb31ca8525b/22492 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Preparing saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:08.589 thread=production-landmark-load-7fb32eb31ca8525b/22492 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Opening crop image; elapsed_s=0.001",
+      "2026-09-27T15:20:08.590 thread=production-landmark-load-7fb32eb31ca8525b/22492 image_id=7fb32eb31ca8525b op=production_landmark_load_worker state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\7fb32eb31ca8525b.png elapsed_s=0.005",
+      "2026-09-27T15:20:08.632 thread=MainThread/36036 image_id=7fb32eb31ca8525b op=production_landmark_lm1_loaded state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\7fb32eb31ca8525b.png state=manual provenance=manual x=935.8519221642146 y=309.82439487422874 model_id=None prediction_run_id=None updated_at=2026-09-27T10:59:35.863957+00:00",
+      "2026-09-27T15:20:09.629 thread=MainThread/36036 image_id=7fb32eb31ca8525b op=NAV_CLICK state=START elapsed_s=0.000 path= section=landmarks; step=1; selected=7fb32eb31ca8525b",
+      "2026-09-27T15:20:09.629 thread=MainThread/36036 image_id=7fb32eb31ca8525b op=NAV_BLOCKED state=END elapsed_s=0.000 path= section=landmarks; step=1",
+      "2026-09-27T15:20:09.636 thread=production-landmark-load-304bac790c84f491/25964 image_id=304bac790c84f491 op=production_landmark_load_worker state=START elapsed_s=0.000 path= token=8",
+      "2026-09-27T15:20:09.636 thread=production-landmark-load-304bac790c84f491/25964 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=worker start; elapsed_s=0.000",
+      "2026-09-27T15:20:09.637 thread=production-landmark-load-304bac790c84f491/25964 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Checking saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:09.642 thread=production-landmark-load-304bac790c84f491/25964 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Preparing saved crop frame; elapsed_s=0.004",
+      "2026-09-27T15:20:09.643 thread=production-landmark-load-304bac790c84f491/25964 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Opening crop image; elapsed_s=0.002",
+      "2026-09-27T15:20:09.643 thread=production-landmark-load-304bac790c84f491/25964 image_id=304bac790c84f491 op=production_landmark_load_worker state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\304bac790c84f491.png elapsed_s=0.007",
+      "2026-09-27T15:20:09.673 thread=MainThread/36036 image_id=304bac790c84f491 op=production_landmark_lm1_loaded state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\304bac790c84f491.png state=manual provenance=manual x=663.3813559322034 y=261.40677966101697 model_id=None prediction_run_id=None updated_at=2026-09-27T10:59:11.175741+00:00",
+      "2026-09-27T15:20:10.237 thread=MainThread/36036 image_id=304bac790c84f491 op=NAV_CLICK state=START elapsed_s=0.000 path= section=landmarks; step=1; selected=304bac790c84f491",
+      "2026-09-27T15:20:10.238 thread=MainThread/36036 image_id=304bac790c84f491 op=NAV_BLOCKED state=END elapsed_s=0.000 path= section=landmarks; step=1",
+      "2026-09-27T15:20:10.244 thread=production-landmark-load-7fb32eb31ca8525b/32940 image_id=7fb32eb31ca8525b op=production_landmark_load_worker state=START elapsed_s=0.000 path= token=9",
+      "2026-09-27T15:20:10.244 thread=production-landmark-load-7fb32eb31ca8525b/32940 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=worker start; elapsed_s=0.001",
+      "2026-09-27T15:20:10.245 thread=production-landmark-load-7fb32eb31ca8525b/32940 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Checking saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:10.246 thread=production-landmark-load-7fb32eb31ca8525b/32940 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Preparing saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:10.248 thread=production-landmark-load-7fb32eb31ca8525b/32940 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Opening crop image; elapsed_s=0.001",
+      "2026-09-27T15:20:10.248 thread=production-landmark-load-7fb32eb31ca8525b/32940 image_id=7fb32eb31ca8525b op=production_landmark_load_worker state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\7fb32eb31ca8525b.png elapsed_s=0.003",
+      "2026-09-27T15:20:10.284 thread=MainThread/36036 image_id=7fb32eb31ca8525b op=production_landmark_lm1_loaded state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\7fb32eb31ca8525b.png state=manual provenance=manual x=935.8519221642146 y=309.82439487422874 model_id=None prediction_run_id=None updated_at=2026-09-27T10:59:35.863957+00:00",
+      "2026-09-27T15:20:10.605 thread=MainThread/36036 image_id=7fb32eb31ca8525b op=NAV_CLICK state=START elapsed_s=0.000 path= section=landmarks; step=1; selected=7fb32eb31ca8525b",
+      "2026-09-27T15:20:10.606 thread=MainThread/36036 image_id=7fb32eb31ca8525b op=NAV_BLOCKED state=END elapsed_s=0.000 path= section=landmarks; step=1",
+      "2026-09-27T15:20:10.612 thread=production-landmark-load-304bac790c84f491/11780 image_id=304bac790c84f491 op=production_landmark_load_worker state=START elapsed_s=0.000 path= token=10",
+      "2026-09-27T15:20:10.612 thread=production-landmark-load-304bac790c84f491/11780 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=worker start; elapsed_s=0.000",
+      "2026-09-27T15:20:10.613 thread=production-landmark-load-304bac790c84f491/11780 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Checking saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:10.614 thread=production-landmark-load-304bac790c84f491/11780 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Preparing saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:10.615 thread=production-landmark-load-304bac790c84f491/11780 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Opening crop image; elapsed_s=0.001",
+      "2026-09-27T15:20:10.616 thread=production-landmark-load-304bac790c84f491/11780 image_id=304bac790c84f491 op=production_landmark_load_worker state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\304bac790c84f491.png elapsed_s=0.003",
+      "2026-09-27T15:20:10.658 thread=MainThread/36036 image_id=304bac790c84f491 op=production_landmark_lm1_loaded state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\304bac790c84f491.png state=manual provenance=manual x=663.3813559322034 y=261.40677966101697 model_id=None prediction_run_id=None updated_at=2026-09-27T10:59:11.175741+00:00",
+      "2026-09-27T15:20:10.828 thread=MainThread/36036 image_id=304bac790c84f491 op=NAV_CLICK state=START elapsed_s=0.000 path= section=landmarks; step=1; selected=304bac790c84f491",
+      "2026-09-27T15:20:10.830 thread=MainThread/36036 image_id=304bac790c84f491 op=NAV_BLOCKED state=END elapsed_s=0.000 path= section=landmarks; step=1",
+      "2026-09-27T15:20:10.837 thread=production-landmark-load-7fb32eb31ca8525b/9824 image_id=7fb32eb31ca8525b op=production_landmark_load_worker state=START elapsed_s=0.000 path= token=11",
+      "2026-09-27T15:20:10.837 thread=production-landmark-load-7fb32eb31ca8525b/9824 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=worker start; elapsed_s=0.000",
+      "2026-09-27T15:20:10.838 thread=production-landmark-load-7fb32eb31ca8525b/9824 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Checking saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:10.838 thread=production-landmark-load-7fb32eb31ca8525b/9824 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Preparing saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:10.840 thread=production-landmark-load-7fb32eb31ca8525b/9824 image_id=7fb32eb31ca8525b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Opening crop image; elapsed_s=0.001",
+      "2026-09-27T15:20:10.840 thread=production-landmark-load-7fb32eb31ca8525b/9824 image_id=7fb32eb31ca8525b op=production_landmark_load_worker state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\7fb32eb31ca8525b.png elapsed_s=0.003",
+      "2026-09-27T15:20:10.877 thread=MainThread/36036 image_id=7fb32eb31ca8525b op=production_landmark_lm1_loaded state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\7fb32eb31ca8525b.png state=manual provenance=manual x=935.8519221642146 y=309.82439487422874 model_id=None prediction_run_id=None updated_at=2026-09-27T10:59:35.863957+00:00",
+      "2026-09-27T15:20:11.029 thread=MainThread/36036 image_id=7fb32eb31ca8525b op=NAV_CLICK state=START elapsed_s=0.000 path= section=landmarks; step=1; selected=7fb32eb31ca8525b",
+      "2026-09-27T15:20:11.030 thread=MainThread/36036 image_id=7fb32eb31ca8525b op=NAV_BLOCKED state=END elapsed_s=0.000 path= section=landmarks; step=1",
+      "2026-09-27T15:20:11.036 thread=production-landmark-load-304bac790c84f491/35664 image_id=304bac790c84f491 op=production_landmark_load_worker state=START elapsed_s=0.000 path= token=12",
+      "2026-09-27T15:20:11.036 thread=production-landmark-load-304bac790c84f491/35664 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=worker start; elapsed_s=0.001",
+      "2026-09-27T15:20:11.037 thread=production-landmark-load-304bac790c84f491/35664 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Checking saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:11.038 thread=production-landmark-load-304bac790c84f491/35664 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Preparing saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:11.039 thread=production-landmark-load-304bac790c84f491/35664 image_id=304bac790c84f491 op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Opening crop image; elapsed_s=0.001",
+      "2026-09-27T15:20:11.039 thread=production-landmark-load-304bac790c84f491/35664 image_id=304bac790c84f491 op=production_landmark_load_worker state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\304bac790c84f491.png elapsed_s=0.004",
+      "2026-09-27T15:20:11.079 thread=MainThread/36036 image_id=304bac790c84f491 op=production_landmark_lm1_loaded state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\304bac790c84f491.png state=manual provenance=manual x=663.3813559322034 y=261.40677966101697 model_id=None prediction_run_id=None updated_at=2026-09-27T10:59:11.175741+00:00",
+      "2026-09-27T15:20:11.809 thread=production-landmark-load-53acd1fd3541e99b/8532 image_id=53acd1fd3541e99b op=production_landmark_load_worker state=START elapsed_s=0.000 path= token=13",
+      "2026-09-27T15:20:11.811 thread=production-landmark-load-53acd1fd3541e99b/8532 image_id=53acd1fd3541e99b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=worker start; elapsed_s=0.002",
+      "2026-09-27T15:20:11.812 thread=production-landmark-load-53acd1fd3541e99b/8532 image_id=53acd1fd3541e99b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Checking saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:11.813 thread=production-landmark-load-53acd1fd3541e99b/8532 image_id=53acd1fd3541e99b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Preparing saved crop frame; elapsed_s=0.001",
+      "2026-09-27T15:20:11.814 thread=production-landmark-load-53acd1fd3541e99b/8532 image_id=53acd1fd3541e99b op=production_landmark_load_stage state=END elapsed_s=0.000 path= stage=Opening crop image; elapsed_s=0.001",
+      "2026-09-27T15:20:11.814 thread=production-landmark-load-53acd1fd3541e99b/8532 image_id=53acd1fd3541e99b op=production_landmark_load_worker state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\53acd1fd3541e99b.png elapsed_s=0.005",
+      "2026-09-27T15:20:11.847 thread=MainThread/36036 image_id=53acd1fd3541e99b op=production_landmark_lm1_loaded state=END elapsed_s=0.000 path=D:\\MorphoLabel_GUI_Acceptance\\projects\\GUI_Acceptance\\project_data\\cache\\standardized\\53acd1fd3541e99b.png state=manual provenance=manual x=592.4328429046037 y=78.48125296630279 model_id=None prediction_run_id=None updated_at=2026-09-27T10:59:40.928151+00:00",
+      "2026-09-27T15:31:41.334 thread=simm-hardware-profile/25120 image_id=GLOBAL op=hardware_profile state=END elapsed_s=0.000 path= cpu=Intel64 Family 6 Model 183 Stepping 1, GenuineIntel; logical=28; gpu=NVIDIA GeForce RTX 3060; vram_mib=12288; cuda=False"
+    ]
+  }
+}
