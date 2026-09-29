@@ -82,7 +82,7 @@ class ProjectSection(SectionView):
 
   sample_rows=project_sample_rows(project,self.context.rows)
   lower=ttk.Frame(content);lower.grid(row=2,column=0,columnspan=2,sticky="nsw");lower.rowconfigure(0,weight=1)
-  samples=ttk.LabelFrame(lower,text="Samples",padding=8,width=650);samples.grid(row=0,column=0,sticky="nsw",padx=(0,7));samples.grid_propagate(False)
+  samples=ttk.LabelFrame(lower,text="Samples",padding=8);samples.grid(row=0,column=0,sticky="nsew",padx=(0,7))
   samples.rowconfigure(1,weight=1);samples.columnconfigure(0,weight=1)
   ttk.Label(samples,text=f"{len(sample_rows)} samples · click a column title to sort",style="Muted.TLabel").grid(row=0,column=0,columnspan=2,sticky="w",pady=(0,5))
   columns=("sample","images","calibrated");table=ttk.Treeview(samples,columns=columns,show="headings",selectmode="browse",height=11)
@@ -105,7 +105,7 @@ class ProjectSection(SectionView):
   scroll=ttk.Scrollbar(samples,orient="vertical",command=table.yview);table.configure(yscrollcommand=scroll.set)
   table.grid(row=1,column=0,sticky="nsew");scroll.grid(row=1,column=1,sticky="ns");populate()
 
-  overview=ttk.LabelFrame(lower,text="Overview",padding=(14,10),width=190);overview.grid(row=0,column=1,sticky="ns");overview.grid_propagate(False)
+  overview=ttk.LabelFrame(lower,text="Overview",padding=(14,10));overview.grid(row=0,column=1,sticky="ns")
   calibrated=sum(1 for item in sample_rows if item["calibrated"])
   metrics=((str(len(self.context.rows)),"Images"),(str(len(sample_rows)),"Samples"),(f"{calibrated}/{len(sample_rows)}","Calibrated"),(str(len(project.schema)),"Landmarks"))
   for index,(value,label) in enumerate(metrics):
