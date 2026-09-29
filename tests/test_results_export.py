@@ -18,7 +18,7 @@ class ResultsExportTests(unittest.TestCase):
  def test_tps_csv_order_missing_and_rebuild(self):
   out=self.project.sync_results();self.assertEqual(set(p.name for p in self.project.results_root.iterdir()),{"landmarks.tps","specimens.csv"})
   blocks=parse_tps(out["tps"]);self.assertEqual(len(blocks),1);block=blocks[0];self.assertEqual(len(block["coordinates"]),18);self.assertEqual(block["coordinates"][0],(1.25,1.5));self.assertEqual(block["coordinates"][-1],(-1.0,-1.0));self.assertEqual(block["IMAGE"],self.ready["original_name"]);self.assertEqual(block["ID"],self.ready["image_id"]);self.assertEqual(block["SCALE"],"0.100000")
-  rows=list(csv.DictReader(out["specimens"].open(encoding="ascii")));self.assertEqual(len(rows),2);ready=next(r for r in rows if r["image_id"]==self.ready["image_id"]);self.assertEqual((ready["locality"],ready["filename"],ready["skipped"],ready["calibration_mm_per_px"],ready["sex"]),("A","one.jpg","1","0.1","female"))
+  rows=list(csv.DictReader(out["specimens"].open(encoding="ascii")));self.assertEqual(len(rows),2);ready=next(r for r in rows if r["image_id"]==self.ready["image_id"]);self.assertEqual((ready["locality"],ready["filename"],ready["skipped"],ready["calibration_mm_per_px"],ready["sex"]),("A","one.jpg","1","0.100000","female"))
   out["tps"].unlink();self.assertFalse(out["tps"].exists());self.project.sync_results();self.assertEqual(len(parse_tps(out["tps"])),1)
   self.project.sync_results();self.assertEqual(set(p.name for p in self.project.results_root.iterdir()),{"landmarks.tps","specimens.csv"})
  def test_ui_state_survives_reopen(self):
