@@ -139,8 +139,8 @@ def _prediction_context_text(project,row):
    dt=datetime.fromisoformat(stamps[-1].replace("Z","+00:00")).astimezone()
    when=dt.strftime("%Y-%m-%d %H:%M")
   except ValueError:when=stamps[-1][:16].replace("T"," ")
- expected=int(row.get("expected_landmarks") or len(project.schema));placed=int(row.get("placed") or 0);remaining=max(0,expected-placed)
- state=f"{placed}/{expected} landmarks · review pending" if not remaining else f"{placed}/{expected} landmarks · {remaining} unresolved"
+ expected=int(row.get("expected_landmarks") or len(project.schema));unresolved=len(tuple(row.get("missing_ids") or ()));resolved=max(0,expected-unresolved)
+ state=f"{resolved}/{expected} resolved · review pending" if not unresolved else f"{resolved}/{expected} resolved · {unresolved} unresolved"
  return "AI prediction · "+model+(f" · {when}" if when else "")+" · "+state
 
 class LandmarksSection(SectionView):
@@ -900,7 +900,7 @@ class LandmarksSection(SectionView):
        events.put(('empty','No new unannotated images remain, and no AI-predicted images need reapplication.'));return
       data,path=create_batch_for_ids(self.context.project,model['model_id'],ids,selection_mode='reapply_unverified')
       events.put(('status',f'No new unannotated images remain. Reapplying the next {len(ids)} unverified AI images…'))
-    data,path=run_batch(self.context.project,path,LandmarkAIService(self.context.project,backend),progress=lambda done,total,name:events.put(('progress',done,total,name)),status=lambda text:events.put(('status',text)));events.put(('done',data))
+    data,path=run_batch(self.context.project,path,LandmarkAIService(self.context.project,backend),progress=lambda done,total,name,image_id=None:events.put(('progress',done,total,name,image_id)),status=lambda text:events.put(('status',text)));events.put(('done',data))
    except Exception as exc:events.put(('error',exc))
   threading.Thread(target=worker,daemon=True,name='production-landmark-predict').start()
   def poll():
@@ -911,8 +911,14 @@ class LandmarksSection(SectionView):
       bar.stop();bar.configure(mode='indeterminate');bar.start();label.config(text=value[0])
      elif kind=='progress':
       bar.stop();bar.configure(mode='determinate',maximum=value[1],value=value[0]);label.config(text=f'Predicting {value[0]} / {value[1]}: {value[2]}')
+      image_id=value[3] if len(value)>3 else None
+      if image_id and self.context.refresh_landmark_state(image_id):
+       photo_panel=getattr(self.shell,'photo_panel',None);photos=getattr(photo_panel,'photos',photo_panel)
+       refresh_one=getattr(photos,'refresh_image',None)
+       if refresh_one:refresh_one(image_id)
      elif kind=='done':
-      for item in value[0].get('selected_images',()):self.context.refresh_landmark_state(item['image_id']);self.context.update_image_counts(item['image_id'])
+      for item in value[0].get('selected_images',()):self.context.refresh_landmark_state(item['image_id'])
+      self.context.invalidate_counts()
       dialog.destroy();self._offer_prediction_review(value[0]);return
      elif kind=='empty':
       dialog.destroy();messagebox.showinfo('Landmark prediction',str(value[0]),parent=self.shell);return

@@ -1,6 +1,6 @@
 """Prospective AI batch selection and persistence; GUI-independent."""
 from __future__ import annotations
-import json, time, uuid
+import inspect, json, time, uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from .io import atomic_json_write
@@ -95,8 +95,14 @@ def load_batch(project,batch_id_or_path):
  path=Path(batch_id_or_path);path=path if path.suffix else _batch_path(project,path)
  return json.loads(path.read_text(encoding='utf8')),path
 
+def _progress_accepts_image_id(callback):
+ if callback is None:return False
+ try:parameters=tuple(inspect.signature(callback).parameters.values())
+ except (TypeError,ValueError):return False
+ return any(parameter.kind==inspect.Parameter.VAR_POSITIONAL for parameter in parameters) or sum(parameter.kind in {inspect.Parameter.POSITIONAL_ONLY,inspect.Parameter.POSITIONAL_OR_KEYWORD} for parameter in parameters)>=4
+
 def run_batch(project,batch_id_or_path,service,progress=None,status=None):
- data,path=load_batch(project,batch_id_or_path);started=time.perf_counter()
+ data,path=load_batch(project,batch_id_or_path);started=time.perf_counter();progress_with_image_id=_progress_accepts_image_id(progress)
  if not data.get("prediction_started_at"):
   data["prediction_started_at"]=_now();atomic_json_write(path,data)
  current_identity=landmark_schema_identity(load_schema(project.schema_path))
@@ -112,7 +118,10 @@ def run_batch(project,batch_id_or_path,service,progress=None,status=None):
   if result:data["prediction_runs"][image_id]=result.prediction_run_id
   else:data["failures"][image_id]=str(error)
   completed+=1;atomic_json_write(path,data)
-  if progress:progress(completed,total,next((item.get("display_name",image_id) for item in data["selected_images"] if item["image_id"]==image_id),image_id))
+  if progress:
+   display_name=next((item.get("display_name",image_id) for item in data["selected_images"] if item["image_id"]==image_id),image_id)
+   if progress_with_image_id:progress(completed,total,display_name,str(image_id))
+   else:progress(completed,total,display_name)
  if pending:
   if hasattr(service,"predict_many"):
    try:service.predict_many([item["image_id"] for item in pending],progress=persisted,status=status)
