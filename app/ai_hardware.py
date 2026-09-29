@@ -21,6 +21,7 @@ from pathlib import Path
 from .ai_runtime_resolver import AI_RUNTIME_INFO_TIMEOUT, resolve_ai_runtime
 from .io import atomic_json_write
 from .runtime_paths import app_state_dir, resource_path
+from .process_utils import hidden_window_kwargs
 
 
 AUTO = "auto"
@@ -47,7 +48,7 @@ class HardwareProfile:
 
 
 def _run(command, *, input_text=None, timeout=8):
-    return subprocess.run(command, input=input_text, text=True, capture_output=True, check=False, timeout=timeout)
+    return subprocess.run(command, input=input_text, text=True, capture_output=True, check=False, timeout=timeout, **hidden_window_kwargs())
 
 
 def _ram_bytes():
