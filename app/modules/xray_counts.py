@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 import re
 import tkinter as tk
 from tkinter import filedialog,messagebox,simpledialog,ttk
@@ -12,7 +13,7 @@ from app.xray_icons import XRAY_ICON_SIZE,TRAIT_ICON_SIZE,tk_xray_icon
 from app.xray_project import XRayProject
 from app.xray_schema import (
     MARKER_COLORS,METHOD_BY_ID,SHAPES,TRAIT_METHODS,blank_scheme,normalize_scheme,
-    phoxinus_vertebral_preset,scheme_change_impact,structure_usage,
+    phoxinus_vertebral_preset,preset_catalog,preset_scheme,scheme_change_impact,structure_usage,
 )
 
 STAGES=(
@@ -46,6 +47,7 @@ class XRayCountsRuntime:
     def _header(self,parent):
         row=ttk.Frame(parent);row.pack(fill="x")
         self._button(row,"Modules",self.host.show_module_hub,"Return to the MorphoLabel module chooser.").pack(side="left",padx=(0,10))
+        ttk.Label(row,image=self._icon(row,"xray",32)).pack(side="left",padx=(0,7))
         ttk.Label(row,text="X-ray traits",style="PageTitle.TLabel").pack(side="left")
         if self.project:ttk.Label(row,text=f"  {self.project.name}",style="Muted.TLabel").pack(side="left",pady=(5,0))
         nav=ttk.Frame(parent,style="Topbar.TFrame");nav.pack(fill="x",pady=(7,0))
@@ -59,17 +61,38 @@ class XRayCountsRuntime:
 
     def _render_project(self,parent):
         ttk.Label(parent,text="Project",style="PageTitle.TLabel").pack(anchor="w")
-        ttk.Label(parent,text="Choose the traits first. MorphoLabel derives the annotation structures needed to obtain them.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,12))
+        ttk.Label(parent,text="Define the biological traits first. MorphoLabel then shows exactly what must be annotated.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,12))
         if self.project is None:
             card=ttk.LabelFrame(parent,text="Start",padding=16);card.pack(fill="x",anchor="n")
             ttk.Label(card,text="New X-ray project",style="ModuleTitle.TLabel").pack(anchor="w")
-            ttk.Label(card,text="Start from the built-in Phoxinus scheme or a blank trait scheme.",style="Muted.TLabel").pack(anchor="w",pady=(3,10))
-            self._button(card,"New project",self._new_project,"Create a versioned X-ray project.",True).pack(side="left")
+            ttk.Label(card,text="A ready-made trait scheme is offered first; a blank scheme remains available for other organisms and characters.",style="Muted.TLabel",wraplength=920).pack(anchor="w",pady=(3,10))
+            self._button(card,"New project",self._new_project,"Create a versioned X-ray project.",True,image=self._icon(card,"xray_project")).pack(side="left")
             self._button(card,"Open project",self._open_project,"Open an existing X-ray project.").pack(side="left",padx=(8,0));return
-        scheme=self.project.scheme;info=ttk.LabelFrame(parent,text="Trait scheme",padding=14);info.pack(fill="x")
-        top=ttk.Frame(info);top.pack(fill="x");ttk.Label(top,text=scheme["name"],style="ModuleTitle.TLabel").pack(side="left")
-        self._button(top,"Edit traits…",self._edit_scheme,"Change traits safely; earlier versions and annotations stay stored.",True).pack(side="right")
-        ttk.Label(info,text=scheme.get("description",""),style="Muted.TLabel",wraplength=920).pack(anchor="w",pady=(3,8))
+
+        scheme=self.project.scheme
+        if not scheme.get("traits"):
+            empty=ttk.LabelFrame(parent,text="Trait scheme",padding=18);empty.pack(fill="x")
+            title=ttk.Frame(empty);title.pack(fill="x")
+            ttk.Label(title,image=self._icon(title,"xray",42)).pack(side="left",padx=(0,12))
+            words=ttk.Frame(title);words.pack(side="left",fill="x",expand=True)
+            ttk.Label(words,text="No traits yet",style="ModuleTitle.TLabel").pack(anchor="w")
+            ttk.Label(words,text="Apply a ready-made scheme or create traits from scratch. You can change the scheme later without deleting earlier project data.",style="Muted.TLabel",wraplength=850).pack(anchor="w",pady=(2,0))
+            actions=ttk.Frame(empty);actions.pack(fill="x",pady=(14,0))
+            self._button(actions,"Apply preset…",self._apply_preset,"Choose a ready-made scientific trait scheme.",True,image=self._icon(actions,"xray_structures")).pack(side="left")
+            self._button(actions,"Create traits…",self._edit_scheme,"Create a custom trait scheme.").pack(side="left",padx=(7,0))
+            self._button(actions,"Import scheme…",self._import_scheme,"Import a MorphoLabel X-ray trait scheme from JSON.").pack(side="left",padx=(7,0))
+            ttk.Label(empty,text=f"Current scheme: {scheme['name']} · {len(self.project.schema_history())} saved version(s)",style="Muted.TLabel").pack(anchor="w",pady=(12,0))
+            return
+
+        info=ttk.LabelFrame(parent,text="Trait scheme",padding=14);info.pack(fill="x")
+        top=ttk.Frame(info);top.pack(fill="x")
+        ttk.Label(top,image=self._icon(top,"xray_structures",34)).pack(side="left",padx=(0,8))
+        ttk.Label(top,text=scheme["name"],style="ModuleTitle.TLabel").pack(side="left")
+        actions=ttk.Frame(top);actions.pack(side="right")
+        self._button(actions,"Apply preset…",self._apply_preset,"Replace the active scheme with a ready-made scheme while keeping earlier project data.",image=self._icon(actions,"xray_project")).pack(side="left")
+        self._button(actions,"Edit traits…",self._edit_scheme,"Change traits safely; earlier versions and annotations stay stored.",True).pack(side="left",padx=(6,0))
+        self._button(actions,"More…",self._scheme_more,"Start a blank scheme or import one from JSON.").pack(side="left",padx=(6,0))
+        ttk.Label(info,text=scheme.get("description",""),style="Muted.TLabel",wraplength=920).pack(anchor="w",pady=(5,8))
         for trait in scheme["traits"]:
             method=METHOD_BY_ID[trait["method"]];row=ttk.Frame(info);row.pack(fill="x",pady=2)
             icon=ttk.Label(row,image=self._icon(row,method["icon"],TRAIT_ICON_SIZE));icon.pack(side="left",padx=(0,7));self._tip.bind(icon,method["help"])
@@ -81,7 +104,9 @@ class XRayCountsRuntime:
             link=ttk.Label(row,text=ref.get("label",""),foreground="#256d9e",cursor="hand2");link.pack(side="left",padx=(4,0))
             if ref.get("doi"):link.bind("<Button-1>",lambda _e:webbrowser.open("https://doi.org/"+ref["doi"]))
             self._tip.bind(link,ref.get("note",""))
-        ttk.Label(info,text=f"{len(scheme['traits'])} traits · {len(scheme['structures'])} structure groups · {len(self.project.schema_history())} scheme version(s)",style="Muted.TLabel").pack(anchor="w",pady=(9,0))
+        abbreviations=", ".join(item.get("abbr") or item["id"] for item in scheme["traits"])
+        ttk.Label(info,text=f"Traits: {abbreviations}",style="Muted.TLabel",wraplength=1100).pack(anchor="w",pady=(9,0))
+        ttk.Label(info,text=f"{len(scheme['traits'])} traits · {len(scheme['structures'])} structure groups · {len(self.project.schema_history())} scheme version(s)",style="Muted.TLabel").pack(anchor="w",pady=(3,0))
 
     def _render_crops(self,parent):
         ttk.Label(parent,text="Crops",style="PageTitle.TLabel").pack(anchor="w")
@@ -93,42 +118,124 @@ class XRayCountsRuntime:
     def _render_structures(self,parent):
         ttk.Label(parent,text="Structures",style="PageTitle.TLabel").pack(anchor="w")
         ttk.Label(parent,text="Annotate only the structures required by the selected traits.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,10))
+        scheme=self.project.scheme
+        if not scheme.get("structures"):
+            self._empty_scheme_state(parent,"No annotation structures","Choose or create traits first; MorphoLabel will derive the required annotation structures automatically.")
+            return
         pane=ttk.Panedwindow(parent,orient="horizontal");pane.pack(fill="both",expand=True)
         canvas=ttk.LabelFrame(pane,text="X-ray",padding=12);tools=ttk.LabelFrame(pane,text="Annotation structures",padding=10);pane.add(canvas,weight=3);pane.add(tools,weight=1)
         ttk.Label(canvas,text="Specimen image / annotation canvas",style="Muted.TLabel").pack(expand=True)
-        ttk.Label(tools,text="Current annotation",style="SectionTitle.TLabel").pack(anchor="w");active=ttk.Label(tools,text="",style="ModuleTitle.TLabel");active.pack(fill="x",pady=(3,8))
-        buttons={}
+        ttk.Label(tools,text="Current annotation",style="SectionTitle.TLabel").pack(anchor="w")
+        active_row=ttk.Frame(tools);active_row.pack(fill="x",pady=(4,9))
+        active_marker=tk.Label(active_row,text="●",font=("Segoe UI Symbol",16,"bold"),width=2)
+        active_marker.pack(side="left")
+        active=ttk.Label(active_row,text="",style="ModuleTitle.TLabel");active.pack(side="left",fill="x",expand=True)
+        ttk.Label(tools,text="Choose a structure or press its number key. The selected tool stays active for repeated structures.",style="Muted.TLabel",wraplength=300).pack(anchor="w",pady=(0,7))
+        buttons={};markers={}
         def choose(s):
-            active.configure(text=f"ANNOTATING: {self._shape_symbol(s)} {s['name']}   [{s.get('hotkey','')}]")
+            active.configure(text=f"{s['name']}   [{s.get('hotkey','')}]")
+            active_marker.configure(text=self._shape_symbol(s),foreground=s.get("color","#256d9e"))
             for ident,b in buttons.items():b.configure(style="Primary.TButton" if ident==s["id"] else "P.TButton")
-        for s in self.project.scheme["structures"]:
-            b=self._button(tools,f"[{s.get('hotkey','')}]  {self._shape_symbol(s)}  {s['name']}",lambda item=s:choose(item),s.get("description",""));b.pack(fill="x",pady=2);buttons[s["id"]]=b
+            for ident,m in markers.items():m.configure(font=("Segoe UI Symbol",15,"bold") if ident==s["id"] else ("Segoe UI Symbol",13,"bold"))
+        for s in scheme["structures"]:
+            row=ttk.Frame(tools);row.pack(fill="x",pady=2)
+            marker=tk.Label(row,text=self._shape_symbol(s),foreground=s.get("color","#256d9e"),font=("Segoe UI Symbol",13,"bold"),width=2)
+            marker.pack(side="left",padx=(0,4));markers[s["id"]]=marker
+            b=self._button(row,f"[{s.get('hotkey','')}]  {s['name']}",lambda item=s:choose(item),s.get("description",""));b.pack(side="left",fill="x",expand=True);buttons[s["id"]]=b
+            self._tip.bind(marker,s.get("description","") or f"Annotation structure: {s['name']}.")
             if s.get("hotkey"):tools.winfo_toplevel().bind(s["hotkey"],lambda _e,item=s:choose(item),add="+")
-        if self.project.scheme["structures"]:choose(self.project.scheme["structures"][0])
-        ttk.Separator(tools).pack(fill="x",pady=10);ttk.Label(tools,text="Manual repeatability",style="SectionTitle.TLabel").pack(anchor="w")
-        ttk.Label(tools,text="Annotation 1 and Annotation 2 are independent saved passes, matching the Landmarks workflow.",style="Muted.TLabel",wraplength=260).pack(anchor="w",pady=(3,0))
+        if scheme["structures"]:choose(scheme["structures"][0])
+        ttk.Separator(tools).pack(fill="x",pady=10)
+        ttk.Label(tools,text="Manual repeatability",style="SectionTitle.TLabel").pack(anchor="w")
+        ttk.Label(tools,text="Annotation 1 and Annotation 2 will be independent saved passes, using the same logic as Landmarks.",style="Muted.TLabel",wraplength=300).pack(anchor="w",pady=(3,0))
+
     @staticmethod
     def _shape_symbol(s):return {"circle":"●","triangle":"▲","diamond":"◆","square":"■","cross":"✚","ring":"○"}.get(s.get("shape"),"●")
 
     def _render_results(self,parent):
         ttk.Label(parent,text="Results",style="PageTitle.TLabel").pack(anchor="w")
         ttk.Label(parent,text="Calculated traits and QC will update from verified structures.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,10))
+        if not self.project.scheme.get("traits"):
+            self._empty_scheme_state(parent,"No traits to calculate","Apply a ready-made scheme or create traits in Project first.")
+            return
         cols=[t.get("abbr") or t["id"] for t in self.project.scheme["traits"]];tree=ttk.Treeview(parent,columns=("specimen",*cols),show="headings",height=12);tree.pack(fill="both",expand=True)
         tree.heading("specimen",text="Specimen");tree.column("specimen",width=180,anchor="w")
         for col in cols:tree.heading(col,text=col);tree.column(col,width=90,anchor="center")
     def _render_export(self,parent):
         ttk.Label(parent,text="Export",style="PageTitle.TLabel").pack(anchor="w")
         ttk.Label(parent,text="Export verified traits together with scheme version, QC and provenance.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,10))
+        if not self.project.scheme.get("traits"):
+            self._empty_scheme_state(parent,"Nothing to export","Apply a ready-made scheme or create traits in Project first.")
+            return
         card=ttk.LabelFrame(parent,text="Scientific table",padding=14);card.pack(fill="x")
         ttk.Label(card,text="Trait values + specimen IDs + QC + scheme provenance",style="ModuleTitle.TLabel").pack(anchor="w")
         ttk.Label(card,text="Export stays disabled until the calculation and verification layer is connected; no placeholder data will be written.",style="Muted.TLabel").pack(anchor="w",pady=(4,0))
+
+    def _empty_scheme_state(self,parent,title,text):
+        card=ttk.LabelFrame(parent,text="Trait scheme needed",padding=18);card.pack(fill="x",anchor="n")
+        top=ttk.Frame(card);top.pack(fill="x")
+        ttk.Label(top,image=self._icon(top,"xray",40)).pack(side="left",padx=(0,11))
+        words=ttk.Frame(top);words.pack(side="left",fill="x",expand=True)
+        ttk.Label(words,text=title,style="ModuleTitle.TLabel").pack(anchor="w")
+        ttk.Label(words,text=text,style="Muted.TLabel",wraplength=850).pack(anchor="w",pady=(2,0))
+        actions=ttk.Frame(card);actions.pack(anchor="w",pady=(12,0))
+        self._button(actions,"Apply preset…",self._apply_preset,"Choose a ready-made trait scheme.",True,image=self._icon(actions,"xray_structures")).pack(side="left")
+        self._button(actions,"Edit traits…",self._edit_scheme,"Create or edit a custom trait scheme.").pack(side="left",padx=(7,0))
+
+    def _apply_scheme_version(self,new_scheme,note,title):
+        root=self.host.container.winfo_toplevel()
+        try:new=normalize_scheme(new_scheme);old=normalize_scheme(self.project.scheme);impact=scheme_change_impact(old,new,self.project.annotation_counts_by_structure())
+        except Exception as exc:messagebox.showerror(title,str(exc),parent=root);return False
+        if old==new:
+            messagebox.showinfo(title,"This scheme is already active.",parent=root);return False
+        lines=[
+            f"Use ‘{new['name']}’ as the active trait scheme?",
+            "",
+            "Existing project data and earlier scheme versions will be kept.",
+            f"New scheme: {len(new['traits'])} traits · {len(new['structures'])} structure groups.",
+        ]
+        if impact["added_traits"]:lines.append(f"New traits: {len(impact['added_traits'])}.")
+        if impact["archived_traits"]:lines.append(f"Current traits not used by the new scheme: {len(impact['archived_traits'])}.")
+        if impact["affected_annotations"]:lines.append(f"{impact['affected_annotations']} existing annotation(s) remain stored with the earlier scheme version.")
+        if not messagebox.askyesno(title,"\n".join(lines),parent=root,default="yes"):return False
+        try:self.project.save_scheme(new,note)
+        except Exception as exc:messagebox.showerror(title,str(exc),parent=root);return False
+        self.stage="project";self._rerender();return True
+
+    def _apply_preset(self):
+        dialog=PresetDialog(self.host.container.winfo_toplevel());self.host.container.wait_window(dialog)
+        if dialog.result is None:return
+        try:scheme=preset_scheme(dialog.result)
+        except Exception as exc:messagebox.showerror("Apply preset",str(exc),parent=self.host.container.winfo_toplevel());return
+        self._apply_scheme_version(scheme,f"Applied preset: {scheme['name']}","Apply preset")
+
+    def _new_blank_scheme(self):
+        root=self.host.container.winfo_toplevel()
+        name=simpledialog.askstring("New trait scheme","Scheme name:",initialvalue="Untitled X-ray trait scheme",parent=root)
+        if not name:return
+        self._apply_scheme_version(blank_scheme(name),"Started a new blank trait scheme","New trait scheme")
+
+    def _import_scheme(self):
+        root=self.host.container.winfo_toplevel()
+        path=filedialog.askopenfilename(parent=root,title="Import X-ray trait scheme",filetypes=(("JSON files","*.json"),("All files","*.*")))
+        if not path:return
+        try:
+            with open(path,"r",encoding="utf-8") as handle:scheme=normalize_scheme(json.load(handle))
+        except Exception as exc:messagebox.showerror("Import scheme",f"Could not read this trait scheme.\n\n{exc}",parent=root);return
+        self._apply_scheme_version(scheme,f"Imported trait scheme: {scheme['name']}","Import scheme")
+
+    def _scheme_more(self):
+        root=self.host.container.winfo_toplevel()
+        if messagebox.askyesno("Trait scheme","Start a new blank trait scheme?\n\nChoose No to import a scheme from JSON instead.",parent=root,default="no"):
+            self._new_blank_scheme()
+        else:self._import_scheme()
 
     def _new_project(self):
         root=self.host.container.winfo_toplevel();name=simpledialog.askstring("New X-ray project","Project name:",parent=root)
         if not name:return
         source=filedialog.askdirectory(parent=root,title="Folder with X-ray images");dest=filedialog.askdirectory(parent=root,title="Folder where the X-ray project will be created")
         if not source or not dest:return
-        choice=messagebox.askyesnocancel("Trait scheme","Use the built-in Phoxinus vertebral-count scheme?\n\nYes = starter scheme\nNo = blank scheme",parent=root)
+        choice=messagebox.askyesnocancel("Trait scheme","Start with the ready-made Phoxinus vertebral-count scheme?\n\nYes = recommended starter preset (7 traits)\nNo = blank custom scheme\n\nYou can apply a preset later at any time.",parent=root,default="yes")
         if choice is None:return
         try:self.project=XRayProject.create(name,source,dest,phoxinus_vertebral_preset() if choice else blank_scheme())
         except Exception as exc:messagebox.showerror("New X-ray project",str(exc),parent=root);return
@@ -146,6 +253,34 @@ class XRayCountsRuntime:
         try:self.project.save_scheme(dialog.result,"Edited in Trait scheme")
         except Exception as exc:messagebox.showerror("Trait scheme",str(exc),parent=self.host.container.winfo_toplevel());return
         self._rerender()
+
+class PresetDialog(tk.Toplevel):
+    def __init__(self,parent):
+        super().__init__(parent);self.title("Apply trait preset");self.transient(parent);self.resizable(False,False);self.result=None
+        self._catalog=preset_catalog();self.choice=tk.StringVar(value=self._catalog[0]["id"] if self._catalog else "");self._build();self.grab_set()
+
+    def _build(self):
+        outer=ttk.Frame(self,padding=16);outer.pack(fill="both",expand=True)
+        ttk.Label(outer,text="Ready-made trait schemes",style="PageTitle.TLabel").pack(anchor="w")
+        ttk.Label(outer,text="Choose a scientific starting scheme. Applying it creates a new project scheme version; earlier data stay stored.",style="PageSubtitle.TLabel",wraplength=680).pack(anchor="w",pady=(2,12))
+        for item in self._catalog:
+            card=ttk.LabelFrame(outer,text=item["name"],padding=10);card.pack(fill="x",pady=(0,8))
+            row=ttk.Frame(card);row.pack(fill="x")
+            ttk.Radiobutton(row,text="Use this preset",variable=self.choice,value=item["id"]).pack(side="left")
+            ttk.Label(row,text=f"{item['trait_count']} traits · {item['structure_count']} structure groups",style="Muted.TLabel").pack(side="right")
+            ttk.Label(card,text=item["description"],style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(5,2))
+            ttk.Label(card,text="Traits: "+", ".join(item["trait_abbrs"]),style="SectionTitle.TLabel").pack(anchor="w",pady=(3,0))
+            ref=item.get("reference") or {}
+            if ref:ttk.Label(card,text=ref.get("label",""),style="Muted.TLabel").pack(anchor="w",pady=(4,0))
+        actions=ttk.Frame(outer);actions.pack(fill="x",pady=(6,0))
+        ttk.Button(actions,text="Cancel",command=self.destroy).pack(side="right")
+        ttk.Button(actions,text="Apply preset",command=self._apply,style="Primary.TButton").pack(side="right",padx=(0,6))
+
+    def _apply(self):
+        value=self.choice.get().strip()
+        if not value:return
+        self.result=value;self.destroy()
+
 
 class TraitSchemeDialog(tk.Toplevel):
     def __init__(self,parent,scheme,annotation_counts):
