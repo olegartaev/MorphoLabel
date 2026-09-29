@@ -30,7 +30,7 @@ from app.extensions.builtins import module_registry
 from app.extensions.internal_runtime import create_internal_runtime
 from app.calibration_workflow import CalibrationWorkflow
 from app.measurements_ui import MeasurementsWindow
-from app.ai_hardware import get_hardware_profile, persist_machine_profile, format_hardware_profile
+from app.ai_hardware import get_hardware_profile, format_hardware_profile
 from app.ai_package import export_model_package, import_model_package
 from app.first_run_setup import first_run_setup_required, run_first_run_setup, defer_first_run_setup, ai_setup_complete
 
@@ -120,9 +120,8 @@ class ProductionShell(tk.Tk):
         # ordinary work. Source/developer runs remain side-effect free.
         if first_run_setup_required():
             self.after(300,self._show_first_run_setup)
-        else:
-            # Keep routine hardware discovery off Tk on subsequent launches.
-            threading.Thread(target=self._warm_ai_hardware,daemon=True,name="morpholabel-hardware-profile").start()
+        # Successful setup already persists a qualified hardware profile.
+        # Ordinary launches must not silently re-probe or overwrite it.
         if requested_project is not None:
             self.after_idle(lambda p=requested_project:self._load_existing_project_async(p,"Opening project"))
 
@@ -348,14 +347,6 @@ class ProductionShell(tk.Tk):
 
         initial_actions();poll()
 
-    def _warm_ai_hardware(self):
-        try:
-            profile=get_hardware_profile()
-            persist_machine_profile(profile)
-            log("GLOBAL","hardware_profile","END",detail=f"cpu={profile.cpu_model}; logical={profile.logical_cores}; gpu={profile.gpu_model}; vram_mib={profile.gpu_vram_mib}; cuda={profile.cuda_available}")
-        except Exception as exc:
-            log("GLOBAL","hardware_profile","ERROR",detail=str(exc))
-
     def ui_icon(self,name,size):
         key=(str(name),int(size))
         if key not in self._ui_icons:self._ui_icons[key]=tk_icon(self,name,size)
@@ -418,10 +409,10 @@ class ProductionShell(tk.Tk):
 
     def _enter_next(self,event):
         if event.widget.winfo_class() in {"Entry","TEntry","TCombobox","Text","Spinbox","TSpinbox"}: return
-        if self.context.project and self.context.section not in {"project","export"}:
+        if self.context.project and self.context.section not in {"project","export"} and self._workflow_navigation_visible(self._active_batch_summary()):
             handler=getattr(getattr(self,"current_view",None),"on_enter",None)
-            if handler: handler()
-            else: self._nav_image(1)
+            if handler:handler()
+            else:self._nav_image(1)
         return "break"
 
     def _clear(self):
@@ -485,17 +476,24 @@ class ProductionShell(tk.Tk):
         self._menus(row)
 
     def _menus(self,row):
-        about=ttk.Menubutton(row,text="About"); about_menu=tk.Menu(about,tearoff=False)
-        about_menu.add_command(label="About MorphoLabel...",command=self.show_about)
-        about_menu.add_command(label="Create diagnostic report...",command=self.create_diagnostic_report)
-        about_menu.add_command(label="GitHub project",command=lambda:webbrowser.open(PUBLIC_REPOSITORY))
-        about.configure(menu=about_menu); about.pack(side="right",padx=2); self.tip.bind(about,"About MorphoLabel, license and project links.")
-        ai=ttk.Menubutton(row,text="AI"); ai_menu=tk.Menu(ai,tearoff=False)
-        ai_menu.add_command(label="Set up AI support...",command=self._show_first_run_setup)
-        ai_menu.add_separator()
-        ai_menu.add_command(label="Hardware",command=self.show_hardware)
-        ai_menu.add_command(label="AI Model Transfer...",command=self.show_model_transfer,state="normal" if self.context.project else "disabled")
-        ai.configure(menu=ai_menu); ai.pack(side="right",padx=2); self.tip.bind(ai,"Open hardware and model transfer tools.")
+        button=ttk.Menubutton(row,text="Menu"); menu=tk.Menu(button,tearoff=False)
+        menu.add_command(label="AI",state="disabled")
+        menu.add_command(label="Set up AI support...",command=self._show_first_run_setup)
+        menu.add_command(label="Hardware status...",command=self.show_hardware)
+        menu.add_command(label="AI model transfer...",command=self.show_model_transfer,state="normal" if self.context.project else "disabled")
+        menu.add_separator()
+        menu.add_command(label="Support",state="disabled")
+        menu.add_command(label="Create diagnostic report...",command=self.create_diagnostic_report)
+        menu.add_command(label="GitHub project",command=lambda:webbrowser.open(PUBLIC_REPOSITORY))
+        menu.add_separator()
+        menu.add_command(label="About",state="disabled")
+        menu.add_command(label="About MorphoLabel...",command=self.show_about)
+        button.configure(menu=menu);button.pack(side="right",padx=2)
+        self.tip.bind(button,"AI setup, diagnostics, project links and About MorphoLabel.")
+
+    @staticmethod
+    def _workflow_navigation_visible(batch):
+        return batch is not None
 
     def _status(self):
         """Reserve the right-side navigation before flexible descriptive status text."""
@@ -592,10 +590,11 @@ class ProductionShell(tk.Tk):
         self._refresh_status_context()
         if hasattr(self,"status_index"):
             batch=self._active_batch_summary()
-            crop_normal=self.context.section=='crop' and batch is None
-            if crop_normal:self.status_navigation.grid_remove()
-            else:self.status_navigation.grid()
-            self.status_index.configure(text=batch.get('text') if batch else f"{self.context.selected+1 if self.context.rows else 0}")
+            if self._workflow_navigation_visible(batch):
+                self.status_navigation.grid()
+                self.status_index.configure(text=batch.get('text',""))
+            else:
+                self.status_navigation.grid_remove()
             kind=batch.get('kind') if batch else None
             landmark_confirm=bool(self.context.section=='landmarks' and kind in {'landmark','landmark_ai_review','landmark_suspicious'})
             crop_confirm=bool(self.context.section=='crop' and batch)

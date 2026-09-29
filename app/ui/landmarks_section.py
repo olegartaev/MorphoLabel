@@ -74,6 +74,13 @@ def _next_pending_ai_prediction_ids(project,rows,start_image_id,count):
   position=order.index(start);order=order[position+1:]+order[:position+1]
  return tuple(image_id for image_id in order if image_id in pending)[:max(0,int(count))]
 
+def _prediction_failure_summary(batch):
+ failures=list((batch.get('failures') or {}).values())
+ if not failures:return ''
+ lines=[line.strip() for line in str(failures[0]).splitlines() if line.strip()]
+ preferred=next((line for line in lines if line.startswith(('ModuleNotFoundError:','ImportError:','RuntimeError:','ValueError:','FileNotFoundError:'))),lines[-1] if lines else str(failures[0]))
+ return preferred[:400]
+
 def _landmark_toolbar_state(state,selected_id):
  point=(state.points_by_id.get(int(selected_id)) if state is not None and selected_id is not None else None) or {}
  missing=point.get('state')=='missing'
@@ -727,7 +734,10 @@ class LandmarksSection(SectionView):
  def _offer_prediction_review(self,batch):
   try:session=create_review_session(self.context.project,batch)
   except ValueError:
-   messagebox.showinfo('Landmark prediction',f"Completed: {len(batch['prediction_runs'])}; failed: {len(batch['failures'])}.",parent=self.shell);self.shell.render();return
+   completed=len(batch.get('prediction_runs',{}));failed=len(batch.get('failures',{}));detail=_prediction_failure_summary(batch)
+   text=f"Completed: {completed}; failed: {failed}."
+   if detail:text+=f"\n\n{detail}"
+   (messagebox.showerror if failed and not completed else messagebox.showinfo)('Landmark prediction',text,parent=self.shell);self.shell.render();return
   count=len(session['image_ids']);answer=messagebox.askyesno('Landmark prediction',f"Completed: {len(batch['prediction_runs'])}; failed: {len(batch['failures'])}.\n\nReview this batch now?\nSuccessful predictions: {count}",parent=self.shell,default=messagebox.YES)
   if answer:self._open_review_session(session['batch_id'])
   else:self.shell.render()

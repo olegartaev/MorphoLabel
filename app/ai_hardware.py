@@ -212,6 +212,48 @@ def machine_profile_path():
     return app_state_dir()/_MACHINE_PROFILE_FILENAME
 
 
+def _hardware_profile_from_mapping(value):
+    if not isinstance(value, dict):
+        return None
+    try:
+        return HardwareProfile(
+            cpu_model=str(value.get("cpu_model") or "Unknown"),
+            physical_cores=None if value.get("physical_cores") is None else int(value.get("physical_cores")),
+            logical_cores=max(1,int(value.get("logical_cores") or 1)),
+            ram_bytes=None if value.get("ram_bytes") is None else int(value.get("ram_bytes")),
+            gpu_model=value.get("gpu_model"),
+            gpu_vram_mib=None if value.get("gpu_vram_mib") is None else int(value.get("gpu_vram_mib")),
+            gpu_driver=value.get("gpu_driver"),
+            cuda_available=bool(value.get("cuda_available")),
+            cuda_runtime=value.get("cuda_runtime"),
+            acceleration=str(value.get("acceleration") or ("CUDA" if value.get("cuda_available") else "CPU")),
+            gpu_free_mib=None if value.get("gpu_free_mib") is None else int(value.get("gpu_free_mib")),
+        )
+    except (TypeError,ValueError):
+        return None
+
+
+def _read_state_json(path):
+    try:
+        value=json.loads(Path(path).read_text(encoding="utf-8"))
+        return value if isinstance(value,dict) else {}
+    except (OSError,UnicodeDecodeError,json.JSONDecodeError):
+        return {}
+
+
+def persisted_hardware_profile():
+    """Return the setup-qualified machine profile without probing hardware again."""
+    # A successful first-run qualification is stronger than the legacy warm-cache
+    # file: older builds could overwrite hardware_profile.json after a transient
+    # runtime probe reported CUDA unavailable.
+    setup=_read_state_json(app_state_dir()/"first_run_setup.json")
+    if setup.get("status")=="PASS":
+        profile=_hardware_profile_from_mapping(setup.get("hardware"))
+        if profile is not None:return profile
+    saved=_read_state_json(machine_profile_path())
+    return _hardware_profile_from_mapping(saved.get("hardware"))
+
+
 def persist_machine_profile(hardware=None):
     """Persist first-launch hardware discovery for diagnostics, never as scientific state."""
     hardware=hardware or get_hardware_profile()
@@ -229,10 +271,12 @@ def persist_machine_profile(hardware=None):
 
 
 def get_hardware_profile(*, refresh=False):
-    """Discover hardware once per process unless an explicit refresh is requested."""
+    """Use setup-qualified hardware by default; probe only when explicitly requested or absent."""
     global _HARDWARE_PROFILE
-    if refresh or _HARDWARE_PROFILE is None:
-        _HARDWARE_PROFILE = detect_hardware()
+    if refresh:
+        _HARDWARE_PROFILE=detect_hardware()
+    elif _HARDWARE_PROFILE is None:
+        _HARDWARE_PROFILE=persisted_hardware_profile() or detect_hardware()
     return _HARDWARE_PROFILE
 
 

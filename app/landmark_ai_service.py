@@ -140,9 +140,8 @@ class LandmarkAIService:
         # replace _request retain their supplied requests unchanged.
         if getattr(self._request, "__func__", None) is LandmarkAIService._request:
             try:
-                if status:status("Detecting hardware…")
-                # Detect once; file-preparation worker tuning and inference
-                # AUTO selection must share the same portable profile.
+                # Use the setup-qualified machine profile. Hardware discovery is
+                # a setup/diagnostic concern, not a landmark-prediction stage.
                 prepared_hardware = get_hardware_profile()
                 metadata_by_id = prepare_inference_metadata(self.project, ids, hardware=prepared_hardware)
                 prepared_schema = tuple(dict(row) for row in load_schema(self.project.schema_path))

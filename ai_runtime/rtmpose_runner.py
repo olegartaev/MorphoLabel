@@ -55,11 +55,33 @@ def stream_training_process(command, log_path, *, cwd):
   process.stdout.close();returncode=process.wait()
  return returncode,''.join(tail)
 
+_LEGACY_INFERENCE_IMPORTS=("rtmpose_augmentations",)
+
+def _load_inference_config(config_loader, config_path):
+ """Load old MorphoLabel/SIMM configs without requiring training-only augmentations."""
+ try:
+  return config_loader.fromfile(config_path)
+ except ImportError as exc:
+  missing=next((name for name in _LEGACY_INFERENCE_IMPORTS if name in str(exc)),None)
+  if missing is None:raise
+  import types
+  previous=sys.modules.get(missing)
+  inserted=previous is None
+  if inserted:sys.modules[missing]=types.ModuleType(missing)
+  try:cfg=config_loader.fromfile(config_path)
+  finally:
+   if inserted:sys.modules.pop(missing,None)
+  # The legacy module only registered training-time augmentation transforms.
+  # Inference must not retain the obsolete import requirement after loading.
+  try:cfg["custom_imports"]=None
+  except (TypeError,KeyError):pass
+  return cfg
+
 def prepare_inference_config(config_path, *, config_loader=None):
- """Provide MMPose an inference dataloader even for SIMM training configs."""
+ """Provide MMPose an inference dataloader even for legacy training configs."""
  if config_loader is None:
   from mmengine.config import Config as config_loader
- cfg=config_loader.fromfile(config_path)
+ cfg=_load_inference_config(config_loader,config_path)
  if cfg.get("test_dataloader") is None:
   dataset=cfg.train_dataloader.dataset.copy()
   dataset["pipeline"]=cfg.val_pipeline
