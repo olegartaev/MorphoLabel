@@ -10,6 +10,7 @@ from .io import atomic_json_write
 from .project_storage import schema_hash, landmark_model_schema_compatible
 from .ai_runtime_resolver import validate_ai_runtime
 from .ai_delivery import ensure_ai_runtime
+from .process_utils import hidden_window_kwargs
 
 class RTMPoseRuntimeError(RuntimeError): pass
 @dataclass(frozen=True)
@@ -30,7 +31,7 @@ class RTMPoseBackend(LandmarkBackend):
   if not self.runtime_python.exists(): raise RTMPoseRuntimeError(f'AI runtime is unavailable: {self.runtime_python}')
   if not self.runner_path.exists(): raise RTMPoseRuntimeError(f'RTMPose runner is unavailable: {self.runner_path}')
   if operation in {'rank','rank_benchmark','rank_checkpoints','probe_many'}: return self._invoke_rank(payload,operation=operation,progress_callback=progress_callback,no_progress_timeout=no_progress_timeout)
-  try: run=subprocess.run([str(self.runtime_python),str(self.runner_path),operation],input=json.dumps(payload),text=True,capture_output=True,check=False,cwd=str(Path(__file__).resolve().parents[1]))
+  try: run=subprocess.run([str(self.runtime_python),str(self.runner_path),operation],input=json.dumps(payload),text=True,capture_output=True,check=False,cwd=str(Path(__file__).resolve().parents[1]),**hidden_window_kwargs())
   except OSError as exc: raise RTMPoseRuntimeError(f'cannot start isolated AI runtime: {exc}') from exc
   if run.returncode: raise RTMPoseRuntimeError(f"RTMPose {operation} failed (return code {run.returncode})\nFULL STDOUT:\n{run.stdout}\nFULL STDERR:\n{run.stderr}")
   try: return json.loads(next(line for line in reversed(run.stdout.splitlines()) if line.strip()))
@@ -38,7 +39,7 @@ class RTMPoseBackend(LandmarkBackend):
  def _invoke_rank(self,payload,*,operation='rank',progress_callback=None,no_progress_timeout=180):
   """Run one rank process, terminating only when its heartbeat stops."""
   command=[str(self.runtime_python),str(self.runner_path),operation];events=queue.Queue();stdout=[];stderr=[]
-  try: process=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,bufsize=1,cwd=str(Path(__file__).resolve().parents[1]))
+  try: process=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,bufsize=1,cwd=str(Path(__file__).resolve().parents[1]),**hidden_window_kwargs())
   except OSError as exc: raise RTMPoseRuntimeError(f'cannot start isolated AI runtime: {exc}') from exc
   def drain(stream,kind):
    try:
