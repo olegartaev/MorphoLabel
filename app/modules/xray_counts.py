@@ -103,12 +103,14 @@ class XRayCountsRuntime:
         if not model.get("reference_text"):return
         row=ttk.Frame(parent);row.pack(anchor="w",fill="x",pady=(3,0))
         ttk.Label(row,text="Reference:",style="Muted.TLabel").pack(side="left")
-        if model.get("reference_doi"):
-            link=ttk.Label(row,text=model["reference_text"],foreground="#256d9e",cursor="hand2")
-            link.pack(side="left",padx=(4,0));link.bind("<Button-1>",lambda _e,doi=model["reference_doi"]:webbrowser.open("https://doi.org/"+doi))
+        citation=ttk.Label(row,text=model["reference_text"],style="Muted.TLabel",wraplength=wraplength);citation.pack(side="left",padx=(4,0))
+        if model.get("reference_note"):self._tip.bind(citation,model["reference_note"])
+        if model.get("reference_doi") and model["reference_text"]!=f"DOI: {model['reference_doi']}":
+            link=ttk.Label(row,text=f"DOI {model['reference_doi']}",foreground="#256d9e",cursor="hand2")
+            link.pack(side="left",padx=(7,0));link.bind("<Button-1>",lambda _e,doi=model["reference_doi"]:webbrowser.open("https://doi.org/"+doi))
             if model.get("reference_note"):self._tip.bind(link,model["reference_note"])
-        else:
-            ttk.Label(row,text=model["reference_text"],style="Muted.TLabel",wraplength=wraplength).pack(side="left",padx=(4,0))
+        elif model.get("reference_doi"):
+            citation.configure(foreground="#256d9e",cursor="hand2");citation.bind("<Button-1>",lambda _e,doi=model["reference_doi"]:webbrowser.open("https://doi.org/"+doi))
 
     def _render_project(self,parent):
         ttk.Label(parent,text="Project setup",style="PageTitle.TLabel").pack(anchor="w")
@@ -390,9 +392,11 @@ class SchemeLibraryDialog(tk.Toplevel):
         ttk.Label(self.detail,text=", ".join(model["trait_abbrs"]) or "None",style="Muted.TLabel",wraplength=390).pack(anchor="w",pady=(2,0))
         if model["reference_text"]:
             row=ttk.Frame(self.detail);row.pack(anchor="w",fill="x",pady=(10,0));ttk.Label(row,text="Reference:",style="Muted.TLabel").pack(side="left")
-            if model["reference_doi"]:
-                link=ttk.Label(row,text=model["reference_text"],foreground="#256d9e",cursor="hand2");link.pack(side="left",padx=(4,0));link.bind("<Button-1>",lambda _e,doi=model["reference_doi"]:webbrowser.open("https://doi.org/"+doi))
-            else:ttk.Label(row,text=model["reference_text"],style="Muted.TLabel",wraplength=340).pack(side="left",padx=(4,0))
+            citation=ttk.Label(row,text=model["reference_text"],style="Muted.TLabel",wraplength=300);citation.pack(side="left",padx=(4,0))
+            if model["reference_doi"] and model["reference_text"]!=f"DOI: {model['reference_doi']}":
+                link=ttk.Label(row,text=f"DOI {model['reference_doi']}",foreground="#256d9e",cursor="hand2");link.pack(side="left",padx=(6,0));link.bind("<Button-1>",lambda _e,doi=model["reference_doi"]:webbrowser.open("https://doi.org/"+doi))
+            elif model["reference_doi"]:
+                citation.configure(foreground="#256d9e",cursor="hand2");citation.bind("<Button-1>",lambda _e,doi=model["reference_doi"]:webbrowser.open("https://doi.org/"+doi))
 
     def _open_file(self):
         path=filedialog.askopenfilename(parent=self,title="Open X-ray trait scheme",filetypes=(("MorphoLabel trait scheme","*.json"),("JSON files","*.json"),("All files","*.*")))
