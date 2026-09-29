@@ -691,12 +691,15 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   self.assertIn('self._loading_text=str(error)',source)
   self.assertIn('"production_landmark_load_stage"',source)
 
- def test_ai_hardware_is_warmed_on_launch_and_prediction_tuning_is_visible(self):
+ def test_ai_hardware_is_qualified_at_setup_and_prediction_reuses_it(self):
   shell=(Path(__file__).parents[1]/'app'/'ui'/'shell.py').read_text(encoding='utf8')
+  setup=(Path(__file__).parents[1]/'app'/'first_run_setup.py').read_text(encoding='utf8')
   landmarks=(Path(__file__).parents[1]/'app'/'ui'/'landmarks_section.py').read_text(encoding='utf8')
   service=(Path(__file__).parents[1]/'app'/'landmark_ai_service.py').read_text(encoding='utf8')
-  self.assertIn('threading.Thread(target=self._warm_ai_hardware',shell)
-  self.assertIn('persist_machine_profile(profile)',shell)
+  self.assertNotIn('threading.Thread(target=self._warm_ai_hardware',shell)
+  self.assertIn('refresh_hardware_profile()',setup)
+  self.assertIn('persist_machine_profile(hardware)',setup)
+  self.assertNotIn('status("Detecting hardware…")',service)
   self.assertIn("kind=='status'",landmarks)
   self.assertIn('Calibrating inference — first run only…',service)
   self.assertIn('Running AI: batch',service)

@@ -347,6 +347,16 @@ class ProductionShell(tk.Tk):
 
         initial_actions();poll()
 
+    def _warm_ai_hardware(self):
+        """Compatibility hook: load the setup-qualified profile without probing hardware."""
+        try:
+            profile=get_hardware_profile()
+            log("GLOBAL","hardware_profile","END",detail=f"source=setup-qualified; cpu={profile.cpu_model}; logical={profile.logical_cores}; gpu={profile.gpu_model}; vram_mib={profile.gpu_vram_mib}; cuda={profile.cuda_available}")
+            return profile
+        except Exception as exc:
+            log("GLOBAL","hardware_profile","ERROR",detail=str(exc))
+            return None
+
     def ui_icon(self,name,size):
         key=(str(name),int(size))
         if key not in self._ui_icons:self._ui_icons[key]=tk_icon(self,name,size)
