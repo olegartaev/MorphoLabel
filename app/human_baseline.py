@@ -339,16 +339,23 @@ def _span(points):
  valid=[(float(p["x"]),float(p["y"])) for p in points.values() if p.get("state")=="present" and p.get("x") is not None and p.get("y") is not None]
  return max((math.hypot(a[0]-b[0],a[1]-b[1]) for i,a in enumerate(valid) for b in valid[i+1:]),default=0.0)
 def _repeat_points(project,sid):return {p["landmark_id"]:p for p in _load(project,sid).get("repeat",())}
+def _error_aggregate(errors,n_images):
+ errors=list(errors)
+ return {"n_images":int(n_images),"n_comparable_landmarks":len(errors),"median_error_percent":_pct(errors,.5),"p90_error_percent":_pct(errors,.9),"p95_error_percent":_pct(errors,.95)}
+def _gm_landmark_ids(project):
+ return frozenset(int(row["id"]) for row in project.schema if str(row.get("role") or "BOTH").upper() in {"GM","BOTH"})
 def _evaluate_pair(project,run,first,second):
- errors=[];per={};per_image=[]
+ errors=[];gm_errors=[];per={};per_image=[];gm_ids=_gm_landmark_ids(project)
  for a,b,image_id in zip(first,second,run["image_ids"]):
   original,repeat=_repeat_points(project,a),_repeat_points(project,b);span=_span(original);image_errors=[]
   for ident,point in original.items():
    other=repeat.get(ident)
    if not other or point.get("state")!="present" or other.get("state")!="present" or span<=0:continue
    value=math.hypot(point["x"]-other["x"],point["y"]-other["y"])/span*100;errors.append(value);image_errors.append(value);per.setdefault(str(ident),[]).append(value)
+   if int(ident) in gm_ids:gm_errors.append(value)
   per_image.append({"image_id":image_id,"reference_span_px":span,"median_error_percent":_pct(image_errors,.5)})
- return {"aggregate":{"n_images":len(per_image),"n_comparable_landmarks":len(errors),"median_error_percent":_pct(errors,.5),"p90_error_percent":_pct(errors,.9),"p95_error_percent":_pct(errors,.95)},"per_landmark":{i:{"landmark_id":int(i),"n":len(v),"median_error_percent":_pct(v,.5),"p90_error_percent":_pct(v,.9)} for i,v in per.items()},"per_image":per_image}
+ aggregate=_error_aggregate(errors,len(per_image))
+ return {"aggregate":aggregate,"aggregate_by_scope":{"all":dict(aggregate),"gm":_error_aggregate(gm_errors,len(per_image))},"per_landmark":{i:{"landmark_id":int(i),"n":len(v),"median_error_percent":_pct(v,.5),"p90_error_percent":_pct(v,.9)} for i,v in per.items()},"per_image":per_image}
 def _translation_aligned_points(present,reference):
  """Robustly remove a whole-annotation translation before local QC comparisons."""
  common=sorted(set(present)&set(reference))
