@@ -842,13 +842,14 @@ ON CONFLICT(image_id) DO UPDATE SET verified_at=excluded.verified_at""",(image_i
   reviewed=sum(bool(present[i]['human_verified']) and present[i]['provenance'] in {'manual','ai_accepted','ai_corrected'} and bool(present[i]['crop_json']) for i in eligible)
   return {"Reviewed":reviewed,"Remaining":max(0,len(eligible)-reviewed),"Train ready":len(train),"Total":len(eligible)}
  def landmark_counts(self):
-  """Landmark counts with Train ready meaning current verified training states not in the active lineage."""
-  from .landmark_dataset import training_ready_image_ids
+  """Human-readable Landmark workspace counts; categories intentionally overlap."""
+  from .landmark_dataset import training_ready_image_ids, v2_human_final_eligible_image_ids
   rows=[row for row in self.catalog_rows() if not row.get('excluded')]
   checked=sum(bool(row.get('human_verified')) for row in rows)
   unresolved=sum(bool(row.get('missing_ids') or row.get('extra_ids') or row.get('placed',0)<row.get('expected_landmarks',0)) for row in rows)
+  eligible=v2_human_final_eligible_image_ids(self)
   ready=training_ready_image_ids(self)
-  return {"Total":len(rows),"Human reviewed / Checked":checked,"Remaining":unresolved,"Train ready":len(ready)}
+  return {"Total":len(rows),"Human verified":checked,"Training set":len(eligible),"New/changed":len(ready),"Incomplete":unresolved}
  def exclude_image(self,image_id,reason,note=None):
   reason=(reason or "Other").strip() or "Other"
   with self.transaction() as c:c.execute("UPDATE images SET excluded=1,exclusion_reason=?,exclusion_note=? WHERE image_id=?",(reason,(note or "").strip() or None,image_id))
