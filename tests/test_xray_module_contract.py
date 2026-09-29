@@ -29,5 +29,9 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertTrue(required.issubset(XRAY_ICON_NAMES))
         for name in required:
             image=render_xray_icon(name,26);self.assertEqual((26,26),image.size);self.assertIsNotNone(image.getbbox(),name)
+        source=open("app/xray_icons.py",encoding="utf-8").read()
+        self.assertIn("def _fish_skeleton",source)
+        for icon in ("xray_project","xray_crops","xray_structures","xray_results","xray_export"):
+            self.assertIn('name=="'+icon+'"',source)
 
 if __name__=="__main__":unittest.main()
