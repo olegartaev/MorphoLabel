@@ -125,13 +125,13 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   self.p.delete_landmark(image_id,1);self.p.delete_landmark(image_id,2);self.p.clear_checked(image_id)
   self._final_crop(image_id)
   context=UIContext(self.p,'landmarks');context.refresh(force=True)
-  self.assertEqual(0,context.landmark_counts()['Train ready'])
+  self.assertEqual(0,context.landmark_counts()['New/changed'])
   self.p.save_landmark(image_id,1,10,10,'manual','manual')
   context.refresh_landmark_state(image_id);context.update_landmark_counts(image_id)
-  self.assertEqual(0,context.landmark_counts()['Train ready'])
+  self.assertEqual(0,context.landmark_counts()['New/changed'])
   self.p.save_landmark(image_id,2,20,10,'manual','manual')
   context.refresh_landmark_state(image_id);counts=context.update_landmark_counts(image_id)
-  self.assertEqual(1,counts['Train ready'])
+  self.assertEqual(1,counts['New/changed'])
 
  def test_correction_to_image_already_seen_by_model_becomes_train_ready(self):
   import json
@@ -155,13 +155,13 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   context=UIContext(self.p,'landmarks');context.refresh(force=True)
   represented=model_training_state_fingerprints(self.p,'seen-model')
   self.assertEqual(represented[str(image_id)],current_training_state_fingerprint(self.p,image_id))
-  self.assertEqual(0,context.landmark_counts()['Train ready']);self.assertEqual(0,self.p.landmark_counts()['Train ready'])
+  self.assertEqual(0,context.landmark_counts()['New/changed']);self.assertEqual(0,self.p.landmark_counts()['New/changed'])
 
   self.p.save_landmark(image_id,1,11,10,'corrected','corrected_by_human')
   self.assertEqual(11,self.p.load_landmarks(image_id)[1]['x_standardized'])
   self.assertNotEqual(represented[str(image_id)],current_training_state_fingerprint(self.p,image_id))
   context.refresh_landmark_state(image_id);counts=context.update_landmark_counts(image_id)
-  self.assertEqual(1,counts['Train ready']);self.assertEqual(1,self.p.landmark_counts()['Train ready'])
+  self.assertEqual(1,counts['New/changed']);self.assertEqual(1,self.p.landmark_counts()['New/changed'])
 
   learned=self.p.data_root/'ai'/'datasets'/'learned';learned.mkdir(parents=True,exist_ok=True)
   learned_manifest={
@@ -173,20 +173,20 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   (learned/'manifest.json').write_text(json.dumps(learned_manifest),encoding='utf8')
   self.p.register_model('learned-model','landmark',active=True,schema_digest=digest,dataset_id='learned',parent_model_id='seen-model',dataset_manifest_path='ai/datasets/learned/manifest.json')
   context.invalidate_counts()
-  self.assertEqual(0,context.landmark_counts()['Train ready']);self.assertEqual(0,self.p.landmark_counts()['Train ready'])
+  self.assertEqual(0,context.landmark_counts()['New/changed']);self.assertEqual(0,self.p.landmark_counts()['New/changed'])
 
   self.p.save_landmark(image_id,1,11,10,'corrected','corrected_by_human')
   context.refresh_landmark_state(image_id);counts=context.update_landmark_counts(image_id)
-  self.assertEqual(0,counts['Train ready']);self.assertEqual(0,self.p.landmark_counts()['Train ready'])
+  self.assertEqual(0,counts['New/changed']);self.assertEqual(0,self.p.landmark_counts()['New/changed'])
 
   changed=Transform(40,30,1.0,20.0,15.0,0.0,0.0,40,30)
   crop={'crop_bounds':[0,0,40,30],'transform':changed.__dict__,'rotation_degrees':1.0,'standardized_relpath':f'cache/standardized/{image_id}.png','normalization_status':'PASS'}
   self.p.save_reviewed_crop(image_id,crop,previous_frame_proven=True)
   context.refresh_landmark_state(image_id);counts=context.update_landmark_counts(image_id)
-  self.assertTrue(self.p.landmark_crop_review_required(image_id));self.assertEqual(0,counts['Train ready'])
+  self.assertTrue(self.p.landmark_crop_review_required(image_id));self.assertEqual(0,counts['New/changed'])
   self.p.mark_checked(image_id)
   context.refresh_landmark_state(image_id);counts=context.update_landmark_counts(image_id)
-  self.assertEqual(1,counts['Train ready']);self.assertEqual(1,self.p.landmark_counts()['Train ready'])
+  self.assertEqual(1,counts['New/changed']);self.assertEqual(1,self.p.landmark_counts()['New/changed'])
 
  def test_crop_review_pending_keeps_crop_marker_but_not_verified_state(self):
   image_id=self.ids[0];self._final_crop(image_id)
@@ -198,13 +198,13 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   bulk=next(item for item in self.p.catalog_rows() if item['image_id']==image_id)
   self.assertFalse(bulk['human_verified']);self.assertTrue(bulk['has_crop']);self.assertEqual('yellow',bulk['status_color'])
   context=UIContext(self.p,'landmarks');context.refresh(force=True)
-  self.assertEqual(3,context.landmark_counts()['Human reviewed / Checked']);self.assertEqual(3,self.p.landmark_counts()['Human reviewed / Checked'])
+  self.assertEqual(3,context.landmark_counts()['Human verified']);self.assertEqual(3,self.p.landmark_counts()['Human verified'])
   self.p.save_landmark(image_id,1,11,10,'corrected','corrected_by_human')
   self.assertFalse(self.p.annotation_status(image_id)['verified']);self.assertTrue(self.p.landmark_crop_review_required(image_id))
   self.p.mark_checked(image_id);context.refresh_landmark_state(image_id);counts=context.update_landmark_counts(image_id)
   row=self.p.catalog_row(image_id);self.assertTrue(row['human_verified']);self.assertTrue(row['has_crop']);self.assertEqual('green',row['status_color'])
   self.assertTrue(landmark_frame_ready(self.p,image_id))
-  self.assertEqual(4,counts['Human reviewed / Checked']);self.assertEqual(4,self.p.landmark_counts()['Human reviewed / Checked'])
+  self.assertEqual(4,counts['Human verified']);self.assertEqual(4,self.p.landmark_counts()['Human verified'])
 
  def test_reapplying_identical_crop_does_not_create_landmark_review(self):
   image_id=self.ids[0]
@@ -476,11 +476,11 @@ class ProductionWorkflowGapTests(unittest.TestCase):
    evaluate_model_on_repeatability_run(self.p,run['run_id'],'frozen-model',backend=backend)
 
  def test_landmark_counter_delta_never_scans_catalog_or_trainer(self):
-  context=UIContext(self.p,'landmarks');context.refresh(force=True);self.assertEqual(0,context.landmark_counts()['Train ready'])
+  context=UIContext(self.p,'landmarks');context.refresh(force=True);self.assertEqual(0,context.landmark_counts()['New/changed'])
   image_id=self.ids[0];self.p.delete_landmark(image_id,1)
   with patch.object(self.p,'catalog_rows',side_effect=AssertionError('whole catalog scan')),patch('app.landmark_dataset.v2_human_final_eligible_image_ids',side_effect=AssertionError('whole trainer scan')):
    self.assertTrue(context.refresh_landmark_state(image_id));counts=context.update_landmark_counts(image_id)
-  self.assertEqual(1,counts['Remaining']);self.assertEqual(0,counts['Train ready'])
+  self.assertEqual(1,counts['Remaining']);self.assertEqual(0,counts['New/changed'])
  def test_landmark_batch_counter_uses_cached_rows_without_status_scan(self):
   ids=self.ids[:3];self.p.set_ui_state(STATE_KEY,{'stage':'INITIAL_TRAINING','initial_image_ids':ids,'improvement_image_ids':[],'current_image_id':ids[0],'current_position':0})
   context=UIContext(self.p,'landmarks');context.refresh(force=True);shell=ProductionShell.__new__(ProductionShell);shell.context=context
@@ -497,7 +497,7 @@ class ProductionWorkflowGapTests(unittest.TestCase):
    self.p.set_ui_state(STATE_KEY,state);context=UIContext(self.p,'landmarks');context.refresh(force=True);context.landmark_counts();section=self._batch_section(context)
    with patch('app.ui.landmarks_section.messagebox.showinfo'),patch.object(self.p,'catalog_rows',side_effect=AssertionError('global catalog scan')),patch('app.landmark_dataset.v2_human_final_eligible_image_ids',side_effect=AssertionError('global trainer scan')):
     self.assertTrue(section.navigate_training_batch(1))
-   self.assertTrue(self.p.annotation_status(ids[0])['verified']);self.assertFalse(self.p.annotation_status(ids[1])['verified']);self.assertEqual(ids[1],context.current()['image_id']);self.assertEqual('green',next(row for row in context.rows if row['image_id']==ids[0])['status_color']);self.assertEqual(0,context.landmark_counts()['Train ready'])
+   self.assertTrue(self.p.annotation_status(ids[0])['verified']);self.assertFalse(self.p.annotation_status(ids[1])['verified']);self.assertEqual(ids[1],context.current()['image_id']);self.assertEqual('green',next(row for row in context.rows if row['image_id']==ids[0])['status_color']);self.assertEqual(0,context.landmark_counts()['New/changed'])
    self.assertTrue(section.navigate_training_batch(-1));self.assertFalse(self.p.annotation_status(ids[1])['verified']);self.assertEqual(ids[0],context.current()['image_id'])
  def test_final_batch_next_accepts_final_member_and_persists_position(self):
   ids=self.ids[:4]
@@ -526,7 +526,7 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   ui=(Path(__file__).parents[1]/'app'/'human_baseline_ui.py').read_text(encoding='utf8');section=(Path(__file__).parents[1]/'app'/'ui'/'landmarks_section.py').read_text(encoding='utf8')
   self.assertNotIn('self.transient(parent)',ui);self.assertIn("'Confirm & Finish' if final",ui);self.assertIn("'Edit repeat annotations...',self.open_repeat",section)
  def test_section_specific_counts_are_authoritative(self):
-  self.assertEqual(0,self.p.landmark_counts()['Train ready'])
+  self.assertEqual(0,self.p.landmark_counts()['New/changed'])
   self.assertEqual(0,self.p.crop_section_counts()['Train ready'])
   first=self.ids[0];self.p.save_crop(first,{'crop_bounds':[0,0,10,10]},'manual');self.p.save_reviewed_crop(first,{'crop_bounds':[0,0,10,10]})
   self.assertEqual(1,self.p.crop_section_counts()['Train ready']);self.assertEqual({'Reviewed':1,'Remaining':1,'Train ready':1,'Total':2},self.p.crop_batch_counts(self.ids[:2]))
