@@ -508,6 +508,7 @@ class ProductionShell(tk.Tk):
         self.status_counts={}
         status_help={
             "Total":"Images currently included in this project view.",
+            "Images":"Images currently included in the Landmarks workflow.",
             "Human verified":"Images whose current landmark set has been explicitly confirmed by a person.",
             "Training set":"Verified, complete images currently eligible for model training. This is the full set used when training starts.",
             "New/changed":"Training-set images whose current Crop or landmarks are not yet represented by the active model lineage.",
