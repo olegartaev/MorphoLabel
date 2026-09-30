@@ -162,6 +162,8 @@ class XRayCountsRuntime:
             b=ttk.Button(nav,text=("● "+label) if active else label,image=self._icon(nav,icon,TOPBAR_ICON_SIZE),compound="left",style="StageActive.TButton" if active else "Stage.TButton",command=lambda k=key:self._select(k))
             if self.project is None and key!="project":b.state(["disabled"])
             b.pack(side="left",padx=(0,3));self._tip.bind(b,f"Open the {label} section.")
+        standard_menu=getattr(self.host,"build_standard_menu",None)
+        if callable(standard_menu):standard_menu(nav)
 
     def _select(self,key):
         if self.project is None and key!="project":return
@@ -357,7 +359,9 @@ class XRayCountsRuntime:
     def _open_project(self):
         root=self.host.container.winfo_toplevel();folder=filedialog.askdirectory(parent=root,title="Select X-ray project folder")
         if not folder:return
-        try:self.project=XRayProject(folder)
+        try:
+            self.project=XRayProject(folder)
+            self.project.compact_disposable_ai_artifacts()
         except Exception as exc:messagebox.showerror("Open X-ray project",str(exc),parent=root);return
         self.stage="project";self._rerender()
 class MarkerSettingsDialog(tk.Toplevel):

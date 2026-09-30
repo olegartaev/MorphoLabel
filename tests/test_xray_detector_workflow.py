@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image
 
 from app.xray_crop import crop_from_geometry, proposals_from_detector_boxes
-from app.xray_crop_ui import PlateCropEditSession
+from app.xray_crop_ui import PlateCropEditSession, apply_and_confirm_plate
 from app.ai_hardware import HardwareProfile
 from app.xray_detector import MIN_TRAINING_PLATES, detector_performance_settings, prepare_training_dataset
 from app.xray_project import XRayProject
@@ -152,6 +152,17 @@ class XRayDetectorWorkflowTests(unittest.TestCase):
         self.assertEqual("cuda:0",settings["inference"]["device"])
         self.assertFalse(settings["inference"]["mixed_precision"])
 
+    def test_apply_action_persists_and_human_confirms_whole_plate(self):
+        image_id=self.project.source_images()[0]["image_id"]
+        crop=crop_from_geometry(450,240,500,160,0,(900,480),algorithm="manual")
+        session=PlateCropEditSession();session.add(crop)
+        selected=apply_and_confirm_plate(self.project,image_id,session)
+        self.assertTrue(selected)
+        self.assertTrue(self.project.source_image(image_id)["crop_reviewed"])
+        active=self.project.specimens(image_id)
+        self.assertEqual(1,len(active));self.assertEqual("confirmed",active[0]["crop_status"])
+        self.assertEqual(1,len(self.project.training_plates()))
+
     def test_batch_selection_round_robins_source_series(self):
         images=[
             {"image_id":"a1","relative_path":"A/1.tif"},
@@ -184,8 +195,9 @@ class XRayDetectorContractTests(unittest.TestCase):
         ui=(root/"app/xray_crop_ui.py").read_text(encoding="utf-8")
         for text in (
             "Apply crop","1. Training batch","Start first batch","Add next batch","2. Train","Train X-ray crop model",
-            "3. Predict & review","Predict next","Predict all remaining","Review AI crops","Confirm & Next",
-            "drag empty space to add","<Delete>","WorkflowCard.TLabelframe",
+            "3. Predict & review","Predict next","Predict all","Review AI crops","Confirm & Next",
+            "Drag empty space","<Delete>","WorkflowCard.TLabelframe","PhotoListCanvas","Sample","Plate","Show excluded",
+            "NavPrimary.TButton","apply_and_confirm_plate",
         ):self.assertIn(text,ui)
         self.assertNotIn("Selected specimen",ui)
         self.assertNotIn("Edit crop…",ui)
@@ -194,12 +206,12 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn("training truth",ui)
         self.assertIn('text="Specimens"',ui)
         self.assertIn("PlateCropEditSession",ui)
-        self.assertIn("_status_icon",ui)
-        self.assertIn('width=3',ui)
+        self.assertIn('status_shape="square"',ui)
         self.assertIn('"#d93025"',ui)
         self.assertIn('"#e6a700"',ui)
         self.assertIn('"#188038"',ui)
-        self.assertIn('columns=("count",)',ui)
+        self.assertIn("self.apply_host.grid_forget()",ui)
+        self.assertIn("self.batch_actions.grid",ui)
 
     def test_runtime_runner_uses_one_class_rtmdet_tiny_and_coco(self):
         root=Path(__file__).resolve().parents[1]
