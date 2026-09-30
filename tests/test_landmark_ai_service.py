@@ -74,7 +74,7 @@ class LandmarkAIGateOneTests(unittest.TestCase):
   self.assertNotIn(manual_only,targets)
 
  def test_historical_confirmation_remains_prediction_locked(self):
-  from app.ui.landmarks_section import _prediction_target_ids
+  from app.ui.landmarks_section import _prediction_candidate_ids
   image_id=self.ids[0]
   self.service().predict_one(image_id)
   self.project.mark_checked(image_id)
@@ -83,7 +83,7 @@ class LandmarkAIGateOneTests(unittest.TestCase):
    c.execute("UPDATE image_review SET human_verified=0 WHERE image_id=?",(image_id,))
   self.assertFalse(self.project.annotation_status(image_id)["verified"])
   self.assertTrue(self.project.landmark_prediction_locked(image_id))
-  self.assertNotIn(image_id,_prediction_target_ids(self.project,self.project.catalog_rows()))
+  self.assertNotIn(image_id,_prediction_candidate_ids(self.project,self.project.catalog_rows()))
 
  def test_reprediction_replaces_machine_points_but_preserves_human_correction(self):
   image_id=self.ids[0]
