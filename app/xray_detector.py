@@ -17,6 +17,7 @@ from .runtime_paths import resource_path
 from .xray_crop import display_preview, proposals_from_detector_boxes
 
 DETECTOR_BACKEND="rtmdet_tiny_mmdet_3_2"
+RTMDET_TINY_COCO_URL="https://download.openmmlab.com/mmdetection/v3.0/rtmdet/rtmdet_tiny_8xb32-300e_coco/rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth"
 DATASET_MAX_DIM=1800
 MIN_TRAINING_PLATES=3
 
@@ -84,17 +85,20 @@ def train_detector(project,seed=42,epochs=80,progress=None):
     hardware=get_hardware_profile();settings=get_training_config(hardware=hardware)
     runtime,_=ensure_ai_runtime(project=project,progress=progress)
     if progress:progress("TRAINING",f"Training {model_id} from {len(dataset['plate_ids'])} confirmed plates…")
+    parent_checkpoint=(str(project.root/parent["path"]) if parent else RTMDET_TINY_COCO_URL)
     payload={
         "dataset_root":str(dataset["root"]),"train_json":str(dataset["train_json"]),"val_json":str(dataset["val_json"]),
         "work_dir":str(directory/"work"),"device":settings["device"],"batch_size":int(settings["batch_size"]),
         "workers":max(0,int(settings["workers"])),"epochs":int(epochs),"seed":int(seed),
+        "initial_checkpoint":parent_checkpoint,
     }
     result=_run(runtime,"train",payload,7200)
     checkpoint=Path(result["checkpoint"]);config=Path(result["config"])
     if not checkpoint.is_file() or not config.is_file():raise RuntimeError("X-ray detector training finished without a loadable model artifact.")
     final_checkpoint=directory/"model.pth";final_config=directory/"config.py"
     shutil.copy2(checkpoint,final_checkpoint);shutil.copy2(config,final_config)
-    metrics={"backend":DETECTOR_BACKEND,"epochs":int(epochs),"device":settings["device"],"train_plates":dataset["train_plates"],"val_plates":dataset["val_plates"],**dict(result.get("metrics") or {})}
+    metrics={"backend":DETECTOR_BACKEND,"epochs":int(epochs),"device":settings["device"],"train_plates":dataset["train_plates"],"val_plates":dataset["val_plates"],
+             "initialization":(parent or {}).get("model_id") or "rtmdet_tiny_coco_pretrained",**dict(result.get("metrics") or {})}
     project.register_crop_model(model_id,str(final_checkpoint.relative_to(project.root)),str(final_config.relative_to(project.root)),
                                 (parent or {}).get("model_id"),metrics,dataset["plate_ids"],dataset["training_specimens"],activate=True)
     return {"trained":True,"model_id":model_id,"metrics":metrics,"training_plates":len(dataset["plate_ids"]),"training_specimens":dataset["training_specimens"]}

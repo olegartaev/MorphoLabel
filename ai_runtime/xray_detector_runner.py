@@ -50,12 +50,15 @@ def train(payload):
     ]
     simple_test=[
         dict(type="LoadImageFromFile"),
+        dict(type="LoadAnnotations",with_bbox=True),
         dict(type="Resize",scale=(640,640),keep_ratio=True),
         dict(type="Pad",size=(640,640),pad_val=dict(img=(114,114,114))),
-        dict(type="LoadAnnotations",with_bbox=True),
         dict(type="PackDetInputs",meta_keys=("img_id","img_path","ori_shape","img_shape","scale_factor")),
     ]
     cfg.model.bbox_head.num_classes=1
+    initial_checkpoint=str(payload.get("initial_checkpoint") or "").strip()
+    if not initial_checkpoint:raise ValueError("X-ray detector training requires an initial pretrained or parent checkpoint")
+    cfg.load_from=initial_checkpoint
     cfg.work_dir=str(work);cfg.randomness=dict(seed=int(payload.get("seed",42)))
     cfg.train_dataloader.batch_size=batch;cfg.train_dataloader.num_workers=workers;cfg.train_dataloader.persistent_workers=bool(workers)
     cfg.train_dataloader.dataset=_dataset(root,payload["train_json"],simple_train)

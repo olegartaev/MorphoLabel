@@ -416,8 +416,13 @@ class XRayCropWorkspace:
         elif self._drag_mode[0]=="rotate":
             angle=math.degrees(math.atan2(y-cy,x-cx))
         else:
-            a=math.radians(angle);major=(math.cos(a),math.sin(a));minor=(-major[1],major[0]);dx=x-cx;dy=y-cy
-            length=max(20.0,2*abs(dx*major[0]+dy*major[1]));width=max(20.0,2*abs(dx*minor[0]+dy*minor[1]))
+            a=math.radians(angle);major=(math.cos(a),math.sin(a));minor=(-major[1],major[0])
+            initial_corners=crop_corners(cx,cy,length,width,angle)
+            opposite=initial_corners[(int(self._drag_mode[1])+2)%4]
+            dx=x-opposite[0];dy=y-opposite[1]
+            cx=(x+opposite[0])/2;cy=(y+opposite[1])/2
+            length=max(20.0,abs(dx*major[0]+dy*major[1]))
+            width=max(20.0,abs(dx*minor[0]+dy*minor[1]))
         self._editing_crop=crop_from_geometry(cx,cy,length,width,angle,self.preview_original_size,confidence="high",algorithm="manual")
         self._draw()
 

@@ -80,6 +80,16 @@ class XRayDetectorWorkflowTests(unittest.TestCase):
         self.assertEqual("xray_crop_model_v001",active["parent_model_id"])
         self.assertEqual(2,len(self.project.crop_models()))
 
+    def test_batch_selection_round_robins_source_series(self):
+        images=[
+            {"image_id":"a1","relative_path":"A/1.tif"},
+            {"image_id":"a2","relative_path":"A/2.tif"},
+            {"image_id":"b1","relative_path":"B/1.tif"},
+            {"image_id":"b2","relative_path":"B/2.tif"},
+            {"image_id":"c1","relative_path":"C/1.tif"},
+        ]
+        self.assertEqual(["a1","b1","c1","a2"],XRayProject._round_robin_series(images,4))
+
 
 class XRayDetectorGeometryTests(unittest.TestCase):
     def test_detector_box_is_never_trimmed_by_rotation_refinement(self):
@@ -116,6 +126,12 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn("num_classes=1",runner)
         self.assertIn('type="CocoDataset"',runner)
         self.assertIn('save_best="coco/bbox_mAP"',runner)
+        self.assertIn("cfg.load_from=initial_checkpoint",runner)
+        self.assertLess(runner.index('dict(type="LoadAnnotations",with_bbox=True)',runner.index("simple_test=[")),
+                        runner.index('dict(type="Resize"',runner.index("simple_test=[")))
+        detector=(root/"app/xray_detector.py").read_text(encoding="utf-8")
+        self.assertIn("rtmdet_tiny_coco_pretrained",detector)
+        self.assertIn("initial_checkpoint",detector)
         spec=(root/"packaging/morpholabel.spec").read_text(encoding="utf-8")
         self.assertIn("xray_detector_runner.py",spec)
 
