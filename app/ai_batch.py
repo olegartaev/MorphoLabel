@@ -83,14 +83,20 @@ def create_batch(project,model_id,start_image_id,count):
 def create_batch_for_ids(project,model_id,image_ids,*,selection_mode='explicit'):
  model=project.model_metadata(model_id)
  if not model or not model.get("active"):raise BatchError("requested model is not the active landmark model")
- catalog={row["image_id"]:row for row in project.catalog_rows()};ids=tuple(map(str,image_ids))
+ catalog={row["image_id"]:row for row in project.catalog_rows()};ids=tuple(map(str,image_ids));mode=str(selection_mode)
  if not ids or any(i not in catalog for i in ids):raise BatchError("requested prediction image IDs are unavailable")
  invalid=[i for i in ids if catalog[i].get("excluded") or not landmark_frame_ready(project,i)]
  if invalid:raise BatchError("requested prediction image IDs are not crop-ready: "+", ".join(invalid[:5]))
  verified=[i for i in ids if project.annotation_status(i).get("verified")]
- if verified:raise BatchError("requested prediction image IDs include human-verified images: "+", ".join(verified[:5]))
+ if verified:
+  if mode in {"all_eligible","next_eligible"}:
+   from .landmark_state import load_current_landmark_state
+   fully_human=[i for i in verified if load_current_landmark_state(project,i).all_required_human]
+   if fully_human:raise BatchError("requested prediction image IDs include fully human-authored images: "+", ".join(fully_human[:5]))
+  else:
+   raise BatchError("requested prediction image IDs include human-verified images: "+", ".join(verified[:5]))
  batch_id=f"{model_id}_batch_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{uuid.uuid4().hex[:8]}";path=_batch_path(project,batch_id);path.parent.mkdir(parents=True,exist_ok=False)
- data={"format_version":BATCH_FORMAT_VERSION,"batch_id":batch_id,"created_at":_now(),"model_id":model_id,"schema_sha256":schema_hash(project.schema_path),"schema_identity":list(landmark_schema_identity(load_schema(project.schema_path))),"selection_mode":str(selection_mode),"selection_rule":"explicit eligible image IDs","requested_count":len(ids),"selected_count":len(ids),"start_image_id":ids[0],"selected_images":[{"image_id":i,"display_name":str(catalog[i].get("original_name") or i)} for i in ids],"prediction_runs":{},"failures":{}};atomic_json_write(path,data);return data,path
+ data={"format_version":BATCH_FORMAT_VERSION,"batch_id":batch_id,"created_at":_now(),"model_id":model_id,"schema_sha256":schema_hash(project.schema_path),"schema_identity":list(landmark_schema_identity(load_schema(project.schema_path))),"selection_mode":mode,"selection_rule":"explicit eligible image IDs","requested_count":len(ids),"selected_count":len(ids),"start_image_id":ids[0],"selected_images":[{"image_id":i,"display_name":str(catalog[i].get("original_name") or i)} for i in ids],"prediction_runs":{},"failures":{}};atomic_json_write(path,data);return data,path
 def load_batch(project,batch_id_or_path):
  path=Path(batch_id_or_path);path=path if path.suffix else _batch_path(project,path)
  return json.loads(path.read_text(encoding='utf8')),path
