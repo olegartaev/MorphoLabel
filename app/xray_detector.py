@@ -24,11 +24,14 @@ MIN_TRAINING_PLATES=3
 def detector_performance_settings(hardware=None):
     """Use the persisted first-run hardware profile for X-ray AI defaults."""
     hardware=hardware or get_hardware_profile()
-    return {
-        "hardware":hardware.as_dict(),
-        "training":get_training_config(hardware=hardware),
-        "inference":get_inference_config(hardware=hardware),
-    }
+    training=get_training_config(hardware=hardware)
+    inference=get_inference_config(hardware=hardware).copy()
+    # The managed mmcv NMS extension used by this detector expects Float
+    # tensors. CUDA autocast makes RTMDet predictions Half before NMS and
+    # fails with "expected scalar type Float but found Half". Keep AMP for
+    # training (the expensive path), but use batched FP32 inference.
+    inference["mixed_precision"]=False
+    return {"hardware":hardware.as_dict(),"training":training,"inference":inference}
 
 def _run(runtime,mode,payload,timeout):
     runner=resource_path("ai_runtime","xray_detector_runner.py")

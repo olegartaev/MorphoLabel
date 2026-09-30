@@ -139,6 +139,7 @@ class XRayDetectorWorkflowTests(unittest.TestCase):
         self.assertTrue(settings["training"]["mixed_precision"])
         self.assertTrue(settings["training"]["pin_memory"])
         self.assertEqual("cuda:0",settings["inference"]["device"])
+        self.assertFalse(settings["inference"]["mixed_precision"])
 
     def test_batch_selection_round_robins_source_series(self):
         images=[
@@ -205,6 +206,9 @@ class XRayDetectorContractTests(unittest.TestCase):
         infer=runner[runner.index("simple_infer=["):runner.index("cfg.model.bbox_head.num_classes=1")]
         self.assertNotIn('type="LoadAnnotations"',infer)
         self.assertIn("def predict_many",runner)
+        predict_many=runner[runner.index("def predict_many"):runner.index("def predict(payload)")]
+        self.assertNotIn("torch.autocast",predict_many)
+        self.assertNotIn("dtype=torch.float16",predict_many)
         detector=(root/"app/xray_detector.py").read_text(encoding="utf-8")
         self.assertIn("rtmdet_tiny_coco_pretrained",detector)
         self.assertIn("initial_checkpoint",detector)

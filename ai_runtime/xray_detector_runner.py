@@ -119,15 +119,16 @@ def predict_many(payload):
     device=str(payload.get("device") or "cpu");images=[str(value) for value in payload.get("images") or ()]
     if not images:raise ValueError("X-ray prediction requires at least one image")
     model=init_detector(str(payload["config"]),str(payload["checkpoint"]),device=device)
-    use_amp=bool(payload.get("mixed_precision")) and device.startswith("cuda") and torch.cuda.is_available()
+    # Do not wrap detector prediction in CUDA autocast. The managed mmcv NMS
+    # extension receives RTMDet boxes/scores before this function can cast
+    # them and requires Float, not Half. Batching and cuDNN autotuning remain
+    # enabled, while training still uses AMP.
     if device.startswith("cuda") and torch.cuda.is_available():
         torch.backends.cudnn.benchmark=True
         try:torch.set_float32_matmul_precision("high")
         except (AttributeError,RuntimeError):pass
     threshold=float(payload.get("score_threshold",0.25))
-    context=torch.autocast(device_type="cuda",dtype=torch.float16,enabled=use_amp) if device.startswith("cuda") else torch.autocast(device_type="cpu",enabled=False)
-    with context:
-        raw=inference_detector(model,images if len(images)>1 else images[0])
+    raw=inference_detector(model,images if len(images)>1 else images[0])
     results=raw if isinstance(raw,list) else [raw]
     return {"results":[{"detections":_detections(result,threshold)} for result in results]}
 
