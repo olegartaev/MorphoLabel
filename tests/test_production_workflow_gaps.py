@@ -8,7 +8,7 @@ from app.operator_qc import set_repeat_landmark,complete_repeat_session,_load,op
 from app.ai import MockBackend
 from app.project_storage import schema_hash
 from app.landmark_ai_workflow import STATE_KEY,load_state
-from app.ui.landmarks_section import LandmarksSection,_format_percent,_landmark_toolbar_state,_remaining_prediction_ids,_confirm_complex_qc_image
+from app.ui.landmarks_section import LandmarksSection,_format_percent,_landmark_toolbar_state,_confirm_complex_qc_image
 from app.ui.context import UIContext, _training_ready_image_ids, _training_seen_image_ids
 from app.ui.batch_status import position_and_remaining
 from app.ui.shell import ProductionShell
