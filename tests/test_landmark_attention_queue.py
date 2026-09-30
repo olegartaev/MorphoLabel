@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.landmark_attention_queue import (
- active, classify, complete_current, current, move, record_failure, remove_image, start, user_copy
+ active, classify, complete_current, current, move, record_failure, remove_image, start, stage_counts, user_copy
 )
 
 
@@ -54,6 +54,26 @@ class LandmarkAttentionQueueTests(unittest.TestCase):
   self.crops["a"]={"provenance":"manual","human_verified":1}
   self.assertEqual(("a","prediction"),(current(self.project)["image_id"],current(self.project)["stage"]))
   self.assertEqual("b",move(self.project,1)["image_id"])
+
+ def test_confirmed_crop_with_landmark_review_flag_goes_to_landmarks_not_crop(self):
+  self.project.crop_review.add("a")
+  self.project.points["a"]={1:{"provenance":"machine","model_id":"m"}}
+  self.complete["a"]=True
+  issue=classify(self.project,"a")
+  self.assertEqual("landmarks",issue["stage"])
+  self.assertIn("Crop confirmed",issue["reason"])
+  copy=user_copy(issue)
+  self.assertIn("not be sent back to Crop",copy["message"])
+
+ def test_prediction_result_stage_counts_match_next_actions(self):
+  self.crops["a"]=None
+  self.project.points["b"]={1:{"provenance":"machine","model_id":"m"}}
+  self.complete["b"]=True
+  counts=stage_counts(self.project,("a","b","c"))
+  self.assertEqual(1,counts["crop"])
+  self.assertEqual(1,counts["landmarks"])
+  self.assertEqual(1,counts["prediction"])
+  self.assertEqual(3,counts["total"])
 
  def test_exclusion_removes_current_without_collapsing_queue(self):
   start(self.project,("a","b","c"))

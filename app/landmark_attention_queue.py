@@ -73,9 +73,10 @@ def classify(project,image_id):
   return {"image_id":image_id,"stage":"crop","reason":"Crop is missing or invalid"}
  if crop.get("provenance") not in {"manual","ai_accepted","ai_corrected"} or not crop.get("human_verified"):
   return {"image_id":image_id,"stage":"crop","reason":"Crop needs human confirmation"}
- if project.landmark_crop_review_required(image_id):
-  return {"image_id":image_id,"stage":"crop","reason":"Crop changed and landmarks need review"}
  current=load_current_landmark_state(project,image_id)
+ if project.landmark_crop_review_required(image_id):
+  reason="Crop confirmed; review landmarks in the new crop" if current.complete else "Crop confirmed; complete landmarks in the new crop"
+  return {"image_id":image_id,"stage":"landmarks","reason":reason}
  if project.landmark_ai_review_ready(image_id):
   return {"image_id":image_id,"stage":"resolved","reason":"Landmarks verified"}
  points=project.load_landmarks(image_id)
@@ -89,6 +90,14 @@ def classify(project,image_id):
  if any(_machine_origin(point) for point in points.values()):
   return {"image_id":image_id,"stage":"landmarks","reason":"Review the AI landmark prediction"}
  return {"image_id":image_id,"stage":"landmarks","reason":"Review the completed landmark set"}
+
+def stage_counts(project,image_ids):
+ counts={"crop":0,"prediction":0,"landmarks":0,"resolved":0}
+ for image_id in _unique(image_ids):
+  stage=classify(project,image_id).get("stage","resolved")
+  counts[stage]=counts.get(stage,0)+1
+ counts["total"]=sum(counts.get(key,0) for key in ("crop","prediction","landmarks"))
+ return counts
 
 def _short_reason(reason):
  text=str(reason or "").strip()
@@ -112,7 +121,11 @@ def user_copy(issue):
   detail="AI could not finish landmark prediction for this image."
   if reason and reason!="AI prediction is missing or incomplete":detail+=" "+reason
   return {"title":"AI prediction needs attention","message":detail+" Retry AI. If it fails again, check the crop or exclude the image.","action":"Retry AI","help":"Retry landmark prediction for this queued image without changing human-confirmed images."}
- return {"title":"Review landmarks","message":"Check the landmark positions and correct any that are wrong. When they are ready, verify the image and continue the same queue.","action":"Verify & continue","help":"Verify this landmark set after review and continue to the next queued image."}
+ if reason.startswith("Crop confirmed;"):
+  message="The Crop is already confirmed. Check the landmarks in this updated Crop, correct or complete them if needed, then verify the image. You will not be sent back to Crop."
+ else:
+  message="Check the landmark positions and correct any that are wrong. When they are ready, verify the image and continue the same queue."
+ return {"title":"Review landmarks","message":message,"action":"Verify & continue","help":"Verify this landmark set after review and continue to the next queued image."}
 
 def _mark_completed(value,image_id):
  completed=set(map(str,value.get("completed_ids") or ()));completed.add(str(image_id));value["completed_ids"]=sorted(completed)

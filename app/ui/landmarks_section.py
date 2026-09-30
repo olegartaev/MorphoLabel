@@ -14,7 +14,7 @@ from app.landmark_attention_queue import (
  active as active_attention_queue, classify as classify_attention_issue,
  complete_current as complete_attention_current, clear_failure as clear_attention_failure,
  move as move_attention_queue, record_failure as record_attention_failure,
- start as start_attention_queue,
+ start as start_attention_queue, stage_counts as attention_stage_counts,
 )
 from app.landmark_review import scan_project
 from app.landmark_suspicious_review import (
@@ -780,7 +780,30 @@ class LandmarksSection(SectionView):
   complete_attention_current(self.context.project,current)
   self.shell.open_landmark_attention();return True
 
- def _start_prediction_attention(self,batch,blocked=()):
+ def _show_prediction_results(self,ordered,predicted_count,failed_count):
+  counts=attention_stage_counts(self.context.project,ordered)
+  dialog=tk.Toplevel(self.shell);dialog.title('Landmark prediction complete');dialog.transient(self.shell);dialog.resizable(False,False)
+  frame=ttk.Frame(dialog,padding=16);frame.pack(fill='both',expand=True)
+  ttk.Label(frame,text='Landmark prediction complete',style='PageTitle.TLabel').pack(anchor='w')
+  ttk.Label(frame,text=f"Predicted successfully: {int(predicted_count)}",style='SectionTitle.TLabel').pack(anchor='w',pady=(10,0))
+  lines=[]
+  if counts.get('crop'):lines.append(f"Crop needs attention: {counts['crop']}")
+  if counts.get('prediction'):lines.append(f"Retry AI / incomplete prediction: {counts['prediction']}")
+  if counts.get('landmarks'):lines.append(f"Landmark review: {counts['landmarks']}")
+  if failed_count:lines.append(f"Prediction failures: {int(failed_count)}")
+  ttk.Label(frame,text='\n'.join(lines) if lines else 'No images need further review.',justify='left').pack(anchor='w',pady=(5,0))
+  if counts.get('total'):
+   ttk.Label(frame,text=f"Review queue: {counts['total']} image(s). MorphoLabel will open Crop or Landmarks only when that step is actually needed.",style='Muted.TLabel',wraplength=560,justify='left').pack(anchor='w',pady=(10,0))
+  actions=ttk.Frame(frame);actions.pack(fill='x',pady=(14,0))
+  def review_now():
+   dialog.destroy();self.shell.open_landmark_attention()
+  if counts.get('total'):
+   self.button(actions,'Review now',review_now,'Start the saved review queue now.',style='Primary.TButton').pack(side='right')
+   self.button(actions,'Review later',dialog.destroy,'Keep the review queue saved and stay in Landmarks for now.').pack(side='right',padx=(0,6))
+  else:self.button(actions,'Close',dialog.destroy,'Close this result summary.').pack(side='right')
+  center(self.shell,dialog)
+
+ def _start_prediction_attention(self,batch,blocked=(),offer_results=False):
   failures={str(key):str(value) for key,value in (batch.get('failures') or {}).items()}
   selected=[str(item.get('image_id')) for item in batch.get('selected_images',())]
   failed=[image_id for image_id in selected if image_id in failures]
@@ -793,7 +816,9 @@ class LandmarksSection(SectionView):
   from app.landmark_ai_review import supersede_unfinished_reviews
   supersede_unfinished_reviews(self.context.project,'landmark attention queue')
   start_attention_queue(self.context.project,ordered,batch_id=batch.get('batch_id'),failure_reasons=failures)
-  self.shell.open_landmark_attention();return True
+  if offer_results:self._show_prediction_results(ordered,len(successful),len(failed))
+  else:self.shell.open_landmark_attention()
+  return True
 
  def enter_landmark_review_session(self,batch_id=None):
   """One explicit production transition; never rely on a list-selection event."""
@@ -944,9 +969,12 @@ class LandmarksSection(SectionView):
        if current_id in (batch.get('failures') or {}):record_attention_failure(self.context.project,current_id,batch['failures'][current_id])
        else:clear_attention_failure(self.context.project,current_id)
        self.shell.open_landmark_attention();return
-      self._start_prediction_attention(batch,blocked);return
+      self._start_prediction_attention(batch,blocked,offer_results=bool(remaining and explicit_ids is None));return
      elif kind=='attention_only':
-      dialog.destroy();start_attention_queue(self.context.project,value[0],batch_id=None);self.shell.open_landmark_attention();return
+      dialog.destroy();blocked=tuple(value[0]);start_attention_queue(self.context.project,blocked,batch_id=None)
+      if remaining and explicit_ids is None:self._show_prediction_results(blocked,0,0)
+      else:self.shell.open_landmark_attention()
+      return
      elif kind=='empty':
       dialog.destroy();messagebox.showinfo('Landmark prediction',str(value[0]),parent=self.shell);return
      else:

@@ -117,7 +117,7 @@ class CropSection(SectionView):
  def _defer_crop_action(self,advance):
   current=(self.context.current() or {}).get('image_id')
   if not current:return
-  self._pending_crop_action=(current,getattr(self.shell,'selection_request_epoch',getattr(self.canvas,'requested_request_epoch',0)),bool(advance))
+  self._pending_crop_action=(current,getattr(self.shell,'selection_request_epoch',getattr(self.canvas,'requested_request_epoch',0)),advance)
   self.shell.status_context.configure(text='Preparing image…')
  def _crop_ready(self,image_id,generation,request_epoch=None):
   pending=getattr(self,'_pending_crop_action',None)
@@ -127,7 +127,8 @@ class CropSection(SectionView):
   if outcome=='DEFERRED':
    # A new request started between callback scheduling and apply; bind once to it.
    self._defer_crop_action(pending[2]);return
-  if outcome=='SAVED' and pending[2]:self._move_batch(1,_already_saved=True)
+  if outcome=='SAVED' and pending[2]=='attention':self.navigate_attention_queue(1,_already_saved=True)
+  elif outcome=='SAVED' and pending[2]:self._move_batch(1,_already_saved=True)
  def apply_current(self):
   outcome=self.canvas.apply()
   if outcome=='DEFERRED':self._defer_crop_action(False)
