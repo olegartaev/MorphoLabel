@@ -9,7 +9,7 @@ from tkinter import messagebox, ttk
 
 from PIL import Image, ImageTk
 
-from .xray_crop import crop_from_geometry, detect_specimens, display_preview
+from .xray_crop import crop_corners, crop_from_geometry, detect_specimens, display_preview
 from .xray_detector import predict_plates, train_detector
 
 
@@ -21,6 +21,7 @@ class XRayCropWorkspace:
         self.selected_image_id=None;self.selected_specimen_id=None
         self.preview=self.photo=None;self.preview_original_size=(1,1);self.display_scale=1.0;self.offset=(0,0)
         self._busy=False;self._add_mode=False;self._add_start=None
+        self._drag_mode=None;self._drag_anchor=None;self._drag_initial=None;self._editing_crop=None
         self.training_batch_size=tk.IntVar(value=6);self.prediction_batch_size=tk.IntVar(value=6)
         self._build();self.refresh()
 
@@ -32,7 +33,7 @@ class XRayCropWorkspace:
         self.previous_button.pack(side="left")
         self.confirm_button=ttk.Button(toolbar,text="Confirm plate & Next",style="Primary.TButton",command=self.confirm_plate_next)
         self.confirm_button.pack(side="left",padx=(6,0))
-        ttk.Label(toolbar,text="Correct the proposed specimen frames; a plate becomes training truth only after confirmation.",style="Muted.TLabel").pack(side="left",padx=10)
+        ttk.Label(toolbar,text="Drag a frame to move it; drag a corner to resize; use the yellow handle to rotate. Confirm only when the whole plate is correct.",style="Muted.TLabel").pack(side="left",padx=10)
         self.batch_status=ttk.Label(toolbar,text="",style="Muted.TLabel");self.batch_status.pack(side="right")
 
         workflow=ttk.Frame(outer);workflow.pack(fill="x",pady=(0,7))
@@ -81,6 +82,7 @@ class XRayCropWorkspace:
         self.canvas.pack(fill="both",expand=True)
         self.canvas.bind("<Configure>",lambda _e:self._draw())
         self.canvas.bind("<Button-1>",self._canvas_down)
+        self.canvas.bind("<B1-Motion>",self._canvas_drag)
         self.canvas.bind("<ButtonRelease-1>",self._canvas_up)
 
         self.name_var=tk.StringVar(value="No specimen selected")
@@ -90,7 +92,7 @@ class XRayCropWorkspace:
         self.edit_button=ttk.Button(right,text="Edit crop…",command=self.edit_selected);self.edit_button.pack(fill="x",pady=2)
         self.reject_button=ttk.Button(right,text="False detection — remove",command=self.reject_selected);self.reject_button.pack(fill="x",pady=2)
         self.add_button=ttk.Button(right,text="Add missed specimen",command=self.start_add);self.add_button.pack(fill="x",pady=(10,2))
-        ttk.Label(right,text="Do not confirm objects one by one. Correct the whole plate, then use Confirm plate & Next. That confirmed plate becomes training truth.",style="Muted.TLabel",wraplength=260,justify="left").pack(anchor="w",pady=(12,0))
+        ttk.Label(right,text="Routine editing is directly on the plate. Edit crop… is only a fallback. Correct the whole plate, then Confirm plate & Next; only that confirmed state becomes training truth.",style="Muted.TLabel",wraplength=260,justify="left").pack(anchor="w",pady=(12,0))
 
     def _batch(self):
         return self.project.get_ui_state("xray_crop_active_batch",{})
@@ -153,7 +155,7 @@ class XRayCropWorkspace:
         if selected:self._load_plate(selected[0])
 
     def _load_plate(self,image_id):
-        self.selected_image_id=image_id;self.selected_specimen_id=None
+        self.selected_image_id=image_id;self.selected_specimen_id=None;self._editing_crop=None;self._drag_mode=None
         try:preview,_scale,original_size=display_preview(self.project.source_image_path(image_id),1400)
         except Exception as exc:messagebox.showerror("X-ray Crops",str(exc),parent=self.parent);return
         self.preview=preview;self.preview_original_size=original_size;self._update_selected_panel();self._draw()
@@ -181,21 +183,33 @@ class XRayCropWorkspace:
         if not self.selected_image_id:return
         for item in self.project.specimens(self.selected_image_id):
             if item["excluded"]:continue
-            crop=item.get("crop") or {};corners=crop.get("corners") or []
+            selected=item["specimen_id"]==self.selected_specimen_id
+            crop=(self._editing_crop if selected and self._editing_crop is not None else (item.get("crop") or {}))
+            corners=crop.get("corners") or []
             if len(corners)!=4:continue
             pts=[]
             for x,y in corners:pts.extend(self._screen(x,y))
-            selected=item["specimen_id"]==self.selected_specimen_id
             color="#35d07f" if item["crop_status"]=="confirmed" else "#ffcc00";width=4 if selected else 2
             tag=f"specimen:{item['specimen_id']}"
             self.canvas.create_polygon(*pts,outline=color,fill="",width=width,tags=("crop",tag))
             cx,cy=self._screen(crop.get("center_x",0),crop.get("center_y",0))
             self.canvas.create_text(cx,cy,text=str(item.get("ordinal") or ""),fill="white",font=("Segoe UI",10,"bold"),tags=("crop",tag))
-            self.canvas.tag_bind(tag,"<Button-1>",lambda _e,sid=item["specimen_id"]:self._select_specimen(sid))
+            if selected:
+                for point in corners:
+                    hx,hy=self._screen(*point)
+                    self.canvas.create_rectangle(hx-6,hy-6,hx+6,hy+6,fill="#35d07f",outline="white",tags="crop_handle")
+                angle=math.radians(float(crop.get("angle_degrees",0)));major=(math.cos(angle),math.sin(angle))
+                reach=float(crop.get("length",0))/2+35/max(self.display_scale,1e-6)
+                rx=float(crop.get("center_x",0))+reach*major[0];ry=float(crop.get("center_y",0))+reach*major[1]
+                ex=float(crop.get("center_x",0))+float(crop.get("length",0))/2*major[0]
+                ey=float(crop.get("center_y",0))+float(crop.get("length",0))/2*major[1]
+                sx,sy=self._screen(rx,ry);tx,ty=self._screen(ex,ey)
+                self.canvas.create_line(tx,ty,sx,sy,fill="#ffcc00",width=2,tags="crop_handle")
+                self.canvas.create_oval(sx-7,sy-7,sx+7,sy+7,fill="#ffcc00",outline="white",tags="crop_handle")
         if self._add_mode:self.canvas.create_text(15,15,anchor="nw",text="Drag a box around the missed specimen",fill="#ffcc00",font=("Segoe UI",11,"bold"),tags="add_hint")
 
     def _select_specimen(self,specimen_id):
-        self.selected_specimen_id=specimen_id;self._update_selected_panel();self._draw()
+        self.selected_specimen_id=specimen_id;self._editing_crop=None;self._update_selected_panel();self._draw()
 
     def _update_selected_panel(self):
         if not self.selected_specimen_id:
@@ -351,20 +365,75 @@ class XRayCropWorkspace:
         if not self.selected_image_id:return
         self._add_mode=True;self._add_start=None;self._draw()
 
+    @staticmethod
+    def _inside(point,polygon):
+        x,y=point;inside=False;j=len(polygon)-1
+        for i,(xi,yi) in enumerate(polygon):
+            xj,yj=polygon[j]
+            if ((yi>y)!=(yj>y)) and x < (xj-xi)*(y-yi)/(yj-yi+1e-12)+xi:inside=not inside
+            j=i
+        return inside
+
+    def _hit_crop(self,x,y,item):
+        crop=item.get("crop") or {};corners=crop.get("corners") or []
+        if len(corners)!=4:return None
+        tol=14/max(self.display_scale,1e-6)
+        for index,(cx,cy) in enumerate(corners):
+            if (x-cx)**2+(y-cy)**2<=tol**2:return ("corner",index)
+        angle=math.radians(float(crop.get("angle_degrees",0)));major=(math.cos(angle),math.sin(angle))
+        reach=float(crop.get("length",0))/2+35/max(self.display_scale,1e-6)
+        rx=float(crop.get("center_x",0))+reach*major[0];ry=float(crop.get("center_y",0))+reach*major[1]
+        if (x-rx)**2+(y-ry)**2<=tol**2:return ("rotate",0)
+        if self._inside((x,y),corners):return ("move",0)
+        return None
+
     def _canvas_down(self,event):
-        if self._add_mode:self._add_start=(event.x,event.y)
+        if self._add_mode:
+            self._add_start=(event.x,event.y);return
+        if not self.selected_image_id:return
+        x,y=self._original(event.x,event.y);items=[item for item in self.project.specimens(self.selected_image_id) if not item["excluded"]]
+        selected=next((item for item in items if item["specimen_id"]==self.selected_specimen_id),None)
+        ordered=([selected] if selected else [])+[item for item in reversed(items) if selected is None or item["specimen_id"]!=selected["specimen_id"]]
+        for item in ordered:
+            if item is None:continue
+            hit=self._hit_crop(x,y,item)
+            if hit is None:continue
+            self.selected_specimen_id=item["specimen_id"];self._editing_crop=dict(item.get("crop") or {})
+            self._drag_mode=hit;self._drag_anchor=(x,y)
+            self._drag_initial=(
+                float(self._editing_crop.get("center_x",0)),float(self._editing_crop.get("center_y",0)),
+                float(self._editing_crop.get("length",0)),float(self._editing_crop.get("width",0)),
+                float(self._editing_crop.get("angle_degrees",0)),
+            )
+            self._update_selected_panel();self._draw();return
+        self.selected_specimen_id=None;self._editing_crop=None;self._update_selected_panel();self._draw()
+
+    def _canvas_drag(self,event):
+        if self._drag_mode is None or self._editing_crop is None:return
+        x,y=self._original(event.x,event.y);cx,cy,length,width,angle=self._drag_initial
+        if self._drag_mode[0]=="move":
+            ax,ay=self._drag_anchor;cx+=x-ax;cy+=y-ay
+        elif self._drag_mode[0]=="rotate":
+            angle=math.degrees(math.atan2(y-cy,x-cx))
+        else:
+            a=math.radians(angle);major=(math.cos(a),math.sin(a));minor=(-major[1],major[0]);dx=x-cx;dy=y-cy
+            length=max(20.0,2*abs(dx*major[0]+dy*major[1]));width=max(20.0,2*abs(dx*minor[0]+dy*minor[1]))
+        self._editing_crop=crop_from_geometry(cx,cy,length,width,angle,self.preview_original_size,confidence="high",algorithm="manual")
+        self._draw()
 
     def _canvas_up(self,event):
-        if not self._add_mode or not self._add_start:return
-        x0,y0=self._original(*self._add_start);x1,y1=self._original(event.x,event.y)
-        self._add_mode=False;self._add_start=None
-        left,right=sorted((x0,x1));top,bottom=sorted((y0,y1))
-        if right-left<20 or bottom-top<20:self._draw();return
-        crop=crop_from_geometry((left+right)/2,(top+bottom)/2,right-left,bottom-top,0,self.preview_original_size,algorithm="manual")
-        specimen_id=self.project.add_manual_specimen(self.selected_image_id,crop)
-        self.refresh();self._select_specimen(specimen_id)
-        messagebox.showinfo("Missed specimen","Specimen added. If it is tilted, use Edit crop to rotate the frame. Confirm the plate only after every specimen is correct.",parent=self.parent)
-
+        if self._add_mode and self._add_start:
+            x0,y0=self._original(*self._add_start);x1,y1=self._original(event.x,event.y)
+            self._add_mode=False;self._add_start=None
+            left,right=sorted((x0,x1));top,bottom=sorted((y0,y1))
+            if right-left<20 or bottom-top<20:self._draw();return
+            crop=crop_from_geometry((left+right)/2,(top+bottom)/2,right-left,bottom-top,0,self.preview_original_size,algorithm="manual")
+            specimen_id=self.project.add_manual_specimen(self.selected_image_id,crop)
+            self.refresh();self._select_specimen(specimen_id);return
+        if self._drag_mode is not None and self.selected_specimen_id and self._editing_crop is not None:
+            self.project.update_specimen_crop(self.selected_specimen_id,self._editing_crop)
+            self._drag_mode=self._drag_anchor=self._drag_initial=None;self._editing_crop=None
+            self.refresh();return
 
 class XRayCropEditor(tk.Toplevel):
     """Rare-case editor for one oriented rectangle."""

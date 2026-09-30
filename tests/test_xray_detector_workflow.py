@@ -103,6 +103,7 @@ class XRayDetectorContractTests(unittest.TestCase):
         for text in (
             "1. Training batch","Start first batch","Add next batch","2. Train","Train X-ray crop model",
             "3. Predict & review","Predict next","Predict all remaining","Review AI crops","Confirm plate & Next",
+            "drag a corner to resize","yellow handle to rotate",
         ):self.assertIn(text,ui)
         self.assertNotIn("Auto-crop all plates",ui)
         self.assertNotIn("Accept clear crops",ui)
