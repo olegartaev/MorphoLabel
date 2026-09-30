@@ -664,7 +664,7 @@ class ProductionShell(tk.Tk):
         if not self.context.project:return None
         from .batch_status import position_and_remaining,compact
         current=(self.context.current() or {}).get('image_id')
-        from app.landmark_attention_queue import summary as attention_summary
+        from app.landmark_attention_queue import display_summary as attention_summary
         attention=attention_summary(self.context.project)
         if attention and current==attention.get('image_id'):
             label={"crop":"Crop","prediction":"Retry AI","landmarks":"Landmarks"}.get(attention.get("stage"),"Review")

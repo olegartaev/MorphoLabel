@@ -43,6 +43,8 @@ def start(project,image_ids,*,batch_id=None,failure_reasons=None,source="landmar
   "image_ids":ids,
   "position":0,
   "current_image_id":ids[0] if ids else None,
+  "current_stage":None,
+  "current_reason":None,
   "completed_ids":[],
   "active":bool(ids),
   "failure_reasons":{str(k):str(v) for k,v in (failure_reasons or {}).items() if str(k) in ids},
@@ -88,56 +90,67 @@ def classify(project,image_id):
   return {"image_id":image_id,"stage":"landmarks","reason":"Review the AI landmark prediction"}
  return {"image_id":image_id,"stage":"landmarks","reason":"Review the completed landmark set"}
 
-def _pending_ids(project,value):
+def _mark_completed(value,image_id):
+ completed=set(map(str,value.get("completed_ids") or ()));completed.add(str(image_id));value["completed_ids"]=sorted(completed)
+
+def _seek(project,value,start,direction=1):
+ ids=[str(v) for v in value.get("image_ids") or ()]
+ if not ids:return None
  completed=set(map(str,value.get("completed_ids") or ()))
- result=[]
- for image_id in value.get("image_ids") or ():
-  image_id=str(image_id)
+ index=max(0,min(int(start),len(ids)-1))
+ positions=range(index,len(ids)) if int(direction)>=0 else range(index,-1,-1)
+ for position in positions:
+  image_id=ids[position]
   if image_id in completed:continue
   issue=classify(project,image_id)
   if issue["stage"]=="resolved":
    completed.add(image_id);continue
-  result.append(image_id)
- if completed!=set(map(str,value.get("completed_ids") or ())):
   value["completed_ids"]=sorted(completed)
- return result
-
-def _position_for(ids,current,default=0):
- if not ids:return 0
- if current in ids:return ids.index(current)
- return max(0,min(int(default or 0),len(ids)-1))
+  value["position"]=position;value["current_image_id"]=image_id
+  value["current_stage"]=issue["stage"];value["current_reason"]=issue["reason"]
+  value["active"]=True;_save(project,value)
+  issue["position"]=position+1;issue["total"]=len(ids);issue["remaining"]=max(0,len(ids)-len(completed));issue["batch_id"]=value.get("batch_id")
+  if issue["stage"]=="prediction":
+   issue["reason"]=value.get("failure_reasons",{}).get(image_id) or issue["reason"]
+   value["current_reason"]=issue["reason"];_save(project,value)
+  return issue
+ value["completed_ids"]=sorted(completed);value.update({"active":False,"current_image_id":None,"current_stage":None,"current_reason":None});_save(project,value)
+ return None
 
 def current(project):
  value=active(project)
  if not value:return None
- pending=_pending_ids(project,value)
- if not pending:
-  value.update({"active":False,"current_image_id":None,"position":0});_save(project,value);return None
- current_id=str(value.get("current_image_id") or "")
- position=_position_for(pending,current_id,value.get("position",0))
- value["position"]=position;value["current_image_id"]=pending[position];_save(project,value)
- issue=classify(project,pending[position])
- if issue["stage"]=="prediction":
-  issue["reason"]=value.get("failure_reasons",{}).get(pending[position]) or issue["reason"]
- issue["position"]=position+1;issue["total"]=len(pending);issue["remaining"]=len(pending);issue["batch_id"]=value.get("batch_id")
- return issue
+ return _seek(project,value,int(value.get("position") or 0),1)
+
+def display_summary(project):
+ value=active(project)
+ if not value:return None
+ ids=[str(v) for v in value.get("image_ids") or ()];current_id=str(value.get("current_image_id") or "")
+ if current_id not in ids:return None
+ completed=set(map(str,value.get("completed_ids") or ()))
+ return {
+  "image_id":current_id,
+  "stage":value.get("current_stage"),
+  "reason":value.get("current_reason"),
+  "position":ids.index(current_id)+1,
+  "total":len(ids),
+  "remaining":max(0,len(ids)-len(completed)),
+  "batch_id":value.get("batch_id"),
+ }
 
 def summary(project):
- issue=current(project)
- if not issue:return None
- return {key:issue[key] for key in ("image_id","stage","reason","position","total","remaining","batch_id")}
+ return display_summary(project)
 
 def move(project,step):
  value=active(project)
  if not value:return None
- pending=_pending_ids(project,value)
- if not pending:
-  value.update({"active":False,"current_image_id":None,"position":0});_save(project,value);return None
+ ids=[str(v) for v in value.get("image_ids") or ()]
  current_id=str(value.get("current_image_id") or "")
- position=_position_for(pending,current_id,value.get("position",0))
- target=max(0,min(len(pending)-1,position+int(step)))
- value["position"]=target;value["current_image_id"]=pending[target];_save(project,value)
- return current(project)
+ position=ids.index(current_id) if current_id in ids else max(0,min(int(value.get("position") or 0),max(0,len(ids)-1)))
+ if int(step)<0:
+  issue=_seek(project,value,max(0,position-1),-1)
+  return issue or current(project)
+ return _seek(project,value,min(len(ids)-1,position+1),1)
 
 def complete_current(project,image_id=None):
  value=active(project)
@@ -146,7 +159,8 @@ def complete_current(project,image_id=None):
  completed=set(map(str,value.get("completed_ids") or ()));completed.add(image_id)
  value["completed_ids"]=sorted(completed)
  reasons=dict(value.get("failure_reasons") or {});reasons.pop(image_id,None);value["failure_reasons"]=reasons
- _save(project,value);return current(project)
+ position=int(value.get("position") or 0);_save(project,value)
+ return _seek(project,value,position,1)
 
 def record_failure(project,image_id,reason):
  value=active(project)
@@ -171,7 +185,7 @@ def remove_image(project,image_id):
  value.update({"image_ids":ids,"completed_ids":completed,"failure_reasons":reasons})
  if not ids:
   value.update({"active":False,"current_image_id":None,"position":0});_save(project,value);return None
- position=min(old_index,len(ids)-1);value["position"]=position;value["current_image_id"]=ids[position]
+ position=min(old_index,len(ids)-1);value["position"]=position;value["current_image_id"]=ids[position];value["current_stage"]=None;value["current_reason"]=None
  _save(project,value);return current(project)
 
 def clear(project):

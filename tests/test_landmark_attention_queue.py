@@ -69,6 +69,15 @@ class LandmarkAttentionQueueTests(unittest.TestCase):
   self.complete["a"]=True
   self.assertEqual("Review the AI landmark prediction",current(self.project)["reason"])
 
+ def test_display_summary_is_persisted_and_does_not_reclassify_whole_queue(self):
+  from app.landmark_attention_queue import display_summary
+  start(self.project,("a","b","c"))
+  first=current(self.project)
+  self.assertEqual("a",first["image_id"])
+  with patch("app.landmark_attention_queue.classify",side_effect=AssertionError("status repaint must not classify")):
+   shown=display_summary(self.project)
+  self.assertEqual(("a",3),(shown["image_id"],shown["remaining"]))
+
  def test_complete_current_advances_and_preserves_history(self):
   start(self.project,("a","b"),batch_id="batch")
   issue=complete_current(self.project,"a")
