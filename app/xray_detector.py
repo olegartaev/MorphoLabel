@@ -209,4 +209,3 @@ def predict_plates(project,image_ids,cancel=None,progress=None,score_threshold=0
             index+=len(chunk)
     return {"success":len(success),"successful_ids":[row["image_id"] for row in success],"failures":failures,
             "model_id":model["model_id"],"results":success,"inference_batch_size":chunk_size}
-            "model_id":model["model_id"],"results":success,"inference_batch_size":chunk_size}
