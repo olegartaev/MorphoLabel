@@ -246,7 +246,7 @@ class ExtensionArchitectureTests(unittest.TestCase):
         self.assertNotIn("_open_core",public_api)
         self.assertNotIn("ProductionShell",inspect.getsource(FakeRuntime))
         self.assertNotIn("._",inspect.getsource(FakeRuntime))
-        self.assertEqual({"container","project","show_module_hub","open_project","new_project"},
+        self.assertEqual({"container","project","show_module_hub","open_project","new_project","build_standard_menu"},
                          {item.name for item in fields(ModuleHost)})
         registry_source=(root/"app/extensions/registry.py").read_text(encoding="utf-8")
         self.assertNotIn("LandmarkBackend",registry_source+public_api)

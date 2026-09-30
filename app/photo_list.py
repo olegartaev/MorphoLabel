@@ -6,6 +6,7 @@ from app.ui.tooltips import place_popup
 class PhotoListCanvas(tk.Canvas):
  row_height=24
  def __init__(self,master,**kwargs):
+  self.status_shape=str(kwargs.pop("status_shape","circle") or "circle")
   super().__init__(master,highlightthickness=0,**kwargs);self.rows=[];self._selection=();self._yscroll=None;self._tooltip=None
   self.bind("<Configure>",lambda _e:self._draw());self.bind("<Button-1>",self._click);self.bind("<MouseWheel>",self._wheel);self.bind("<Up>",lambda _e:self._move(-1));self.bind("<Down>",lambda _e:self._move(1));self.bind("<Home>",lambda _e:self._select(0));self.bind("<End>",lambda _e:self._select(len(self.rows)-1));self.bind("<Motion>",self._motion);self.bind("<Leave>",lambda _e:self._hide_tooltip());super().configure(scrollregion=(0,0,1,1),takefocus=True)
  def configure(self,cnf=None,**kwargs):
@@ -71,7 +72,10 @@ class PhotoListCanvas(tk.Canvas):
     self.create_text(status_x,y+self.row_height/2,text="×",anchor="center",fill="#6b7280",font=("Segoe UI",12,"bold"),tags="photo_list_render")
    else:
     color={"red":"#d93025","yellow":"#e6a700","green":"#188038"}.get(row.get("status"),"#d93025")
-    self.create_oval(status_x-5,y+7,status_x+5,y+17,fill=color,outline=color,tags="photo_list_render")
+    if self.status_shape=="square":
+     self.create_rectangle(status_x-6,y+6,status_x+6,y+18,fill="white",outline=color,width=3,tags="photo_list_render")
+    else:
+     self.create_oval(status_x-5,y+7,status_x+5,y+17,fill=color,outline=color,tags="photo_list_render")
    self.create_text(86,y+self.row_height/2,text=row.get("text",""),anchor="w",fill=foreground,tags="photo_list_render")
   self._notify_scroll()
  def _hide_tooltip(self):

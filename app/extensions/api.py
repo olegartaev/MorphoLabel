@@ -22,6 +22,7 @@ class ModuleHost:
     show_module_hub: Callable[[], None]
     open_project: Callable[..., object]
     new_project: Callable[[], object]
+    build_standard_menu: Callable[["Misc"], object] | None = None
 
 
 class ModuleRuntime(Protocol):
