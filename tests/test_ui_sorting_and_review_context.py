@@ -51,7 +51,7 @@ class UISortingAndReviewContextTests(unittest.TestCase):
   landmarks=(root/"app"/"ui"/"landmarks_section.py").read_text(encoding="utf-8")
   crop=(root/"app"/"ui"/"crop_section.py").read_text(encoding="utf-8")
   photos=(root/"app"/"ui"/"photo_list_panel.py").read_text(encoding="utf-8")
-  self.assertIn("Predict all unresolved",landmarks);self.assertNotIn("'All remaining'",landmarks);self.assertNotIn("run All remaining again",landmarks)
+  self.assertIn("Predict all",landmarks);self.assertNotIn("'All remaining'",landmarks);self.assertNotIn("run All remaining again",landmarks)
   self.assertIn("Predict all uncropped",crop);self.assertNotIn('"Apply remaining"',crop)
   self.assertIn("Needs attention:",crop);self.assertNotIn("failed: {result['failed']}",crop)
   self.assertIn("' unresolved'",photos);self.assertIn("' verified'",photos);self.assertNotIn("Incomplete:",photos);self.assertNotIn(" else 'Ready'",photos)
