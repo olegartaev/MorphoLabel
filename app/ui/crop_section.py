@@ -1,4 +1,4 @@
-"""Prototype-style Crop section backed by existing crop services."""
+"""Crop workspace backed by the production crop services."""
 from tkinter import ttk, messagebox
 import tkinter as tk
 import threading, queue
@@ -15,9 +15,11 @@ class CropSection(SectionView):
  def render(self):
   panel=self.frame(padding=(6,4));panel.pack(fill="both",expand=True);panel.rowconfigure(1,weight=1);panel.columnconfigure(0,weight=1)
 
-  actions=ttk.Frame(panel,style="Toolbar.TFrame");actions.grid(row=0,column=0,sticky="ew",pady=(0,4))
+  header=ttk.Frame(panel);header.grid(row=0,column=0,sticky="ew",pady=(0,4))
+  actions=ttk.Frame(header,style="Toolbar.TFrame");actions.pack(fill="x")
   self.button(actions,"Apply crop",self.apply_current,"Save this reversible crop and stay on the current image.",style="Primary.TButton").pack(side="left")
   ttk.Label(actions,text="Adjust the green frame; drag the yellow handle to rotate.",style="Muted.TLabel").pack(side="left",padx=10)
+  self.attention_banner(header,lambda:self.navigate_attention_queue(1),stages={"crop"})
 
   self.canvas_frame=ttk.Frame(panel);self.canvas_frame.grid(row=1,column=0,sticky="nsew")
   self.canvas=CropCanvasController(self.canvas_frame,self.context,self.refresh);self.canvas.on_image_ready=self._crop_ready

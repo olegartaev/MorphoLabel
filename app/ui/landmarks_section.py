@@ -1,11 +1,11 @@
-"""Prototype-style Landmarks workspace wired to existing Project, AI and Human Baseline services."""
+"""Landmarks workspace wired to Project, AI and Human Baseline services."""
 from tkinter import ttk, messagebox, colorchooser
 import tkinter as tk
 import threading, queue
 from app.landmark_training_workflow import available_training_parents, prepare_landmark_training, run_landmark_training, validation_metrics
 from app.landmark_ai_workflow import begin_improvement, control_set_summary, add_control_image, create_stage, stage_summary, workflow_current
 from app.ai_batch import BatchError, active_backend, create_batch_for_ids, run_batch
-from app.landmark_ai_review import (active_review_session, activate_review_session, complete_or_advance_review, create_review_session, pending_review_session, review_summary, create_review_session_for_ids)
+from app.landmark_ai_review import (active_review_session, activate_review_session, complete_or_advance_review, create_review_session_for_ids)
 from app.landmark_ai_service import LandmarkAIService
 from app.active_learning import select_ai_worst_first
 from app.smart_selection import create_improvement_selection
@@ -68,12 +68,6 @@ def _prediction_candidate_ids(project,rows):
    result.append(image_id)
  return tuple(result)
 
-def _prediction_target_ids(project,rows):
- return tuple(image_id for image_id in _prediction_candidate_ids(project,rows) if landmark_frame_ready(project,image_id))
-
-def _prediction_blocked_ids(project,rows):
- return tuple(image_id for image_id in _prediction_candidate_ids(project,rows) if not landmark_frame_ready(project,image_id))
-
 def _next_prediction_candidates(project,rows,start_image_id,count):
  candidates=set(_prediction_candidate_ids(project,rows))
  order=[str(item['image_id']) for item in rows if str(item['image_id']) in candidates]
@@ -97,13 +91,6 @@ def _repeatability_diagram(parent):
  canvas.create_oval(92,7,116,31,fill="#ffffff",outline="#c6cdd3");canvas.create_text(104,19,text="1",fill="#27313a",font=("Segoe UI",9,"bold"))
  canvas.create_oval(312,7,336,31,fill="#ffffff",outline="#c6cdd3");canvas.create_text(324,19,text="2",fill="#27313a",font=("Segoe UI",9,"bold"))
  return canvas
-
-def _prediction_failure_summary(batch):
- failures=list((batch.get('failures') or {}).values())
- if not failures:return ''
- lines=[line.strip() for line in str(failures[0]).splitlines() if line.strip()]
- preferred=next((line for line in lines if line.startswith(('ModuleNotFoundError:','ImportError:','RuntimeError:','ValueError:','FileNotFoundError:'))),lines[-1] if lines else str(failures[0]))
- return preferred[:400]
 
 def _landmark_toolbar_state(state,selected_id):
  point=(state.points_by_id.get(int(selected_id)) if state is not None and selected_id is not None else None) or {}
@@ -168,7 +155,9 @@ class LandmarksSection(SectionView):
  def render(self):
   panel=self.frame(padding=(6,4));panel.pack(fill="both",expand=True);panel.rowconfigure(1,weight=1);panel.columnconfigure(0,weight=1)
 
-  controls=ttk.Frame(panel,style="Toolbar.TFrame");controls.grid(row=0,column=0,sticky="ew",pady=(0,4))
+  header=ttk.Frame(panel);header.grid(row=0,column=0,sticky="ew",pady=(0,4))
+  controls=ttk.Frame(header,style="Toolbar.TFrame");controls.pack(fill="x")
+  self.attention_banner(header,lambda:self.navigate_attention_queue(1),stages={"prediction","landmarks"})
   self.canvas_frame=ttk.Frame(panel);self.canvas_frame.grid(row=1,column=0,sticky="nsew")
   # The image canvas must consume only the space left after the workflow dock.
   # A packed Tk Canvas otherwise propagates its requested height upward and can
@@ -819,11 +808,6 @@ class LandmarksSection(SectionView):
   self.shell.render();self.shell._update_status();self.shell.after_idle(lambda:self.shell._selected_image(False));self.shell.lift();self.shell.focus_force();return True
  def _open_review_session(self,batch_id=None):
   return self.enter_landmark_review_session(batch_id)
- def review_pending(self):
-  session=pending_review_session(self.context.project)
-  if session is None:
-   messagebox.showinfo('Prediction review','No unfinished prediction review is available.',parent=self.shell);return
-  self._open_review_session(session['batch_id'])
  def navigate_prediction_review(self,step):
   session=active_review_session(self.context.project)
   current=(self.context.current() or {}).get('image_id')
