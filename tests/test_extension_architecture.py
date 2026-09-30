@@ -100,10 +100,10 @@ class ExtensionArchitectureTests(unittest.TestCase):
         registry = module_registry()
         self.assertEqual("Landmarks & measurements", registry.get("landmarks").display_name)
         self.assertEqual("builtin", registry.get("landmarks").source)
-        self.assertEqual("X-ray counts", registry.get("xray_counts").display_name)
+        self.assertEqual("X-ray traits", registry.get("xray_counts").display_name)
         self.assertEqual("Scales & meristics", registry.get("scales_meristics").display_name)
-        self.assertEqual(("landmarks",), tuple(item.module_id for item in registry.available()))
-        self.assertEqual(("xray_counts", "scales_meristics"), tuple(item.module_id for item in registry.planned()))
+        self.assertEqual(("landmarks", "xray_counts"), tuple(item.module_id for item in registry.available()))
+        self.assertEqual(("scales_meristics",), tuple(item.module_id for item in registry.planned()))
 
     def test_builtin_landmarks_factory_obeys_public_zero_argument_contract(self):
         spec = module_registry().get("landmarks")
@@ -235,7 +235,7 @@ class ExtensionArchitectureTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         hub = (root / "app/ui/module_hub.py").read_text(encoding="utf-8")
         shell = (root / "app/ui/shell.py").read_text(encoding="utf-8")
-        for name in ("Landmarks & measurements", "X-ray counts", "Scales & meristics"):
+        for name in ("Landmarks & measurements", "X-ray traits", "Scales & meristics"):
             self.assertNotIn(name, hub)
         self.assertIn("self.shell.open_module(key)", hub)
         self.assertIn("spec.factory()", shell)
