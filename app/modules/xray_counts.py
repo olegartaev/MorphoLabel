@@ -12,6 +12,7 @@ from app.ui.tooltips import Tooltip
 from app.ui.icons import TOPBAR_ICON_SIZE,tk_icon
 from app.xray_icons import XRAY_ICON_SIZE,TRAIT_ICON_SIZE,tk_xray_icon,tk_rule_preview
 from app.xray_project import XRayProject
+from app.xray_crop_ui import XRayCropWorkspace
 from app.xray_schema import (
     MARKER_COLORS,METHOD_BY_ID,SCHEME_RESOURCE_DIR,SHAPES,TRAIT_METHODS,blank_scheme,normalize_scheme,
     load_scheme_file,save_scheme_file,scheme_change_impact,structure_usage,
@@ -238,10 +239,8 @@ class XRayCountsRuntime:
 
     def _render_crops(self,parent):
         ttk.Label(parent,text="Crops",style="PageTitle.TLabel").pack(anchor="w")
-        ttk.Label(parent,text="Separate specimens from X-ray plates before annotation.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,12))
-        card=ttk.LabelFrame(parent,text="Source X-rays",padding=14);card.pack(fill="x")
-        ttk.Label(card,text=f"{len(self.project.source_images())} source image(s) indexed",style="ModuleTitle.TLabel").pack(anchor="w")
-        ttk.Label(card,text="The legacy automatic plate splitter will be connected here next. Originals remain read-only; crop corrections and exclusions will live in SQLite.",style="Muted.TLabel",wraplength=900).pack(anchor="w",pady=(4,0))
+        ttk.Label(parent,text="Automatically separate, straighten and protect whole specimens before annotation.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,8))
+        XRayCropWorkspace(parent,self.project)
 
     def _render_structures(self,parent):
         ttk.Label(parent,text="Structures",style="PageTitle.TLabel").pack(anchor="w")
