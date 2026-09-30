@@ -1,0 +1,1093 @@
+READ-ONLY production fingerprint recheck
+{
+  "affected": 343,
+  "categories": {
+    "exact_with_production_fingerprint": 215,
+    "mismatch_schema": 111,
+    "mismatch_rows": 17
+  },
+  "first_5_mismatch_field_diffs": [
+    {
+      "image_id": "263e48d1910f0867",
+      "confirmation_timestamp": "2026-09-25T14:58:50.238579+00:00",
+      "source_confirmation_qc_id": 475,
+      "target_fingerprint": "3bee91f8a6a742a5e39de2b2950aea74175b0a9281aa9a64836f22840220b786",
+      "reconstructed_fingerprint": "617deaea5f0e6a8826a6d73c53d1f34f128d165027d17dfcb08511f8a37cd906",
+      "category": "mismatch_rows",
+      "machine_rows": 24,
+      "human_rows": 1,
+      "missing_runs": [],
+      "likely_row_differences": [
+        {
+          "landmark_abbr": "AnHtTip",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "AnI",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "AnO",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "CPminD",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "CPminV",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "CauUTip",
+          "fields": [
+            "y_standardized",
+            "model_id",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "DorHtTip",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "DorO",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "JawP",
+          "fields": [
+            "y_standardized",
+            "model_id",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "NarP",
+          "fields": [
+            "y_standardized",
+            "model_id",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OpD",
+          "fields": [
+            "y_standardized",
+            "model_id",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OpP",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "OpV",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbA",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbD",
+          "fields": [
+            "y_standardized",
+            "model_id",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbP",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbV",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "PecO",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "PecTip",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "PelO",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "PelTip",
+          "fields": [
+            "y_standardized",
+            "model_id",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "SOccP",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "SnT",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "VCend",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        }
+      ]
+    },
+    {
+      "image_id": "2646f8725ba7e175",
+      "confirmation_timestamp": "2026-09-28T14:04:02.026286+00:00",
+      "source_confirmation_qc_id": 628,
+      "target_fingerprint": "2246e53350ed0b34c35d7c61c063584c6cc797cdab8f441b6210c5d89932f20c",
+      "reconstructed_fingerprint": "30d598b8596280e23e262768b8da3ef49450b1fa12b414a22c28f4f51a0b482f",
+      "category": "mismatch_rows",
+      "machine_rows": 18,
+      "human_rows": 7,
+      "missing_runs": [],
+      "likely_row_differences": [
+        {
+          "landmark_abbr": "AnHtTip",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "AnI",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "AnO",
+          "fields": [
+            "y_standardized",
+            "model_id",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "CPminD",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "CPminV",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "DorHtTip",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "DorO",
+          "fields": [
+            "y_standardized",
+            "model_id",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "JawP",
+          "fields": [
+            "y_standardized",
+            "model_id",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "NarP",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OpD",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OpP",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbA",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbD",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbP",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "PecTip",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "SOccP",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "SnT",
+          "fields": [
+            "y_standardized",
+            "model_id",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "VCend",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        }
+      ]
+    },
+    {
+      "image_id": "34565b7bd1d466bf",
+      "confirmation_timestamp": "2026-09-26T11:55:42.505384+00:00",
+      "source_confirmation_qc_id": 563,
+      "target_fingerprint": "13cd8bf84ac8af134a99caa589a91c1ed9f5dd3471052d1960a7ddc3cdada734",
+      "reconstructed_fingerprint": "7f3a225c538501ebc34968b4edfb0e1e928eda7455f4422202f02a91a7b085c1",
+      "category": "mismatch_rows",
+      "machine_rows": 17,
+      "human_rows": 8,
+      "missing_runs": [],
+      "likely_row_differences": [
+        {
+          "landmark_abbr": "AnHtTip",
+          "fields": [
+            "y_standardized",
+            "model_id",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "AnO",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "CPminD",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "CPminV",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "DorHtTip",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "JawP",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "NarP",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OpD",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "OpP",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OpV",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbA",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbD",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbP",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbV",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "PecO",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "PecTip",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "SnT",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        }
+      ]
+    },
+    {
+      "image_id": "444bb60863357138",
+      "confirmation_timestamp": "2026-09-25T14:03:42.777064+00:00",
+      "source_confirmation_qc_id": 238,
+      "target_fingerprint": "bd501aca05d38fd365cfbb42664c7b972cbb79e4d1dfb71bf735283deb7c01d2",
+      "reconstructed_fingerprint": "97dd7ad1c118daf110fa0d665447a63188d60fb6f42ea6c36ed4a4faa5d636e7",
+      "category": "mismatch_rows",
+      "machine_rows": 9,
+      "human_rows": 16,
+      "missing_runs": [],
+      "likely_row_differences": [
+        {
+          "landmark_abbr": "AnHtTip",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OpV",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbA",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbD",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbP",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbV",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "PelO",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "SnT",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "VCend",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        }
+      ]
+    },
+    {
+      "image_id": "50ae94fbabe27c09",
+      "confirmation_timestamp": "2026-09-25T14:58:02.669486+00:00",
+      "source_confirmation_qc_id": 468,
+      "target_fingerprint": "7f50e454876cece2b08f69bc5d29bf41df6a54e4c6407c8c771ed85c4f6e416c",
+      "reconstructed_fingerprint": "df0d1d7f16a23e5df7b08119fe5f53b86d23ff7e5055832d3382ba88c75cff67",
+      "category": "mismatch_rows",
+      "machine_rows": 25,
+      "human_rows": 0,
+      "missing_runs": [],
+      "likely_row_differences": [
+        {
+          "landmark_abbr": "AnHtTip",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "AnI",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "AnO",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "CPminD",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "CPminV",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "CauUTip",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "DorHtTip",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "DorI",
+          "fields": [
+            "y_standardized",
+            "model_id",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "DorO",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "JawP",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "NarP",
+          "fields": [
+            "y_standardized",
+            "model_id",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OpD",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OpP",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OpV",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbA",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbD",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbP",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "OrbV",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "PecO",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "PecTip",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "PelO",
+          "fields": [
+            "x_standardized",
+            "model_id",
+            "predicted_x",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "PelTip",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "SOccP",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        },
+        {
+          "landmark_abbr": "SnT",
+          "fields": [
+            "x_standardized",
+            "y_standardized",
+            "model_id",
+            "predicted_x",
+            "predicted_y",
+            "confidence",
+            "prediction_run_id",
+            "reviewed"
+          ]
+        },
+        {
+          "landmark_abbr": "VCend",
+          "fields": [
+            "model_id",
+            "confidence",
+            "prediction_run_id"
+          ]
+        }
+      ]
+    }
+  ],
+  "temp_sqlite_used": true
+}
