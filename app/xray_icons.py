@@ -117,7 +117,7 @@ def _export_arrow(d,p):
 
 def _vertebra(d,p,cx,cy,scale=1.0,accent=BLUE):
     """One large lateral-view fish vertebra, readable at toolbar size."""
-    width=7.2*scale;height=5.2*scale
+    width=8.2*scale;height=6.0*scale
     body=[
         (cx-width/2,cy),
         (cx-width*.32,cy-height/2),
@@ -126,7 +126,7 @@ def _vertebra(d,p,cx,cy,scale=1.0,accent=BLUE):
         (cx+width*.32,cy+height/2),
         (cx-width*.32,cy+height/2),
     ]
-    d.polygon([(p(x),p(y)) for x,y in body],fill="#ffffff",outline=accent)
+    d.polygon([(p(x),p(y)) for x,y in body],fill=XRAY_FILM,outline=accent,width=max(1,p(1.25)))
     d.ellipse((p(cx-1.0*scale),p(cy-1.0*scale),p(cx+1.0*scale),p(cy+1.0*scale)),fill=XRAY_FILM,outline=XRAY_DARK,width=max(1,p(.55)))
     _line(d,p,[(cx,cy-height/2),(cx+1.0*scale,cy-height/2-4.4*scale)],XRAY_DARK,1.15)
     _line(d,p,[(cx,cy+height/2),(cx-1.0*scale,cy+height/2+4.4*scale)],XRAY_DARK,1.15)
