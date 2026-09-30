@@ -128,18 +128,19 @@ class XRayCropWorkspace:
         model_state="normal" if model else "disabled"
         self.predict_next_button.configure(state=model_state);self.predict_all_button.configure(state=model_state)
         self.review_button.configure(state="normal" if summary["ai_pending_plates"] else "disabled")
-        ids=list(batch.get("ids") or []);active=bool(ids and self.selected_image_id in ids)
-        self.confirm_button.configure(state="normal" if active else "disabled");self.previous_button.configure(state="normal" if active else "disabled")
-        if active:
-            pos=ids.index(self.selected_image_id)+1
-            label="AI review" if batch.get("batch_type")=="prediction_review" else "Training batch"
-            self.batch_status.configure(text=f"{label} {pos}/{len(ids)}")
-        else:self.batch_status.configure(text="")
+        ids=list(batch.get("ids") or [])
         plate_ids=self.plates.get_children()
         target=previous if previous and self.plates.exists(previous) else (ids[0] if ids and self.plates.exists(ids[0]) else (plate_ids[0] if plate_ids else None))
         if target:
             self.plates.selection_set(target);self.plates.focus(target);self.plates.see(target);self._load_plate(target)
         else:self._clear_canvas()
+        active=bool(ids and target in ids)
+        self.confirm_button.configure(state="normal" if active else "disabled");self.previous_button.configure(state="normal" if active else "disabled")
+        if active:
+            pos=ids.index(target)+1
+            label="AI review" if batch.get("batch_type")=="prediction_review" else "Training batch"
+            self.batch_status.configure(text=f"{label} {pos}/{len(ids)}")
+        else:self.batch_status.configure(text="")
         self.on_changed()
 
     def _select_plate(self,image_id):
@@ -302,7 +303,12 @@ class XRayCropWorkspace:
         bar=ttk.Progressbar(frame,mode="determinate",maximum=len(ids));bar.pack(fill="x",pady=(8,0))
         ttk.Button(frame,text="Cancel",command=cancel.set).pack(anchor="e",pady=(8,0))
         def worker():
-            try:events.put(("done",predict_plates(self.project,ids,cancel=cancel,progress=lambda done,total,image_id:events.put(("progress",done,total,image_id))))
+            try:
+                result=predict_plates(
+                    self.project,ids,cancel=cancel,
+                    progress=lambda done,total,image_id:events.put(("progress",done,total,image_id)),
+                )
+                events.put(("done",result))
             except Exception as exc:events.put(("error",exc))
         threading.Thread(target=worker,daemon=True,name="xray-detector-predict").start()
         def poll():
