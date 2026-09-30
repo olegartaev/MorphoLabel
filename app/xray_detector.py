@@ -7,6 +7,7 @@ from pathlib import Path
 import random
 import shutil
 import subprocess
+import tempfile
 
 from PIL import Image
 
@@ -53,13 +54,14 @@ def _dataset_preview(project,image_id,target):
     preview.convert("RGB").save(target,format="PNG")
     return scale,original_size,preview.size
 
-def prepare_training_dataset(project,model_id,seed=42):
+def prepare_training_dataset(project,model_id,seed=42,workspace_root=None):
     plates=project.training_plates()
     if len(plates)<MIN_TRAINING_PLATES:
         raise ValueError(f"Need at least {MIN_TRAINING_PLATES} human-confirmed X-ray plates before training.")
     rng=random.Random(int(seed));order=list(plates);rng.shuffle(order)
     val_n=max(1,round(len(order)*0.2));val_ids={row["image_id"] for row in order[:val_n]}
-    root=project.models_root/model_id/"dataset";images=root/"images";images.mkdir(parents=True,exist_ok=True)
+    root=Path(workspace_root) if workspace_root is not None else project.cache_root/"xray_training"/model_id
+    root=root/"dataset";images=root/"images";images.mkdir(parents=True,exist_ok=True)
     groups={"train":{"images":[],"annotations":[]},"val":{"images":[],"annotations":[]}}
     ann_id=1
     for image_index,row in enumerate(plates,1):
@@ -92,47 +94,53 @@ def prepare_training_dataset(project,model_id,seed=42):
     }
 
 def train_detector(project,seed=42,epochs=80,progress=None):
+    project.compact_disposable_ai_artifacts()
     model_id=project.next_crop_model_id();parent=project.active_crop_model();directory=project.models_root/model_id
-    dataset=prepare_training_dataset(project,model_id,seed=seed)
     performance=detector_performance_settings();hardware_settings=performance["hardware"];settings=performance["training"]
     runtime,_=ensure_ai_runtime(project=project,progress=progress)
-    if progress:progress("TRAINING",f"Training {model_id} from {len(dataset['plate_ids'])} confirmed plates…")
     parent_checkpoint=(str(project.root/parent["path"]) if parent else RTMDET_TINY_COCO_URL)
-    base_batch=max(1,int(settings["batch_size"]))
-    batch_attempts=[];value=base_batch
-    while value>=1:
-        if value not in batch_attempts:batch_attempts.append(value)
-        if value==1:break
-        value=max(1,value//2)
-    result=None;used_batch=None
-    for attempt_index,batch_size in enumerate(batch_attempts):
-        payload={
-            "dataset_root":str(dataset["root"]),"train_json":str(dataset["train_json"]),"val_json":str(dataset["val_json"]),
-            "work_dir":str(directory/f"work_b{batch_size}"),"device":settings["device"],"batch_size":batch_size,
-            "workers":max(0,int(settings["workers"])),"epochs":int(epochs),"seed":int(seed),
-            "mixed_precision":bool(settings.get("mixed_precision")),"pin_memory":bool(settings.get("pin_memory")),
-            "persistent_workers":bool(settings.get("persistent_workers")),"initial_checkpoint":parent_checkpoint,
-        }
-        try:
-            result=_run(runtime,"train",payload,7200);used_batch=batch_size;break
-        except RuntimeError as exc:
-            if not is_cuda_oom(exc) or attempt_index==len(batch_attempts)-1:raise
-            if progress:progress("AUTO PERFORMANCE",f"GPU memory limit at batch {batch_size}; retrying with batch {batch_attempts[attempt_index+1]}…")
-    if result is None or used_batch is None:raise RuntimeError("X-ray detector training did not complete.")
-    checkpoint=Path(result["checkpoint"]);config=Path(result["config"])
-    if not checkpoint.is_file() or not config.is_file():raise RuntimeError("X-ray detector training finished without a loadable model artifact.")
-    final_checkpoint=directory/"model.pth";final_config=directory/"config.py"
-    shutil.copy2(checkpoint,final_checkpoint);shutil.copy2(config,final_config)
-    metrics={"backend":DETECTOR_BACKEND,"epochs":int(epochs),"device":settings["device"],"train_plates":dataset["train_plates"],"val_plates":dataset["val_plates"],
-             "initialization":(parent or {}).get("model_id") or "rtmdet_tiny_coco_pretrained","batch_size":used_batch,
-             "workers":int(settings.get("workers") or 0),"mixed_precision":bool(settings.get("mixed_precision")),
-             "hardware":hardware_settings,**dict(result.get("metrics") or {})}
+    with tempfile.TemporaryDirectory(prefix=f"morpholabel_xray_train_{model_id}_") as scratch:
+        scratch=Path(scratch)
+        dataset=prepare_training_dataset(project,model_id,seed=seed,workspace_root=scratch)
+        if progress:progress("TRAINING",f"Training {model_id} from {len(dataset['plate_ids'])} confirmed plates…")
+        base_batch=max(1,int(settings["batch_size"]))
+        batch_attempts=[];value=base_batch
+        while value>=1:
+            if value not in batch_attempts:batch_attempts.append(value)
+            if value==1:break
+            value=max(1,value//2)
+        result=None;used_batch=None
+        for attempt_index,batch_size in enumerate(batch_attempts):
+            payload={
+                "dataset_root":str(dataset["root"]),"train_json":str(dataset["train_json"]),"val_json":str(dataset["val_json"]),
+                "work_dir":str(scratch/f"work_b{batch_size}"),"device":settings["device"],"batch_size":batch_size,
+                "workers":max(0,int(settings["workers"])),"epochs":int(epochs),"seed":int(seed),
+                "mixed_precision":bool(settings.get("mixed_precision")),"pin_memory":bool(settings.get("pin_memory")),
+                "persistent_workers":bool(settings.get("persistent_workers")),"initial_checkpoint":parent_checkpoint,
+            }
+            try:
+                result=_run(runtime,"train",payload,7200);used_batch=batch_size;break
+            except RuntimeError as exc:
+                if not is_cuda_oom(exc) or attempt_index==len(batch_attempts)-1:raise
+                if progress:progress("AUTO PERFORMANCE",f"GPU memory limit at batch {batch_size}; retrying with batch {batch_attempts[attempt_index+1]}…")
+        if result is None or used_batch is None:raise RuntimeError("X-ray detector training did not complete.")
+        checkpoint=Path(result["checkpoint"]);config=Path(result["config"])
+        if not checkpoint.is_file() or not config.is_file():raise RuntimeError("X-ray detector training finished without a loadable model artifact.")
+        directory.mkdir(parents=True,exist_ok=True)
+        final_checkpoint=directory/"model.pth";final_config=directory/"config.py"
+        shutil.copy2(checkpoint,final_checkpoint);shutil.copy2(config,final_config)
+        metrics={"backend":DETECTOR_BACKEND,"epochs":int(epochs),"device":settings["device"],"train_plates":dataset["train_plates"],"val_plates":dataset["val_plates"],
+                 "initialization":(parent or {}).get("model_id") or "rtmdet_tiny_coco_pretrained","batch_size":used_batch,
+                 "workers":int(settings.get("workers") or 0),"mixed_precision":bool(settings.get("mixed_precision")),
+                 "hardware":hardware_settings,**dict(result.get("metrics") or {})}
+        training_plate_ids=list(dataset["plate_ids"]);training_specimens=int(dataset["training_specimens"])
     project.register_crop_model(model_id,str(final_checkpoint.relative_to(project.root)),str(final_config.relative_to(project.root)),
-                                (parent or {}).get("model_id"),metrics,dataset["plate_ids"],dataset["training_specimens"],activate=True)
-    return {"trained":True,"model_id":model_id,"metrics":metrics,"training_plates":len(dataset["plate_ids"]),"training_specimens":dataset["training_specimens"]}
+                                (parent or {}).get("model_id"),metrics,training_plate_ids,training_specimens,activate=True)
+    project.compact_disposable_ai_artifacts()
+    return {"trained":True,"model_id":model_id,"metrics":metrics,"training_plates":len(training_plate_ids),"training_specimens":training_specimens}
 
-def _prediction_input(project,image_id):
-    target=project.cache_root/"xray_detector"/f"{image_id}.png";target.parent.mkdir(parents=True,exist_ok=True)
+def _prediction_input(project,image_id,target):
+    target=Path(target);target.parent.mkdir(parents=True,exist_ok=True)
     preview,scale,original_size=display_preview(project.source_image_path(image_id),DATASET_MAX_DIM)
     preview.convert("RGB").save(target,format="PNG")
     return target,scale,original_size
@@ -160,41 +168,45 @@ def predict_plates(project,image_ids,cancel=None,progress=None,score_threshold=0
     if not model:raise RuntimeError("Train an X-ray crop model before prediction.")
     ids=list(image_ids);success=[];failures=[];runtime,_=ensure_ai_runtime(project=project)
     settings=detector_performance_settings()["inference"];chunk_size=max(1,int(settings.get("batch_size") or 1));index=0
-    while index<len(ids):
-        if cancel is not None and cancel.is_set():break
-        chunk=ids[index:index+chunk_size];prepared=[]
-        for image_id in chunk:
+    project.compact_disposable_ai_artifacts()
+    with tempfile.TemporaryDirectory(prefix="morpholabel_xray_predict_") as scratch:
+        scratch=Path(scratch)
+        while index<len(ids):
+            if cancel is not None and cancel.is_set():break
+            chunk=ids[index:index+chunk_size];prepared=[]
+            for image_id in chunk:
+                try:
+                    path,scale,_original=_prediction_input(project,image_id,scratch/f"{image_id}.png");prepared.append((image_id,path,scale))
+                except Exception as exc:
+                    failures.append({"image_id":image_id,"reason":f"{type(exc).__name__}: {exc}"})
+                    if progress:progress(index+len(prepared)+1,len(ids),image_id)
+            if not prepared:
+                index+=len(chunk);continue
+            payload={
+                "config":str(project.root/model["config_path"]),"checkpoint":str(project.root/model["path"]),
+                "images":[str(path) for _image_id,path,_scale in prepared],"device":settings["device"],
+                "score_threshold":float(score_threshold),"mixed_precision":bool(settings.get("mixed_precision")),
+            }
             try:
-                path,scale,_original=_prediction_input(project,image_id);prepared.append((image_id,path,scale))
-            except Exception as exc:
-                failures.append({"image_id":image_id,"reason":f"{type(exc).__name__}: {exc}"})
-                if progress:progress(index+len(prepared)+1,len(ids),image_id)
-        if not prepared:
-            index+=len(chunk);continue
-        payload={
-            "config":str(project.root/model["config_path"]),"checkpoint":str(project.root/model["path"]),
-            "images":[str(path) for _image_id,path,_scale in prepared],"device":settings["device"],
-            "score_threshold":float(score_threshold),"mixed_precision":bool(settings.get("mixed_precision")),
-        }
-        try:
-            result=_run(runtime,"predict_many",payload,max(600,120*len(prepared)))
-        except RuntimeError as exc:
-            if is_cuda_oom(exc) and chunk_size>1:
-                chunk_size=max(1,chunk_size//2)
-                if progress:progress(index,len(ids),f"GPU memory limit; retrying with batch {chunk_size}")
-                continue
-            reason=f"{type(exc).__name__}: {exc}"
-            for image_id,_path,_scale in prepared:failures.append({"image_id":image_id,"reason":reason})
-            index+=len(chunk);continue
-        returned=list(result.get("results") or [])
-        for offset,(image_id,_path,scale) in enumerate(prepared):
-            row=returned[offset] if offset<len(returned) else {"error":"missing prediction result"}
-            if row.get("error"):
-                failures.append({"image_id":image_id,"reason":str(row["error"])})
-            else:
-                try:success.append(_save_prediction(project,model,image_id,scale,row.get("detections") or []))
-                except Exception as exc:failures.append({"image_id":image_id,"reason":f"{type(exc).__name__}: {exc}"})
-            if progress:progress(index+offset+1,len(ids),image_id)
-        index+=len(chunk)
+                result=_run(runtime,"predict_many",payload,max(600,120*len(prepared)))
+            except RuntimeError as exc:
+                if is_cuda_oom(exc) and chunk_size>1:
+                    chunk_size=max(1,chunk_size//2)
+                    if progress:progress(index,len(ids),f"GPU memory limit; retrying with batch {chunk_size}")
+                    continue
+                reason=f"{type(exc).__name__}: {exc}"
+                for image_id,_path,_scale in prepared:failures.append({"image_id":image_id,"reason":reason})
+                index+=len(chunk);continue
+            returned=list(result.get("results") or [])
+            for offset,(image_id,_path,scale) in enumerate(prepared):
+                row=returned[offset] if offset<len(returned) else {"error":"missing prediction result"}
+                if row.get("error"):
+                    failures.append({"image_id":image_id,"reason":str(row["error"])})
+                else:
+                    try:success.append(_save_prediction(project,model,image_id,scale,row.get("detections") or []))
+                    except Exception as exc:failures.append({"image_id":image_id,"reason":f"{type(exc).__name__}: {exc}"})
+                if progress:progress(index+offset+1,len(ids),image_id)
+            index+=len(chunk)
     return {"success":len(success),"successful_ids":[row["image_id"] for row in success],"failures":failures,
+            "model_id":model["model_id"],"results":success,"inference_batch_size":chunk_size}
             "model_id":model["model_id"],"results":success,"inference_batch_size":chunk_size}

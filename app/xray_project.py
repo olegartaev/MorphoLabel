@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sqlite3
+import shutil
 from datetime import datetime, timezone
 import uuid
 
@@ -129,6 +130,33 @@ class XRayProject:
     def cache_root(self):
         path=self.root/"cache";path.mkdir(parents=True,exist_ok=True);return path
 
+    def compact_disposable_ai_artifacts(self):
+        """Remove only reproducible X-ray AI scratch data, never science/model finals."""
+        removed_files=0;removed_bytes=0
+        targets=[]
+        for path in (self.root/"cache"/"xray_detector",self.root/"cache"/"xray_training"):
+            if path.exists():targets.append(path)
+        models=self.root/"models"
+        if models.is_dir():
+            for model_dir in models.iterdir():
+                if not model_dir.is_dir():continue
+                dataset=model_dir/"dataset"
+                if dataset.exists():targets.append(dataset)
+                targets.extend(path for path in model_dir.glob("work*") if path.is_dir())
+        unique=[]
+        seen=set()
+        for target in targets:
+            key=str(target.resolve())
+            if key in seen:continue
+            seen.add(key);unique.append(target)
+        for target in unique:
+            for path in target.rglob("*") if target.is_dir() else ():
+                if not path.is_file():continue
+                try:removed_bytes+=int(path.stat().st_size);removed_files+=1
+                except OSError:pass
+            shutil.rmtree(target,ignore_errors=True)
+        return {"removed_files":removed_files,"removed_bytes":removed_bytes}
+
     def scan_source(self):
         source=self.source
         if not source.is_dir():return 0
@@ -154,6 +182,12 @@ class XRayProject:
 
     def source_image_path(self,image_id):
         return self.source/self.source_image(image_id)["relative_path"]
+
+    def set_source_excluded(self,image_id,excluded=True):
+        self.source_image(image_id)
+        with sqlite3.connect(self.db_path) as c:
+            c.execute("UPDATE source_images SET excluded=? WHERE image_id=?",(int(bool(excluded)),image_id))
+        return bool(excluded)
 
     @staticmethod
     def _decode_specimen(row):

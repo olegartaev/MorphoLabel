@@ -64,7 +64,7 @@ class XRayDetectorWorkflowTests(unittest.TestCase):
     def test_coco_training_export_uses_confirmed_plates_only(self):
         rows=self.project.source_images()
         for index,row in enumerate(rows[:MIN_TRAINING_PLATES]):self._confirm(row["image_id"],index)
-        dataset=prepare_training_dataset(self.project,"xray_crop_model_v001",seed=7)
+        dataset=prepare_training_dataset(self.project,"xray_crop_model_v001",seed=7,workspace_root=self.root/"scratch")
         self.assertEqual(MIN_TRAINING_PLATES,len(dataset["plate_ids"]))
         self.assertEqual(MIN_TRAINING_PLATES,dataset["training_specimens"])
         train=json.loads(dataset["train_json"].read_text(encoding="utf-8"))
@@ -72,6 +72,17 @@ class XRayDetectorWorkflowTests(unittest.TestCase):
         self.assertEqual([{"id":1,"name":"specimen"}],train["categories"])
         self.assertGreater(len(train["annotations"]),0);self.assertGreater(len(val["annotations"]),0)
         self.assertTrue(all((dataset["root"]/item["file_name"]).is_file() for item in train["images"]+val["images"]))
+
+    def test_project_compaction_removes_only_disposable_ai_scratch(self):
+        model_dir=self.project.models_root/"xray_crop_model_v999";(model_dir/"dataset"/"images").mkdir(parents=True)
+        (model_dir/"dataset"/"images"/"copy.png").write_bytes(b"x"*128)
+        (model_dir/"work_b8").mkdir();(model_dir/"work_b8"/"epoch_10.pth").write_bytes(b"x"*256)
+        (model_dir/"model.pth").write_bytes(b"final");(model_dir/"config.py").write_text("# final",encoding="utf-8")
+        old_cache=self.project.cache_root/"xray_detector";old_cache.mkdir();(old_cache/"plate.png").write_bytes(b"x"*64)
+        result=self.project.compact_disposable_ai_artifacts()
+        self.assertGreaterEqual(result["removed_files"],3)
+        self.assertFalse((model_dir/"dataset").exists());self.assertFalse((model_dir/"work_b8").exists());self.assertFalse(old_cache.exists())
+        self.assertEqual(b"final",(model_dir/"model.pth").read_bytes());self.assertTrue((model_dir/"config.py").is_file())
 
     def test_model_registry_preserves_parent_lineage_and_active_version(self):
         ids=[row["image_id"] for row in self.project.source_images()[:3]]
@@ -217,6 +228,8 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn('"mixed_precision"',detector)
         self.assertIn('"pin_memory"',detector)
         self.assertIn('"predict_many"',detector)
+        self.assertIn("TemporaryDirectory",detector)
+        self.assertIn("compact_disposable_ai_artifacts",detector)
         spec=(root/"packaging/morpholabel.spec").read_text(encoding="utf-8")
         self.assertIn("xray_detector_runner.py",spec)
 
