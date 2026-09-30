@@ -223,7 +223,9 @@ class XRayPlateListPanel(ttk.Frame):
         visible=selection[0]
         if not 0<=visible<len(self.visible_indices):return
         row=self._rows[self.visible_indices[visible]]
-        if row.get("excluded"):return
+        # Match the Landmarks list: excluded rows stay inspectable/selectable
+        # so the same Exclude button can become Restore. Workflow navigation
+        # still skips excluded plates.
         self.selected_image_id=row["image_id"];self.on_select(row["image_id"]);self.refresh(preserve_scroll=True)
 
     def navigate(self,step):

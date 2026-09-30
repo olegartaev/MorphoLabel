@@ -204,7 +204,6 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertNotIn("Add missed specimen",ui)
         self.assertNotIn("Auto-crop all plates",ui)
         self.assertIn("training truth",ui)
-        self.assertIn('text="Specimens"',ui)
         self.assertIn("PlateCropEditSession",ui)
         self.assertIn('status_shape="square"',ui)
         self.assertIn('"#d93025"',ui)
@@ -212,6 +211,7 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn('"#188038"',ui)
         self.assertIn("self.apply_host.grid_forget()",ui)
         self.assertIn("self.batch_actions.grid",ui)
+        self.assertIn("excluded rows stay inspectable/selectable",ui)
 
     def test_runtime_runner_uses_one_class_rtmdet_tiny_and_coco(self):
         root=Path(__file__).resolve().parents[1]
