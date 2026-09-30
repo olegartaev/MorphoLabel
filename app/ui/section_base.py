@@ -13,6 +13,24 @@ class SectionView:
             self.shell,
             help_factory=lambda host: build_help_button(self, host, help_title, help_text),
         )
+    def attention_banner(self, parent, command, *, stages):
+        """Explain why a persistent prediction-review queue opened this workspace."""
+        from tkinter import ttk
+        from app.landmark_attention_queue import display_summary, user_copy
+        project=getattr(self.context,"project",None)
+        current=(self.context.current() or {}).get("image_id") if project else None
+        issue=display_summary(project) if project else None
+        if not issue or issue.get("image_id")!=current or issue.get("stage") not in set(stages):
+            return None
+        copy=user_copy(issue)
+        box=ttk.Frame(parent,style="Attention.TFrame",padding=(10,7));box.pack(fill="x",pady=(3,0))
+        text=ttk.Frame(box,style="Attention.TFrame");text.pack(side="left",fill="x",expand=True)
+        ttk.Label(text,text=f"Prediction review · {issue.get('position',0)} of {issue.get('total',0)}",style="AttentionStep.TLabel").pack(anchor="w")
+        ttk.Label(text,text=copy["title"],style="AttentionTitle.TLabel").pack(anchor="w")
+        ttk.Label(text,text=copy["message"],style="AttentionText.TLabel",wraplength=900,justify="left").pack(anchor="w")
+        self.button(box,copy["action"],command,copy["help"],style="Primary.TButton").pack(side="right",padx=(12,0))
+        return box
+
     def what_to_do(self, parent, title, text, help_text="Open a short guide for this workspace."):
         """One compact, shared workflow guide button for production sections."""
         import tkinter as tk

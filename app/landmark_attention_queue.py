@@ -90,6 +90,30 @@ def classify(project,image_id):
   return {"image_id":image_id,"stage":"landmarks","reason":"Review the AI landmark prediction"}
  return {"image_id":image_id,"stage":"landmarks","reason":"Review the completed landmark set"}
 
+def _short_reason(reason):
+ text=str(reason or "").strip()
+ if not text:return ""
+ lines=[line.strip() for line in text.splitlines() if line.strip()]
+ preferred=next((line for line in reversed(lines) if line.startswith(("ModuleNotFoundError:","ImportError:","RuntimeError:","ValueError:","FileNotFoundError:","OSError:"))),lines[-1] if lines else text)
+ return preferred[:180]
+
+def user_copy(issue):
+ stage=str((issue or {}).get("stage") or "")
+ reason=_short_reason((issue or {}).get("reason"))
+ if stage=="crop":
+  detail={
+   "Crop is missing or invalid":"The crop is missing or cannot be used for landmark prediction.",
+   "Crop needs human confirmation":"The crop exists but has not yet been confirmed.",
+   "Crop changed and landmarks need review":"The crop changed after landmarks were created, so it must be confirmed before continuing.",
+   "Landmark frame is not ready":"The image is not ready for landmark prediction until its crop is confirmed.",
+  }.get(reason,reason or "This image needs its crop checked before landmark prediction can continue.")
+  return {"title":"Crop needs attention","message":detail+" Adjust the frame if needed, then confirm it. The review queue will continue automatically.","action":"Confirm crop & continue","help":"Save and confirm this crop, then continue the same prediction-review queue."}
+ if stage=="prediction":
+  detail="AI could not finish landmark prediction for this image."
+  if reason and reason!="AI prediction is missing or incomplete":detail+=" "+reason
+  return {"title":"AI prediction needs attention","message":detail+" Retry AI. If it fails again, check the crop or exclude the image.","action":"Retry AI","help":"Retry landmark prediction for this queued image without changing human-confirmed images."}
+ return {"title":"Review landmarks","message":"Check the landmark positions and correct any that are wrong. When they are ready, verify the image and continue the same queue.","action":"Verify & continue","help":"Verify this landmark set after review and continue to the next queued image."}
+
 def _mark_completed(value,image_id):
  completed=set(map(str,value.get("completed_ids") or ()));completed.add(str(image_id));value["completed_ids"]=sorted(completed)
 
