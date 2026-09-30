@@ -8,13 +8,14 @@ from .api import BackendContext, BackendSpec, EXTENSION_API_VERSION, ModuleSpec
 from .discovery import discover_backends, discover_modules
 from .registry import BackendRegistry, ModuleRegistry
 from app.modules.landmarks import LandmarksRuntime
+from app.modules.xray_counts import XRayCountsRuntime
 
 
 def module_registry():
     registry = ModuleRegistry()
     for spec in (
         ModuleSpec("landmarks", "Landmarks & measurements", "Crop → landmark annotation and AI review → measurements → export", "1", EXTENSION_API_VERSION, 10, "available", LandmarksRuntime, "builtin"),
-        ModuleSpec("xray_counts", "X-ray counts", "X-ray counts workflow", "1", EXTENSION_API_VERSION, 20, "planned", None, "builtin"),
+        ModuleSpec("xray_counts", "X-ray traits", "Trait-first X-ray annotation → calculated results → export", "1", EXTENSION_API_VERSION, 20, "available", XRayCountsRuntime, "builtin"),
         ModuleSpec("scales_meristics", "Scales & meristics", "Scales and meristics workflow", "1", EXTENSION_API_VERSION, 30, "planned", None, "builtin"),
     ):
         registry.register(spec)
