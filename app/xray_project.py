@@ -341,8 +341,19 @@ class XRayProject:
             result.append(image["image_id"])
         return result
 
+    def training_candidate_ids(self):
+        return [image["image_id"] for image in self.source_images() if not image["excluded"] and not image["crop_reviewed"]]
+
     def prediction_candidate_ids(self):
-        return self.untouched_plate_ids()
+        ids=[]
+        for image in self.source_images():
+            if image["excluded"] or image["crop_reviewed"]:continue
+            has_model_pending=any(
+                item["crop_source"]=="model" and item["crop_status"]=="proposed" and not item["excluded"]
+                for item in self.specimens(image["image_id"])
+            )
+            if not has_model_pending:ids.append(image["image_id"])
+        return ids
 
     def ai_review_plate_ids(self):
         ids=[]
