@@ -341,8 +341,29 @@ class XRayProject:
             result.append(image["image_id"])
         return result
 
+    @staticmethod
+    def _round_robin_series(images,count):
+        groups={}
+        for image in images:
+            parent=Path(image["relative_path"]).parent.as_posix()
+            groups.setdefault(parent,[]).append(image["image_id"])
+        ordered=[];keys=sorted(groups)
+        while keys and len(ordered)<int(count):
+            next_keys=[]
+            for key in keys:
+                values=groups[key]
+                if values:ordered.append(values.pop(0))
+                if values:next_keys.append(key)
+                if len(ordered)>=int(count):break
+            keys=next_keys
+        return ordered
+
     def training_candidate_ids(self):
         return [image["image_id"] for image in self.source_images() if not image["excluded"] and not image["crop_reviewed"]]
+
+    def select_training_plate_ids(self,count):
+        candidates=[image for image in self.source_images() if not image["excluded"] and not image["crop_reviewed"]]
+        return self._round_robin_series(candidates,max(1,int(count)))
 
     def prediction_candidate_ids(self):
         ids=[]
@@ -354,6 +375,11 @@ class XRayProject:
             )
             if not has_model_pending:ids.append(image["image_id"])
         return ids
+
+    def select_prediction_plate_ids(self,count):
+        allowed=set(self.prediction_candidate_ids())
+        candidates=[image for image in self.source_images() if image["image_id"] in allowed]
+        return self._round_robin_series(candidates,max(1,int(count)))
 
     def ai_review_plate_ids(self):
         ids=[]

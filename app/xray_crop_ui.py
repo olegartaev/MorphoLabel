@@ -225,8 +225,8 @@ class XRayCropWorkspace:
 
     def start_training_batch(self):
         if self._busy:return
-        count=max(1,int(self.training_batch_size.get()));candidates=self.project.training_candidate_ids()
-        batch_ids=[image_id for image_id in candidates if not self.project.source_image(image_id)["crop_reviewed"]][:count]
+        count=max(1,int(self.training_batch_size.get()))
+        batch_ids=self.project.select_training_plate_ids(count)
         if not batch_ids:
             messagebox.showinfo("X-ray training batch","No unverified plates are available.",parent=self.parent);return
         self._busy=True;events=queue.Queue()
@@ -308,7 +308,7 @@ class XRayCropWorkspace:
         if not model:
             messagebox.showinfo("Predict X-ray crops","Train an X-ray crop model first.",parent=self.parent);return
         candidates=self.project.prediction_candidate_ids()
-        ids=candidates if count is None else candidates[:max(1,int(count))]
+        ids=candidates if count is None else self.project.select_prediction_plate_ids(max(1,int(count)))
         if not ids:
             messagebox.showinfo("Predict X-ray crops","No remaining eligible plates need prediction.",parent=self.parent);return
         self._busy=True;events=queue.Queue();cancel=threading.Event()
