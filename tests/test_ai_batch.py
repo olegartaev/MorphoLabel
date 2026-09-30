@@ -8,7 +8,6 @@ from app.project_storage import Project, schema_hash
 from app.project_runtime import record, save
 from app.workflow import set_human_point
 from app.transforms import Transform
-from app.ui.landmarks_section import _next_pending_ai_prediction_ids
 
 class FakeService:
  def __init__(self,project,fail=()):self.project=project;self.calls=[];self.fail=set(fail)
@@ -67,30 +66,13 @@ class AIBatchTests(unittest.TestCase):
   self.assertEqual(10,data['requested_count']);self.assertEqual(1,data['selected_count'])
   self.assertEqual('new_unannotated',data['selection_mode'])
  def test_17_explicit_batch_records_honest_selection_mode(self):
-  data,_=create_batch_for_ids(self.p,'v1',[self.ids[3]],selection_mode='reapply_unverified')
-  self.assertEqual('reapply_unverified',data['selection_mode'])
+  data,_=create_batch_for_ids(self.p,'v1',[self.ids[3]],selection_mode='all_eligible')
+  self.assertEqual('all_eligible',data['selection_mode'])
   self.assertEqual(1,data['selected_count'])
-
- def test_18_next_pending_ai_batch_wraps_after_current(self):
-  rows=[{'image_id':'a','excluded':False},{'image_id':'b','excluded':False},{'image_id':'c','excluded':False},{'image_id':'d','excluded':False}]
-  class P:
-   def pending_ai_landmark_image_ids(self):return ('a','c','d')
-   def annotation_status(self,_image_id):return {'verified':False}
-  with patch('app.ui.landmarks_section.landmark_frame_ready',return_value=True):
-   selected=_next_pending_ai_prediction_ids(P(),rows,'c',2)
-  self.assertEqual(('d','a'),selected)
- def test_19_next_pending_ai_batch_excludes_ineligible_rows(self):
-  rows=[{'image_id':'a','excluded':True},{'image_id':'b','excluded':False},{'image_id':'c','excluded':False}]
-  class P:
-   def pending_ai_landmark_image_ids(self):return ('a','b','c')
-   def annotation_status(self,_image_id):return {'verified':False}
-  with patch('app.ui.landmarks_section.landmark_frame_ready',side_effect=lambda _p,image_id:image_id!='c'):
-   selected=_next_pending_ai_prediction_ids(P(),rows,'b',10)
-  self.assertEqual(('b',),selected)
 
  def test_20_explicit_prediction_rejects_human_verified_image(self):
   image_id=self.ids[3];self.p.save_landmark(image_id,1,5,6,'manual');self.p.save_landmark(image_id,2,7,8,'manual');self.p.mark_checked(image_id)
-  with self.assertRaisesRegex(BatchError,'human-verified'):create_batch_for_ids(self.p,'v1',[image_id],selection_mode='reapply_unverified')
+  with self.assertRaisesRegex(BatchError,'human-verified'):create_batch_for_ids(self.p,'v1',[image_id],selection_mode='all_eligible')
  def test_22_saved_batch_survives_name_only_schema_edit(self):
   _data,path=create_batch(self.p,'v1',self.ids[0],1)
   self.p.schema_path.write_text('id,abbr,name\n1,A,Renamed one\n2,B,Renamed two\n',encoding='utf8')
@@ -102,7 +84,7 @@ class AIBatchTests(unittest.TestCase):
   self.p.schema_path.write_text('id,abbr,name\n1,B,Two\n2,A,One\n',encoding='utf8')
   with self.assertRaisesRegex(BatchError,'identities/order'):run_batch(self.p,path,FakeService(self.p))
 
- def test_21_reapply_preserves_human_correction(self):
+ def test_21_reprediction_preserves_human_correction(self):
   data,path=create_batch(self.p,'v1',self.ids[0],1);done,_=run_batch(self.p,path,FakeService(self.p));image_id=done['selected_images'][0]['image_id']
   rec=record(self.p,next(x for x in self.rows if x['image_id']==image_id));set_human_point(rec,1,'A',31,32,corrected=True);save(self.p,rec)
   before=self.p.load_landmarks(image_id)[1]
