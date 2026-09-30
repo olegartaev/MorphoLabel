@@ -54,7 +54,8 @@ class UISortingAndReviewContextTests(unittest.TestCase):
   self.assertIn("Predict all unresolved",landmarks);self.assertNotIn("'All remaining'",landmarks);self.assertNotIn("run All remaining again",landmarks)
   self.assertIn("Predict all uncropped",crop);self.assertNotIn('"Apply remaining"',crop)
   self.assertIn("Needs attention:",crop);self.assertNotIn("failed: {result['failed']}",crop)
-  self.assertIn("' unresolved'",photos);self.assertIn("' verified'",photos)
+  self.assertIn("' unresolved'",photos);self.assertIn("' verified'",photos);self.assertNotIn("Incomplete:",photos);self.assertNotIn(" else 'Ready'",photos)
+  self.assertNotIn("Review worst",crop);self.assertNotIn("Applying crop model",crop)
 
  def test_landmarks_ui_reuses_established_overlay_and_has_no_reapply_button(self):
   from pathlib import Path

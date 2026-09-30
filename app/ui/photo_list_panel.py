@@ -62,7 +62,7 @@ class PhotoListPanel(ttk.Frame):
    dot=tk.Canvas(states,width=11,height=11,highlightthickness=0,bd=0);dot.create_oval(2,2,9,9,fill=color,outline=color);dot.pack(side='left')
    ttk.Label(states,text=text,style='Muted.TLabel').pack(side='left',padx=(0,7))
  def _row_data(self,index,row):
-  excluded=bool(row.get('excluded'));status='excluded' if excluded else row.get('status_color','red');tip='Excluded: '+(row.get('exclusion_reason') or 'Other') if excluded else f"Incomplete: {len(row.get('missing_ids',()))} remaining" if status=='red' else 'Complete — needs review' if status=='yellow' else 'Ready';tip+=(' · calibrated' if row.get('calibrated') else '');path=row.get('source_relpath',row.get('relative_path',''));locality=row.get('locality') or row.get('sample_id') or ''
+  excluded=bool(row.get('excluded'));status='excluded' if excluded else row.get('status_color','red');tip='Excluded: '+(row.get('exclusion_reason') or 'Other') if excluded else f"Unresolved: {len(row.get('missing_ids',()))} landmark(s)" if status=='red' else 'Complete — needs review' if status=='yellow' else 'Verified';tip+=(' · calibrated' if row.get('calibrated') else '');path=row.get('source_relpath',row.get('relative_path',''));locality=row.get('locality') or row.get('sample_id') or ''
   return {'number':str(index+1),'cal':'C' if row.get('calibrated') else '','has_crop':bool(row.get('has_crop')),'excluded':excluded,'text':f"{locality} | {Path(str(path)).name} ({row.get('index_in_locality',1)} | {row.get('total_in_locality',1)})",'status':status,'tooltip':tip,'review_warning':bool(row.get('review_warning'))}
  def refresh(self,preserve_scroll=False):
   rows=self.context.rows

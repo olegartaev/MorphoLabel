@@ -191,7 +191,7 @@ class LandmarksSection(SectionView):
   ttk.Label(controls,text='Click = place · drag = correct',style="Muted.TLabel").pack(side='right',padx=(6,8))
 
   batch=tk.IntVar(value=24);prediction=tk.IntVar(value=24)
-  guide='Why: Landmarks turns specimen anatomy into comparable point coordinates for morphometric analysis.\n\n1. Repeatability\nOptional. Mark the same control images twice, with a break between passes, to estimate your own placement error.\n\n2. Training data\nMark every required point or choose Mark missing. Use Verify & Next to finish each image.\n\n3. Train model\nTrain from all human-verified images. Choose Bootstrap for the first model or a saved model as the parent.\n\n4. Apply & review\nApply the active model to new images. Review worst ranks only complete, unverified AI predictions so you can inspect the riskiest first. Verify & Next confirms each reviewed image. Complex QC is a separate post-verification audit: it scans only final human-verified landmark sets for structural and dataset-wide outliers.'
+  guide='Why: Landmarks turns specimen anatomy into comparable point coordinates for morphometric analysis.\n\n1. Repeatability\nOptional. Mark the same control images twice, with a break between passes, to estimate your own placement error.\n\n2. Training data\nMark every required point or choose Mark missing. Use Verify & Next to finish each image.\n\n3. Train model\nTrain from all human-verified images. Choose Bootstrap for the first model or a saved model as the parent.\n\n4. Predict & review\nPredict only unresolved images. Yellow images already have complete AI landmark sets and belong in Review AI predictions. Verify & Next confirms each reviewed image. Final data QC is a separate post-verification audit of human-verified landmark sets.'
   dock=self.workflow_dock(panel,help_title='Landmarks — quick guide',help_text=guide);dock.grid(row=2,column=0,sticky='ew',pady=(2,0))
 
   repeat_run=current_run(self.context.project)
@@ -883,7 +883,7 @@ class LandmarksSection(SectionView):
    return select_ai_worst_first(self.context.project,count,progress=progress)
   def done(items):
    if not items:
-    messagebox.showinfo('Unverified AI review','No unverified AI landmark predictions are waiting for review.',parent=self.shell);return
+    messagebox.showinfo('Review AI predictions','No AI landmark predictions are waiting for review.',parent=self.shell);return
    import hashlib
    ids=[item['image_id'] for item in items]
    metadata={item['image_id']:{
@@ -895,7 +895,7 @@ class LandmarksSection(SectionView):
    session_id='review_worst_v2_'+hashlib.sha256(('\0'.join(ids)).encode('utf8')).hexdigest()[:16]
    create_review_session_for_ids(self.context.project,session_id,ids,kind='review_worst_v2',metadata=metadata)
    self._open_review_session(session_id)
-  self.shell._run_background_task('Unverified AI review','Ranking complete unverified AI predictions…',worker,done)
+  self.shell._run_background_task('Review AI predictions','Ranking complete AI predictions for review…',worker,done)
  def predict(self,remaining,count,explicit_ids=None,title='Predict landmarks',selection_mode=None):
   row=self.context.current();active=self.context.project.active_model_readonly('landmark') or {}
   if not active or (explicit_ids is None and not row):messagebox.showwarning('Landmark prediction','No active landmark model.',parent=self.shell);return
