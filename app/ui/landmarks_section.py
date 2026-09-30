@@ -388,7 +388,7 @@ class LandmarksSection(SectionView):
   # Review worst ranks whole images. Do not visually imply that suggested
   # landmarks are necessarily the only wrong ones.
   self.canvas.clear_review_landmarks()
-  self._inline_status('Unverified AI review: '+display_reason)
+  self._inline_status('Review AI predictions: '+display_reason)
   return True
 
  def _apply_suspicious_highlight(self):

@@ -70,7 +70,7 @@ class UISortingAndReviewContextTests(unittest.TestCase):
   self.assertIn('fill="#ffdf80",font=("Segoe UI",10,"bold")',canvas)
   self.assertIn('"Incomplete":"Unresolved"',shell)
   self.assertIn("def _repeatability_diagram",section)
-  self.assertIn('text="Overview"',project)
+  self.assertIn('text="Project overview"',project)
 
 
 

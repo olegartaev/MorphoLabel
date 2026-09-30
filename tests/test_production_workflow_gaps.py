@@ -66,7 +66,7 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   source=(Path(__file__).parents[1]/'app'/'ui'/'landmarks_section.py').read_text(encoding='utf8')
   self.assertIn("except ValueError:",source)
   self.assertIn("No compatible active model",source)
-  self.assertIn("prediction_state='normal' if active else 'disabled'",source)
+  self.assertIn("prediction_state='normal' if active and workflow_counts['unresolved'] else 'disabled'",source)
 
  def test_train_ready_means_current_state_not_yet_in_active_lineage(self):
   project=SimpleNamespace()
@@ -634,11 +634,11 @@ class ProductionWorkflowGapTests(unittest.TestCase):
  def test_review_worst_v2_is_background_bounded_and_explainable(self):
   source=(Path(__file__).parents[1]/'app'/'ui'/'landmarks_section.py').read_text(encoding='utf8')
   self.assertIn("lambda:self.review_worst(prediction.get())",source)
-  self.assertIn("self.shell._run_background_task('Unverified AI review'",source)
+  self.assertIn("self.shell._run_background_task('Review AI predictions'",source)
   self.assertIn("'review_worst_v2'",source)
   self.assertIn("self.canvas.clear_review_landmarks()",source)
   self.assertIn("display_reason='Inspect all landmarks' if reason.startswith('Correction history:') else reason",source)
-  self.assertIn("self._inline_status('Unverified AI review: '+display_reason)",source)
+  self.assertIn("self._inline_status('Review AI predictions: '+display_reason)",source)
 
  def test_landmark_loading_reports_preparation_stages(self):
   source=(Path(__file__).parents[1]/'app'/'ui'/'landmark_canvas.py').read_text(encoding='utf8')

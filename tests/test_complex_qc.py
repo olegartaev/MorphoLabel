@@ -136,7 +136,7 @@ class ComplexQCTests(unittest.TestCase):
         shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf8")
         dialog=(root/"app"/"ui"/"complex_qc_dialog.py").read_text(encoding="utf8")
         self.assertIn("'Final data QC'",landmarks)
-        self.assertIn("'Unverified AI review'",landmarks)
+        self.assertIn("'Review AI predictions'",landmarks)
         self.assertNotIn("'Review pending'",landmarks)
         self.assertIn("ReviewAction.TButton",shell)
         self.assertIn('"Review flagged — worst first"',dialog)

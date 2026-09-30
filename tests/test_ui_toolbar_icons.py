@@ -47,7 +47,7 @@ class ToolbarIconContractTests(unittest.TestCase):
 
     def test_review_actions_have_distinct_icons_and_equal_layout(self):
         source=open("app/ui/landmarks_section.py",encoding="utf-8").read()
-        self.assertIn("'Unverified AI review'",source)
+        self.assertIn("'Review AI predictions'",source)
         self.assertIn("'Final data QC'",source)
         self.assertIn("icon='review_worst'",source)
         self.assertIn("icon='complex_qc'",source)
