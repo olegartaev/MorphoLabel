@@ -9,6 +9,7 @@ import numpy as np
 from PIL import Image
 
 from app.xray_crop import crop_from_geometry, proposals_from_detector_boxes
+from app.xray_crop_ui import PlateCropEditSession
 from app.xray_detector import MIN_TRAINING_PLATES, prepare_training_dataset
 from app.xray_project import XRayProject
 from app.xray_schema import blank_scheme
@@ -80,6 +81,51 @@ class XRayDetectorWorkflowTests(unittest.TestCase):
         self.assertEqual("xray_crop_model_v001",active["parent_model_id"])
         self.assertEqual(2,len(self.project.crop_models()))
 
+    def test_apply_plate_crop_edits_is_explicit_and_keeps_plate_unverified(self):
+        image_id=self.project.source_images()[0]["image_id"]
+        first=crop_from_geometry(300,220,300,120,0,(900,480),algorithm="heuristic")
+        second=crop_from_geometry(650,260,280,110,0,(900,480),algorithm="heuristic")
+        self.project.replace_auto_proposals(image_id,[first,second],"heuristic")
+        rows=self.project.specimens(image_id)
+        changed=crop_from_geometry(320,220,310,120,3,(900,480),algorithm="manual")
+        added=crop_from_geometry(450,390,220,90,0,(900,480),algorithm="manual")
+        result=self.project.apply_plate_crop_edits(
+            image_id,
+            edits=[{"specimen_id":rows[0]["specimen_id"],"crop":changed}],
+            new_crops=[{"client_id":"draft:1","crop":added}],
+            removed_ids=[rows[1]["specimen_id"]],
+        )
+        self.assertEqual({"updated":1,"added":1,"removed":1}, {key:result[key] for key in ("updated","added","removed")})
+        self.assertIn("draft:1",result["id_map"])
+        active=self.project.specimens(image_id)
+        self.assertEqual(2,len(active));self.assertTrue(all(item["crop_status"]=="proposed" for item in active))
+        self.assertTrue(all(item["crop_source"]=="manual" for item in active))
+        self.assertEqual([],self.project.training_plates())
+        self.project.confirm_plate(image_id)
+        self.assertEqual(1,len(self.project.training_plates()))
+
+    def test_manual_pending_crop_is_protected_from_model_prediction(self):
+        image_id=self.project.source_images()[0]["image_id"]
+        crop=crop_from_geometry(450,240,400,140,0,(900,480),algorithm="manual")
+        self.project.apply_plate_crop_edits(image_id,new_crops=[{"client_id":"draft:1","crop":crop}])
+        self.assertNotIn(image_id,self.project.prediction_candidate_ids())
+        result=self.project.replace_model_proposals(image_id,[crop],"xray_crop_model_v001")
+        self.assertEqual(1,result["protected"])
+        active=self.project.specimens(image_id)
+        self.assertEqual(1,len(active));self.assertEqual("manual",active[0]["crop_source"])
+
+    def test_plate_edit_session_keeps_selection_until_explicit_delete(self):
+        crop=crop_from_geometry(450,240,400,140,0,(900,480),algorithm="manual")
+        session=PlateCropEditSession([{"specimen_id":"s1","crop":crop,"ordinal":1,"label":"one"}])
+        session.select("s1");moved=crop_from_geometry(460,240,400,140,0,(900,480),algorithm="manual")
+        session.update_selected(moved)
+        self.assertEqual("s1",session.selected_id);self.assertTrue(session.dirty)
+        draft=session.add(crop);self.assertEqual(draft,session.selected_id)
+        self.assertTrue(session.delete_selected());self.assertIsNone(session.selected_id)
+        self.assertNotIn(draft,[item["specimen_id"] for item in session.active_items()])
+        session.select("s1");session.delete_selected()
+        self.assertEqual(["s1"],session.changes()["removed_ids"])
+
     def test_batch_selection_round_robins_source_series(self):
         images=[
             {"image_id":"a1","relative_path":"A/1.tif"},
@@ -111,15 +157,17 @@ class XRayDetectorContractTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_crop_ui.py").read_text(encoding="utf-8")
         for text in (
-            "1. Training batch","Start first batch","Add next batch","2. Train","Train X-ray crop model",
-            "3. Predict & review","Predict next","Predict all remaining","Review AI crops","Confirm plate & Next",
-            "drag a corner to resize","yellow handle to rotate",
+            "Apply crop","1. Training batch","Start first batch","Add next batch","2. Train","Train X-ray crop model",
+            "3. Predict & review","Predict next","Predict all remaining","Review AI crops","Confirm & Next",
+            "drag empty space to add","<Delete>","WorkflowCard.TLabelframe",
         ):self.assertIn(text,ui)
+        self.assertNotIn("Selected specimen",ui)
+        self.assertNotIn("Edit crop…",ui)
+        self.assertNotIn("Add missed specimen",ui)
         self.assertNotIn("Auto-crop all plates",ui)
-        self.assertNotIn("Accept clear crops",ui)
         self.assertIn("training truth",ui)
         self.assertIn('text="Specimens"',ui)
-        self.assertIn("_drag_changed",ui)
+        self.assertIn("PlateCropEditSession",ui)
 
     def test_runtime_runner_uses_one_class_rtmdet_tiny_and_coco(self):
         root=Path(__file__).resolve().parents[1]

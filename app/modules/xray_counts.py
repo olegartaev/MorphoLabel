@@ -238,8 +238,6 @@ class XRayCountsRuntime:
         table.grid(row=1,column=0,sticky="nsew");scroll.grid(row=1,column=1,sticky="ns")
 
     def _render_crops(self,parent):
-        ttk.Label(parent,text="Crops",style="PageTitle.TLabel").pack(anchor="w")
-        ttk.Label(parent,text="Automatically separate, straighten and protect whole specimens before annotation.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,8))
         XRayCropWorkspace(parent,self.project)
 
     def _render_structures(self,parent):

@@ -204,9 +204,9 @@ class XRayProject:
         with sqlite3.connect(self.db_path) as c:
             c.row_factory=sqlite3.Row
             protected=[self._decode_specimen(row) for row in c.execute(
-                "SELECT * FROM specimens WHERE image_id=? AND crop_status='confirmed' AND excluded=0",(image_id,))]
+                "SELECT * FROM specimens WHERE image_id=? AND excluded=0 AND (crop_status='confirmed' OR crop_source='manual')",(image_id,))]
             old=[row[0] for row in c.execute(
-                "SELECT specimen_id FROM specimens WHERE image_id=? AND crop_status='proposed'",(image_id,))]
+                "SELECT specimen_id FROM specimens WHERE image_id=? AND crop_status='proposed' AND crop_source!='manual'",(image_id,))]
             for specimen_id in old:
                 c.execute("UPDATE specimens SET crop_status='superseded',excluded=1,updated_at=? WHERE specimen_id=?",(now,specimen_id))
                 self._event(c,specimen_id,"supersede",source,{"reason":"new_proposal_set","model_id":model_id})
@@ -299,6 +299,45 @@ class XRayProject:
             c.execute("UPDATE specimens SET crop_status='rejected',excluded=1,updated_at=? WHERE specimen_id=?",(_now(),specimen_id))
             self._event(c,specimen_id,"reject","human",{"previous_status":item["crop_status"]})
 
+    def apply_plate_crop_edits(self,image_id,edits=(),new_crops=(),removed_ids=()):
+        """Atomically persist one plate's staged Crop edits without confirming it."""
+        image=self.source_image(image_id);reviewed=bool(image.get("crop_reviewed"));status="confirmed" if reviewed else "proposed";now=_now()
+        edits=[dict(item) for item in edits];new_crops=[dict(item) for item in new_crops];removed_ids={str(value) for value in removed_ids}
+        id_map={};updated=added=removed=0
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row
+            rows={row["specimen_id"]:self._decode_specimen(row) for row in c.execute("SELECT * FROM specimens WHERE image_id=?",(image_id,))}
+            for specimen_id in removed_ids:
+                item=rows.get(specimen_id)
+                if item is None:raise KeyError(f"Unknown specimen on this plate: {specimen_id}")
+                if item["crop_status"] in {"rejected","superseded"} or item["excluded"]:continue
+                c.execute("UPDATE specimens SET crop_status='rejected',excluded=1,updated_at=? WHERE specimen_id=?",(now,specimen_id))
+                self._event(c,specimen_id,"reject","human",{"previous_status":item["crop_status"],"reason":"apply_crop"})
+                removed+=1
+            for edit in edits:
+                specimen_id=str(edit.get("specimen_id") or "");item=rows.get(specimen_id)
+                if item is None:raise KeyError(f"Unknown specimen on this plate: {specimen_id}")
+                if specimen_id in removed_ids:continue
+                crop=dict(edit.get("crop") or {});crop["confidence"]="high"
+                if not crop.get("corners") or not crop.get("bounds"):raise ValueError("Crop geometry is incomplete.")
+                c.execute(
+                    "UPDATE specimens SET crop_json=?,crop_source='manual',crop_status=?,crop_qc_json='[]',model_id='',excluded=0,updated_at=? WHERE specimen_id=?",
+                    (_json(crop),status,now,specimen_id),
+                )
+                self._event(c,specimen_id,"edit","human",{"previous_crop":item.get("crop") or {},"crop":crop,"action":"apply_crop"})
+                updated+=1
+            ordinal=max((int(item.get("ordinal") or 0) for item in rows.values()),default=0);stem=self.source_image_path(image_id).stem
+            for entry in new_crops:
+                crop=dict(entry.get("crop") or {});crop["confidence"]="high"
+                if not crop.get("corners") or not crop.get("bounds"):raise ValueError("Crop geometry is incomplete.")
+                ordinal+=1;specimen_id=str(uuid.uuid4());client_id=str(entry.get("client_id") or specimen_id);label=f"{stem}-{ordinal:02d}"
+                c.execute(
+                    "INSERT INTO specimens(specimen_id,image_id,label,crop_json,excluded,ordinal,crop_source,crop_status,crop_qc_json,model_id,updated_at) VALUES(?,?,?,?,0,?,'manual',?,'[]','',?)",
+                    (specimen_id,image_id,label,_json(crop),ordinal,status,now),
+                )
+                self._event(c,specimen_id,"add","human",{"crop":crop,"action":"apply_crop"});id_map[client_id]=specimen_id;added+=1
+        return {"updated":updated,"added":added,"removed":removed,"id_map":id_map}
+
     def set_specimen_excluded(self,specimen_id,excluded=True):
         with sqlite3.connect(self.db_path) as c:
             c.execute("UPDATE specimens SET excluded=?,updated_at=? WHERE specimen_id=?",(int(bool(excluded)),_now(),specimen_id))
@@ -369,11 +408,12 @@ class XRayProject:
         ids=[]
         for image in self.source_images():
             if image["excluded"] or image["crop_reviewed"]:continue
-            has_model_pending=any(
-                item["crop_source"]=="model" and item["crop_status"]=="proposed" and not item["excluded"]
-                for item in self.specimens(image["image_id"])
+            active=self.specimens(image["image_id"])
+            has_protected_pending=any(
+                item["crop_status"]=="proposed" and not item["excluded"] and item["crop_source"] in {"model","manual"}
+                for item in active
             )
-            if not has_model_pending:ids.append(image["image_id"])
+            if not has_protected_pending:ids.append(image["image_id"])
         return ids
 
     def select_prediction_plate_ids(self,count):
