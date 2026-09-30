@@ -58,7 +58,7 @@ class PhotoListPanel(ttk.Frame):
   show=ttk.Checkbutton(meta,text='Show excluded',variable=self.show_excluded);show.pack(side='right');self.tooltip.bind(show,'Include excluded images in the list.')
 
   states=ttk.Frame(legend);states.pack(fill='x',pady=(2,0))
-  for color,text in (('#d93025',' incomplete'),('#e6a700',' review'),('#188038',' ready')):
+  for color,text in (('#d93025',' unresolved'),('#e6a700',' review'),('#188038',' verified')):
    dot=tk.Canvas(states,width=11,height=11,highlightthickness=0,bd=0);dot.create_oval(2,2,9,9,fill=color,outline=color);dot.pack(side='left')
    ttk.Label(states,text=text,style='Muted.TLabel').pack(side='left',padx=(0,7))
  def _row_data(self,index,row):

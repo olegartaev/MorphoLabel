@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.ui.project_section import sorted_project_samples
-from app.ui.landmarks_section import _prediction_context_text, _remaining_prediction_ids
+from app.ui.landmarks_section import _prediction_context_text, _remaining_prediction_ids, _landmark_status_counts
 
 
 class UISortingAndReviewContextTests(unittest.TestCase):
@@ -34,6 +34,27 @@ class UISortingAndReviewContextTests(unittest.TestCase):
     return {"verified":False,"complete":image_id=="complete"}
   with patch('app.ui.landmarks_section.landmark_frame_ready',return_value=True):
    self.assertEqual(("partial",),_remaining_prediction_ids(P(),rows))
+
+ def test_landmark_workflow_status_separates_prediction_from_review(self):
+  rows=[
+   {"status_color":"red","excluded":False},
+   {"status_color":"yellow","excluded":False},
+   {"status_color":"yellow","excluded":False},
+   {"status_color":"green","excluded":False},
+   {"status_color":"red","excluded":True},
+  ]
+  self.assertEqual({"unresolved":1,"review":2,"verified":1},_landmark_status_counts(rows))
+
+ def test_prediction_and_crop_labels_do_not_use_ambiguous_remaining_or_raw_failed(self):
+  from pathlib import Path
+  root=Path(__file__).resolve().parents[1]
+  landmarks=(root/"app"/"ui"/"landmarks_section.py").read_text(encoding="utf-8")
+  crop=(root/"app"/"ui"/"crop_section.py").read_text(encoding="utf-8")
+  photos=(root/"app"/"ui"/"photo_list_panel.py").read_text(encoding="utf-8")
+  self.assertIn("Predict all unresolved",landmarks);self.assertNotIn("'All remaining'",landmarks)
+  self.assertIn("Predict all uncropped",crop);self.assertNotIn('"Apply remaining"',crop)
+  self.assertIn("Needs attention:",crop);self.assertNotIn("failed: {result['failed']}",crop)
+  self.assertIn("' unresolved'",photos);self.assertIn("' verified'",photos)
 
  def test_landmarks_ui_reuses_established_overlay_and_has_no_reapply_button(self):
   from pathlib import Path

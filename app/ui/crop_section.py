@@ -40,17 +40,19 @@ class CropSection(SectionView):
   self.button(two,"Train crop model",self.train,"Train the Crop model from all verified examples.",style="Primary.TButton").grid(row=2,column=0,sticky="w",pady=(7,0))
   self.button(two,"Models…",lambda:self.shell.show_models('crop'),"Compare and select saved Crop model versions.").grid(row=2,column=1,sticky="w",padx=(5,0),pady=(7,0))
 
-  three=dock.add_card("3. Apply and check",icon="crop_apply",help_text="Apply the active Crop model to new images, then review and confirm its proposals.")
-  ttk.Label(three,text="Prediction batch").grid(row=0,column=0,sticky="w")
-  ttk.Spinbox(three,from_=1,to=500,textvariable=prediction,width=5).grid(row=0,column=1,sticky="w",padx=4)
-  ttk.Label(three,text="images",style="Muted.TLabel").grid(row=0,column=2,sticky="w")
-  apply_actions=ttk.Frame(three);apply_actions.grid(row=1,column=0,columnspan=3,sticky="w",pady=(7,0))
-  self.button(apply_actions,"Apply next batch",lambda:self.auto_batch(prediction.get()),"Apply the active Crop model to the next prediction batch.").pack(side="left")
-  self.button(apply_actions,"Apply remaining",lambda:self.auto_batch(None),"Apply the active Crop model to all eligible remaining images.").pack(side="left",padx=4)
-  self.button(apply_actions,"Reapply AI crops",self.reapply_ai_pending,"Re-run the active Crop model on every AI-unreviewed crop. Human-confirmed crops and images that already have landmarks are protected.").pack(side="left")
-  review_actions=ttk.Frame(three);review_actions.grid(row=2,column=0,columnspan=3,sticky="w",pady=(5,0))
-  self.button(review_actions,"Review worst",self.review_worst,"Review pending AI Crop proposals, worst first.").pack(side="left")
-  self.button(review_actions,"Review manual",self.review_manual,"Re-review crops that were created manually.").pack(side="left",padx=(4,0))
+  three=dock.add_card("3. Predict & review",icon="crop_apply",help_text="Predict only uncropped images. Pending AI Crop proposals are a separate review state and are not predicted again.")
+  counts=self.context.project.crop_section_counts()
+  ttk.Label(three,text=f"Uncropped {counts.get('Uncropped',0)} · AI review {counts.get('AI pending',0)} · Verified {counts.get('Reviewed',0)}",style="Muted.TLabel").grid(row=0,column=0,columnspan=3,sticky="w")
+  batch_row=ttk.Frame(three);batch_row.grid(row=1,column=0,columnspan=3,sticky="w",pady=(5,0))
+  ttk.Label(batch_row,text="Next").pack(side="left")
+  ttk.Spinbox(batch_row,from_=1,to=500,textvariable=prediction,width=5).pack(side="left",padx=4)
+  ttk.Label(batch_row,text="uncropped images",style="Muted.TLabel").pack(side="left")
+  apply_actions=ttk.Frame(three);apply_actions.grid(row=2,column=0,columnspan=3,sticky="w",pady=(7,0))
+  self.button(apply_actions,"Predict next",lambda:self.auto_batch(prediction.get()),"Predict Crop for the next uncropped eligible images.").pack(side="left")
+  self.button(apply_actions,"Predict all uncropped",lambda:self.auto_batch(None),"Predict Crop for every uncropped eligible image. Existing AI proposals are not rerun.").pack(side="left",padx=4)
+  review_actions=ttk.Frame(three);review_actions.grid(row=3,column=0,columnspan=3,sticky="w",pady=(5,0))
+  self.button(review_actions,"Review AI crops",self.review_worst,"Review pending AI Crop proposals, worst first.").pack(side="left")
+  self.button(review_actions,"Review manual crops",self.review_manual,"Re-review crops that were created manually.").pack(side="left",padx=(4,0))
   self.button(review_actions,"Accept all AI crops",self.accept_all_ai_crops,"Accept every current pending AI Crop exactly as predicted, without recalculating it.").pack(side="left",padx=(4,0))
  def refresh(self,image_id=None):
   if image_id is not None:
@@ -221,13 +223,14 @@ class CropSection(SectionView):
      elif kind=="progress":
       bar.stop();bar.configure(mode="determinate",maximum=value[1],value=value[0]);label.config(text=f"Applying crop model: {value[0]} / {value[1]}")
      elif kind=="empty":
-      dialog.destroy();messagebox.showinfo(title,"No eligible images remain for crop prediction.",parent=self.shell);return
+      dialog.destroy();counts=self.context.project.crop_section_counts();messagebox.showinfo(title,f"Nothing to predict. Uncropped: {counts.get('Uncropped',0)}. AI review: {counts.get('AI pending',0)}.\n\nPending AI crops already have predictions; use Review AI crops.",parent=self.shell);return
      elif kind=="done":
-      dialog.destroy();result,prediction_batch=value;summary=f"Success: {result['success']}; failed: {result['failed']}; protected: {result['protected']}."
+      dialog.destroy();result,prediction_batch=value;summary=f"Predicted: {result['success']}."
       failures=result.get("failures") or []
+      if result.get("protected"):summary+=f" Protected: {result['protected']}."
       if failures:
        first=failures[0];reason=first.get("reason",str(first)) if isinstance(first,dict) else str(first)
-       summary+=f"\nFirst failure: {reason}\nFull details: app.log (complete per-image failures)."
+       summary+=f"\nNeeds attention: {len(failures)}.\nFirst issue: {reason}\nThese images were not silently accepted; details are recorded in app.log."
       if result["success"] and messagebox.askyesno(title,summary+"\n\nReview this batch now?",parent=self.shell,default=messagebox.YES):
        ids=list(result.get("successful_ids",()))
        self.context.project.set_ui_state("crop_active_batch",{"batch_id":(prediction_batch or {}).get("batch_id","crop_prediction_review"),"batch_type":"prediction_review","ids":ids,"prepared_ids":ids,"completed_ids":[],"position":0,"model_id":result.get("model_id"),"completion_announced":False})

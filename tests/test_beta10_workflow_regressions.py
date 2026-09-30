@@ -100,8 +100,9 @@ class Beta10WorkflowRegressionTests(unittest.TestCase):
         shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
         service=(root/"app"/"landmark_ai_service.py").read_text(encoding="utf-8")
         project=(root/"app"/"ui"/"project_section.py").read_text(encoding="utf-8")
-        self.assertIn("'Apply next',lambda:self.predict(False,prediction.get())",landmarks)
-        self.assertIn("'All remaining',lambda:self.predict(True,prediction.get())",landmarks)
+        self.assertIn("'Predict next',lambda:self.predict(False,prediction.get())",landmarks)
+        self.assertIn("'Predict all unresolved',lambda:self.predict(True,prediction.get())",landmarks)
+        self.assertNotIn("'All remaining',lambda:self.predict(True,prediction.get())",landmarks)
         self.assertNotIn("'Reapply',self.reapply_unverified",landmarks)
         self.assertIn("'Review AI predictions',lambda:self.review_worst(prediction.get())",landmarks)
         self.assertIn("'Final data QC',lambda:open_complex_qc(self)",landmarks)
@@ -112,6 +113,8 @@ class Beta10WorkflowRegressionTests(unittest.TestCase):
         self.assertNotIn("threading.Thread(target=self._warm_ai_hardware",shell)
         self.assertIn("Project setup",project)
         self.assertIn("Image preparation",project)
+        self.assertIn('text="Project overview"',project)
+        self.assertIn('text="Workflow"',project)
         self.assertNotIn("Panedwindow",project)
 
 

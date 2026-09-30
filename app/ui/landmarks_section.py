@@ -94,6 +94,16 @@ def _repeatability_diagram(parent):
  canvas.create_oval(312,7,336,31,fill="#ffffff",outline="#c6cdd3");canvas.create_text(324,19,text="2",fill="#27313a",font=("Segoe UI",9,"bold"))
  return canvas
 
+def _landmark_status_counts(rows):
+ counts={"unresolved":0,"review":0,"verified":0}
+ for row in rows:
+  if row.get("excluded"):continue
+  color=str(row.get("status_color") or "red")
+  if color=="green":counts["verified"]+=1
+  elif color=="yellow":counts["review"]+=1
+  else:counts["unresolved"]+=1
+ return counts
+
 def _prediction_failure_summary(batch):
  failures=list((batch.get('failures') or {}).values())
  if not failures:return ''
@@ -220,16 +230,25 @@ class LandmarksSection(SectionView):
   self.button(three,'Train',lambda:self.preflight(None if parent_choice.get()=='Bootstrap / first model' else parent_choice.get()),'Check then run Landmark model training.',style='Primary.TButton').grid(row=2,column=0,columnspan=2,sticky='w',pady=(5,0))
   self.button(three,'Models…',lambda:self.shell.show_models('landmark'),'Compare and select saved Landmark models.').grid(row=2,column=2,sticky='e',padx=(5,0),pady=(5,0))
 
-  four=dock.add_card('4. Apply & review',icon='landmark_apply',help_text='Fill unresolved landmark sets with the active model, then review AI predictions before final data QC.')
-  ttk.Label(four,text='Next batch').grid(row=0,column=0,sticky='w')
-  ttk.Spinbox(four,from_=1,to=500,textvariable=prediction,width=5).grid(row=0,column=1,sticky='w',padx=4)
-  ttk.Label(four,text='images',style='Muted.TLabel').grid(row=0,column=2,sticky='w')
-  predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,columnspan=3,sticky='ew',pady=(5,0))
-  prediction_state='normal' if active else 'disabled'
+  four=dock.add_card('4. Predict & review',icon='landmark_apply',help_text='Red images need landmark prediction. Yellow images already have a complete set and need human review. Green images are verified.')
+  workflow_counts=_landmark_status_counts(self.context.rows)
+  status=ttk.Frame(four);status.grid(row=0,column=0,columnspan=3,sticky='ew')
+  def status_item(parent,color,value,label,padx):
+   dot=tk.Canvas(parent,width=11,height=11,highlightthickness=0,bd=0);dot.create_oval(2,2,9,9,fill=color,outline=color);dot.pack(side='left',padx=padx)
+   ttk.Label(parent,text=f"{label} {value}",style='Muted.TLabel').pack(side='left')
+  status_item(status,'#d93025',workflow_counts['unresolved'],'Unresolved',(0,3))
+  status_item(status,'#e6a700',workflow_counts['review'],'Review',(12,3))
+  status_item(status,'#188038',workflow_counts['verified'],'Verified',(12,3))
+  batch_row=ttk.Frame(four);batch_row.grid(row=1,column=0,columnspan=3,sticky='w',pady=(5,0))
+  ttk.Label(batch_row,text='Next').pack(side='left')
+  ttk.Spinbox(batch_row,from_=1,to=500,textvariable=prediction,width=5).pack(side='left',padx=4)
+  ttk.Label(batch_row,text='unresolved images',style='Muted.TLabel').pack(side='left')
+  predict_actions=ttk.Frame(four);predict_actions.grid(row=2,column=0,columnspan=3,sticky='ew',pady=(5,0))
+  prediction_state='normal' if active and workflow_counts['unresolved'] else 'disabled'
   predict_actions.columnconfigure(0,weight=1,uniform='prediction_actions');predict_actions.columnconfigure(1,weight=1,uniform='prediction_actions')
-  self.button(predict_actions,'Apply next',lambda:self.predict(False,prediction.get()),'Fill the next unresolved eligible images. Existing human landmarks are preserved.',state=prediction_state).grid(row=0,column=0,sticky='ew',padx=(0,3))
-  self.button(predict_actions,'All remaining',lambda:self.predict(True,prediction.get()),'Fill every unresolved eligible image in the project. Existing human landmarks are preserved.',state=prediction_state).grid(row=0,column=1,sticky='ew',padx=(3,0))
-  review_actions=ttk.Frame(four);review_actions.grid(row=2,column=0,columnspan=3,sticky='ew',pady=(5,0))
+  self.button(predict_actions,'Predict next',lambda:self.predict(False,prediction.get()),'Predict landmarks for the next unresolved eligible images. Existing human landmarks are preserved.',state=prediction_state).grid(row=0,column=0,sticky='ew',padx=(0,3))
+  self.button(predict_actions,'Predict all unresolved',lambda:self.predict(True,prediction.get()),'Predict landmarks for every unresolved eligible image. Yellow review images are already predicted and are not rerun.',state=prediction_state).grid(row=0,column=1,sticky='ew',padx=(3,0))
+  review_actions=ttk.Frame(four);review_actions.grid(row=3,column=0,columnspan=3,sticky='ew',pady=(5,0))
   review_actions.columnconfigure(0,weight=1,uniform='review_actions');review_actions.columnconfigure(1,weight=1,uniform='review_actions')
   self.button(
    review_actions,'Review AI predictions',lambda:self.review_worst(prediction.get()),
@@ -892,7 +911,8 @@ class LandmarksSection(SectionView):
     else:
      ids=_next_remaining_prediction_ids(self.context.project,self.context.rows,row['image_id'],int(count));mode='next_unresolved'
     if not ids:
-     events.put(('empty','No unresolved images need AI landmark prediction.'));return
+     counts=_landmark_status_counts(self.context.rows)
+     events.put(('empty',f"Nothing to predict. Unresolved: 0. Review: {counts['review']}.\n\nYellow images already have landmarks and are waiting for human review; use Review AI predictions."));return
     data,path=create_batch_for_ids(self.context.project,model['model_id'],ids,selection_mode=mode)
     data,path=run_batch(self.context.project,path,LandmarkAIService(self.context.project,backend),progress=lambda done,total,name,image_id=None:events.put(('progress',done,total,name,image_id)),status=lambda text:events.put(('status',text)),retry_failures=True);events.put(('done',data))
    except Exception as exc:events.put(('error',exc))

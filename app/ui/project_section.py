@@ -81,11 +81,13 @@ class ProjectSection(SectionView):
   self.shell.tip.bind(skip,"Go directly to landmarks while keeping existing crop data.")
 
   sample_rows=project_sample_rows(project,self.context.rows)
-  lower=ttk.Frame(content);lower.grid(row=2,column=0,columnspan=2,sticky="nsw");lower.rowconfigure(0,weight=1)
+  lower=ttk.Frame(content);lower.grid(row=2,column=0,columnspan=2,sticky="nsew");lower.rowconfigure(0,weight=1)
+  lower.columnconfigure(0,weight=3,uniform="project_lower");lower.columnconfigure(1,weight=2,uniform="project_lower")
+
   samples=ttk.LabelFrame(lower,text="Samples",padding=8);samples.grid(row=0,column=0,sticky="nsew",padx=(0,7))
   samples.rowconfigure(1,weight=1);samples.columnconfigure(0,weight=1)
   ttk.Label(samples,text=f"{len(sample_rows)} samples · click a column title to sort",style="Muted.TLabel").grid(row=0,column=0,columnspan=2,sticky="w",pady=(0,5))
-  columns=("sample","images","calibrated");table=ttk.Treeview(samples,columns=columns,show="headings",selectmode="browse",height=11)
+  columns=("sample","images","calibrated");table=ttk.Treeview(samples,columns=columns,show="headings",selectmode="browse",height=14)
   labels={"sample":"Sample","images":"Images","calibrated":"Calibration"}
   table.column("sample",width=330,stretch=True,anchor="w");table.column("images",width=72,stretch=False,anchor="e");table.column("calibrated",width=96,stretch=False,anchor="center")
   table.tag_configure("alternate",background="#f6f8fa")
@@ -105,10 +107,24 @@ class ProjectSection(SectionView):
   scroll=ttk.Scrollbar(samples,orient="vertical",command=table.yview);table.configure(yscrollcommand=scroll.set)
   table.grid(row=1,column=0,sticky="nsew");scroll.grid(row=1,column=1,sticky="ns");populate()
 
-  overview=ttk.LabelFrame(lower,text="Overview",padding=(14,10));overview.grid(row=0,column=1,sticky="ns")
+  details=ttk.Frame(lower);details.grid(row=0,column=1,sticky="nsew");details.columnconfigure(0,weight=1)
+  overview=ttk.LabelFrame(details,text="Project overview",padding=(12,10));overview.grid(row=0,column=0,sticky="ew")
+  overview.columnconfigure(0,weight=1);overview.columnconfigure(1,weight=1)
   calibrated=sum(1 for item in sample_rows if item["calibrated"])
   metrics=((str(len(self.context.rows)),"Images"),(str(len(sample_rows)),"Samples"),(f"{calibrated}/{len(sample_rows)}","Calibrated"),(str(len(project.schema)),"Landmarks"))
   for index,(value,label) in enumerate(metrics):
-   block=ttk.Frame(overview);block.pack(fill="x",pady=(0,10 if index<len(metrics)-1 else 0))
-   ttk.Label(block,text=value,font=("Segoe UI",16,"bold")).pack(anchor="w")
+   block=ttk.Frame(overview,padding=(4,3));block.grid(row=index//2,column=index%2,sticky="nsew",padx=(0 if index%2==0 else 8,0),pady=(0,8))
+   ttk.Label(block,text=value,font=("Segoe UI",17,"bold")).pack(anchor="w")
    ttk.Label(block,text=label,style="Muted.TLabel").pack(anchor="w")
+
+  workflow_status=ttk.LabelFrame(details,text="Workflow",padding=(12,10));workflow_status.grid(row=1,column=0,sticky="ew",pady=(8,0))
+  workflow_rows=(
+   ("Source photos","Linked" if project.source_root else "Not set"),
+   ("Calibration",f"{calibrated} of {len(sample_rows)} samples"),
+   ("Before landmarks","Crop" if self.context.crop_enabled() else "Direct to landmarks"),
+   ("Landmark scheme",f"{len(project.schema)} landmarks" if project.schema else "Needs setup"),
+  )
+  for index,(label,value) in enumerate(workflow_rows):
+   row=ttk.Frame(workflow_status);row.pack(fill="x",pady=(0,7 if index<len(workflow_rows)-1 else 0))
+   ttk.Label(row,text=label,style="Muted.TLabel").pack(side="left")
+   ttk.Label(row,text=value,font=("Segoe UI",9,"bold")).pack(side="right")
