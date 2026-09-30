@@ -316,3 +316,76 @@ def oriented_crop(image, proposal):
     y0 = max(0, int(round(center[1] - width / 2)))
     y1 = min(rotated.shape[0], int(round(center[1] + width / 2)))
     return Image.fromarray(rotated[y0:y1, x0:x1])
+
+
+def proposals_from_detector_boxes(path, boxes, max_preview_dim=1600, safety_margin=0.06):
+    """Convert detector boxes into anatomy-safe oriented proposals.
+
+    The detector box is treated as the minimum protected extent. Rotation is
+    estimated only inside that isolated ROI, then the oriented rectangle is
+    expanded enough to contain the complete detector box plus a small margin.
+    Thus orientation can reduce irrelevant background but can never trim a
+    detector-predicted head/tail extent.
+    """
+    preview, scale, original_size = _read_gray(path, max_preview_dim)
+    proposals = []
+    for raw in boxes:
+        if isinstance(raw, dict):
+            bounds = raw.get("bbox") or raw.get("bounds") or ()
+            score = float(raw.get("score", 1.0))
+        else:
+            values = list(raw);bounds=values[:4];score=float(values[4]) if len(values)>4 else 1.0
+        if len(bounds) != 4:
+            continue
+        x0,y0,x1,y1 = [float(v) for v in bounds]
+        if x1 <= x0 or y1 <= y0:
+            continue
+        px0=max(0,int(math.floor(x0*scale)));py0=max(0,int(math.floor(y0*scale)))
+        px1=min(preview.shape[1],int(math.ceil(x1*scale)));py1=min(preview.shape[0],int(math.ceil(y1*scale)))
+        roi=preview[py0:py1,px0:px1]
+        angle = 0.0 if (x1-x0) >= (y1-y0) else 90.0
+        if roi.size >= 100:
+            threshold,_=cv2.threshold(roi,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+            border_w=max(2,min(roi.shape)//12)
+            border=np.concatenate((roi[:border_w,:].ravel(),roi[-border_w:,:].ravel(),roi[:,:border_w].ravel(),roi[:,-border_w:].ravel()))
+            bright=float(np.median(border)) <= float(threshold)
+            mask=((roi>threshold) if bright else (roi<=threshold)).astype(np.uint8)
+            mask=cv2.morphologyEx(mask,cv2.MORPH_OPEN,np.ones((3,3),np.uint8))
+            count,labels,stats,_=cv2.connectedComponentsWithStats(mask,8)
+            best=None
+            rc=np.array([roi.shape[1]/2,roi.shape[0]/2])
+            for label in range(1,count):
+                area=int(stats[label,cv2.CC_STAT_AREA])
+                if area < max(30,int(roi.size*.015)):
+                    continue
+                ys,xs=np.nonzero(labels==label)
+                pts=np.column_stack((xs,ys)).astype(np.float32)
+                mean,major,_minor,_proj=_pca(pts)
+                distance=float(np.linalg.norm(mean-rc))/max(1.0,float(np.linalg.norm(rc)))
+                score_component=area*(1.4-max(0.0,min(1.0,distance)))
+                if best is None or score_component>best[0]:
+                    best=(score_component,major)
+            if best is not None:
+                major=best[1]
+                angle=math.degrees(math.atan2(float(major[1]),float(major[0])))
+                if angle>90:angle-=180
+                if angle<=-90:angle+=180
+        center=np.array([(x0+x1)/2,(y0+y1)/2],dtype=float)
+        a=math.radians(angle);major=np.array([math.cos(a),math.sin(a)]);minor=np.array([-major[1],major[0]])
+        axis_corners=np.array([[x0,y0],[x1,y0],[x1,y1],[x0,y1]],dtype=float)-center
+        half_l=max(abs(axis_corners@major))*(1.0+float(safety_margin))
+        half_w=max(abs(axis_corners@minor))*(1.0+float(safety_margin))
+        length=max(2.0,float(2*half_l));width=max(2.0,float(2*half_w))
+        corners=crop_corners(center[0],center[1],length,width,angle)
+        qc=[]
+        iw,ih=original_size
+        pad=max(2,min(iw,ih)*0.003)
+        if x0<=pad or y0<=pad or x1>=iw-pad or y1>=ih-pad:qc.append("source_edge")
+        confidence="high" if score>=0.45 and not qc else "review"
+        proposals.append(CropProposal(
+            center_x=float(center[0]),center_y=float(center[1]),length=length,width=width,
+            angle_degrees=float(angle),corners=corners,bounds=_bounds_from_corners(corners,original_size),
+            confidence=confidence,qc=tuple(qc),algorithm="rtmdet-tiny-v1",
+        ))
+    proposals.sort(key=lambda p:(p.center_y,p.center_x))
+    return proposals
