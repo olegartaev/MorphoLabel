@@ -118,6 +118,8 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertNotIn("Auto-crop all plates",ui)
         self.assertNotIn("Accept clear crops",ui)
         self.assertIn("training truth",ui)
+        self.assertIn('text="Specimens"',ui)
+        self.assertIn("_drag_changed",ui)
 
     def test_runtime_runner_uses_one_class_rtmdet_tiny_and_coco(self):
         root=Path(__file__).resolve().parents[1]
@@ -132,6 +134,8 @@ class XRayDetectorContractTests(unittest.TestCase):
         detector=(root/"app/xray_detector.py").read_text(encoding="utf-8")
         self.assertIn("rtmdet_tiny_coco_pretrained",detector)
         self.assertIn("initial_checkpoint",detector)
+        self.assertIn("is_cuda_oom",detector)
+        self.assertIn("batch_attempts",detector)
         spec=(root/"packaging/morpholabel.spec").read_text(encoding="utf-8")
         self.assertIn("xray_detector_runner.py",spec)
 

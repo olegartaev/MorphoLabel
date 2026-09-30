@@ -21,7 +21,7 @@ class XRayCropWorkspace:
         self.selected_image_id=None;self.selected_specimen_id=None
         self.preview=self.photo=None;self.preview_original_size=(1,1);self.display_scale=1.0;self.offset=(0,0)
         self._busy=False;self._add_mode=False;self._add_start=None
-        self._drag_mode=None;self._drag_anchor=None;self._drag_initial=None;self._editing_crop=None
+        self._drag_mode=None;self._drag_anchor=None;self._drag_initial=None;self._editing_crop=None;self._drag_changed=False
         self.training_batch_size=tk.IntVar(value=6);self.prediction_batch_size=tk.IntVar(value=6)
         self._build();self.refresh()
 
@@ -73,7 +73,7 @@ class XRayCropWorkspace:
         self.plates=ttk.Treeview(left,columns=("status","count"),show="tree headings",selectmode="browse",height=18)
         self.plates.heading("#0",text="Plate");self.plates.column("#0",width=190,stretch=True)
         self.plates.heading("status",text="Status");self.plates.column("status",width=86,anchor="center",stretch=False)
-        self.plates.heading("count",text="Fish");self.plates.column("count",width=44,anchor="center",stretch=False)
+        self.plates.heading("count",text="Specimens");self.plates.column("count",width=72,anchor="center",stretch=False)
         plate_scroll=ttk.Scrollbar(left,orient="vertical",command=self.plates.yview);self.plates.configure(yscrollcommand=plate_scroll.set)
         self.plates.pack(side="left",fill="both",expand=True);plate_scroll.pack(side="right",fill="y")
         self.plates.bind("<<TreeviewSelect>>",self._plate_selected)
@@ -399,7 +399,7 @@ class XRayCropWorkspace:
             hit=self._hit_crop(x,y,item)
             if hit is None:continue
             self.selected_specimen_id=item["specimen_id"];self._editing_crop=dict(item.get("crop") or {})
-            self._drag_mode=hit;self._drag_anchor=(x,y)
+            self._drag_mode=hit;self._drag_anchor=(x,y);self._drag_changed=False
             self._drag_initial=(
                 float(self._editing_crop.get("center_x",0)),float(self._editing_crop.get("center_y",0)),
                 float(self._editing_crop.get("length",0)),float(self._editing_crop.get("width",0)),
@@ -411,6 +411,7 @@ class XRayCropWorkspace:
     def _canvas_drag(self,event):
         if self._drag_mode is None or self._editing_crop is None:return
         x,y=self._original(event.x,event.y);cx,cy,length,width,angle=self._drag_initial
+        if abs(x-self._drag_anchor[0])+abs(y-self._drag_anchor[1])>1.0:self._drag_changed=True
         if self._drag_mode[0]=="move":
             ax,ay=self._drag_anchor;cx+=x-ax;cy+=y-ay
         elif self._drag_mode[0]=="rotate":
@@ -436,8 +437,9 @@ class XRayCropWorkspace:
             specimen_id=self.project.add_manual_specimen(self.selected_image_id,crop)
             self.refresh();self._select_specimen(specimen_id);return
         if self._drag_mode is not None and self.selected_specimen_id and self._editing_crop is not None:
-            self.project.update_specimen_crop(self.selected_specimen_id,self._editing_crop)
-            self._drag_mode=self._drag_anchor=self._drag_initial=None;self._editing_crop=None
+            changed=bool(self._drag_changed);crop=self._editing_crop
+            self._drag_mode=self._drag_anchor=self._drag_initial=None;self._editing_crop=None;self._drag_changed=False
+            if changed:self.project.update_specimen_crop(self.selected_specimen_id,crop)
             self.refresh();return
 
 class XRayCropEditor(tk.Toplevel):
