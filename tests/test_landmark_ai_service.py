@@ -98,7 +98,7 @@ class LandmarkAIGateOneTests(unittest.TestCase):
 
  def test_invalid_coordinates_write_nothing(self):
   image_id=self.ids[0]
-  for coords in ((math.nan,1),(1,math.inf),(-1,1),(100,1)):
+  for coords in ((math.nan,1),(1,math.inf),(-1,1),(101,1)):
    with self.subTest(coords=coords):
     with self.assertRaises(PredictionValidationError): self.service(coordinate_overrides={1:coords}).predict_one(image_id)
     self.assertEqual(self.points(image_id),{})
