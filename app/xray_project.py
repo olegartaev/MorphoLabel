@@ -215,7 +215,18 @@ class XRayProject:
         return accepted
 
     def crop_review_candidates(self):
-        return [item for item in self.specimens() if item["crop_status"]=="proposed" and not item["excluded"]]
+        return [
+            item for item in self.specimens()
+            if item["crop_status"]=="proposed" and not item["excluded"]
+            and str((item.get("crop") or {}).get("confidence"))!="high"
+        ]
+
+    def pending_clear_crop_count(self,image_id=None):
+        return sum(
+            1 for item in self.specimens(image_id)
+            if item["crop_source"]=="auto" and item["crop_status"]=="proposed" and not item["excluded"]
+            and str((item.get("crop") or {}).get("confidence"))=="high"
+        )
 
     def update_specimen_crop(self,specimen_id,crop,qc=()):
         item=self.specimen(specimen_id);crop=dict(crop);crop["confidence"]="high";now=_now()
@@ -256,12 +267,24 @@ class XRayProject:
 
     def crop_summary(self):
         rows=self.specimens()
+        clear_pending=sum(
+            row["crop_status"]=="proposed" and not row["excluded"]
+            and str((row.get("crop") or {}).get("confidence"))=="high"
+            for row in rows
+        )
+        exceptions=sum(
+            row["crop_status"]=="proposed" and not row["excluded"]
+            and str((row.get("crop") or {}).get("confidence"))!="high"
+            for row in rows
+        )
         return {
             "plates":len(self.source_images()),
             "plates_with_specimens":len({row["image_id"] for row in rows if not row["excluded"]}),
             "specimens":sum(not row["excluded"] for row in rows),
             "confirmed":sum(row["crop_status"]=="confirmed" and not row["excluded"] for row in rows),
-            "review":sum(row["crop_status"]=="proposed" and not row["excluded"] for row in rows),
+            "clear_pending":clear_pending,
+            "exceptions":exceptions,
+            "review":clear_pending+exceptions,
         }
 
     def save_scheme(self,scheme,note="Scheme update"):

@@ -27,6 +27,8 @@ class XRayCropWorkspace:
         toolbar=ttk.Frame(outer);toolbar.pack(fill="x",pady=(0,7))
         self.auto_button=ttk.Button(toolbar,text="Auto-crop all plates",style="Primary.TButton",command=self.auto_crop_all)
         self.auto_button.pack(side="left")
+        self.accept_clear_button=ttk.Button(toolbar,text="Accept clear crops",command=self.accept_clear)
+        self.accept_clear_button.pack(side="left",padx=(6,0))
         self.review_button=ttk.Button(toolbar,text="Review exceptions",command=self.review_exceptions)
         self.review_button.pack(side="left",padx=(6,0))
         self.status=ttk.Label(toolbar,text="",style="Muted.TLabel");self.status.pack(side="left",padx=10)
@@ -58,7 +60,7 @@ class XRayCropWorkspace:
         self.edit_button=ttk.Button(right,text="Edit crop…",command=self.edit_selected);self.edit_button.pack(fill="x",pady=2)
         self.reject_button=ttk.Button(right,text="False detection — remove",command=self.reject_selected);self.reject_button.pack(fill="x",pady=2)
         self.add_button=ttk.Button(right,text="Add missed specimen",command=self.start_add);self.add_button.pack(fill="x",pady=(10,2))
-        ttk.Label(right,text="Most plates need no specimen-by-specimen work. Auto-crop accepts clear cases and leaves only ambiguous crops here.",style="Muted.TLabel",wraplength=260,justify="left").pack(anchor="w",pady=(12,0))
+        ttk.Label(right,text="Auto-crop proposes all specimens. Accept clear crops in one action; only ambiguous cases need individual review.",style="Muted.TLabel",wraplength=260,justify="left").pack(anchor="w",pady=(12,0))
 
     def refresh(self,preserve_plate=True):
         previous=self.selected_image_id if preserve_plate else None
@@ -70,13 +72,21 @@ class XRayCropWorkspace:
         self.plates.delete(*self.plates.get_children())
         for row in rows:
             items=by_image.get(row["image_id"],[])
-            review=sum(x["crop_status"]=="proposed" for x in items)
+            clear_pending=sum(
+                x["crop_status"]=="proposed" and str((x.get("crop") or {}).get("confidence"))=="high"
+                for x in items
+            )
+            exceptions=sum(
+                x["crop_status"]=="proposed" and str((x.get("crop") or {}).get("confidence"))!="high"
+                for x in items
+            )
             confirmed=sum(x["crop_status"]=="confirmed" for x in items)
-            status="Review" if review else ("Ready" if confirmed else "Not run")
+            status="Review" if exceptions else ("Accept" if clear_pending else ("Ready" if confirmed else "Not run"))
             self.plates.insert("","end",iid=row["image_id"],text=row["relative_path"],values=(status,len(items)))
         summary=self.project.crop_summary()
-        self.status.configure(text=f"{summary['confirmed']} confirmed · {summary['review']} to review · {summary['plates_with_specimens']}/{summary['plates']} plates processed")
-        review_state="normal" if summary["review"] else "disabled";self.review_button.configure(state=review_state)
+        self.status.configure(text=f"{summary['confirmed']} confirmed · {summary['clear_pending']} clear to accept · {summary['exceptions']} exceptions · {summary['plates_with_specimens']}/{summary['plates']} plates processed")
+        self.accept_clear_button.configure(state="normal" if summary["clear_pending"] else "disabled")
+        self.review_button.configure(state="normal" if summary["exceptions"] else "disabled")
         ids=self.plates.get_children()
         target=previous if previous and self.plates.exists(previous) else (ids[0] if ids else None)
         if target:
@@ -168,7 +178,6 @@ class XRayCropWorkspace:
                 for index,row in enumerate(rows,1):
                     proposals=detect_specimens(self.project.source_image_path(row["image_id"]))
                     result=self.project.replace_auto_proposals(row["image_id"],proposals,ALGORITHM_VERSION)
-                    self.project.confirm_clear_proposals(row["image_id"])
                     total_high+=result["high"];total_review+=result["review"];total_protected+=result["protected"]
                     events.put(("progress",index,len(rows),row["relative_path"]))
                 events.put(("done",total_high,total_review,total_protected))
@@ -185,11 +194,28 @@ class XRayCropWorkspace:
                         messagebox.showerror("Auto-crop X-rays",str(event[1]),parent=self.parent);self.refresh();return
                     else:
                         self._detecting=False;self.auto_button.configure(state="normal");self.refresh()
-                        messagebox.showinfo("Auto-crop X-rays",f"Clear crops accepted: {event[1]}\nExceptions to review: {event[2]}\nExisting confirmed crops protected: {event[3]}",parent=self.parent)
+                        if event[1]:
+                            self.accept_clear(
+                                prompt=True,
+                                title="Auto-crop complete",
+                                message=f"Clear crop proposals: {event[1]}\nExceptions to review: {event[2]}\nExisting confirmed crops protected: {event[3]}\n\nAccept all clear crops now?"
+                            )
+                        elif event[2]:
+                            messagebox.showinfo("Auto-crop complete",f"Exceptions to review: {event[2]}\nExisting confirmed crops protected: {event[3]}",parent=self.parent)
                         if event[2]:self.review_exceptions()
                         return
             except queue.Empty:self.parent.after(100,poll)
         poll()
+
+    def accept_clear(self,prompt=True,title="Accept clear crops",message=None):
+        count=self.project.pending_clear_crop_count()
+        if not count:return 0
+        if message is None:
+            message=f"Accept all {count} clear automatic crop proposals?\n\nAmbiguous crops will stay in Review."
+        if prompt and not messagebox.askyesno(title,message,parent=self.parent,default=messagebox.YES):return 0
+        accepted=self.project.confirm_clear_proposals()
+        self.refresh()
+        return accepted
 
     def review_exceptions(self):
         rows=self.project.crop_review_candidates()

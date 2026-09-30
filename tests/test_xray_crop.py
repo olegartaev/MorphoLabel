@@ -89,6 +89,22 @@ class XRayCropPersistenceTests(unittest.TestCase):
         reopened=XRayProject(self.project.root)
         self.assertEqual(2,len(reopened.specimens(image_id)))
 
+    def test_auto_detection_does_not_claim_human_confirmation(self):
+        image_id=self.project.source_images()[0]["image_id"]
+        proposals=detect_specimens(self.project.source_image_path(image_id))
+        self.project.replace_auto_proposals(image_id,proposals,ALGORITHM_VERSION)
+        summary=self.project.crop_summary()
+        self.assertEqual(0,summary["confirmed"])
+        self.assertEqual(2,summary["clear_pending"])
+        self.assertEqual(0,summary["exceptions"])
+        self.assertEqual(2,self.project.confirm_clear_proposals())
+        summary=self.project.crop_summary()
+        self.assertEqual(2,summary["confirmed"])
+        self.assertEqual(0,summary["clear_pending"])
+        for item in self.project.specimens(image_id):
+            sources=[event["source"] for event in self.project.crop_events(item["specimen_id"]) if event["action"]=="confirm"]
+            self.assertEqual(["human-bulk"],sources)
+
     def test_manual_specimen_and_reject_are_persisted(self):
         image_id=self.project.source_images()[0]["image_id"]
         crop=crop_from_geometry(300,250,300,120,9,(900,500),algorithm="manual")
@@ -106,9 +122,12 @@ class XRayCropUIContractTests(unittest.TestCase):
         ui=(root/"app/xray_crop_ui.py").read_text(encoding="utf-8")
         self.assertIn("XRayCropWorkspace",module)
         self.assertNotIn("legacy automatic plate splitter",module)
-        for text in ("Auto-crop all plates","Review exceptions","Edit crop…","Add missed specimen","False detection — remove"):
+        for text in ("Auto-crop all plates","Accept clear crops","Review exceptions","Edit crop…","Add missed specimen","False detection — remove"):
             self.assertIn(text,ui)
         self.assertIn("Existing confirmed crops protected",ui)
+        self.assertIn("Accept all clear crops now?",ui)
+        worker=ui[ui.index("def worker():"):ui.index("threading.Thread",ui.index("def worker():"))]
+        self.assertNotIn("confirm_clear_proposals",worker)
 
 
 if __name__=="__main__":
