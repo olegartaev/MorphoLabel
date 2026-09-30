@@ -90,10 +90,6 @@ class Beta10WorkflowRegressionTests(unittest.TestCase):
         self.assertFalse(ProductionShell._workflow_navigation_visible(None))
         self.assertTrue(ProductionShell._workflow_navigation_visible({"kind":"landmark","text":"2 / 20"}))
 
-    def test_all_failed_prediction_exposes_concise_cause(self):
-        batch={"failures":{"a":"trace\nModuleNotFoundError: No module named 'rtmpose_augmentations'\nmore"}}
-        self.assertEqual("ModuleNotFoundError: No module named 'rtmpose_augmentations'",_prediction_failure_summary(batch))
-
     def test_public_workflow_actions_and_menu_are_wired_to_the_named_operation(self):
         root=Path(__file__).resolve().parents[1]
         landmarks=(root/"app"/"ui"/"landmarks_section.py").read_text(encoding="utf-8")
@@ -103,7 +99,8 @@ class Beta10WorkflowRegressionTests(unittest.TestCase):
         self.assertIn("'Predict next',lambda:self.predict(False,prediction.get())",landmarks)
         self.assertIn("'Predict all',lambda:self.predict(True,prediction.get())",landmarks)
         self.assertIn("_prediction_candidate_ids",landmarks)
-        self.assertIn("_prediction_target_ids",landmarks)
+        self.assertNotIn("def _prediction_target_ids",landmarks)
+        self.assertNotIn("def _prediction_blocked_ids",landmarks)
         self.assertIn("start_attention_queue",landmarks)
         self.assertIn("navigate_attention_queue",landmarks)
         self.assertIn("landmark_prediction_locked",landmarks)
@@ -115,6 +112,8 @@ class Beta10WorkflowRegressionTests(unittest.TestCase):
         self.assertNotIn("Reapply AI crops",crop)
         self.assertIn("navigate_attention_queue",crop)
         self.assertIn("open_landmark_attention",shell)
+        self.assertIn("attention_banner",landmarks)
+        self.assertIn("attention_banner",crop)
         self.assertIn("'Review AI predictions',lambda:self.review_worst(prediction.get())",landmarks)
         self.assertIn("'Final data QC',lambda:open_complex_qc(self)",landmarks)
         self.assertNotIn('status("Detecting hardware…")',service)

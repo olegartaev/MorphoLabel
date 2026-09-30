@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.landmark_attention_queue import (
- active, classify, complete_current, current, move, record_failure, remove_image, start
+ active, classify, complete_current, current, move, record_failure, remove_image, start, user_copy
 )
 
 
@@ -77,6 +77,17 @@ class LandmarkAttentionQueueTests(unittest.TestCase):
   with patch("app.landmark_attention_queue.classify",side_effect=AssertionError("status repaint must not classify")):
    shown=display_summary(self.project)
   self.assertEqual(("a",3),(shown["image_id"],shown["remaining"]))
+
+ def test_user_copy_explains_why_the_queue_changed_workspace(self):
+  crop_copy=user_copy({"stage":"crop","reason":"Crop is missing or invalid"})
+  self.assertEqual("Crop needs attention",crop_copy["title"])
+  self.assertEqual("Confirm crop & continue",crop_copy["action"])
+  self.assertIn("review queue",crop_copy["message"])
+  retry_copy=user_copy({"stage":"prediction","reason":"trace\\nValueError: coordinates outside frame"})
+  self.assertEqual("Retry AI",retry_copy["action"])
+  self.assertIn("ValueError: coordinates outside frame",retry_copy["message"])
+  landmark_copy=user_copy({"stage":"landmarks","reason":"Review the AI landmark prediction"})
+  self.assertEqual("Verify & continue",landmark_copy["action"])
 
  def test_complete_current_advances_and_preserves_history(self):
   start(self.project,("a","b"),batch_id="batch")

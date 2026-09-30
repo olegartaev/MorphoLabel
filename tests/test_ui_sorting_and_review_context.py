@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.ui.project_section import sorted_project_samples
-from app.ui.landmarks_section import _prediction_context_text, _prediction_candidate_ids, _prediction_target_ids, _prediction_blocked_ids
+from app.ui.landmarks_section import _prediction_context_text, _prediction_candidate_ids
 
 
 class UISortingAndReviewContextTests(unittest.TestCase):
@@ -27,7 +27,7 @@ class UISortingAndReviewContextTests(unittest.TestCase):
   value=_prediction_context_text(project,pending)
   self.assertIn("m1",value);self.assertNotIn("unresolved",value);self.assertNotIn("resolved",value)
 
- def test_prediction_candidates_include_blocked_but_exclude_manual_only(self):
+ def test_prediction_candidates_include_empty_and_ai_but_exclude_manual_only(self):
   rows=[{"image_id":"empty","excluded":False},{"image_id":"manual","excluded":False},{"image_id":"ai","excluded":False}]
   class P:
    def landmark_prediction_locked(self,_image_id):return False
@@ -35,11 +35,7 @@ class UISortingAndReviewContextTests(unittest.TestCase):
     if image_id=="empty":return {}
     if image_id=="manual":return {1:{"provenance":"manual"}}
     return {1:{"provenance":"machine","model_id":"m1"}}
-  project=P()
-  self.assertEqual(("empty","ai"),_prediction_candidate_ids(project,rows))
-  with patch('app.ui.landmarks_section.landmark_frame_ready',side_effect=lambda _p,image_id:image_id=="ai"):
-   self.assertEqual(("ai",),_prediction_target_ids(project,rows))
-   self.assertEqual(("empty",),_prediction_blocked_ids(project,rows))
+  self.assertEqual(("empty","ai"),_prediction_candidate_ids(P(),rows))
 
  def test_prediction_and_crop_labels_do_not_use_ambiguous_remaining_or_raw_failed(self):
   from pathlib import Path
