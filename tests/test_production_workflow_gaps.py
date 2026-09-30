@@ -66,7 +66,7 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   source=(Path(__file__).parents[1]/'app'/'ui'/'landmarks_section.py').read_text(encoding='utf8')
   self.assertIn("except ValueError:",source)
   self.assertIn("No compatible active model",source)
-  self.assertIn("prediction_state='normal' if active and workflow_counts['unresolved'] else 'disabled'",source)
+  self.assertIn("prediction_state='normal' if active else 'disabled'",source)
 
  def test_train_ready_means_current_state_not_yet_in_active_lineage(self):
   project=SimpleNamespace()

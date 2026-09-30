@@ -50,6 +50,35 @@ class LandmarkAIGateOneTests(unittest.TestCase):
   self.assertIsNone(rows[1]["predicted_x"]);self.assertEqual(result.saved_landmarks,4);self.assertEqual(result.skipped_human_landmarks,1)
   self.assertTrue(all(rows[i]["provenance"]=="machine" for i in (2,3,4,5)))
 
+ def test_predict_all_targets_empty_ai_and_mixed_but_skips_fully_human(self):
+  from app.ui.landmarks_section import _remaining_prediction_ids
+  empty,ai_only,mixed,fully_human,excluded=self.ids
+  self.service().predict_one(ai_only);self.project.mark_checked(ai_only)
+  self.service().predict_one(mixed)
+  self.project.save_landmark(mixed,1,44,55,"corrected",provenance="corrected_by_human")
+  for ident in range(1,6):
+   self.project.save_landmark(fully_human,ident,10*ident,12,"manual",provenance="manual")
+  self.project.exclude_image(excluded,"Bad image")
+  targets=_remaining_prediction_ids(self.project,self.project.catalog_rows())
+  self.assertIn(empty,targets)
+  self.assertIn(ai_only,targets)
+  self.assertIn(mixed,targets)
+  self.assertNotIn(fully_human,targets)
+  self.assertNotIn(excluded,targets)
+
+ def test_reprediction_replaces_machine_points_but_preserves_human_correction(self):
+  image_id=self.ids[0]
+  self.service(coordinate_overrides={1:(10,10),2:(20,20)}).predict_one(image_id)
+  self.project.save_landmark(image_id,1,44,55,"corrected",provenance="corrected_by_human")
+  before=self.points(image_id)
+  self.assertEqual((before[2]["x_standardized"],before[2]["y_standardized"]),(20,20))
+  result=self.service(coordinate_overrides={1:(5,5),2:(66,33)}).predict_one(image_id)
+  after=self.points(image_id)
+  self.assertEqual((after[1]["x_standardized"],after[1]["y_standardized"],after[1]["provenance"]),(44,55,"corrected_by_human"))
+  self.assertEqual((after[2]["x_standardized"],after[2]["y_standardized"],after[2]["provenance"]),(66,33,"machine"))
+  self.assertEqual(1,result.skipped_human_landmarks)
+  self.assertEqual(4,result.saved_landmarks)
+
  def test_partial_prediction_keeps_absent_schema_id_unresolved(self):
   image_id=self.ids[0];self.service(missing_ids={3}).predict_one(image_id)
   self.assertEqual(set(self.points(image_id)),{1,2,4,5})

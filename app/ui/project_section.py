@@ -82,7 +82,7 @@ class ProjectSection(SectionView):
 
   sample_rows=project_sample_rows(project,self.context.rows)
   lower=ttk.Frame(content);lower.grid(row=2,column=0,columnspan=2,sticky="nsew");lower.rowconfigure(0,weight=1)
-  lower.columnconfigure(0,weight=3,uniform="project_lower");lower.columnconfigure(1,weight=2,uniform="project_lower")
+  lower.columnconfigure(0,weight=4,uniform="project_lower");lower.columnconfigure(1,weight=1,uniform="project_lower")
 
   samples=ttk.LabelFrame(lower,text="Samples",padding=8);samples.grid(row=0,column=0,sticky="nsew",padx=(0,7))
   samples.rowconfigure(1,weight=1);samples.columnconfigure(0,weight=1)
@@ -117,14 +117,3 @@ class ProjectSection(SectionView):
    ttk.Label(block,text=value,font=("Segoe UI",17,"bold")).pack(anchor="w")
    ttk.Label(block,text=label,style="Muted.TLabel").pack(anchor="w")
 
-  workflow_status=ttk.LabelFrame(details,text="Workflow",padding=(12,10));workflow_status.grid(row=1,column=0,sticky="ew",pady=(8,0))
-  workflow_rows=(
-   ("Source photos","Linked" if project.source_root else "Not set"),
-   ("Calibration",f"{calibrated} of {len(sample_rows)} samples"),
-   ("Before landmarks","Crop" if self.context.crop_enabled() else "Direct to landmarks"),
-   ("Landmark scheme",f"{len(project.schema)} landmarks" if project.schema else "Needs setup"),
-  )
-  for index,(label,value) in enumerate(workflow_rows):
-   row=ttk.Frame(workflow_status);row.pack(fill="x",pady=(0,7 if index<len(workflow_rows)-1 else 0))
-   ttk.Label(row,text=label,style="Muted.TLabel").pack(side="left")
-   ttk.Label(row,text=value,font=("Segoe UI",9,"bold")).pack(side="right")

@@ -101,7 +101,8 @@ class Beta10WorkflowRegressionTests(unittest.TestCase):
         service=(root/"app"/"landmark_ai_service.py").read_text(encoding="utf-8")
         project=(root/"app"/"ui"/"project_section.py").read_text(encoding="utf-8")
         self.assertIn("'Predict next',lambda:self.predict(False,prediction.get())",landmarks)
-        self.assertIn("'Predict all unresolved',lambda:self.predict(True,prediction.get())",landmarks)
+        self.assertIn("'Predict all',lambda:self.predict(True,prediction.get())",landmarks)
+        self.assertNotIn("prediction_ids=_remaining_prediction_ids",landmarks)
         self.assertNotIn("'All remaining',lambda:self.predict(True,prediction.get())",landmarks)
         self.assertNotIn("'Reapply',self.reapply_unverified",landmarks)
         self.assertIn("'Review AI predictions',lambda:self.review_worst(prediction.get())",landmarks)
@@ -114,7 +115,7 @@ class Beta10WorkflowRegressionTests(unittest.TestCase):
         self.assertIn("Project setup",project)
         self.assertIn("Image preparation",project)
         self.assertIn('text="Project overview"',project)
-        self.assertIn('text="Workflow"',project)
+        self.assertNotIn('text="Workflow"',project)
         self.assertNotIn("Panedwindow",project)
 
 
