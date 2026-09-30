@@ -8,7 +8,6 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app import ai_hardware
-from app.ui.landmarks_section import _prediction_failure_summary
 from app.ui.photo_list_panel import PhotoListPanel
 from app.ui.shell import ProductionShell
 

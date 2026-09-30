@@ -51,7 +51,7 @@ class LandmarkAIGateOneTests(unittest.TestCase):
   self.assertTrue(all(rows[i]["provenance"]=="machine" for i in (2,3,4,5)))
 
  def test_predict_all_targets_only_empty_or_unconfirmed_ai_images(self):
-  from app.ui.landmarks_section import _prediction_target_ids
+  from app.ui.landmarks_section import _prediction_candidate_ids
   empty,ai_only,mixed,verified_ai,manual_only=self.ids
 
   self.service().predict_one(ai_only)
@@ -66,7 +66,7 @@ class LandmarkAIGateOneTests(unittest.TestCase):
   for ident in range(1,6):
    self.project.save_landmark(manual_only,ident,10*ident,12,"manual",provenance="manual")
 
-  targets=_prediction_target_ids(self.project,self.project.catalog_rows())
+  targets=_prediction_candidate_ids(self.project,self.project.catalog_rows())
   self.assertIn(empty,targets)
   self.assertIn(ai_only,targets)
   self.assertIn(mixed,targets)
