@@ -798,7 +798,7 @@ class LandmarksSection(SectionView):
    name=selected.get('display_name') or first_id;detail=_prediction_failure_summary(batch)
    text=f"Predicted: {completed}. Needs attention: {len(failures)}.\n\nImage to check: {name}"
    if detail:text+=f"\nReason: {detail}"
-   text+="\n\nIt remains Unresolved and has been opened. Check its Crop/image if needed, then run All remaining again. Successful predictions are already saved."
+   text+="\n\nIt remains Unresolved and has been opened. Check its Crop/image if needed, then use Predict all unresolved again. Successful predictions are already saved."
    messagebox.showwarning('Landmark prediction',text,parent=self.shell)
    if self.context.select_image(first_id):self.shell.render()
    return
@@ -912,7 +912,11 @@ class LandmarksSection(SectionView):
      ids=_next_remaining_prediction_ids(self.context.project,self.context.rows,row['image_id'],int(count));mode='next_unresolved'
     if not ids:
      counts=_landmark_status_counts(self.context.rows)
-     events.put(('empty',f"Nothing to predict. Unresolved: 0. Review: {counts['review']}.\n\nYellow images already have landmarks and are waiting for human review; use Review AI predictions."));return
+     if counts['unresolved']:
+      message=f"No eligible unresolved images can be predicted. Unresolved shown: {counts['unresolved']}. Review: {counts['review']}.\n\nRed images may need a verified Crop or manual resolution before AI can run."
+     else:
+      message=f"Nothing to predict. Unresolved: 0. Review: {counts['review']}.\n\nYellow images already have landmarks and are waiting for human review; use Review AI predictions."
+     events.put(('empty',message));return
     data,path=create_batch_for_ids(self.context.project,model['model_id'],ids,selection_mode=mode)
     data,path=run_batch(self.context.project,path,LandmarkAIService(self.context.project,backend),progress=lambda done,total,name,image_id=None:events.put(('progress',done,total,name,image_id)),status=lambda text:events.put(('status',text)),retry_failures=True);events.put(('done',data))
    except Exception as exc:events.put(('error',exc))

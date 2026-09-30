@@ -223,7 +223,11 @@ class CropSection(SectionView):
      elif kind=="progress":
       bar.stop();bar.configure(mode="determinate",maximum=value[1],value=value[0]);label.config(text=f"Applying crop model: {value[0]} / {value[1]}")
      elif kind=="empty":
-      dialog.destroy();counts=self.context.project.crop_section_counts();messagebox.showinfo(title,f"Nothing to predict. Uncropped: {counts.get('Uncropped',0)}. AI review: {counts.get('AI pending',0)}.\n\nPending AI crops already have predictions; use Review AI crops.",parent=self.shell);return
+      dialog.destroy();counts=self.context.project.crop_section_counts();uncropped=int(counts.get('Uncropped',0));pending=int(counts.get('AI pending',0))
+      message=f"No eligible uncropped images can be predicted. Uncropped: {uncropped}. AI review: {pending}."
+      if uncropped:message+="\n\nSome uncropped images may be protected because downstream landmark data already exist."
+      elif pending:message+="\n\nPending AI crops already have predictions; use Review AI crops."
+      messagebox.showinfo(title,message,parent=self.shell);return
      elif kind=="done":
       dialog.destroy();result,prediction_batch=value;summary=f"Predicted: {result['success']}."
       failures=result.get("failures") or []
