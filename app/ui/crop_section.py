@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox
 import tkinter as tk
 import threading, queue
 from app.crop_training_batch import create_crop_prediction_batch, create_crop_training_batch, prepare_crop_training_images
-from app.crop_training import correction_count, current_label, train
+from app.crop_training import current_label, train
 from app.crop_auto import candidates, process as process_auto_crops
 from app.landmark_attention_queue import active as active_attention_queue, classify as classify_attention_issue, move as move_attention_queue
 from .section_base import SectionView

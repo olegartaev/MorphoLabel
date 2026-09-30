@@ -4,7 +4,7 @@ import tkinter as tk
 import threading, queue
 from app.landmark_training_workflow import available_training_parents, prepare_landmark_training, run_landmark_training, validation_metrics
 from app.landmark_ai_workflow import begin_improvement, control_set_summary, add_control_image, create_stage, stage_summary, workflow_current
-from app.ai_batch import BatchError, active_backend, create_batch_for_ids, run_batch
+from app.ai_batch import active_backend, create_batch_for_ids, run_batch
 from app.landmark_ai_review import (active_review_session, activate_review_session, complete_or_advance_review, create_review_session_for_ids)
 from app.landmark_ai_service import LandmarkAIService
 from app.active_learning import select_ai_worst_first
@@ -21,7 +21,7 @@ from app.landmark_suspicious_review import (
  active as suspicious_active, current as suspicious_current, start as start_suspicious_review,
  move as move_suspicious_review, complete_current as complete_suspicious_review,
 )
-from app.human_baseline import start_or_continue_run, current_run, previous_runs, available_control_image_ids, complete_run, ensure_pass, pass_progress, complete_pass, pass_session_ids, pending_pass_session_ids, redo_repeatability_image, reset_pass, abandon_run, mark_completed_run_stale, recompute_completed_run, pass_qc_complete, repeatability_pass_qc_issues, finalize_repeatability_pass_qc, finish_repeatability_pass
+from app.human_baseline import start_or_continue_run, current_run, previous_runs, available_control_image_ids, ensure_pass, pass_progress, pass_session_ids, pending_pass_session_ids, redo_repeatability_image, reset_pass, abandon_run, mark_completed_run_stale, recompute_completed_run, pass_qc_complete, repeatability_pass_qc_issues, finalize_repeatability_pass_qc, finish_repeatability_pass
 from app.human_baseline_ui import HumanBaselineWindow
 from app.gui_crop_debug import log
 from .section_base import SectionView
