@@ -18,14 +18,14 @@ class XRayModuleContractTests(unittest.TestCase):
         source=(Path(__file__).resolve().parents[1]/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         for text in (
             "Project setup","Source X-rays","Trait scheme","Traits",
-            "Choose traits...","Edit traits...","More...","Save scheme copy...",
+            "Traits...","Choose a scheme, edit it, or make a new one for this project.","Save copy...",
             "Existing annotations and earlier scheme versions will be kept.",
             "Active structure","Structure keys","Manual repeatability",
         ):self.assertIn(text,source)
         self.assertIn("bundled_scheme_catalog()",source)
         self.assertIn("load_scheme_file(path)",source)
         self.assertIn("save_scheme_file(self.project.scheme,path)",source)
-        for technical in ("Open JSON...","Save as JSON...","Built-in schemes...","New blank...","Choose / open scheme...","Apply preset"):
+        for technical in ("Open JSON...","Built-in schemes...","New blank","Choose / open scheme...","Apply preset"):
             self.assertNotIn(technical,source)
 
     def test_choose_traits_dialog_is_one_clear_choice_screen(self):
@@ -33,7 +33,7 @@ class XRayModuleContractTests(unittest.TestCase):
         start=source.index("class SchemeLibraryDialog")
         end=source.index("class SchemeReferenceDialog",start)
         block=source[start:end]
-        for text in ("Choose traits","Ready-made sets","What it contains","Open saved scheme...","Create my own...","Use selected"):
+        for text in ("Trait scheme","Schemes","Details","Open saved...","New","Edit","Save copy...","Use selected"):
             self.assertIn(text,block)
         for text in ("Open JSON...","New scheme...","Edit selected...","Source:","Available schemes"):
             self.assertNotIn(text,block)

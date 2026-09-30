@@ -143,12 +143,7 @@ class XRayCountsRuntime:
         ttk.Label(scheme_box,text=f"{model['trait_count']} traits · {model['structure_count']} structure groups · project version {len(self.project.schema_history())}",style="Muted.TLabel").pack(anchor="w",pady=(2,0))
         self._render_reference(scheme_box,model,1200)
         actions=ttk.Frame(scheme_box);actions.pack(anchor="w",pady=(8,0))
-        self._button(actions,"Choose traits...",self._choose_scheme,"Choose a ready-made trait set, open a saved one, or create your own.",True).pack(side="left")
-        self._button(actions,"Edit traits...",self._edit_scheme,"Edit the traits used by this project.").pack(side="left",padx=(6,0))
-        more=ttk.Menubutton(actions,text="More...",style="P.TButton");more.pack(side="left",padx=(6,0))
-        more_menu=tk.Menu(more,tearoff=False)
-        more_menu.add_command(label="Save scheme copy...",command=self._save_scheme_as)
-        more.configure(menu=more_menu);more._menu=more_menu
+        self._button(actions,"Traits...",self._choose_scheme,"Choose, edit, or save the project trait scheme.",True).pack(side="left")
 
         traits=ttk.LabelFrame(content,text="Traits",padding=8);traits.grid(row=2,column=0,columnspan=2,sticky="nsew")
         traits.columnconfigure(0,weight=1);traits.rowconfigure(1,weight=1)
@@ -274,7 +269,7 @@ class XRayCountsRuntime:
 
     def _choose_scheme(self):
         root=self.host.container.winfo_toplevel()
-        dialog=SchemeLibraryDialog(root);self.host.container.wait_window(dialog)
+        dialog=SchemeLibraryDialog(root,current_scheme=self.project.scheme);self.host.container.wait_window(dialog)
         if dialog.result is None:return
         scheme,note=dialog.result
         self._apply_scheme_version(scheme,note,"Choose trait scheme")
@@ -329,8 +324,8 @@ class XRayCountsRuntime:
         self._rerender()
 
 class SchemeLibraryDialog(tk.Toplevel):
-    def __init__(self,parent):
-        super().__init__(parent);self.title("Choose traits");self.transient(parent);self.geometry("820x470");self.minsize(720,420);self.result=None;self._entries={}
+    def __init__(self,parent,current_scheme=None):
+        super().__init__(parent);self.title("Trait scheme");self.transient(parent);self.geometry("820x500");self.minsize(720,440);self.result=None;self._entries={};self._current_scheme=current_scheme
         self._build();self.grab_set()
 
     def _add_entry(self,scheme,entry_id):
@@ -340,13 +335,13 @@ class SchemeLibraryDialog(tk.Toplevel):
 
     def _build(self):
         outer=ttk.Frame(self,padding=14);outer.pack(fill="both",expand=True);outer.columnconfigure(0,weight=1);outer.rowconfigure(2,weight=1)
-        ttk.Label(outer,text="Choose traits",style="PageTitle.TLabel").grid(row=0,column=0,sticky="w")
-        ttk.Label(outer,text="Start with a ready-made set, open one shared by a colleague, or create your own.",style="PageSubtitle.TLabel").grid(row=1,column=0,sticky="w",pady=(2,10))
+        ttk.Label(outer,text="Trait scheme",style="PageTitle.TLabel").grid(row=0,column=0,sticky="w")
+        ttk.Label(outer,text="Choose a scheme, edit it, or make a new one for this project.",style="PageSubtitle.TLabel").grid(row=1,column=0,sticky="w",pady=(2,10))
         body=ttk.Panedwindow(outer,orient="horizontal");body.grid(row=2,column=0,sticky="nsew")
-        left=ttk.LabelFrame(body,text="Ready-made sets",padding=8);right=ttk.LabelFrame(body,text="What it contains",padding=10);body.add(left,weight=3);body.add(right,weight=2)
+        left=ttk.LabelFrame(body,text="Schemes",padding=8);right=ttk.LabelFrame(body,text="Details",padding=10);body.add(left,weight=3);body.add(right,weight=2)
         left.rowconfigure(0,weight=1);left.columnconfigure(0,weight=1)
         self.list=ttk.Treeview(left,columns=("name","traits","structures"),show="headings",selectmode="browse",height=12)
-        for key,label,width,stretch in (("name","Name",300,True),("traits","Traits",60,False),("structures","Markers",75,False)):
+        for key,label,width,stretch in (("name","Name",300,True),("traits","Traits",60,False),("structures","Structures",75,False)):
             self.list.heading(key,text=label);self.list.column(key,width=width,anchor="w" if key=="name" else "center",stretch=stretch)
         scroll=ttk.Scrollbar(left,orient="vertical",command=self.list.yview);self.list.configure(yscrollcommand=scroll.set)
         self.list.grid(row=0,column=0,sticky="nsew");scroll.grid(row=0,column=1,sticky="ns")
@@ -354,17 +349,21 @@ class SchemeLibraryDialog(tk.Toplevel):
         self.detail=ttk.Frame(right);self.detail.pack(fill="both",expand=True)
 
         actions=ttk.Frame(outer);actions.grid(row=3,column=0,sticky="ew",pady=(10,0))
-        ttk.Button(actions,text="Open saved scheme...",command=self._open_saved).pack(side="left")
-        ttk.Button(actions,text="Create my own...",command=self._create_new).pack(side="left",padx=(6,0))
+        ttk.Button(actions,text="Open saved...",command=self._open_saved).pack(side="left")
+        ttk.Button(actions,text="New",command=self._create_new).pack(side="left",padx=(6,0))
+        self.edit_button=ttk.Button(actions,text="Edit",command=self._edit_selected);self.edit_button.pack(side="left",padx=(6,0))
+        ttk.Button(actions,text="Save copy...",command=self._save_copy).pack(side="left",padx=(6,0))
         ttk.Button(actions,text="Cancel",command=self.destroy).pack(side="right")
         self.apply=ttk.Button(actions,text="Use selected",command=self._use_selected,style="Primary.TButton");self.apply.pack(side="right",padx=(0,6))
 
         for item in bundled_scheme_catalog():
             self._add_entry(bundled_scheme(item["id"]),"bundled:"+item["id"])
+        if self._current_scheme:
+            self._add_entry(self._current_scheme,"current")
         if self._entries:
             first=next(iter(self._entries));self.list.selection_set(first);self.list.focus(first);self._show_selection()
         else:
-            self.apply.state(["disabled"]);ttk.Label(self.detail,text="No ready-made trait sets are installed.",style="Muted.TLabel").pack(anchor="w")
+            self.apply.state(["disabled"]);self.edit_button.state(["disabled"]);ttk.Label(self.detail,text="No schemes are available.",style="Muted.TLabel").pack(anchor="w")
 
     def _selected_entry(self):
         selected=self.list.selection()
@@ -374,8 +373,8 @@ class SchemeLibraryDialog(tk.Toplevel):
         for child in self.detail.winfo_children():child.destroy()
         entry=self._selected_entry()
         if not entry:
-            self.apply.state(["disabled"]);return
-        self.apply.state(["!disabled"])
+            self.apply.state(["disabled"]);self.edit_button.state(["disabled"]);return
+        self.apply.state(["!disabled"]);self.edit_button.state(["!disabled"])
         model=entry["model"]
         ttk.Label(self.detail,text=model["name"],style="ModuleTitle.TLabel").pack(anchor="w")
         if model["description"]:ttk.Label(self.detail,text=model["description"],style="Muted.TLabel",wraplength=330).pack(anchor="w",pady=(3,8))
@@ -394,6 +393,23 @@ class SchemeLibraryDialog(tk.Toplevel):
         entry=self._selected_entry()
         if not entry:return
         self.result=(deepcopy(entry["scheme"]),"Ready-made trait set");self.destroy()
+
+    def _edit_selected(self):
+        entry=self._selected_entry()
+        if not entry:return
+        editor=TraitSchemeDialog(self,entry["scheme"],{});self.wait_window(editor)
+        if editor.result is None:return
+        self._entries[self.list.selection()[0]]["scheme"]=editor.result
+        self._entries[self.list.selection()[0]]["model"]=_scheme_display_model(editor.result)
+        self._show_selection()
+
+    def _save_copy(self):
+        entry=self._selected_entry()
+        if not entry:return
+        path=filedialog.asksaveasfilename(parent=self,title="Save scheme copy",defaultextension=".json",filetypes=(("Saved scheme","*.json"),))
+        if path:
+            try:save_scheme_file(entry["scheme"],path)
+            except Exception as exc:messagebox.showerror("Save scheme copy",str(exc),parent=self)
 
     def _open_saved(self):
         path=filedialog.askopenfilename(parent=self,title="Open saved trait scheme",filetypes=(("MorphoLabel trait scheme","*.json"),("All files","*.*")))
