@@ -37,6 +37,16 @@ def create_review_session_for_ids(project, session_id, image_ids, *, kind="revie
  else:
   session.update({"kind":kind,"image_ids":list(ids),"current_position":0,"current_image_id":ids[0],"complete":False,"active":False,"refreshed_at":_now(),"review_meta":review_meta})
  _save(project,doc);return dict(session)
+def supersede_unfinished_reviews(project,reason=None):
+ doc=_load(project);changed=False
+ for item in doc.get("sessions",()):
+  if item.get("complete"):continue
+  item.update({"active":False,"complete":True,"superseded_at":_now()})
+  if reason:item["superseded_reason"]=str(reason)
+  changed=True
+ if changed:_save(project,doc)
+ return changed
+
 def pending_review_session(project):
  doc=_load(project)
  return next((dict(item) for item in doc.get("sessions",()) if not item.get("complete")),None)

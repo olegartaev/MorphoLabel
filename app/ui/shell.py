@@ -612,10 +612,12 @@ class ProductionShell(tk.Tk):
             else:
                 self.status_navigation.grid_remove()
             kind=batch.get('kind') if batch else None
-            landmark_confirm=bool(self.context.section=='landmarks' and kind in {'landmark','landmark_ai_review','landmark_suspicious'})
-            crop_confirm=bool(self.context.section=='crop' and batch)
-            confirm=landmark_confirm or crop_confirm
-            next_text='Verify & Next ›' if landmark_confirm else 'Confirm & Next ›' if crop_confirm else 'Next ›'
+            attention_stage=batch.get('stage') if kind=='landmark_attention' else None
+            landmark_confirm=bool(self.context.section=='landmarks' and (kind in {'landmark','landmark_ai_review','landmark_suspicious'} or (kind=='landmark_attention' and attention_stage=='landmarks')))
+            crop_confirm=bool(self.context.section=='crop' and ((kind=='landmark_attention' and attention_stage=='crop') or (batch and kind!='landmark_attention')))
+            attention_retry=bool(self.context.section=='landmarks' and kind=='landmark_attention' and attention_stage=='prediction')
+            confirm=landmark_confirm or crop_confirm or attention_retry
+            next_text='Retry AI ›' if attention_retry else 'Verify & Next ›' if landmark_confirm else 'Confirm & Next ›' if crop_confirm else 'Next ›'
             self.status_next.configure(
                 text=next_text,
                 style='NavPrimary.TButton' if confirm else 'Nav.TButton',
@@ -633,17 +635,40 @@ class ProductionShell(tk.Tk):
                 else:
                     help_text='Verify this completed landmark set and continue to the next training image.'
                 self.tip.bind(self.status_next,help_text)
-            elif crop_confirm:self.tip.bind(self.status_next,'Confirm this Crop and continue to the next batch image.')
+            elif attention_retry:self.tip.bind(self.status_next,'Retry AI landmark prediction for this queued image.')
+            elif crop_confirm:self.tip.bind(self.status_next,'Confirm this Crop and continue this attention queue.')
             else:self.tip.bind(self.status_next,'Show the next image. Press Enter when not typing.')
         display_labels={"Incomplete":"Unresolved"}
         for key,label in getattr(self,"status_counts",{}).items():
             label.configure(text=f"{display_labels.get(key,key)}: {self._section_counts().get(key,0)}")
+
+    def open_landmark_attention(self):
+        if not self.context.project:return False
+        from app.landmark_attention_queue import current as current_attention
+        issue=current_attention(self.context.project)
+        if not issue:
+            self._update_status();return False
+        if not self.context.select_image(issue["image_id"]):return False
+        self.context.section="crop" if issue.get("stage")=="crop" else "landmarks"
+        self.render()
+        def show_reason():
+            view=getattr(self,"current_view",None)
+            if self.context.section=="landmarks" and view is not None and hasattr(view,"_inline_status"):
+                view._inline_status(issue.get("reason") or "Check this image")
+            self._update_status()
+        self.after_idle(show_reason)
+        return True
 
     def _active_batch_summary(self):
         """Finite batch position from persisted IDs only; never the catalogue index."""
         if not self.context.project:return None
         from .batch_status import position_and_remaining,compact
         current=(self.context.current() or {}).get('image_id')
+        from app.landmark_attention_queue import summary as attention_summary
+        attention=attention_summary(self.context.project)
+        if attention and current==attention.get('image_id'):
+            label={"crop":"Crop","prediction":"Retry AI","landmarks":"Landmarks"}.get(attention.get("stage"),"Review")
+            return {"kind":"landmark_attention","stage":attention.get("stage"),"text":f"{attention.get('position',0)}/{attention.get('total',0)} · {label}","source":"Prediction attention"}
         if self.context.section=='crop':
             state=self.context.project.get_ui_state('crop_active_batch',{});ids=list(state.get('ids',()))
             if current in ids:
@@ -681,6 +706,13 @@ class ProductionShell(tk.Tk):
         row=self.context.current() or {}; section=self.context.section
         log(row.get("image_id",""),"NAV_CLICK","START",detail=f"section={section}; step={int(step)}; selected={row.get('image_id')}")
         view=getattr(self,"current_view",None)
+        from app.landmark_attention_queue import active as active_attention_queue
+        attention_handler=getattr(view,"navigate_attention_queue",None)
+        if active_attention_queue(self.context.project) and attention_handler:
+            handled=attention_handler(step)
+            if handled:
+                log(row.get("image_id",""),"NAV_FINISHED","END",detail=f"section={section}; step={int(step)}; attention=1")
+                return
         # Finite-batch views exclusively own their scientific commit before navigation.
         handler=(getattr(view,"navigate_training_batch",None) if section=="landmarks" else getattr(view,"navigate_batch",None) if section=="crop" else None)
         if handler:
@@ -1074,7 +1106,7 @@ class ProductionShell(tk.Tk):
         if not project:return
         image_id=str(image_id);current_id=(self.context.current() or {}).get("image_id")
         excluded=bool(project.image_exclusion(image_id).get("excluded"))
-        suspicious_target=ai_target=crop_target=stage_target=None
+        suspicious_target=ai_target=crop_target=stage_target=attention_target=None
         crop_member_removed=False
 
         if excluded:
@@ -1082,9 +1114,12 @@ class ProductionShell(tk.Tk):
             invalidate_runs_for_excluded_image(project,image_id)
             from app.landmark_suspicious_review import remove_image as remove_suspicious_image
             from app.landmark_ai_review import remove_image_from_reviews
+            from app.landmark_attention_queue import remove_image as remove_attention_image
             try:
                 _state,suspicious_target=remove_suspicious_image(project,image_id)
                 ai_target=remove_image_from_reviews(project,image_id)
+                attention_issue=remove_attention_image(project,image_id)
+                attention_target=attention_issue.get("image_id") if attention_issue else None
             except Exception as exc:
                 messagebox.showwarning("Exclude image",f"The image was excluded, but a review queue could not be updated:\n{exc}",parent=self)
 
@@ -1111,14 +1146,16 @@ class ProductionShell(tk.Tk):
 
         target=None
         if excluded and image_id==current_id:
-            if self.context.section=="landmarks":target=suspicious_target or ai_target or stage_target
-            elif self.context.section=="crop":target=crop_target
+            if self.context.section=="landmarks":target=attention_target or suspicious_target or ai_target or stage_target
+            elif self.context.section=="crop":target=attention_target or crop_target
             if target is None:
                 target=next((row.get("image_id") for row in self.context.rows if not row.get("excluded") and row.get("image_id")!=image_id),None)
         elif self.context.section=="crop" and crop_target:
             target=crop_target
 
         if target:self.context.select_image(target)
+        if excluded and image_id==current_id and attention_target:
+            self.open_landmark_attention();return
         if panel and target is None and not panel.show_excluded.get() and (self.context.current() or {}).get('excluded'):
             next_row=next((row for row in self.context.rows if not row.get('excluded')),None)
             if next_row:self.context.select_image(next_row["image_id"])
