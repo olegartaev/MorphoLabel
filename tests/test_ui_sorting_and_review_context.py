@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.ui.project_section import sorted_project_samples
-from app.ui.landmarks_section import _prediction_context_text, _remaining_prediction_ids
+from app.ui.landmarks_section import _prediction_context_text, _prediction_target_ids
 
 
 class UISortingAndReviewContextTests(unittest.TestCase):
@@ -27,13 +27,16 @@ class UISortingAndReviewContextTests(unittest.TestCase):
   value=_prediction_context_text(project,pending)
   self.assertIn("m1",value);self.assertNotIn("unresolved",value);self.assertNotIn("resolved",value)
 
- def test_all_remaining_includes_partially_human_unresolved_image(self):
-  rows=[{"image_id":"partial","excluded":False},{"image_id":"complete","excluded":False}]
+ def test_prediction_targets_are_empty_or_ai_touched_not_manual_only(self):
+  rows=[{"image_id":"empty","excluded":False},{"image_id":"manual","excluded":False},{"image_id":"ai","excluded":False}]
   class P:
-   def annotation_status(self,image_id):
-    return {"verified":False,"complete":image_id=="complete"}
+   def landmark_prediction_locked(self,_image_id):return False
+   def load_landmarks(self,image_id):
+    if image_id=="empty":return {}
+    if image_id=="manual":return {1:{"provenance":"manual"}}
+    return {1:{"provenance":"machine","model_id":"m1"}}
   with patch('app.ui.landmarks_section.landmark_frame_ready',return_value=True):
-   self.assertEqual(("partial",),_remaining_prediction_ids(P(),rows))
+   self.assertEqual(("empty","ai"),_prediction_target_ids(P(),rows))
 
  def test_prediction_and_crop_labels_do_not_use_ambiguous_remaining_or_raw_failed(self):
   from pathlib import Path

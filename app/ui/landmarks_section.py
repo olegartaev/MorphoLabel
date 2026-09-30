@@ -45,28 +45,28 @@ def _format_percent(value,digits=2):
  if value is None:return 'not available'
  return f"{float(value):.{int(digits)}f}%"
 
-def _remaining_prediction_ids(project,rows):
- """Every AI-eligible image that is not already fully human-authored.
+def _prediction_target_ids(project,rows):
+ """Empty or previously AI-predicted images that are still AI-editable.
 
- Existing manual/corrected points are preserved by save_machine_landmarks();
- machine points are deliberately eligible for fresh prediction.
+ Human-confirmed images are permanently locked from prediction. Manual-only
+ images are not prediction targets. In mixed unconfirmed images, persisted
+ human/corrected points remain protected by save_machine_landmarks().
  """
  result=[]
  for item in rows:
   image_id=str(item['image_id'])
   if item.get('excluded') or not landmark_frame_ready(project,image_id):continue
-  if hasattr(project,'schema'):
-   from app.landmark_state import load_current_landmark_state
-   if load_current_landmark_state(project,image_id).all_required_human:continue
-  else:
-   status=project.annotation_status(image_id)
-   if status.get('complete') and int(status.get('human_placed',0))>=int(status.get('expected',0)):continue
-  result.append(image_id)
+  if project.landmark_prediction_locked(image_id):continue
+  points=project.load_landmarks(image_id)
+  if not points:
+   result.append(image_id);continue
+  if any(point.get('provenance')=='machine' or point.get('model_id') is not None or point.get('prediction_run_id') is not None for point in points.values()):
+   result.append(image_id)
  return tuple(result)
 
-def _next_remaining_prediction_ids(project,rows,start_image_id,count):
- remaining=set(_remaining_prediction_ids(project,rows))
- order=[str(item['image_id']) for item in rows if str(item['image_id']) in remaining]
+def _next_prediction_target_ids(project,rows,start_image_id,count):
+ targets=set(_prediction_target_ids(project,rows))
+ order=[str(item['image_id']) for item in rows if str(item['image_id']) in targets]
  if not order:return ()
  start=str(start_image_id) if start_image_id is not None else None
  if start in order:
@@ -222,8 +222,8 @@ class LandmarksSection(SectionView):
   predict_actions=ttk.Frame(four);predict_actions.grid(row=2,column=0,columnspan=3,sticky='ew',pady=(5,0))
   prediction_state='normal' if active else 'disabled'
   predict_actions.columnconfigure(0,weight=1,uniform='prediction_actions');predict_actions.columnconfigure(1,weight=1,uniform='prediction_actions')
-  self.button(predict_actions,'Predict next',lambda:self.predict(False,prediction.get()),'Predict landmarks for the next eligible image. Existing human landmarks are preserved.',state=prediction_state).grid(row=0,column=0,sticky='ew',padx=(0,3))
-  self.button(predict_actions,'Predict all',lambda:self.predict(True,prediction.get()),'Predict landmarks for every eligible image. Existing human landmarks are preserved.',state=prediction_state).grid(row=0,column=1,sticky='ew',padx=(3,0))
+  self.button(predict_actions,'Predict next',lambda:self.predict(False,prediction.get()),'Predict the next empty or previously AI-predicted image. Human-confirmed images are never changed.',state=prediction_state).grid(row=0,column=0,sticky='ew',padx=(0,3))
+  self.button(predict_actions,'Predict all',lambda:self.predict(True,prediction.get()),'Predict all empty and previously AI-predicted images. Human-confirmed images are never changed.',state=prediction_state).grid(row=0,column=1,sticky='ew',padx=(3,0))
   review_actions=ttk.Frame(four);review_actions.grid(row=3,column=0,columnspan=3,sticky='ew',pady=(5,0))
   review_actions.columnconfigure(0,weight=1,uniform='review_actions');review_actions.columnconfigure(1,weight=1,uniform='review_actions')
   self.button(
@@ -883,9 +883,9 @@ class LandmarksSection(SectionView):
     if explicit_ids is not None:
      ids=explicit_ids;mode=selection_mode or 'explicit'
     elif remaining:
-     ids=_remaining_prediction_ids(self.context.project,self.context.rows);mode='all_eligible'
+     ids=_prediction_target_ids(self.context.project,self.context.rows);mode='all_prediction_targets'
     else:
-     ids=_next_remaining_prediction_ids(self.context.project,self.context.rows,row['image_id'],int(count));mode='next_eligible'
+     ids=_next_prediction_target_ids(self.context.project,self.context.rows,row['image_id'],int(count));mode='next_prediction_targets'
     if not ids:
      message="No eligible images are ready for prediction. Check the Crop/frame for images that were skipped."
      events.put(('empty',message));return

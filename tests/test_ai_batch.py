@@ -66,26 +66,23 @@ class AIBatchTests(unittest.TestCase):
   self.assertEqual(10,data['requested_count']);self.assertEqual(1,data['selected_count'])
   self.assertEqual('new_unannotated',data['selection_mode'])
  def test_17_explicit_batch_records_honest_selection_mode(self):
-  data,_=create_batch_for_ids(self.p,'v1',[self.ids[3]],selection_mode='all_eligible')
-  self.assertEqual('all_eligible',data['selection_mode'])
+  data,_=create_batch_for_ids(self.p,'v1',[self.ids[3]],selection_mode='all_prediction_targets')
+  self.assertEqual('all_prediction_targets',data['selection_mode'])
   self.assertEqual(1,data['selected_count'])
 
- def test_20_predict_all_allows_verified_ai_but_rejects_fully_human(self):
-  ai_image=self.ids[3]
-  self.p.save_machine_landmarks(ai_image,[{'landmark_id':1,'x':5,'y':6},{'landmark_id':2,'x':7,'y':8}],model_id='v1',prediction_run_id='old-ai')
-  self.p.mark_checked(ai_image);self.assertTrue(self.p.annotation_status(ai_image)['verified'])
-  data,_=create_batch_for_ids(self.p,'v1',[ai_image],selection_mode='all_eligible')
-  self.assertEqual([ai_image],[item['image_id'] for item in data['selected_images']])
-
-  human_image=self.ids[4]
-  self.p.save_landmark(human_image,1,5,6,'manual',provenance='manual');self.p.save_landmark(human_image,2,7,8,'manual',provenance='manual');self.p.mark_checked(human_image)
-  with self.assertRaisesRegex(BatchError,'fully human-authored'):create_batch_for_ids(self.p,'v1',[human_image],selection_mode='all_eligible')
-
- def test_20b_generic_explicit_batch_still_protects_verified_ai(self):
-  image_id=self.ids[5]
+ def test_20_prediction_batch_rejects_any_human_confirmed_image(self):
+  image_id=self.ids[3]
   self.p.save_machine_landmarks(image_id,[{'landmark_id':1,'x':5,'y':6},{'landmark_id':2,'x':7,'y':8}],model_id='v1',prediction_run_id='old-ai')
   self.p.mark_checked(image_id)
-  with self.assertRaisesRegex(BatchError,'human-verified'):create_batch_for_ids(self.p,'v1',[image_id],selection_mode='explicit')
+  self.assertTrue(self.p.landmark_prediction_locked(image_id))
+  with self.assertRaisesRegex(BatchError,'human-confirmed'):
+   create_batch_for_ids(self.p,'v1',[image_id],selection_mode='all_prediction_targets')
+
+  with self.p.transaction() as c:c.execute("UPDATE image_review SET human_verified=0 WHERE image_id=?",(image_id,))
+  self.assertTrue(self.p.landmark_prediction_locked(image_id))
+  with self.assertRaisesRegex(BatchError,'human-confirmed'):
+   create_batch_for_ids(self.p,'v1',[image_id],selection_mode='all_prediction_targets')
+
  def test_22_saved_batch_survives_name_only_schema_edit(self):
   _data,path=create_batch(self.p,'v1',self.ids[0],1)
   self.p.schema_path.write_text('id,abbr,name\n1,A,Renamed one\n2,B,Renamed two\n',encoding='utf8')
@@ -97,7 +94,7 @@ class AIBatchTests(unittest.TestCase):
   self.p.schema_path.write_text('id,abbr,name\n1,B,Two\n2,A,One\n',encoding='utf8')
   with self.assertRaisesRegex(BatchError,'identities/order'):run_batch(self.p,path,FakeService(self.p))
 
- def test_21_reprediction_preserves_human_correction(self):
+ def test_21_unconfirmed_ai_refresh_preserves_human_correction(self):
   data,path=create_batch(self.p,'v1',self.ids[0],1);done,_=run_batch(self.p,path,FakeService(self.p));image_id=done['selected_images'][0]['image_id']
   rec=record(self.p,next(x for x in self.rows if x['image_id']==image_id));set_human_point(rec,1,'A',31,32,corrected=True);save(self.p,rec)
   before=self.p.load_landmarks(image_id)[1]

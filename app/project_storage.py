@@ -948,6 +948,19 @@ WHERE COALESCE(i.active,1)=1
 ORDER BY l.image_id""",active).fetchall()
   return tuple(str(row["image_id"]) for row in rows)
 
+ def landmark_prediction_locked(self,image_id):
+  """Return True once the image has been human-confirmed for landmark use.
+
+  Current verification locks it. Historical AI-review confirmation also locks
+  it permanently, so a later bug or edit cannot make it eligible for AI
+  assignment again.
+  """
+  image_id=str(image_id)
+  with self.transaction() as c:
+   row=c.execute("SELECT human_verified FROM image_review WHERE image_id=?",(image_id,)).fetchone()
+   if row and bool(row[0]):return True
+   return bool(c.execute("SELECT 1 FROM qc WHERE image_id=? AND kind=? LIMIT 1",(image_id,"landmark_ai_review_confirmation")).fetchone())
+
  def pending_ai_landmark_image_ids(self):
   """Return active non-excluded images whose current AI-origin landmarks still need human confirmation."""
   active=tuple(sorted(str(row["abbr"]) for row in self.schema))

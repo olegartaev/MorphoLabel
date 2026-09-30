@@ -50,21 +50,40 @@ class LandmarkAIGateOneTests(unittest.TestCase):
   self.assertIsNone(rows[1]["predicted_x"]);self.assertEqual(result.saved_landmarks,4);self.assertEqual(result.skipped_human_landmarks,1)
   self.assertTrue(all(rows[i]["provenance"]=="machine" for i in (2,3,4,5)))
 
- def test_predict_all_targets_empty_ai_and_mixed_but_skips_fully_human(self):
-  from app.ui.landmarks_section import _remaining_prediction_ids
-  empty,ai_only,mixed,fully_human,excluded=self.ids
-  self.service().predict_one(ai_only);self.project.mark_checked(ai_only)
+ def test_predict_all_targets_only_empty_or_unconfirmed_ai_images(self):
+  from app.ui.landmarks_section import _prediction_target_ids
+  empty,ai_only,mixed,verified_ai,manual_only=self.ids
+
+  self.service().predict_one(ai_only)
+
   self.service().predict_one(mixed)
   self.project.save_landmark(mixed,1,44,55,"corrected",provenance="corrected_by_human")
+
+  self.service().predict_one(verified_ai)
+  self.project.mark_checked(verified_ai)
+  self.assertTrue(self.project.landmark_prediction_locked(verified_ai))
+
   for ident in range(1,6):
-   self.project.save_landmark(fully_human,ident,10*ident,12,"manual",provenance="manual")
-  self.project.exclude_image(excluded,"Bad image")
-  targets=_remaining_prediction_ids(self.project,self.project.catalog_rows())
+   self.project.save_landmark(manual_only,ident,10*ident,12,"manual",provenance="manual")
+
+  targets=_prediction_target_ids(self.project,self.project.catalog_rows())
   self.assertIn(empty,targets)
   self.assertIn(ai_only,targets)
   self.assertIn(mixed,targets)
-  self.assertNotIn(fully_human,targets)
-  self.assertNotIn(excluded,targets)
+  self.assertNotIn(verified_ai,targets)
+  self.assertNotIn(manual_only,targets)
+
+ def test_historical_confirmation_remains_prediction_locked(self):
+  from app.ui.landmarks_section import _prediction_target_ids
+  image_id=self.ids[0]
+  self.service().predict_one(image_id)
+  self.project.mark_checked(image_id)
+  self.assertTrue(self.project.landmark_prediction_locked(image_id))
+  with self.project.transaction() as c:
+   c.execute("UPDATE image_review SET human_verified=0 WHERE image_id=?",(image_id,))
+  self.assertFalse(self.project.annotation_status(image_id)["verified"])
+  self.assertTrue(self.project.landmark_prediction_locked(image_id))
+  self.assertNotIn(image_id,_prediction_target_ids(self.project,self.project.catalog_rows()))
 
  def test_reprediction_replaces_machine_points_but_preserves_human_correction(self):
   image_id=self.ids[0]
