@@ -10,7 +10,8 @@ from PIL import Image
 
 from app.xray_crop import crop_from_geometry, proposals_from_detector_boxes
 from app.xray_crop_ui import PlateCropEditSession
-from app.xray_detector import MIN_TRAINING_PLATES, prepare_training_dataset
+from app.ai_hardware import HardwareProfile
+from app.xray_detector import MIN_TRAINING_PLATES, detector_performance_settings, prepare_training_dataset
 from app.xray_project import XRayProject
 from app.xray_schema import blank_scheme
 
@@ -126,6 +127,19 @@ class XRayDetectorWorkflowTests(unittest.TestCase):
         session.select("s1");session.delete_selected()
         self.assertEqual(["s1"],session.changes()["removed_ids"])
 
+    def test_xray_detector_uses_first_run_hardware_profile_defaults(self):
+        hardware=HardwareProfile(
+            cpu_model="test",physical_cores=8,logical_cores=16,ram_bytes=32*1024**3,
+            gpu_model="GPU",gpu_vram_mib=12_288,gpu_driver="x",cuda_available=True,
+            cuda_runtime="12.1",acceleration="CUDA",gpu_free_mib=10_000,
+        )
+        settings=detector_performance_settings(hardware)
+        self.assertEqual("cuda:0",settings["training"]["device"])
+        self.assertGreaterEqual(settings["training"]["batch_size"],8)
+        self.assertTrue(settings["training"]["mixed_precision"])
+        self.assertTrue(settings["training"]["pin_memory"])
+        self.assertEqual("cuda:0",settings["inference"]["device"])
+
     def test_batch_selection_round_robins_source_series(self):
         images=[
             {"image_id":"a1","relative_path":"A/1.tif"},
@@ -168,6 +182,12 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn("training truth",ui)
         self.assertIn('text="Specimens"',ui)
         self.assertIn("PlateCropEditSession",ui)
+        self.assertIn("_status_icon",ui)
+        self.assertIn('width=3',ui)
+        self.assertIn('"#d93025"',ui)
+        self.assertIn('"#e6a700"',ui)
+        self.assertIn('"#188038"',ui)
+        self.assertIn('columns=("count",)',ui)
 
     def test_runtime_runner_uses_one_class_rtmdet_tiny_and_coco(self):
         root=Path(__file__).resolve().parents[1]
@@ -177,13 +197,22 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn('type="CocoDataset"',runner)
         self.assertIn('save_best="coco/bbox_mAP"',runner)
         self.assertIn("cfg.load_from=initial_checkpoint",runner)
-        self.assertLess(runner.index('dict(type="LoadAnnotations",with_bbox=True)',runner.index("simple_test=[")),
-                        runner.index('dict(type="Resize"',runner.index("simple_test=[")))
+        self.assertIn("ratio_range=(0.8,1.0)",runner)
+        self.assertNotIn("ratio_range=(0.8,1.2)",runner)
+        self.assertIn('cfg.optim_wrapper.type="AmpOptimWrapper"',runner)
+        self.assertIn("pin_memory=pin_memory",runner)
+        self.assertIn("simple_infer=[",runner)
+        infer=runner[runner.index("simple_infer=["):runner.index("cfg.model.bbox_head.num_classes=1")]
+        self.assertNotIn('type="LoadAnnotations"',infer)
+        self.assertIn("def predict_many",runner)
         detector=(root/"app/xray_detector.py").read_text(encoding="utf-8")
         self.assertIn("rtmdet_tiny_coco_pretrained",detector)
         self.assertIn("initial_checkpoint",detector)
         self.assertIn("is_cuda_oom",detector)
         self.assertIn("batch_attempts",detector)
+        self.assertIn('"mixed_precision"',detector)
+        self.assertIn('"pin_memory"',detector)
+        self.assertIn('"predict_many"',detector)
         spec=(root/"packaging/morpholabel.spec").read_text(encoding="utf-8")
         self.assertIn("xray_detector_runner.py",spec)
 

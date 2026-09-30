@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import uuid
 
-from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageTk
 
 from app.ui.dialogs import center
 from app.ui.icons import WORKFLOW_ICON_SIZE, tk_icon
@@ -99,7 +99,7 @@ class XRayCropWorkspace:
         self.selected_image_id=None;self.session=PlateCropEditSession()
         self.preview=self.photo=None;self.preview_original_size=(1,1);self.display_scale=1.0;self.offset=(0,0);self._photo_key=None
         self._busy=False;self._drag_mode=None;self._drag_anchor=None;self._drag_initial=None;self._drag_changed=False
-        self._drawing_crop=None;self._icons={};self._refreshing_list=False
+        self._drawing_crop=None;self._icons={};self._status_icons={};self._refreshing_list=False
         self.training_batch_size=tk.IntVar(value=6);self.prediction_batch_size=tk.IntVar(value=6)
         self._tip=Tooltip(self.root)
         self._build();self.refresh(preserve_plate=False)
@@ -146,11 +146,15 @@ class XRayCropWorkspace:
         body=ttk.Panedwindow(outer,orient="horizontal");body.grid(row=1,column=0,sticky="nsew")
         left=ttk.LabelFrame(body,text="Source X-rays",padding=6);center=ttk.Frame(body)
         body.add(left,weight=1);body.add(center,weight=6)
-        self.plates=ttk.Treeview(left,columns=("status","count"),show="tree headings",selectmode="browse",height=18)
-        self.plates.heading("#0",text="Plate");self.plates.column("#0",width=190,stretch=True)
-        self.plates.heading("status",text="Status");self.plates.column("status",width=86,anchor="center",stretch=False)
+        legend=ttk.Frame(left);legend.pack(fill="x",pady=(0,4))
+        for state,label in (("unresolved","unresolved"),("review","review"),("verified","verified"),("excluded","excluded")):
+            ttk.Label(legend,image=self._status_icon(state)).pack(side="left")
+            ttk.Label(legend,text=" "+label,style="Muted.TLabel").pack(side="left",padx=(0,7))
+        list_host=ttk.Frame(left);list_host.pack(fill="both",expand=True)
+        self.plates=ttk.Treeview(list_host,columns=("count",),show="tree headings",selectmode="browse",height=18)
+        self.plates.heading("#0",text="Plate");self.plates.column("#0",width=245,stretch=True)
         self.plates.heading("count",text="Specimens");self.plates.column("count",width=72,anchor="center",stretch=False)
-        plate_scroll=ttk.Scrollbar(left,orient="vertical",command=self.plates.yview);self.plates.configure(yscrollcommand=plate_scroll.set)
+        plate_scroll=ttk.Scrollbar(list_host,orient="vertical",command=self.plates.yview);self.plates.configure(yscrollcommand=plate_scroll.set)
         self.plates.pack(side="left",fill="both",expand=True);plate_scroll.pack(side="right",fill="y")
         self.plates.bind("<<TreeviewSelect>>",self._plate_selected)
 
@@ -200,6 +204,24 @@ class XRayCropWorkspace:
         self.review_button=self._button(predict_actions,"Review AI crops",self.review_ai,"Review all plates with pending AI crop proposals.")
         self.review_button.pack(side="left")
 
+    def _status_icon(self,state):
+        colors={"unresolved":"#d93025","review":"#e6a700","verified":"#188038","excluded":"#5f6b76"}
+        state=state if state in colors else "unresolved"
+        if state not in self._status_icons:
+            image=Image.new("RGBA",(14,14),(0,0,0,0));draw=ImageDraw.Draw(image)
+            draw.rectangle((2,2,11,11),fill=(255,255,255,255),outline=colors[state],width=3)
+            self._status_icons[state]=ImageTk.PhotoImage(image,master=self.root)
+        return self._status_icons[state]
+
+    @staticmethod
+    def _visual_status(row,items,batch_ids,batch_type):
+        if row.get("excluded"):return "excluded"
+        if row.get("crop_reviewed"):return "verified"
+        if row.get("image_id") in batch_ids:return "review"
+        if any(item.get("crop_source")=="model" and item.get("crop_status")=="proposed" for item in items):return "review"
+        if items:return "review"
+        return "unresolved"
+
     def _workflow_card(self,parent,column,title,icon,help_text):
         label=ttk.Frame(parent)
         ttk.Label(label,image=self._icon(label,icon)).pack(side="left",padx=(0,6))
@@ -246,13 +268,8 @@ class XRayCropWorkspace:
             self.plates.delete(*self.plates.get_children())
             for row in rows:
                 items=by_image.get(row["image_id"],[])
-                if row["crop_reviewed"]:status="Verified"
-                elif row["image_id"] in batch_ids:
-                    status="AI review" if batch.get("batch_type")=="prediction_review" else "Training"
-                elif any(x["crop_source"]=="model" and x["crop_status"]=="proposed" for x in items):status="AI review"
-                elif items:status="Proposed"
-                else:status="Uncropped"
-                self.plates.insert("","end",iid=row["image_id"],text=row["relative_path"],values=(status,len(items)))
+                state=self._visual_status(row,items,batch_ids,batch.get("batch_type"))
+                self.plates.insert("","end",iid=row["image_id"],text=row["relative_path"],image=self._status_icon(state),values=(len(items),))
             if previous and self.plates.exists(previous):
                 self.plates.selection_set(previous);self.plates.focus(previous);self.plates.see(previous)
         finally:self._refreshing_list=False

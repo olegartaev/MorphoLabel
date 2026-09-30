@@ -21,6 +21,15 @@ RTMDET_TINY_COCO_URL="https://download.openmmlab.com/mmdetection/v3.0/rtmdet/rtm
 DATASET_MAX_DIM=1800
 MIN_TRAINING_PLATES=3
 
+def detector_performance_settings(hardware=None):
+    """Use the persisted first-run hardware profile for X-ray AI defaults."""
+    hardware=hardware or get_hardware_profile()
+    return {
+        "hardware":hardware.as_dict(),
+        "training":get_training_config(hardware=hardware),
+        "inference":get_inference_config(hardware=hardware),
+    }
+
 def _run(runtime,mode,payload,timeout):
     runner=resource_path("ai_runtime","xray_detector_runner.py")
     if not runner.is_file():raise RuntimeError(f"X-ray detector runner is unavailable: {runner}")
@@ -82,7 +91,7 @@ def prepare_training_dataset(project,model_id,seed=42):
 def train_detector(project,seed=42,epochs=80,progress=None):
     model_id=project.next_crop_model_id();parent=project.active_crop_model();directory=project.models_root/model_id
     dataset=prepare_training_dataset(project,model_id,seed=seed)
-    hardware=get_hardware_profile();settings=get_training_config(hardware=hardware)
+    performance=detector_performance_settings();hardware_settings=performance["hardware"];settings=performance["training"]
     runtime,_=ensure_ai_runtime(project=project,progress=progress)
     if progress:progress("TRAINING",f"Training {model_id} from {len(dataset['plate_ids'])} confirmed plates…")
     parent_checkpoint=(str(project.root/parent["path"]) if parent else RTMDET_TINY_COCO_URL)
@@ -98,7 +107,8 @@ def train_detector(project,seed=42,epochs=80,progress=None):
             "dataset_root":str(dataset["root"]),"train_json":str(dataset["train_json"]),"val_json":str(dataset["val_json"]),
             "work_dir":str(directory/f"work_b{batch_size}"),"device":settings["device"],"batch_size":batch_size,
             "workers":max(0,int(settings["workers"])),"epochs":int(epochs),"seed":int(seed),
-            "initial_checkpoint":parent_checkpoint,
+            "mixed_precision":bool(settings.get("mixed_precision")),"pin_memory":bool(settings.get("pin_memory")),
+            "persistent_workers":bool(settings.get("persistent_workers")),"initial_checkpoint":parent_checkpoint,
         }
         try:
             result=_run(runtime,"train",payload,7200);used_batch=batch_size;break
@@ -111,7 +121,9 @@ def train_detector(project,seed=42,epochs=80,progress=None):
     final_checkpoint=directory/"model.pth";final_config=directory/"config.py"
     shutil.copy2(checkpoint,final_checkpoint);shutil.copy2(config,final_config)
     metrics={"backend":DETECTOR_BACKEND,"epochs":int(epochs),"device":settings["device"],"train_plates":dataset["train_plates"],"val_plates":dataset["val_plates"],
-             "initialization":(parent or {}).get("model_id") or "rtmdet_tiny_coco_pretrained","batch_size":used_batch,**dict(result.get("metrics") or {})}
+             "initialization":(parent or {}).get("model_id") or "rtmdet_tiny_coco_pretrained","batch_size":used_batch,
+             "workers":int(settings.get("workers") or 0),"mixed_precision":bool(settings.get("mixed_precision")),
+             "hardware":hardware_settings,**dict(result.get("metrics") or {})}
     project.register_crop_model(model_id,str(final_checkpoint.relative_to(project.root)),str(final_config.relative_to(project.root)),
                                 (parent or {}).get("model_id"),metrics,dataset["plate_ids"],dataset["training_specimens"],activate=True)
     return {"trained":True,"model_id":model_id,"metrics":metrics,"training_plates":len(dataset["plate_ids"]),"training_specimens":dataset["training_specimens"]}
@@ -122,18 +134,9 @@ def _prediction_input(project,image_id):
     preview.convert("RGB").save(target,format="PNG")
     return target,scale,original_size
 
-def predict_plate(project,image_id,model=None,score_threshold=0.25):
-    model=model or project.active_crop_model()
-    if not model:raise RuntimeError("Train an X-ray crop model before prediction.")
-    runtime,_=ensure_ai_runtime(project=project)
-    image_path,scale,_original=_prediction_input(project,image_id)
-    payload={
-        "config":str(project.root/model["config_path"]),"checkpoint":str(project.root/model["path"]),
-        "image":str(image_path),"device":get_inference_config()["device"],"score_threshold":float(score_threshold),
-    }
-    result=_run(runtime,"predict",payload,600)
+def _save_prediction(project,model,image_id,scale,detections):
     boxes=[]
-    for item in result.get("detections") or []:
+    for item in detections or []:
         bbox=item.get("bbox") or []
         if len(bbox)!=4:continue
         boxes.append({"bbox":[float(v)/scale for v in bbox],"score":float(item.get("score",0.0))})
@@ -141,14 +144,54 @@ def predict_plate(project,image_id,model=None,score_threshold=0.25):
     saved=project.replace_model_proposals(image_id,proposals,model["model_id"])
     return {"image_id":image_id,"detections":len(proposals),"model_id":model["model_id"],"saved":saved}
 
-def predict_plates(project,image_ids,cancel=None,progress=None):
-    model=project.active_crop_model()
+def predict_plate(project,image_id,model=None,score_threshold=0.25):
+    model=model or project.active_crop_model()
     if not model:raise RuntimeError("Train an X-ray crop model before prediction.")
-    ids=list(image_ids);success=[];failures=[]
-    for index,image_id in enumerate(ids,1):
+    result=predict_plates(project,[image_id],score_threshold=score_threshold,model=model)
+    if result["success"]:return result["results"][0]
+    failure=(result.get("failures") or [{"reason":"X-ray prediction failed"}])[0]
+    raise RuntimeError(failure.get("reason") or "X-ray prediction failed")
+
+def predict_plates(project,image_ids,cancel=None,progress=None,score_threshold=0.25,model=None):
+    model=model or project.active_crop_model()
+    if not model:raise RuntimeError("Train an X-ray crop model before prediction.")
+    ids=list(image_ids);success=[];failures=[];runtime,_=ensure_ai_runtime(project=project)
+    settings=detector_performance_settings()["inference"];chunk_size=max(1,int(settings.get("batch_size") or 1));index=0
+    while index<len(ids):
         if cancel is not None and cancel.is_set():break
+        chunk=ids[index:index+chunk_size];prepared=[]
+        for image_id in chunk:
+            try:
+                path,scale,_original=_prediction_input(project,image_id);prepared.append((image_id,path,scale))
+            except Exception as exc:
+                failures.append({"image_id":image_id,"reason":f"{type(exc).__name__}: {exc}"})
+                if progress:progress(index+len(prepared)+1,len(ids),image_id)
+        if not prepared:
+            index+=len(chunk);continue
+        payload={
+            "config":str(project.root/model["config_path"]),"checkpoint":str(project.root/model["path"]),
+            "images":[str(path) for _image_id,path,_scale in prepared],"device":settings["device"],
+            "score_threshold":float(score_threshold),"mixed_precision":bool(settings.get("mixed_precision")),
+        }
         try:
-            result=predict_plate(project,image_id,model=model);success.append(result)
-        except Exception as exc:failures.append({"image_id":image_id,"reason":f"{type(exc).__name__}: {exc}"})
-        if progress:progress(index,len(ids),image_id)
-    return {"success":len(success),"successful_ids":[row["image_id"] for row in success],"failures":failures,"model_id":model["model_id"]}
+            result=_run(runtime,"predict_many",payload,max(600,120*len(prepared)))
+        except RuntimeError as exc:
+            if is_cuda_oom(exc) and chunk_size>1:
+                chunk_size=max(1,chunk_size//2)
+                if progress:progress(index,len(ids),f"GPU memory limit; retrying with batch {chunk_size}")
+                continue
+            reason=f"{type(exc).__name__}: {exc}"
+            for image_id,_path,_scale in prepared:failures.append({"image_id":image_id,"reason":reason})
+            index+=len(chunk);continue
+        returned=list(result.get("results") or [])
+        for offset,(image_id,_path,scale) in enumerate(prepared):
+            row=returned[offset] if offset<len(returned) else {"error":"missing prediction result"}
+            if row.get("error"):
+                failures.append({"image_id":image_id,"reason":str(row["error"])})
+            else:
+                try:success.append(_save_prediction(project,model,image_id,scale,row.get("detections") or []))
+                except Exception as exc:failures.append({"image_id":image_id,"reason":f"{type(exc).__name__}: {exc}"})
+            if progress:progress(index+offset+1,len(ids),image_id)
+        index+=len(chunk)
+    return {"success":len(success),"successful_ids":[row["image_id"] for row in success],"failures":failures,
+            "model_id":model["model_id"],"results":success,"inference_batch_size":chunk_size}

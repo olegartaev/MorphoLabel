@@ -40,36 +40,55 @@ def train(payload):
     root=Path(payload["dataset_root"])
     epochs=max(10,int(payload.get("epochs",80)));batch=max(1,int(payload.get("batch_size",2)));workers=max(0,int(payload.get("workers",0)))
     device=str(payload.get("device") or ("cuda:0" if torch.cuda.is_available() else "cpu"))
+    # Never let scale augmentation exceed the final padded size. The previous
+    # 1.2 upper ratio could produce e.g. 696 px tensors; RTMDet's CSPNeXt PAFPN
+    # then received 88-vs-87 feature maps and failed during concatenation.
     simple_train=[
         dict(type="LoadImageFromFile"),
         dict(type="LoadAnnotations",with_bbox=True),
-        dict(type="RandomResize",scale=(640,640),ratio_range=(0.8,1.2),keep_ratio=True),
+        dict(type="RandomResize",scale=(640,640),ratio_range=(0.8,1.0),keep_ratio=True),
         dict(type="RandomFlip",prob=0.5),
         dict(type="Pad",size=(640,640),pad_val=dict(img=(114,114,114))),
         dict(type="PackDetInputs"),
     ]
-    simple_test=[
+    simple_val=[
         dict(type="LoadImageFromFile"),
         dict(type="LoadAnnotations",with_bbox=True),
         dict(type="Resize",scale=(640,640),keep_ratio=True),
         dict(type="Pad",size=(640,640),pad_val=dict(img=(114,114,114))),
         dict(type="PackDetInputs",meta_keys=("img_id","img_path","ori_shape","img_shape","scale_factor")),
     ]
+    simple_infer=[
+        dict(type="LoadImageFromFile"),
+        dict(type="Resize",scale=(640,640),keep_ratio=True),
+        dict(type="Pad",size=(640,640),pad_val=dict(img=(114,114,114))),
+        dict(type="PackDetInputs",meta_keys=("img_id","img_path","ori_shape","img_shape","scale_factor")),
+    ]
     cfg.model.bbox_head.num_classes=1
+    cfg.model.data_preprocessor.pad_size_divisor=32
     initial_checkpoint=str(payload.get("initial_checkpoint") or "").strip()
     if not initial_checkpoint:raise ValueError("X-ray detector training requires an initial pretrained or parent checkpoint")
     cfg.load_from=initial_checkpoint
     cfg.work_dir=str(work);cfg.randomness=dict(seed=int(payload.get("seed",42)))
-    cfg.train_dataloader.batch_size=batch;cfg.train_dataloader.num_workers=workers;cfg.train_dataloader.persistent_workers=bool(workers)
+    pin_memory=bool(payload.get("pin_memory"));persistent=bool(payload.get("persistent_workers")) and bool(workers)
+    cfg.train_dataloader.batch_size=batch;cfg.train_dataloader.num_workers=workers;cfg.train_dataloader.persistent_workers=persistent;cfg.train_dataloader.pin_memory=pin_memory
     cfg.train_dataloader.dataset=_dataset(root,payload["train_json"],simple_train)
-    cfg.val_dataloader.batch_size=max(1,min(batch,4));cfg.val_dataloader.num_workers=workers;cfg.val_dataloader.persistent_workers=bool(workers)
-    cfg.val_dataloader.dataset=_dataset(root,payload["val_json"],simple_test)
-    cfg.test_dataloader=cfg.val_dataloader
+    cfg.val_dataloader.batch_size=max(1,min(batch,4));cfg.val_dataloader.num_workers=workers;cfg.val_dataloader.persistent_workers=persistent;cfg.val_dataloader.pin_memory=pin_memory
+    cfg.val_dataloader.dataset=_dataset(root,payload["val_json"],simple_val)
+    cfg.test_dataloader=dict(cfg.val_dataloader)
+    cfg.test_dataloader.dataset=_dataset(root,payload["val_json"],simple_infer)
     cfg.val_evaluator=dict(type="CocoMetric",ann_file=str(payload["val_json"]),metric="bbox",format_only=False)
     cfg.test_evaluator=cfg.val_evaluator
     cfg.train_cfg=dict(type="EpochBasedTrainLoop",max_epochs=epochs,val_interval=max(1,epochs//8))
     lr=max(0.0001,0.004*batch/32.0)
     cfg.optim_wrapper.optimizer.lr=lr
+    use_amp=bool(payload.get("mixed_precision")) and device.startswith("cuda") and torch.cuda.is_available()
+    if use_amp:
+        cfg.optim_wrapper.type="AmpOptimWrapper";cfg.optim_wrapper.loss_scale="dynamic"
+    if device.startswith("cuda") and torch.cuda.is_available():
+        torch.backends.cudnn.benchmark=True
+        try:torch.set_float32_matmul_precision("high")
+        except (AttributeError,RuntimeError):pass
     cfg.param_scheduler=[
         dict(type="LinearLR",start_factor=0.001,by_epoch=False,begin=0,end=100),
         dict(type="CosineAnnealingLR",eta_min=lr*0.05,begin=0,end=epochs,T_max=epochs,by_epoch=True),
@@ -78,6 +97,7 @@ def train(payload):
     cfg.default_hooks.checkpoint=dict(type="CheckpointHook",interval=max(1,epochs//5),max_keep_ckpts=2,save_best="coco/bbox_mAP",rule="greater")
     cfg.launcher="none"
     cfg.device=device
+    if hasattr(cfg,"env_cfg") and cfg.env_cfg is not None:cfg.env_cfg.cudnn_benchmark=bool(device.startswith("cuda"))
     config_path=work/"xray_rtmdet_config.py";cfg.dump(str(config_path))
     runner=Runner.from_cfg(cfg);runner.train()
     candidates=list(work.glob("best*.pth"))
@@ -85,23 +105,42 @@ def train(payload):
     if not candidates:raise RuntimeError("MMDetection did not produce a checkpoint")
     return {"checkpoint":str(candidates[0]),"config":str(config_path),"metrics":{}}
 
-def predict(payload):
-    from mmdet.apis import init_detector, inference_detector
-    model=init_detector(str(payload["config"]),str(payload["checkpoint"]),device=str(payload.get("device") or "cpu"))
-    result=inference_detector(model,str(payload["image"]))
-    instances=result.pred_instances.cpu()
-    threshold=float(payload.get("score_threshold",0.25));detections=[]
+def _detections(result,threshold):
+    instances=result.pred_instances.cpu();detections=[]
     bboxes=instances.bboxes.numpy();scores=instances.scores.numpy();labels=instances.labels.numpy()
     for bbox,score,label in zip(bboxes,scores,labels):
         if int(label)!=0 or float(score)<threshold:continue
         detections.append({"bbox":[float(x) for x in bbox.tolist()],"score":float(score)})
-    return {"detections":detections}
+    return detections
+
+def predict_many(payload):
+    import torch
+    from mmdet.apis import init_detector, inference_detector
+    device=str(payload.get("device") or "cpu");images=[str(value) for value in payload.get("images") or ()]
+    if not images:raise ValueError("X-ray prediction requires at least one image")
+    model=init_detector(str(payload["config"]),str(payload["checkpoint"]),device=device)
+    use_amp=bool(payload.get("mixed_precision")) and device.startswith("cuda") and torch.cuda.is_available()
+    if device.startswith("cuda") and torch.cuda.is_available():
+        torch.backends.cudnn.benchmark=True
+        try:torch.set_float32_matmul_precision("high")
+        except (AttributeError,RuntimeError):pass
+    threshold=float(payload.get("score_threshold",0.25))
+    context=torch.autocast(device_type="cuda",dtype=torch.float16,enabled=use_amp) if device.startswith("cuda") else torch.autocast(device_type="cpu",enabled=False)
+    with context:
+        raw=inference_detector(model,images if len(images)>1 else images[0])
+    results=raw if isinstance(raw,list) else [raw]
+    return {"results":[{"detections":_detections(result,threshold)} for result in results]}
+
+def predict(payload):
+    copy=dict(payload);copy["images"]=[str(payload["image"])]
+    return {"detections":predict_many(copy)["results"][0]["detections"]}
 
 def main():
     mode=sys.argv[1] if len(sys.argv)>1 else "info";payload=_input()
     if mode=="info":out=info()
     elif mode=="train":out=train(payload)
     elif mode=="predict":out=predict(payload)
+    elif mode=="predict_many":out=predict_many(payload)
     else:raise ValueError(f"Unknown X-ray detector mode: {mode}")
     print(json.dumps(out,ensure_ascii=False))
 
