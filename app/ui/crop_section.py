@@ -184,11 +184,6 @@ class CropSection(SectionView):
   messagebox.showinfo("Accept all AI crops",f"Accepted: {result['accepted']}\nSkipped invalid: {result['skipped']}",parent=self.shell)
   self.shell.render()
   return True
- def reapply_ai_pending(self):
-  ids,_protected=candidates(self.context.project,rerun=True)
-  if not ids:messagebox.showinfo("Reapply AI crops","No safe AI-unreviewed crops are available to reapply. Human-confirmed crops and images with landmarks are protected.",parent=self.shell);return
-  self.auto_batch(None,rerun=True,explicit_ids=ids,title="Reapply AI crops")
-
  def auto_batch(self,count,rerun=False,explicit_ids=None,title="Predict Crop"):
   dialog=tk.Toplevel(self.shell);dialog.title(title);dialog.transient(self.shell)
   frame=ttk.Frame(dialog,padding=14);frame.pack()

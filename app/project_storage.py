@@ -330,7 +330,7 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
  def save_machine_landmarks(self,image_id,points,*,model_id,prediction_run_id):
   """Persist one complete machine prediction without invalidating identical reviewed state.
 
-  Human-derived points are never overwritten.  Reapplying a prediction whose
+  Human-derived points are never overwritten. Refreshing an unconfirmed prediction whose
   scientific coordinates are identical to the current machine state preserves
   its reviewed flag and the image Checked state; only a real coordinate/state
   change invalidates human verification.
