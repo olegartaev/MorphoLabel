@@ -154,21 +154,21 @@ class CropSection(SectionView):
     if batch_type in {"prediction_review","manual_review"}: messagebox.showinfo("Crop review batch","Batch review complete.",parent=self.shell)
     else: messagebox.showinfo("Crop training batch",f"Batch complete\n{len(ids)} images prepared and corrected; ready for training.",parent=self.shell)
    return
-  state["position"]=position;self.context.project.set_ui_state("crop_active_batch",state);self.context.selected=next(i for i,row in enumerate(self.context.rows) if row["image_id"]==ids[position]);panel=getattr(self.shell,"photo_panel",None);panel and getattr(panel,'sync_current',lambda **_kw:None)(reveal=True);self.shell._selected_image()
+  state["position"]=position;self.context.project.set_ui_state("crop_active_batch",state);self.context.selected=next(i for i,row in enumerate(self.context.rows) if row["image_id"]==ids[position]);self.shell._sync_photo_panel_current(align_top=True,refresh_rows=False);self.shell._selected_image()
  def navigate_attention_queue(self,step,_already_saved=False):
   current=(self.context.current() or {}).get('image_id')
   if not active_attention_queue(self.context.project) or not current:return False
   if int(step)<0:
-   self._pending_crop_action=None;move_attention_queue(self.context.project,-1);self.shell.open_landmark_attention();return True
+   self._pending_crop_action=None;issue=move_attention_queue(self.context.project,-1);self.shell.open_landmark_attention(issue);return True
   issue=classify_attention_issue(self.context.project,current)
   if issue.get('stage')!='crop':
-   self.shell.open_landmark_attention();return True
+   self.shell.open_landmark_attention(issue);return True
   if not _already_saved:
    outcome=self.apply_current()
    if outcome=='DEFERRED':
     self._defer_crop_action('attention');return True
    if outcome!='SAVED':return True
-  self.context.refresh_landmark_state(current);self.context.invalidate_counts()
+  self.context.refresh_landmark_state(current);self.context.update_landmark_counts(current)
   self.shell.open_landmark_attention();return True
 
  def navigate_batch(self,step):
