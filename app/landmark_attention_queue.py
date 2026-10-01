@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from .landmark_frames import crop_frame_record, landmark_prediction_frame_ready
-from .landmark_prediction_policy import landmark_prediction_needed
+from .landmark_prediction_policy import ai_editable_unresolved_landmark_ids, landmark_prediction_needed
 from .landmark_state import load_current_landmark_state
 
 _STATE_KEY="landmark_attention_queue"
@@ -77,7 +77,7 @@ def classify(project,image_id):
  current=load_current_landmark_state(project,image_id)
  crop_review=project.landmark_crop_review_required(image_id)
  if crop_review:
-  if not current.complete and landmark_prediction_needed(project,image_id) and landmark_prediction_frame_ready(project,image_id):
+  if not current.complete and ai_editable_unresolved_landmark_ids(project,image_id) and not project.landmark_prediction_locked(image_id) and landmark_prediction_frame_ready(project,image_id):
    return {"image_id":image_id,"stage":"prediction","reason":"AI needs to refresh non-human landmarks on the confirmed Crop"}
   reason="Review landmarks after the Crop change" if current.complete else "Complete the protected human landmarks after the Crop change"
   return {"image_id":image_id,"stage":"landmarks","reason":reason}
@@ -85,7 +85,7 @@ def classify(project,image_id):
   return {"image_id":image_id,"stage":"resolved","reason":"Landmarks verified"}
  points=project.load_landmarks(image_id)
  if not current.complete:
-  if not landmark_prediction_needed(project,image_id):
+  if project.landmark_prediction_locked(image_id) or not ai_editable_unresolved_landmark_ids(project,image_id):
    return {"image_id":image_id,"stage":"landmarks","reason":"Complete the protected human landmark set manually"}
   if landmark_prediction_frame_ready(project,image_id):
    return {"image_id":image_id,"stage":"prediction","reason":"AI prediction is missing or incomplete"}
