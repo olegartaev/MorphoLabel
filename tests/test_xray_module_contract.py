@@ -8,6 +8,16 @@ from app.modules.xray_counts import (
 from app.xray_icons import XRAY_ICON_NAMES, render_rule_preview, render_xray_icon
 
 
+class XRayOrientationAndStorageContractTests(unittest.TestCase):
+    def test_project_creation_exposes_orientation_and_portable_source(self):
+        source=(Path(__file__).resolve().parents[1]/"app/modules/xray_counts.py").read_text(encoding="utf-8")
+        self.assertIn("class OrientationSetupDialog",source)
+        self.assertIn("Head direction",source)
+        self.assertIn("Anatomical bottom / ventral side",source)
+        self.assertIn("Make self-contained",source)
+        self.assertIn("Clear reproducible cache",source)
+
+
 class XRayModuleContractTests(unittest.TestCase):
     def test_xray_module_is_available_and_taxon_neutral(self):
         spec=module_registry().get("xray_counts")

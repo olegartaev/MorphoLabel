@@ -86,13 +86,13 @@ class XRaySpecimenListPanel(ttk.Frame):
             status=str(row.get("annotation_status") or "")
             rows.append({
                 **row,"sample_id":self._sample(row["relative_path"]),"source_relpath":row["relative_path"],
-                "status_color":"green" if status=="verified" else "yellow" if status=="draft" else "red",
+                "status_color":"green" if status=="verified" else "yellow" if status else "red",
             })
         return rows
 
     def _row_data(self,index,row):
         path=Path(str(row["relative_path"]));status=str(row.get("annotation_status") or "")
-        tip="Verified structures" if status=="verified" else "Saved draft — review required" if status else "Not started"
+        tip="Verified structures" if status=="verified" else "Crop changed — annotate this specimen again" if status.startswith("stale") else "Saved draft — review required" if status else "Not started"
         return {
             "number":str(index+1),"cal":"","has_crop":True,"excluded":False,
             "text":f"{row['sample_id']} | {path.name} | №{int(row.get('ordinal') or 0)}",
@@ -111,7 +111,7 @@ class XRaySpecimenListPanel(ttk.Frame):
         selected_index=next((i for i,row in enumerate(self._rows) if row["specimen_id"]==self.selected_specimen_id),None)
         if selected_index in self.visible_indices:
             visible=self.visible_indices.index(selected_index);self.canvas.selection_set(visible)
-            if reveal:self.canvas.see(visible)
+            if reveal:self.canvas.see(visible,align_top=True)
         if yview is not None and not reveal:self.canvas.yview_moveto(yview)
 
     def select(self,specimen_id,reveal=True):
@@ -144,6 +144,7 @@ class XRayStructureWorkspace:
         self.crop_image=None;self.photo=None;self.zoom=1.0;self.pan=None;self.pan_drag=None;self._raster_key=None;self._image_item=None
         self.annotations=[];self._drag_annotation=None;self._drag_last_screen=None;self._marker_buttons={};self._icons={}
         self.display_settings=load_xray_structure_display(self.project,self.project.scheme.get("structures",()))
+        self._source_cache_id="";self._source_cache=None
         self._key_bind_id=None
         self._build();self._bind_keys();self.refresh()
 
@@ -229,6 +230,15 @@ class XRayStructureWorkspace:
             try:self.root.unbind("<KeyPress>",self._key_bind_id)
             except tk.TclError:pass
             self._key_bind_id=None
+        self._source_cache=None;self._source_cache_id=""
+
+    def _source_for(self,image_id):
+        image_id=str(image_id)
+        if image_id==self._source_cache_id and self._source_cache is not None:return self._source_cache
+        with Image.open(self.project.source_image_path(image_id)) as source:
+            source.load();loaded=source.copy()
+        self._source_cache_id=image_id;self._source_cache=loaded
+        return loaded
 
     def _key_pressed(self,event):
         cls=event.widget.winfo_class()
@@ -304,8 +314,8 @@ class XRayStructureWorkspace:
         self.selected_specimen_id=specimen_id;self.selected_annotation_id=None;item=self.project.specimen(specimen_id)
         self.preferred_image_id=item["image_id"];self.context_label.configure(text=self._context(item))
         try:
-            with Image.open(self.project.source_image_path(item["image_id"])) as source:
-                source.load();crop=oriented_crop(source,item["crop"])
+            source=self._source_for(item["image_id"])
+            crop=oriented_crop(source,item["crop"],self.project.orientation_policy)
             self.crop_image=_display_ready(crop)
         except Exception as exc:
             messagebox.showerror("Structures",f"Could not open specimen crop:\n{exc}",parent=self.root);self.crop_image=None

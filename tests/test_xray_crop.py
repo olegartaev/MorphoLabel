@@ -10,6 +10,7 @@ from PIL import Image
 
 from app.xray_crop import ALGORITHM_VERSION, canonical_orientation_flips, crop_from_geometry, detect_specimens, oriented_crop
 from app.xray_project import XRayProject
+from app.xray_crop_ui import PlateCropEditSession
 from app.xray_schema import blank_scheme
 
 
@@ -74,6 +75,19 @@ class XRayCropCanonicalizationTests(unittest.TestCase):
         self.assertTrue(np.array_equal(before,np.asarray(image)))
         crop["head_side"]="right";flipped=np.asarray(oriented_crop(image,crop,{"head":"left","bottom":"down"}))
         self.assertGreater(float(flipped[:,-15:].mean()),float(flipped[:,0:15].mean()))
+
+
+class XRayCropOrientationSessionTests(unittest.TestCase):
+    def test_orientation_toggle_is_a_crop_edit_and_survives_geometry_changes(self):
+        crop=crop_from_geometry(50,30,60,20,0,(100,60),orientation_policy={"head":"left","bottom":"down"})
+        session=PlateCropEditSession(({"specimen_id":"s1","ordinal":1,"crop":crop},),"s1")
+        self.assertTrue(session.toggle_orientation("head"))
+        self.assertEqual("right",session.item()["crop"]["head_side"])
+        moved=crop_from_geometry(55,30,60,20,0,(100,60),orientation_policy={"head":"left","bottom":"down"})
+        session.update_selected(moved)
+        self.assertEqual("right",session.item()["crop"]["head_side"])
+        self.assertEqual("human",session.item()["crop"]["orientation_source"])
+        self.assertTrue(session.dirty)
 
 
 class XRayCropPersistenceTests(unittest.TestCase):

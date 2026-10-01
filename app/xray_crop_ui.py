@@ -62,7 +62,21 @@ class PlateCropEditSession:
     def update_selected(self, crop):
         item=self.item()
         if item is None:return False
-        item["crop"]=dict(crop)
+        previous=dict(item.get("crop") or {});updated=dict(crop)
+        for key in ("head_side","bottom_side","orientation_source"):
+            if key in previous:updated[key]=previous[key]
+        item["crop"]=updated
+        if self.selected_id not in self.new_ids:self.dirty_ids.add(self.selected_id)
+        return True
+
+    def toggle_orientation(self,kind):
+        item=self.item()
+        if item is None:return False
+        crop=dict(item.get("crop") or {})
+        if kind=="head":crop["head_side"]="right" if crop.get("head_side")=="left" else "left"
+        elif kind=="bottom":crop["bottom_side"]="top" if crop.get("bottom_side")=="bottom" else "bottom"
+        else:return False
+        crop["orientation_source"]="human";item["crop"]=crop
         if self.selected_id not in self.new_ids:self.dirty_ids.add(self.selected_id)
         return True
 
@@ -302,7 +316,7 @@ class XRayCropWorkspace:
         );self.apply_button.pack(side="left")
         self.save_status=ttk.Label(self.apply_host,text="",style="Muted.TLabel");self.save_status.pack(side="left",padx=(8,0))
         self.instruction=ttk.Label(
-            actions,text="Click crop = select · drag = correct · drag empty space = new crop · Delete = remove",
+            actions,text="Select a crop · blue marker = head · orange edge = bottom · click either marker to flip",
             style="Muted.TLabel",anchor="center",
         );self.instruction.grid(row=0,column=1,sticky="ew",padx=10)
 
@@ -378,7 +392,7 @@ class XRayCropWorkspace:
         frame=ttk.Frame(dialog,padding=16);frame.pack(fill="both",expand=True)
         ttk.Label(frame,text="X-ray Crop — quick guide",font=("Segoe UI",11,"bold")).pack(anchor="w")
         ttk.Label(frame,text=(
-            "1. Adjust crops\nSelect, move, resize or rotate the specimen rectangles. Drag empty image space to add a missed specimen; Delete removes the selected crop.\n\n"
+            "1. Adjust crops and orientation\nSelect, move, resize or rotate specimen rectangles. The blue marker shows the head side; the orange edge shows the anatomical bottom. Click either marker to flip it. Drag empty image space to add a missed specimen; Delete removes the selected crop.\n\n"
             "2. Apply crop\nOutside a finite batch, Apply crop saves and human-confirms the whole current plate.\n\n"
             "3. Training / review batch\nInside a batch, the same operation is Confirm & Next; Previous never silently confirms.\n\n"
             "4. Train and predict\nTrain only from human-confirmed plates, then predict the next batch or all remaining plates."
@@ -501,6 +515,7 @@ class XRayCropWorkspace:
             self.canvas.create_polygon(*pts,outline=color,fill="",width=3 if selected else 2,tags="crop")
             cx,cy=self._screen(crop.get("center_x",0),crop.get("center_y",0))
             self.canvas.create_text(cx,cy,text=str(item.get("ordinal") or ""),fill="white",font=("Segoe UI",9,"bold"),tags="crop")
+            self._draw_orientation_markers(crop,selected)
             if selected:self._draw_handles(crop)
         if self._drawing_crop is not None:
             pts=[]
@@ -508,6 +523,38 @@ class XRayCropWorkspace:
             if len(pts)==8:self.canvas.create_polygon(*pts,outline="#35d07f",fill="",width=2,dash=(5,3),tags="crop")
         hint="Selected crop · Delete removes it" if self.session.selected_id else "Drag empty space to draw a new crop"
         self.canvas.create_text(12,12,anchor="nw",fill="white",text=hint,tags="crop_hint")
+
+    @staticmethod
+    def _orientation_geometry(crop):
+        corners=crop.get("corners") or []
+        if len(corners)!=4:return None
+        c0,c1,c2,c3=[tuple(map(float,point)) for point in corners]
+        head_edge=(c0,c3) if crop.get("head_side")!="right" else (c1,c2)
+        bottom_edge=(c0,c1) if crop.get("bottom_side")=="top" else (c3,c2)
+        midpoint=lambda a,b:((a[0]+b[0])/2,(a[1]+b[1])/2)
+        return {
+            "head":midpoint(*head_edge),
+            "bottom":midpoint(*bottom_edge),
+            "bottom_edge":bottom_edge,
+            "center":(float(crop.get("center_x",0)),float(crop.get("center_y",0))),
+        }
+
+    def _draw_orientation_markers(self,crop,selected):
+        geometry=self._orientation_geometry(crop)
+        if geometry is None:return
+        cx,cy=self._screen(*geometry["center"]);hx,hy=self._screen(*geometry["head"]);bx,by=self._screen(*geometry["bottom"])
+        def triangle(mx,my,center_x,center_y,color,size):
+            dx=mx-center_x;dy=my-center_y;length=max(1.0,math.hypot(dx,dy));ux=dx/length;uy=dy/length;px=-uy;py=ux
+            tip=(mx+ux*size,my+uy*size);base=(mx-ux*size*.45,my-uy*size*.45)
+            return (tip[0],tip[1],base[0]+px*size*.55,base[1]+py*size*.55,base[0]-px*size*.55,base[1]-py*size*.55)
+        head_color="#42a5f5" if selected else "#6f8fa8";bottom_color="#ffb300" if selected else "#9d874d"
+        size=8 if selected else 5
+        self.canvas.create_polygon(*triangle(hx,hy,cx,cy,head_color,size),fill=head_color,outline="white" if selected else head_color,width=1,tags=("crop","orientation"))
+        e1,e2=geometry["bottom_edge"];x1,y1=self._screen(*e1);x2,y2=self._screen(*e2)
+        mx1=x1+(x2-x1)*.32;my1=y1+(y2-y1)*.32;mx2=x1+(x2-x1)*.68;my2=y1+(y2-y1)*.68
+        self.canvas.create_line(mx1,my1,mx2,my2,fill=bottom_color,width=4 if selected else 2,tags=("crop","orientation"))
+        if selected:
+            self.canvas.create_polygon(*triangle(bx,by,cx,cy,bottom_color,7),fill=bottom_color,outline="white",width=1,tags=("crop","orientation"))
 
     def _draw_handles(self,crop):
         corners=crop.get("corners") or []
@@ -534,6 +581,12 @@ class XRayCropWorkspace:
         crop=item.get("crop") or {};corners=crop.get("corners") or []
         if len(corners)!=4:return None
         tol=12/max(self.display_scale,1e-6)
+        if item.get("specimen_id")==self.session.selected_id:
+            geometry=self._orientation_geometry(crop)
+            if geometry is not None:
+                for kind in ("head","bottom"):
+                    mx,my=geometry[kind]
+                    if (x-mx)**2+(y-my)**2<=(tol*1.35)**2:return (kind,0)
         for index,(cx,cy) in enumerate(corners):
             if (x-cx)**2+(y-cy)**2<=tol**2:return ("corner",index)
         angle=math.radians(float(crop.get("angle_degrees",0)));major=(math.cos(angle),math.sin(angle))
@@ -552,6 +605,8 @@ class XRayCropWorkspace:
             hit=self._hit_crop(x,y,item)
             if hit is None:continue
             self.session.select(item["specimen_id"]);self._preferred_specimen_id=item["specimen_id"];self._notify_selection()
+            if hit[0] in {"head","bottom"}:
+                self.session.toggle_orientation(hit[0]);self._set_save_status("Orientation changed · apply crop");self._draw();return
             crop=item.get("crop") or {};self._drag_mode=hit;self._drag_anchor=(x,y);self._drag_changed=False
             self._drag_initial=(float(crop.get("center_x",0)),float(crop.get("center_y",0)),float(crop.get("length",0)),float(crop.get("width",0)),float(crop.get("angle_degrees",0)))
             self._drawing_crop=None;self._draw();return
@@ -564,7 +619,7 @@ class XRayCropWorkspace:
         if abs(x-ax)+abs(y-ay)>1.0:self._drag_changed=True
         if self._drag_mode[0]=="draw":
             left,right=sorted((ax,x));top,bottom=sorted((ay,y))
-            if right-left>=2 and bottom-top>=2:self._drawing_crop=crop_from_geometry((left+right)/2,(top+bottom)/2,right-left,bottom-top,0,self.preview_original_size,algorithm="manual")
+            if right-left>=2 and bottom-top>=2:self._drawing_crop=crop_from_geometry((left+right)/2,(top+bottom)/2,right-left,bottom-top,0,self.preview_original_size,algorithm="manual",orientation_policy=self.project.orientation_policy)
             self._draw();return
         if not self._drag_changed:return
         cx,cy,length,width,angle=self._drag_initial
@@ -574,7 +629,7 @@ class XRayCropWorkspace:
             a=math.radians(angle);major=(math.cos(a),math.sin(a));minor=(-major[1],major[0]);initial_corners=crop_corners(cx,cy,length,width,angle)
             opposite=initial_corners[(int(self._drag_mode[1])+2)%4];dx=x-opposite[0];dy=y-opposite[1]
             cx=(x+opposite[0])/2;cy=(y+opposite[1])/2;length=max(20.0,abs(dx*major[0]+dy*major[1]));width=max(20.0,abs(dx*minor[0]+dy*minor[1]))
-        self.session.update_selected(crop_from_geometry(cx,cy,length,width,angle,self.preview_original_size,confidence="high",algorithm="manual"))
+        self.session.update_selected(crop_from_geometry(cx,cy,length,width,angle,self.preview_original_size,confidence="high",algorithm="manual",orientation_policy=self.project.orientation_policy))
         self._set_save_status();self._draw()
 
     def _canvas_up(self,_event):

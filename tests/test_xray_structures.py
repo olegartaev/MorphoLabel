@@ -221,6 +221,14 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertNotIn("Structures to mark",ui)
         self.assertIn("trait_rows()",module)
 
+    def test_structures_use_project_orientation_and_one_plate_source_cache(self):
+        root=Path(__file__).resolve().parents[1]
+        ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
+        self.assertIn("self._source_cache_id",ui)
+        self.assertIn("source=self._source_for(item[\"image_id\"])",ui)
+        self.assertIn("self.project.orientation_policy",ui)
+        self.assertIn("align_top=True",ui)
+
     def test_structures_ui_renders_oriented_crop_without_project_image_copy(self):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")

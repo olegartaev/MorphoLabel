@@ -131,6 +131,49 @@ def _trait_rule_summary(scheme,trait):
     if method=="derived":return "Calculated from other traits"
     return METHOD_BY_ID[method]["label"]
 
+class OrientationSetupDialog(tk.Toplevel):
+    """One-time project viewing convention; originals are never rewritten."""
+    def __init__(self,parent,initial=None):
+        super().__init__(parent);self.title("Object orientation");self.transient(parent);self.resizable(False,False)
+        initial=initial or {"head":"left","bottom":"down"};self.result=None
+        self.head=tk.StringVar(master=self,value=str(initial.get("head") or "left"))
+        self.bottom=tk.StringVar(master=self,value=str(initial.get("bottom") or "down"))
+        outer=ttk.Frame(self,padding=16);outer.pack(fill="both",expand=True)
+        ttk.Label(outer,text="Standard orientation",style="PageTitle.TLabel").pack(anchor="w")
+        ttk.Label(outer,text="Choose how each cropped animal should be shown to later annotation and AI. Original X-rays are never changed.",style="PageSubtitle.TLabel",wraplength=620).pack(anchor="w",pady=(2,10))
+        self.preview=tk.Canvas(outer,width=620,height=170,background="white",highlightthickness=1,highlightbackground="#d6dbe0");self.preview.pack(fill="x")
+        controls=ttk.Frame(outer);controls.pack(fill="x",pady=(10,0))
+        head_box=ttk.LabelFrame(controls,text="Head direction",padding=8);head_box.pack(side="left",fill="x",expand=True,padx=(0,5))
+        for text,value in (("Left","left"),("Right","right"),("Do not standardize","none")):
+            ttk.Radiobutton(head_box,text=text,value=value,variable=self.head,command=self._draw).pack(anchor="w")
+        bottom_box=ttk.LabelFrame(controls,text="Anatomical bottom / ventral side",padding=8);bottom_box.pack(side="left",fill="x",expand=True,padx=(5,0))
+        for text,value in (("Down","down"),("Up","up"),("Do not standardize","none")):
+            ttk.Radiobutton(bottom_box,text=text,value=value,variable=self.bottom,command=self._draw).pack(anchor="w")
+        ttk.Label(outer,text="These settings make asymmetry comparable and reduce variation seen by the AI. You can flip an individual crop if the animal lies the other way.",style="Muted.TLabel",wraplength=620).pack(anchor="w",pady=(8,0))
+        actions=ttk.Frame(outer);actions.pack(anchor="e",pady=(12,0))
+        ttk.Button(actions,text="Cancel",command=self.destroy).pack(side="left")
+        ttk.Button(actions,text="Create project",style="Primary.TButton",command=self._accept).pack(side="left",padx=(6,0))
+        self._draw();self.grab_set()
+
+    def _draw(self):
+        c=self.preview;c.delete("all");w=620;h=170;cx=w/2;cy=h/2
+        c.create_oval(cx-150,cy-36,cx+150,cy+36,fill="#e9eef2",outline="#7c8994",width=2)
+        c.create_polygon(cx+150,cy,cx+195,cy-32,cx+195,cy+32,fill="#e9eef2",outline="#7c8994",width=2)
+        head=self.head.get();bottom=self.bottom.get()
+        if head!="none":
+            hx=cx-150 if head=="left" else cx+150;direction=-1 if head=="left" else 1
+            c.create_polygon(hx+direction*20,cy,hx-direction*5,cy-12,hx-direction*5,cy+12,fill="#42a5f5",outline="#1d6fa5")
+            c.create_text(hx+direction*55,cy,text="HEAD",fill="#1d6fa5",font=("Segoe UI",9,"bold"))
+        if bottom!="none":
+            by=cy+36 if bottom=="down" else cy-36;direction=1 if bottom=="down" else -1
+            c.create_line(cx-55,by,cx+55,by,fill="#ffb300",width=5)
+            c.create_polygon(cx,by+direction*20,cx-9,by-direction*2,cx+9,by-direction*2,fill="#ffb300",outline="#b67f00")
+            c.create_text(cx,by+direction*45,text="BOTTOM",fill="#9b6b00",font=("Segoe UI",9,"bold"))
+
+    def _accept(self):
+        self.result={"head":self.head.get(),"bottom":self.bottom.get()};self.destroy()
+
+
 class XRayCountsRuntime:
     def __init__(self):self.host=None;self.project=None;self.stage="project";self._images={};self._tip=None
     def close(self):self.host=None;self._images.clear();self._tip=None
@@ -235,9 +278,19 @@ class XRayCountsRuntime:
         self._button(actions,"New project...",self._new_project,"Create another X-ray project.").pack(side="left",padx=(6,0))
 
         source_box=ttk.LabelFrame(content,text="Source X-rays",padding=10);source_box.grid(row=0,column=1,sticky="nsew",padx=(5,0),pady=(0,7))
+        storage=self.project.storage_summary();policy=self.project.orientation_policy
         ttk.Label(source_box,text=f"{len(self.project.source_images())} indexed images",style="SectionTitle.TLabel").pack(anchor="w")
-        ttk.Label(source_box,text=str(self.project.source),style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,8))
-        self._button(source_box,"Rescan for images",self._rescan_source,"Scan the source X-ray folder for new images without changing existing project work.").pack(anchor="w")
+        storage_text="Self-contained project source" if storage["self_contained"] else "Legacy external source"
+        ttk.Label(source_box,text=f"{storage_text} · {storage['source_bytes']/1024/1024:.1f} MB",style="Muted.TLabel").pack(anchor="w",pady=(2,0))
+        ttk.Label(source_box,text=str(self.project.source),style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,4))
+        head={"left":"left","right":"right","none":"not standardized"}[policy["head"]];bottom={"down":"down","up":"up","none":"not standardized"}[policy["bottom"]]
+        ttk.Label(source_box,text=f"Canonical view: head {head} · bottom {bottom}",style="Muted.TLabel").pack(anchor="w",pady=(0,8))
+        source_actions=ttk.Frame(source_box);source_actions.pack(anchor="w")
+        self._button(source_actions,"Rescan for images",self._rescan_source,"Scan the project source X-ray folder for new images without changing existing project work.").pack(side="left")
+        if not storage["self_contained"]:
+            self._button(source_actions,"Make self-contained…",self._make_self_contained,"Import the indexed source X-rays into the project once; hard links are used when possible to avoid duplicate disk usage.").pack(side="left",padx=(6,0))
+        if storage["cache_bytes"]:
+            self._button(source_actions,"Clear reproducible cache",self._compact_project,"Remove only temporary/reproducible X-ray AI cache files; scientific data and final models are kept.").pack(side="left",padx=(6,0))
 
         scheme_box=ttk.LabelFrame(content,text="Traits",padding=10);scheme_box.grid(row=1,column=0,columnspan=2,sticky="nsew",pady=(0,7))
         ttk.Label(scheme_box,text=model["name"],style="SectionTitle.TLabel").pack(anchor="w")
@@ -379,9 +432,22 @@ class XRayCountsRuntime:
         if not name:return
         source=filedialog.askdirectory(parent=root,title="Folder with X-ray images");dest=filedialog.askdirectory(parent=root,title="Folder where the X-ray project will be created")
         if not source or not dest:return
-        try:self.project=XRayProject.create(name,source,dest,blank_scheme(),scheme_note="Blank scheme created with project")
+        dialog=OrientationSetupDialog(root);root.wait_window(dialog)
+        if dialog.result is None:return
+        try:self.project=XRayProject.create(name,source,dest,blank_scheme(),scheme_note="Blank scheme created with project",orientation_policy=dialog.result)
         except Exception as exc:messagebox.showerror("New X-ray project",str(exc),parent=root);return
         self.stage="project";self._rerender()
+
+    def _make_self_contained(self):
+        root=self.host.container.winfo_toplevel()
+        if not messagebox.askyesno("Make project self-contained","Import the indexed X-rays into this project?\n\nOn the same disk MorphoLabel uses hard links when possible, so this normally does not duplicate image data. On another disk the originals are copied once.",parent=root,default="yes"):return
+        try:result=self.project.make_self_contained()
+        except Exception as exc:messagebox.showerror("Make project self-contained",str(exc),parent=root);return
+        messagebox.showinfo("Project source",f"Project is self-contained.\nImages: {result['files']}\nHard-linked: {result['hardlinked']}\nCopied: {result['copied']}",parent=root);self._rerender()
+
+    def _compact_project(self):
+        result=self.project.compact_disposable_ai_artifacts()
+        messagebox.showinfo("Project cache",f"Removed {result['removed_files']} reproducible file(s).\nFreed {result['removed_bytes']/1024/1024:.1f} MB.\n\nSource X-rays, SQLite data and final models were not touched.",parent=self.host.container.winfo_toplevel());self._rerender()
 
     def _rescan_source(self):
         try:self.project.scan_source()
