@@ -41,7 +41,7 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   section=LandmarksSection.__new__(LandmarksSection);section.context=context
   section.canvas=type('Canvas',(),{'state':type('State',(),{'complete':complete})(),'refresh_authoritative':lambda *_a,**_k:None})()
   panel=type('Panel',(),{'sync_current':lambda *_a,**_k:None,'refresh':lambda *_a,**_k:None})()
-  section.shell=type('Shell',(),{'photo_panel':panel,'_selected_image':lambda *_a,**_k:None,'_update_status':lambda *_a,**_k:None})()
+  section.shell=type('Shell',(),{'photo_panel':panel,'_selected_image':lambda *_a,**_k:None,'_sync_photo_panel_current':lambda *_a,**_k:None,'_update_status':lambda *_a,**_k:None})()
   return section
  def test_two_passes_are_independent_and_resume(self):
   run,new=start_or_continue_run(self.p,count=2);self.assertTrue(new);one=ensure_pass(self.p,run['run_id'],1)[1];self.assertEqual(2,len(one));self.assertEqual(0,pass_progress(self.p,run,2)['completed'])
