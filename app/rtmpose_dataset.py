@@ -75,7 +75,7 @@ model = dict(
     head=dict(out_channels={n}, input_size=codec['input_size'], in_featuremap_size={featuremap!r}, decoder=codec),
     test_cfg=dict(flip_test=False))
 load_from = {parent_load!r}
-train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=max_epochs, val_interval=1)
+train_cfg = dict(_delete_=True, type='EpochBasedTrainLoop', max_epochs=max_epochs, val_interval=1)
 custom_hooks = [dict(type='EMAHook', momentum=0.0002, update_buffers=True)]
 default_hooks = dict(checkpoint=dict(type='CheckpointHook', interval={int(checkpoint_interval)}, by_epoch=True, max_keep_ckpts={int(max_keep_ckpts)}))
 train_pipeline = [

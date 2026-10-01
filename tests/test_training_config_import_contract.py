@@ -73,7 +73,7 @@ class TrainingConfigImportContractTests(unittest.TestCase):
                 "images":[],
             }),encoding="utf-8")
             base=root/"inference_config.py"
-            base.write_text("model = dict(backbone=dict(type='CSPNeXt', init_cfg=None))\n",encoding="utf-8")
+            base.write_text("model = dict(backbone=dict(type='CSPNeXt', init_cfg=None))\ntrain_cfg = dict(by_epoch=True, max_epochs=210)\n",encoding="utf-8")
             child=generate_smoke_config(
                 manifest,
                 data_root=root,
@@ -86,7 +86,7 @@ class TrainingConfigImportContractTests(unittest.TestCase):
             text=child.read_text(encoding="utf-8")
             self.assertIn('backbone=dict(init_cfg=dict(_delete_=True, type="Pretrained"',text)
             self.assertIn("checkpoint=dict(type='CheckpointHook'",text)
-            self.assertIn("train_cfg = dict(type='EpochBasedTrainLoop'",text)
+            self.assertIn("train_cfg = dict(_delete_=True, type='EpochBasedTrainLoop'",text)
             if importlib.util.find_spec("mmengine") is not None:
                 from mmengine.config import Config
                 from mmengine.hooks import CheckpointHook
@@ -95,7 +95,9 @@ class TrainingConfigImportContractTests(unittest.TestCase):
                 self.assertEqual("CSPNeXt",backbone.type)
                 self.assertEqual("Pretrained",backbone.init_cfg.type)
                 self.assertEqual(str((root/"base.pth").resolve()),backbone.init_cfg.checkpoint)
-                self.assertEqual("EpochBasedTrainLoop",Config.fromfile(str(child)).train_cfg.type)
+                train_cfg=Config.fromfile(str(child)).train_cfg
+                self.assertEqual("EpochBasedTrainLoop",train_cfg.type)
+                self.assertNotIn("by_epoch",train_cfg)
                 checkpoint_hook=HOOKS.build(Config.fromfile(str(child)).default_hooks.checkpoint)
                 self.assertIsInstance(checkpoint_hook,CheckpointHook)
 
