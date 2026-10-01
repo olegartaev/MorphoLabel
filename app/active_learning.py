@@ -8,7 +8,7 @@ from .paths import REPORTS
 from .workflow import image_catalog
 from .landmark_review import build_review_context, review_warnings, warning_landmark_ids, _review_snapshot
 from .annotation_check import HARD_KINDS
-from .landmark_frames import landmark_frame_ready
+from .landmark_frames import landmark_prediction_frame_ready
 
 _SWAP_KINDS=frozenset({"swap_suggestion","possible_swap","batch_vector_swap"})
 
@@ -32,10 +32,10 @@ def _percentile(values,q=.9):
 def _ai_worst_first_eligible(project,snapshot,image_id,rows):
     status=snapshot.annotation_status(image_id) or {}
     if bool(status.get("verified")):return False
-    # Review worst is a confirmation workflow, not a completion workflow.
-    # Partial/incomplete predictions belong to Reapply unverified.
+    # Review worst ranks completed AI predictions. Incomplete predictions stay
+    # in the prediction-attention path until every non-human slot is resolved.
     if not bool(status.get("complete")):return False
-    if not landmark_frame_ready(project,image_id):return False
+    if not landmark_prediction_frame_ready(project,image_id):return False
     for row in rows.values():
         ai_origin=(row.get("provenance")=="machine" or row.get("model_id") is not None or row.get("prediction_run_id") is not None)
         x,y=row.get("x_standardized"),row.get("y_standardized")
@@ -144,10 +144,11 @@ def _review_reason(hard,swaps,geometry,learned_component,learned_risk,learned_id
     return "AI prediction selected for review"
 
 
-def select_ai_worst_first(project,size=None,progress=None):
+def select_ai_worst_first(project,size=None,progress=None,image_ids=None):
     """Review worst v2: hard checks -> learned correction risk -> geometry/confidence -> light diversity."""
     _emit_progress(progress,"Reading verified human corrections…")
-    snapshot=_review_snapshot(project);catalog=[row for row in snapshot.catalog_rows() if not row.get("excluded")]
+    snapshot=_review_snapshot(project);allowed=None if image_ids is None else {str(value) for value in image_ids}
+    catalog=[row for row in snapshot.catalog_rows() if not row.get("excluded") and (allowed is None or str(row.get("image_id")) in allowed)]
     context=build_review_context(snapshot,catalog,dimensions_by_id=snapshot.dimensions_by_id)
     calibration=_verified_error_calibration(snapshot)
     if calibration["usable"]:
