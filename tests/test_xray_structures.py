@@ -131,17 +131,19 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         self.assertEqual(3,values["dac"])
         self.assertEqual("6+3",values["formv"])
 
-    def test_repeated_markers_are_renumbered_in_anatomical_order(self):
+    def test_repeated_markers_keep_click_order_when_added_or_moved(self):
         one=self.project.add_annotation(self.specimen_id,"vertebra",0.20,0.5,1)
         two=self.project.add_annotation(self.specimen_id,"vertebra",0.40,0.5,1)
         three=self.project.add_annotation(self.specimen_id,"vertebra",0.30,0.5,1)
         rows=[row for row in self.project.annotations(self.specimen_id,1) if row["structure_id"]=="vertebra"]
-        self.assertEqual([one,three,two],[row["annotation_id"] for row in rows])
+        self.assertEqual([one,two,three],[row["annotation_id"] for row in rows])
         self.assertEqual([0,1,2],[row["sort_order"] for row in rows])
-        self.project.move_annotation(one,0.50,0.5)
+        self.project.move_annotation(one,0.80,0.5)
         rows=[row for row in self.project.annotations(self.specimen_id,1) if row["structure_id"]=="vertebra"]
-        self.assertEqual([three,two,one],[row["annotation_id"] for row in rows])
-        self.assertEqual([0,1,2],[row["sort_order"] for row in rows])
+        self.assertEqual([one,two,three],[row["annotation_id"] for row in rows])
+        self.project.delete_annotation(two)
+        rows=[row for row in self.project.annotations(self.specimen_id,1) if row["structure_id"]=="vertebra"]
+        self.assertEqual([one,three],[row["annotation_id"] for row in rows])
 
     def test_structure_batch_is_persisted_and_advances(self):
         crop=crop_from_geometry(450,240,700,260,0,(900,480),algorithm="manual")
@@ -186,9 +188,8 @@ class XRayStructureUIContractTests(unittest.TestCase):
         module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         for text in (
             "Manual pass","Verify & Next","Sample","Specimen","Locality:","Plate:","Fish №",
-            "Marker actions:","Wheel = zoom","right-drag = pan","1–9 = marker","Space/→ = Verify & Next",
-            "Display…","PhotoListCanvas","status_shape=\"square\"","Annotation batch","Repeatability","Training data","Open Results",
-            "delete_selected","move_annotation","replace_single","_wheel","_pan_motion","_key_pressed",
+            "Marker actions:","Display…","PhotoListCanvas","status_shape=\"square\"","Annotation batch","Repeatability","Training data","Open Results",
+            "delete_selected","move_annotation","replace_single","_wheel","_pan_motion","_key_pressed","_structure_button_order",
         ):
             self.assertIn(text,ui)
         self.assertIn("XRayStructureWorkspace(",module)
@@ -207,6 +208,9 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertNotIn(".save(",ui)
         self.assertIn("draw_xray_marker",ui)
         self.assertIn('self.canvas.move(f"annotation:{self._drag_annotation}"',ui)
+        self.assertIn("| №{int(row.get('ordinal') or 0)}",ui)
+        self.assertNotIn('text="Delete"',ui)
+        self.assertNotIn("Wheel = zoom · right-drag = pan",ui)
 
 
 if __name__=="__main__":

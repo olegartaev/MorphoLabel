@@ -666,41 +666,6 @@ class XRayProject:
             (run_id,_now(),str(action),str(structure_id or ""),annotation_id,_json(payload or {})),
         )
 
-    def _structure_is_repeated(self,structure_id):
-        item=next((row for row in self.scheme.get("structures",()) if row["id"]==str(structure_id)),None)
-        return bool(item and item.get("repeated"))
-
-    @staticmethod
-    def _annotation_direction(c,run_id,structure_id):
-        rows=c.execute(
-            "SELECT x,y FROM annotations WHERE run_id=? AND structure_id=? ORDER BY sort_order,annotation_id",
-            (run_id,str(structure_id)),
-        ).fetchall()
-        if len(rows)<2:return None
-        dx=float(rows[-1][0])-float(rows[0][0])
-        if abs(dx)>1e-9:return 1 if dx>=0 else -1
-        dy=float(rows[-1][1])-float(rows[0][1])
-        return 1 if dy>=0 else -1
-
-    def _normalize_repeated_order(self,c,run_id,structure_id,direction=None):
-        if not self._structure_is_repeated(structure_id):return False
-        rows=c.execute(
-            "SELECT annotation_id,x,y,sort_order FROM annotations WHERE run_id=? AND structure_id=? ORDER BY sort_order,annotation_id",
-            (run_id,str(structure_id)),
-        ).fetchall()
-        if len(rows)<2:return False
-        if direction not in (-1,1):
-            dx=float(rows[-1][1])-float(rows[0][1])
-            if abs(dx)>1e-9:direction=1 if dx>=0 else -1
-            else:direction=1 if float(rows[-1][2])-float(rows[0][2])>=0 else -1
-        ordered=sorted(rows,key=lambda row:(direction*float(row[1]),direction*float(row[2]),int(row[0])))
-        changed=False
-        for order,row in enumerate(ordered):
-            if int(row[3])!=order:
-                c.execute("UPDATE annotations SET sort_order=? WHERE annotation_id=?",(order,int(row[0])));changed=True
-        if changed:self._annotation_event(c,run_id,"reorder",structure_id,payload={"direction":int(direction),"count":len(ordered)})
-        return changed
-
     def structure_batch(self,pass_no=1):
         pass_no=int(pass_no);state=dict(self.get_ui_state("xray_structure_active_batch",{}) or {})
         if int(state.get("pass_no",0) or 0)!=pass_no:return {}
@@ -782,7 +747,6 @@ class XRayProject:
         x=max(0.0,min(1.0,float(x)));y=max(0.0,min(1.0,float(y)))
         run_id=self.ensure_annotation_run(specimen_id,pass_no,source);now=_now()
         with sqlite3.connect(self.db_path) as c:
-            direction=self._annotation_direction(c,run_id,structure_id)
             if replace_single:
                 existing=c.execute(
                     "SELECT annotation_id,x,y FROM annotations WHERE run_id=? AND structure_id=? ORDER BY annotation_id LIMIT 1",
@@ -800,7 +764,6 @@ class XRayProject:
                 cur=c.execute("INSERT INTO annotations(run_id,structure_id,x,y,sort_order) VALUES(?,?,?,?,?)",(run_id,structure_id,x,y,int(order)))
                 annotation_id=int(cur.lastrowid);self._annotation_event(c,run_id,"add",structure_id,annotation_id,{"at":[x,y],"sort_order":int(order)})
                 c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,run_id))
-            self._normalize_repeated_order(c,run_id,structure_id,direction)
         self.recalculate_trait_results(specimen_id)
         return annotation_id
 
@@ -811,11 +774,9 @@ class XRayProject:
                              FROM annotations a JOIN annotation_runs r ON r.run_id=a.run_id
                              WHERE a.annotation_id=?""",(int(annotation_id),)).fetchone()
             if row is None:raise KeyError(f"Unknown annotation: {annotation_id}")
-            direction=self._annotation_direction(c,row[0],row[1])
             specimen_id=row[4];c.execute("UPDATE annotations SET x=?,y=? WHERE annotation_id=?",(x,y,int(annotation_id)))
             self._annotation_event(c,row[0],"move",row[1],int(annotation_id),{"from":[row[2],row[3]],"to":[x,y]})
             c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,row[0]))
-            self._normalize_repeated_order(c,row[0],row[1],direction)
         self.recalculate_trait_results(specimen_id);return True
 
     def delete_annotation(self,annotation_id):
@@ -825,11 +786,9 @@ class XRayProject:
                              FROM annotations a JOIN annotation_runs r ON r.run_id=a.run_id
                              WHERE a.annotation_id=?""",(int(annotation_id),)).fetchone()
             if row is None:return False
-            direction=self._annotation_direction(c,row[0],row[1])
             specimen_id=row[5];self._annotation_event(c,row[0],"delete",row[1],int(annotation_id),{"at":[row[2],row[3]],"sort_order":row[4]})
             c.execute("DELETE FROM annotations WHERE annotation_id=?",(int(annotation_id),))
             c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,row[0]))
-            self._normalize_repeated_order(c,row[0],row[1],direction)
         self.recalculate_trait_results(specimen_id);return True
 
     def verify_annotations(self,specimen_id,pass_no=1,source="human"):

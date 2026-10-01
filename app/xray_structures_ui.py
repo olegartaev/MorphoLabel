@@ -36,6 +36,15 @@ def _shape_symbol(symbol):
     return {"circle":"○","filled_circle":"●","target":"⊙","cross":"✚","diamond":"◆","square":"■","triangle":"▲"}.get(symbol,"●")
 
 
+def _structure_button_order(structures):
+    """Display marker tools in explicit hotkey order; scheme order breaks ties."""
+    indexed=list(enumerate(structures or ()))
+    def key(item):
+        index,structure=item;hotkey=str(structure.get("hotkey") or "").strip()
+        return (0,int(hotkey),index) if hotkey.isdigit() else (1,index,index)
+    return [structure for _index,structure in sorted(indexed,key=key)]
+
+
 class XRaySpecimenListPanel(ttk.Frame):
     """Compact searchable specimen list matching Crop/Landmarks visual language."""
 
@@ -86,7 +95,7 @@ class XRaySpecimenListPanel(ttk.Frame):
         tip="Verified structures" if status=="verified" else "Saved draft — review required" if status else "Not started"
         return {
             "number":str(index+1),"cal":"","has_crop":True,"excluded":False,
-            "text":f"{row['sample_id']} | {path.name} · Fish №{int(row.get('ordinal') or 0)}",
+            "text":f"{row['sample_id']} | {path.name} | №{int(row.get('ordinal') or 0)}",
             "status":row["status_color"],"tooltip":tip,"review_warning":False,
         }
 
@@ -180,11 +189,8 @@ class XRayStructureWorkspace:
         ttk.Label(marker_dock,text="Marker actions:",style="SectionTitle.TLabel").grid(row=0,column=0,sticky="w",padx=(0,6))
         self.marker_host=ttk.Frame(marker_dock,style="WorkflowDock.TFrame");self.marker_host.grid(row=0,column=1,sticky="ew")
         actions=ttk.Frame(marker_dock,style="WorkflowDock.TFrame");actions.grid(row=0,column=2,sticky="e")
-        self.delete_button=ttk.Button(actions,text="Delete",image=self._icon(actions,"delete"),compound="left",style="Icon.TButton",command=self.delete_selected)
-        self.delete_button.pack(side="left",padx=(6,2));self.tip.bind(self.delete_button,"Delete the selected structure marker.")
         self.display_button=ttk.Button(actions,text="Display…",image=self._icon(actions,"display"),compound="left",style="Icon.TButton",command=self.open_display_settings)
-        self.display_button.pack(side="left",padx=2);self.tip.bind(self.display_button,"Change marker size, marker icons and colors for this project.")
-        ttk.Label(actions,text="Wheel = zoom · right-drag = pan · 1–9 = marker · Space/→ = Verify & Next",style="Muted.TLabel").pack(side="left",padx=(8,0))
+        self.display_button.pack(side="left",padx=2);self.tip.bind(self.display_button,"Marker size, icons and colors. Mouse wheel zooms; right-drag pans; number keys switch markers; Delete removes the selected marker.")
         self.counts_label=ttk.Label(marker_dock,text="",style="Muted.TLabel");self.counts_label.grid(row=1,column=0,columnspan=3,sticky="w",pady=(4,0))
         self.save_label=ttk.Label(marker_dock,text="",style="Muted.TLabel");self.save_label.grid(row=1,column=2,sticky="e",pady=(4,0))
 
@@ -264,16 +270,12 @@ class XRayStructureWorkspace:
         counts={}
         for row in self.annotations:counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
         self._marker_buttons={}
-        ordered=[item for item in structures if item.get("repeated")]+[item for item in structures if not item.get("repeated")]
-        saw_reference=False
-        for structure in ordered:
-            if not structure.get("repeated") and not saw_reference:
-                ttk.Separator(self.marker_host,orient="vertical").pack(side="left",fill="y",padx=5,pady=2);saw_reference=True
+        for structure in _structure_button_order(structures):
             index=structures.index(structure);style=marker_style(settings,structure,index);group=ttk.Frame(self.marker_host,style="WorkflowDock.TFrame");group.pack(side="left",padx=2)
             swatch=tk.Label(group,text=_shape_symbol(style["symbol"]),foreground=style["color"],background="#f5f5f5",font=("Segoe UI Symbol",12,"bold"),width=2)
             swatch.pack(side="left")
             hotkey=str(structure.get("hotkey") or "");count=counts.get(structure["id"],0)
-            button=ttk.Button(group,text=f"{hotkey+' · ' if hotkey else ''}{structure['name']} ({count})",style="Primary.TButton" if structure["id"]==self.active_structure_id else "P.TButton",command=lambda sid=structure["id"]:self._choose_structure(sid))
+            button=ttk.Button(group,text=f"{hotkey+'. ' if hotkey else ''}{structure['name']} ({count})",style="Primary.TButton" if structure["id"]==self.active_structure_id else "P.TButton",command=lambda sid=structure["id"]:self._choose_structure(sid))
             button.pack(side="left");self._marker_buttons[structure["id"]]=button;self.tip.bind(button,structure.get("description") or structure["name"])
         if not structures:ttk.Label(self.marker_host,text="No structures configured",style="Muted.TLabel").pack(side="left")
 
