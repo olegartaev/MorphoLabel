@@ -1,6 +1,6 @@
 """Portable SQLite project storage; cache is never the scientific source of truth."""
 from __future__ import annotations
-import csv, hashlib, json, shutil, sqlite3, uuid
+import csv, hashlib, json, math, shutil, sqlite3, uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,6 +16,13 @@ def natural_key(value):
  import re
  return tuple(int(x) if x.isdigit() else x.casefold() for x in re.split(r"(\d+)",str(value)))
 def now(): return datetime.now(timezone.utc).isoformat()
+HUMAN_LANDMARK_PROVENANCE=frozenset({"manual","corrected","corrected_by_human","reviewed_by_human"})
+def landmark_is_protected_human(row):
+ """Protect only a still-valid human decision from machine overwrite."""
+ if not row or row.get("provenance") not in HUMAN_LANDMARK_PROVENANCE:return False
+ if row.get("state")=="missing":return True
+ x,y=row.get("x_standardized"),row.get("y_standardized")
+ return isinstance(x,(int,float)) and isinstance(y,(int,float)) and math.isfinite(x) and math.isfinite(y)
 def schema_hash(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def landmark_schema_identity(rows):
  return tuple(str(row.get("abbr") or "").strip() for row in rows)
@@ -335,12 +342,12 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
   its reviewed flag and the image Checked state; only a real coordinate/state
   change invalidates human verification.
   """
-  self.reconcile_landmark_schema();timestamp=now();human={"manual","corrected","corrected_by_human","reviewed_by_human"};saved=skipped=0;scientific_changed=False
+  self.reconcile_landmark_schema();timestamp=now();saved=skipped=0;scientific_changed=False
   with self.transaction() as c:
    existing={str(row["landmark_abbr"]):dict(row) for row in c.execute("SELECT * FROM landmarks WHERE image_id=?",(image_id,))}
    for point in points:
     display_id=int(point["landmark_id"]);abbr=self._abbr_for_display(display_id);old=existing.get(abbr,{})
-    if old.get("provenance") in human:
+    if landmark_is_protected_human(old):
      skipped+=1;continue
     x=float(point["x"]);y=float(point["y"])
     same=bool(old) and old.get("state")!="missing" and old.get("x_standardized") is not None and old.get("y_standardized") is not None and float(old["x_standardized"])==x and float(old["y_standardized"])==y
@@ -949,17 +956,16 @@ ORDER BY l.image_id""",active).fetchall()
   return tuple(str(row["image_id"]) for row in rows)
 
  def landmark_prediction_locked(self,image_id):
-  """Return True once the image has been human-confirmed for landmark use.
+  """Lock only the currently valid human-confirmed landmark state.
 
-  Current verification locks it. Historical AI-review confirmation also locks
-  it permanently, so a later bug or edit cannot make it eligible for AI
-  assignment again.
+  Historical confirmation remains audit provenance, not a permanent inference
+  ban. A later Crop change deliberately clears current verification so AI can
+  refresh invalidated non-human or unresolved coordinates in the new frame.
   """
   image_id=str(image_id)
   with self.transaction() as c:
    row=c.execute("SELECT human_verified FROM image_review WHERE image_id=?",(image_id,)).fetchone()
-   if row and bool(row[0]):return True
-   return bool(c.execute("SELECT 1 FROM qc WHERE image_id=? AND kind=? LIMIT 1",(image_id,"landmark_ai_review_confirmation")).fetchone())
+  return bool(row and row[0])
 
  def pending_ai_landmark_image_ids(self):
   """Return active non-excluded images whose current AI-origin landmarks still need human confirmation."""
