@@ -328,19 +328,21 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
    c.execute("INSERT INTO image_review(image_id,human_verified,updated_at) VALUES (?,?,?) ON CONFLICT(image_id) DO UPDATE SET human_verified=0,updated_at=excluded.updated_at",(image_id,0,timestamp))
   self._auto_verify_if_fully_human(image_id)
  def save_machine_landmarks(self,image_id,points,*,model_id,prediction_run_id):
-  """Persist one complete machine prediction without invalidating identical reviewed state.
+  """Persist one machine prediction while preserving every human-protected slot.
 
-  Human-derived points are never overwritten. Refreshing an unconfirmed prediction whose
-  scientific coordinates are identical to the current machine state preserves
-  its reviewed flag and the image Checked state; only a real coordinate/state
+  Human-placed/corrected points and an explicit Mark missing decision are never
+  overwritten. Refreshing an unconfirmed prediction whose scientific
+  coordinates are identical to the current machine state preserves its
+  reviewed flag and the image Checked state; only a real coordinate/state
   change invalidates human verification.
   """
-  self.reconcile_landmark_schema();timestamp=now();human={"manual","corrected","corrected_by_human","reviewed_by_human"};saved=skipped=0;scientific_changed=False
+  from .landmark_prediction_policy import human_landmark_protected
+  self.reconcile_landmark_schema();timestamp=now();saved=skipped=0;scientific_changed=False
   with self.transaction() as c:
    existing={str(row["landmark_abbr"]):dict(row) for row in c.execute("SELECT * FROM landmarks WHERE image_id=?",(image_id,))}
    for point in points:
     display_id=int(point["landmark_id"]);abbr=self._abbr_for_display(display_id);old=existing.get(abbr,{})
-    if old.get("provenance") in human:
+    if human_landmark_protected(old):
      skipped+=1;continue
     x=float(point["x"]);y=float(point["y"])
     same=bool(old) and old.get("state")!="missing" and old.get("x_standardized") is not None and old.get("y_standardized") is not None and float(old["x_standardized"])==x and float(old["y_standardized"])==y
@@ -949,16 +951,19 @@ ORDER BY l.image_id""",active).fetchall()
   return tuple(str(row["image_id"]) for row in rows)
 
  def landmark_prediction_locked(self,image_id):
-  """Return True once the image has been human-confirmed for landmark use.
+  """Protect confirmed landmarks unless a later Crop change invalidated that frame.
 
-  Current verification locks it. Historical AI-review confirmation also locks
-  it permanently, so a later bug or edit cannot make it eligible for AI
-  assignment again.
+  Current human verification always locks the image. Historical AI-review
+  confirmation also locks it while the confirmed Crop is unchanged. After a
+  Crop change, only human-protected landmark slots stay immutable; machine
+  slots may be refreshed on the new final Crop.
   """
   image_id=str(image_id)
   with self.transaction() as c:
    row=c.execute("SELECT human_verified FROM image_review WHERE image_id=?",(image_id,)).fetchone()
    if row and bool(row[0]):return True
+   crop_review=c.execute("SELECT 1 FROM image_attributes WHERE image_id=? AND attribute_key='landmark_crop_review_required' AND lower(value)='true'",(image_id,)).fetchone()
+   if crop_review:return False
    return bool(c.execute("SELECT 1 FROM qc WHERE image_id=? AND kind=? LIMIT 1",(image_id,"landmark_ai_review_confirmation")).fetchone())
 
  def pending_ai_landmark_image_ids(self):
