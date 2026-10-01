@@ -6,6 +6,7 @@ from unittest.mock import Mock
 from app.ui.photo_list_panel import PhotoListPanel
 from app.ui.shell import ProductionShell
 from app.ui.landmarks_section import LandmarksSection
+from app.ui.crop_section import CropSection
 
 
 class AttentionNavigationFastPathTests(unittest.TestCase):
@@ -56,9 +57,12 @@ class AttentionNavigationFastPathTests(unittest.TestCase):
   shell._selected_image.assert_not_called()
 
  def test_attention_verify_uses_delta_counter_update_not_global_invalidation(self):
-  source=inspect.getsource(LandmarksSection.navigate_attention_queue)
-  self.assertIn("update_landmark_counts(current)",source)
-  self.assertNotIn("invalidate_counts()",source)
+  landmark_source=inspect.getsource(LandmarksSection.navigate_attention_queue)
+  crop_source=inspect.getsource(CropSection.navigate_attention_queue)
+  self.assertIn("update_landmark_counts(current)",landmark_source)
+  self.assertIn("update_landmark_counts(current)",crop_source)
+  self.assertNotIn("invalidate_counts()",landmark_source)
+  self.assertNotIn("invalidate_counts()",crop_source)
 
 
 if __name__=="__main__":
