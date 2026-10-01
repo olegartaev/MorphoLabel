@@ -62,8 +62,8 @@ def _prediction_candidate_ids(project,rows):
   image_id=str(item['image_id'])
   if item.get('excluded') or project.landmark_prediction_locked(image_id):continue
   points=project.load_landmarks(image_id)
-  status=project.annotation_status(image_id)
-  if not status.get('complete'):
+  status_reader=getattr(project,'annotation_status',None)
+  if status_reader is not None and not status_reader(image_id).get('complete'):
    result.append(image_id);continue
   if any(point.get('provenance')=='machine' or point.get('model_id') is not None or point.get('prediction_run_id') is not None for point in points.values()):
    result.append(image_id)
