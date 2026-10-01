@@ -1,7 +1,7 @@
 """Compact generic UI icons for MorphoLabel.
 
 All symbols are taxon-neutral and are drawn programmatically so installed builds
-need no loose image assets.  Supersampling keeps the small 18–24 px controls
+need no loose image assets.  Supersampling keeps both compact top navigation and larger action/workflow icons
 crisp on Windows.
 """
 from __future__ import annotations
@@ -10,8 +10,8 @@ import math
 from PIL import Image, ImageDraw
 
 TOPBAR_ICON_SIZE=26
-CONTROL_ICON_SIZE=20
-WORKFLOW_ICON_SIZE=24
+CONTROL_ICON_SIZE=40
+WORKFLOW_ICON_SIZE=48
 
 OUTLINE="#465d73"
 MUTED="#91a1b2"
