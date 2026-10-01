@@ -25,10 +25,10 @@ jobs:
       - name: Compile X-ray feature
         shell: pwsh
         run: |
-          python -m py_compile app/xray_schema.py app/xray_project.py app/xray_crop.py app/xray_detector.py app/xray_crop_ui.py ai_runtime/xray_detector_runner.py app/xray_icons.py app/modules/xray_counts.py app/extensions/builtins.py app/gui_crop_debug.py
+          python -m py_compile app/xray_schema.py app/xray_project.py app/xray_crop.py app/xray_detector.py app/xray_crop_ui.py app/xray_structures_ui.py ai_runtime/xray_detector_runner.py app/xray_icons.py app/modules/xray_counts.py app/extensions/builtins.py app/gui_crop_debug.py
 
       - name: Focused regression tests
-        run: python -m unittest tests.test_xray_schema tests.test_xray_crop tests.test_xray_detector_workflow tests.test_xray_module_contract tests.test_extension_architecture tests.test_gui_crop_debug_log_retention
+        run: python -m unittest tests.test_xray_schema tests.test_xray_crop tests.test_xray_detector_workflow tests.test_xray_structures tests.test_xray_module_contract tests.test_extension_architecture tests.test_gui_crop_debug_log_retention
 
       - name: Package exact tested source
         shell: pwsh
