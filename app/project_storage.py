@@ -19,8 +19,9 @@ def now(): return datetime.now(timezone.utc).isoformat()
 HUMAN_LANDMARK_PROVENANCE=frozenset({"manual","corrected","corrected_by_human","reviewed_by_human"})
 def _parse_timestamp(value):
  if not value:return None
- try:return datetime.fromisoformat(str(value).replace("Z","+00:00"))
+ try:parsed=datetime.fromisoformat(str(value).replace("Z","+00:00"))
  except (TypeError,ValueError):return None
+ return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 def landmark_is_protected_human(row,frame_changed_at=None):
  """Protect only a human decision proven to belong to the current Crop frame."""
  if not row or row.get("provenance") not in HUMAN_LANDMARK_PROVENANCE:return False
