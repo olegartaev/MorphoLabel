@@ -75,6 +75,18 @@ class LandmarkAttentionQueueTests(unittest.TestCase):
   self.assertIn("refresh non-human landmarks",issue["reason"])
   self.assertEqual("Retry AI",user_copy(issue)["action"])
 
+ def test_only_protected_human_gap_does_not_repredict_finished_machine_slots(self):
+  self.project.schema=[{"id":1},{"id":2}]
+  self.project.crop_review.add("a")
+  self.project.points["a"]={
+   1:{"provenance":"manual","state":"unresolved","x_standardized":None,"y_standardized":None},
+   2:{"provenance":"machine","model_id":"new-model","state":"auto","x_standardized":10.0,"y_standardized":10.0},
+  }
+  self.complete["a"]=False
+  issue=classify(self.project,"a")
+  self.assertEqual("landmarks",issue["stage"])
+  self.assertIn("protected human",issue["reason"])
+
  def test_prediction_result_stage_counts_match_next_actions(self):
   self.crops["a"]=None
   self.project.points["b"]={1:{"provenance":"machine","model_id":"m"}}
