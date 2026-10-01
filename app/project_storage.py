@@ -353,6 +353,12 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
     if not same:c.execute("INSERT INTO corrections(image_id,landmark_id,landmark_abbr,kind,previous_json,accepted_json,created_at) VALUES (?,?,?,?,?,?,?)",(image_id,stored_id,abbr,"landmark",json.dumps(old or None),json.dumps({"landmark_abbr":abbr,"x":x,"y":y,"state":"auto","provenance":"machine"}),timestamp))
     saved+=1
    if scientific_changed:c.execute("INSERT INTO image_review(image_id,human_verified,updated_at) VALUES (?,?,?) ON CONFLICT(image_id) DO UPDATE SET human_verified=0,updated_at=excluded.updated_at",(image_id,0,timestamp))
+   if saved and c.execute("SELECT 1 FROM image_attributes WHERE image_id=? AND attribute_key='landmark_crop_review_required' AND lower(value)='true'",(image_id,)).fetchone():
+    active={str(row["abbr"]) for row in self.schema}
+    current=[dict(row) for row in c.execute("SELECT * FROM landmarks WHERE image_id=?",(image_id,)) if str(row["landmark_abbr"]) in active]
+    human_crop_review=any(human_landmark_protected(row) and row.get("state")!="missing" for row in current)
+    if not human_crop_review:
+     c.execute("DELETE FROM image_attributes WHERE image_id=? AND attribute_key='landmark_crop_review_required'",(image_id,))
   return saved,skipped
  def restore_landmark_before_missing(self,image_id,landmark_id):
   """Undo the latest Mark missing action, restoring the previous point when one existed."""
