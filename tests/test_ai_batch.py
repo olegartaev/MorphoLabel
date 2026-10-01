@@ -58,6 +58,13 @@ class AIBatchTests(unittest.TestCase):
   with self.p.transaction() as c:c.execute('DELETE FROM crops WHERE image_id=?',(uncropped,))
   ids,_=prospective_candidates(self.p,'v1',self.ids[0],3);self.assertNotIn(uncropped,ids)
   with self.assertRaisesRegex(BatchError,'crop-ready'):create_batch_for_ids(self.p,'v1',[uncropped])
+
+ def test_15b_final_crop_pending_landmark_review_is_prediction_ready(self):
+  image_id=self.ids[3]
+  self.p.set_attribute(image_id,'landmark_crop_review_required','true')
+  self.assertTrue(self.p.landmark_crop_review_required(image_id))
+  data,_=create_batch_for_ids(self.p,'v1',[image_id],selection_mode='all_prediction_targets')
+  self.assertEqual([image_id],[row['image_id'] for row in data['selected_images']])
  def test_16_interactive_batch_uses_smaller_remaining_pool(self):
   self.p.save_landmark(self.ids[0],1,1,1,'manual')
   for image_id in self.ids[4:]:self.p.save_landmark(image_id,1,1,1,'manual')
