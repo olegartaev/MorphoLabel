@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from .landmark_frames import crop_frame_record, landmark_frame_ready
+from .landmark_frames import crop_frame_record, landmark_prediction_frame_ready
 from .landmark_state import load_current_landmark_state
 
 _STATE_KEY="landmark_attention_queue"
@@ -74,9 +74,7 @@ def classify(project,image_id):
  if crop.get("provenance") not in {"manual","ai_accepted","ai_corrected"} or not crop.get("human_verified"):
   return {"image_id":image_id,"stage":"crop","reason":"Crop needs human confirmation"}
  current=load_current_landmark_state(project,image_id)
- if project.landmark_crop_review_required(image_id):
-  reason="Crop confirmed; review landmarks in the new crop" if current.complete else "Crop confirmed; complete landmarks in the new crop"
-  return {"image_id":image_id,"stage":"landmarks","reason":reason}
+ crop_review=project.landmark_crop_review_required(image_id)
  if project.landmark_ai_review_ready(image_id):
   return {"image_id":image_id,"stage":"resolved","reason":"Landmarks verified"}
  points=project.load_landmarks(image_id)
@@ -84,9 +82,12 @@ def classify(project,image_id):
  if not current.complete:
   if locked:
    return {"image_id":image_id,"stage":"landmarks","reason":"Complete the protected human-confirmed landmark set manually"}
-  if landmark_frame_ready(project,image_id):
-   return {"image_id":image_id,"stage":"prediction","reason":"AI prediction is missing or incomplete"}
+  if landmark_prediction_frame_ready(project,image_id):
+   reason="Crop confirmed; refresh incomplete landmarks with AI in the new crop" if crop_review else "AI prediction is missing or incomplete"
+   return {"image_id":image_id,"stage":"prediction","reason":reason}
   return {"image_id":image_id,"stage":"crop","reason":"Landmark frame is not ready"}
+ if crop_review:
+  return {"image_id":image_id,"stage":"landmarks","reason":"Crop confirmed; review landmarks in the new crop"}
  if any(_machine_origin(point) for point in points.values()):
   return {"image_id":image_id,"stage":"landmarks","reason":"Review the AI landmark prediction"}
  return {"image_id":image_id,"stage":"landmarks","reason":"Review the completed landmark set"}
