@@ -113,6 +113,13 @@ class LandmarkAIGateOneTests(unittest.TestCase):
   order=_prediction_attention_order(("less","worst","partial"),("failed",),("crop",),("worst","less"))
   self.assertEqual(["worst","less","partial","failed","crop"],order)
 
+ def test_worst_first_ranking_can_be_scoped_to_the_just_predicted_batch(self):
+  from app.active_learning import select_ai_worst_first
+  first,second=self.ids[:2]
+  self.service().predict_one(first);self.service().predict_one(second)
+  ranked=select_ai_worst_first(self.project,image_ids=(second,))
+  self.assertEqual([second],[item["image_id"] for item in ranked])
+
  def test_reprediction_replaces_machine_points_but_preserves_human_correction(self):
   image_id=self.ids[0]
   self.service(coordinate_overrides={1:(10,10),2:(20,20)}).predict_one(image_id)
