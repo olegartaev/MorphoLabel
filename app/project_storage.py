@@ -342,21 +342,23 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
    if provenance in {"manual","corrected","corrected_by_human","reviewed_by_human"}:c.execute("INSERT INTO training_examples(image_id,kind,label_json,created_at) VALUES (?,?,?,?)",(image_id,"landmark",json.dumps({"landmark_id":landmark_id,"landmark_abbr":abbr,"x":x,"y":y,"state":state}),timestamp))
    c.execute("INSERT INTO image_review(image_id,human_verified,updated_at) VALUES (?,?,?) ON CONFLICT(image_id) DO UPDATE SET human_verified=0,updated_at=excluded.updated_at",(image_id,0,timestamp))
   self._auto_verify_if_fully_human(image_id)
- def save_machine_landmarks(self,image_id,points,*,model_id,prediction_run_id):
-  """Persist one machine prediction while preserving valid human decisions.
+ def landmark_human_protection_cutoff(self,image_id):
+  """Latest pending Crop-frame change; older human coordinates are not current."""
+  with self.transaction() as c:
+   pending=c.execute("SELECT value FROM image_attributes WHERE image_id=? AND attribute_key='landmark_crop_review_required'",(image_id,)).fetchone()
+   if not pending or str(pending["value"]).casefold()!="true":return None
+   crop=c.execute("SELECT reviewed_at,updated_at FROM crops WHERE image_id=?",(image_id,)).fetchone()
+  return (crop["reviewed_at"] or crop["updated_at"]) if crop else None
 
-  Human points with valid coordinates, and explicit human Missing decisions,
-  are never overwritten. Historical human rows whose coordinates were
-  invalidated by a Crop change are fillable again. Refreshing an unconfirmed
-  prediction whose scientific coordinates are identical to the current machine
-  state preserves its reviewed flag and Checked state.
-  """
+ def save_machine_landmarks(self,image_id,points,*,model_id,prediction_run_id):
+  """Persist AI output while preserving only current-frame human decisions."""
   self.reconcile_landmark_schema();timestamp=now();saved=skipped=0;scientific_changed=False
+  frame_cutoff=self.landmark_human_protection_cutoff(image_id)
   with self.transaction() as c:
    existing={str(row["landmark_abbr"]):dict(row) for row in c.execute("SELECT * FROM landmarks WHERE image_id=?",(image_id,))}
    for point in points:
     display_id=int(point["landmark_id"]);abbr=self._abbr_for_display(display_id);old=existing.get(abbr,{})
-    if landmark_is_protected_human(old):
+    if landmark_is_protected_human(old,frame_cutoff):
      skipped+=1;continue
     x=float(point["x"]);y=float(point["y"])
     same=bool(old) and old.get("state")!="missing" and old.get("x_standardized") is not None and old.get("y_standardized") is not None and float(old["x_standardized"])==x and float(old["y_standardized"])==y
