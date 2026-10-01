@@ -174,6 +174,20 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         reopened=load_xray_structure_display(XRayProject(self.project.root),structures)
         self.assertEqual(12,reopened["size"]);self.assertEqual("#12ff34",reopened["colors"][structures[0]["id"]])
 
+    def test_crop_change_archives_and_hides_coordinate_dependent_markers(self):
+        self._complete_pass_one()
+        before=self.project.annotations(self.specimen_id,1);self.assertTrue(before)
+        crop=dict(self.project.specimen(self.specimen_id)["crop"]);crop["center_x"]+=4
+        from app.xray_crop import crop_corners
+        crop["corners"]=[list(point) for point in crop_corners(crop["center_x"],crop["center_y"],crop["length"],crop["width"],crop["angle_degrees"])]
+        self.project.update_specimen_crop(self.specimen_id,crop)
+        self.assertEqual([],self.project.annotations(self.specimen_id,1))
+        run=self.project.annotation_run(self.specimen_id,1);self.assertEqual("stale_crop",run["status"])
+        archives=self.project.annotation_archives(self.specimen_id)
+        self.assertEqual(len(before),len(archives[-1]["annotations"]))
+        row=next(item for item in self.project.trait_rows() if item["specimen_id"]==self.specimen_id)
+        self.assertTrue(all(value is None for value in row["trait_values"].values()))
+
     def test_marker_change_updates_live_result_and_crop_edit_invalidates_verification(self):
         self._complete_pass_one()
         before=self.project.recalculate_trait_results(self.specimen_id)

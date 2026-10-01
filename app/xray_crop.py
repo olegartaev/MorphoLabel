@@ -11,6 +11,40 @@ from PIL import Image
 ALGORITHM_VERSION = "xray-otsu-pca-v1"
 HYBRID_ALGORITHM_VERSION = "xray-hybrid-a-v1"
 
+DEFAULT_ORIENTATION_POLICY={"head":"left","bottom":"down"}
+
+
+def normalize_orientation_policy(value=None):
+    """Normalize the project-level canonical viewing direction."""
+    value=value if isinstance(value,dict) else {}
+    head=str(value.get("head") or DEFAULT_ORIENTATION_POLICY["head"]).strip().lower()
+    bottom=str(value.get("bottom") or DEFAULT_ORIENTATION_POLICY["bottom"]).strip().lower()
+    if head not in {"left","right","none"}:head=DEFAULT_ORIENTATION_POLICY["head"]
+    if bottom not in {"down","up","none"}:bottom=DEFAULT_ORIENTATION_POLICY["bottom"]
+    return {"head":head,"bottom":bottom}
+
+
+def apply_orientation_defaults(crop,policy=None):
+    """Ensure every crop carries reversible orientation metadata."""
+    value=dict(crop or {});policy=normalize_orientation_policy(policy)
+    default_head=policy["head"] if policy["head"] in {"left","right"} else "left"
+    default_bottom="top" if policy["bottom"]=="up" else "bottom"
+    head=str(value.get("head_side") or default_head).lower()
+    bottom=str(value.get("bottom_side") or default_bottom).lower()
+    value["head_side"]=head if head in {"left","right"} else default_head
+    value["bottom_side"]=bottom if bottom in {"top","bottom"} else default_bottom
+    value["orientation_source"]=str(value.get("orientation_source") or "default")
+    return value
+
+
+def canonical_orientation_flips(crop,policy=None):
+    """Return horizontal/vertical flips needed to reach the project canonical view."""
+    value=apply_orientation_defaults(crop,policy);policy=normalize_orientation_policy(policy)
+    flip_h=policy["head"] in {"left","right"} and value["head_side"]!=policy["head"]
+    wanted_bottom={"down":"bottom","up":"top"}.get(policy["bottom"])
+    flip_v=wanted_bottom is not None and value["bottom_side"]!=wanted_bottom
+    return bool(flip_h),bool(flip_v)
+
 
 @dataclass(frozen=True)
 class CropProposal:
@@ -24,6 +58,9 @@ class CropProposal:
     confidence: str
     qc: tuple[str, ...]
     algorithm: str = ALGORITHM_VERSION
+    head_side: str = "left"
+    bottom_side: str = "bottom"
+    orientation_source: str = "default"
 
     def to_dict(self):
         data = asdict(self)
@@ -377,36 +414,40 @@ def crop_corners(center_x, center_y, length, width, angle_degrees):
     return tuple((float(point[0]), float(point[1])) for point in points)
 
 
-def crop_from_geometry(center_x, center_y, length, width, angle_degrees, image_size, confidence="high", qc=(), algorithm="manual"):
+def crop_from_geometry(center_x, center_y, length, width, angle_degrees, image_size, confidence="high", qc=(), algorithm="manual", orientation_policy=None):
     corners = crop_corners(center_x, center_y, length, width, angle_degrees)
-    return {
+    return apply_orientation_defaults({
         "center_x": float(center_x), "center_y": float(center_y),
         "length": float(length), "width": float(width), "angle_degrees": float(angle_degrees),
         "corners": [list(point) for point in corners],
         "bounds": list(_bounds_from_corners(corners, image_size)),
         "confidence": str(confidence), "qc": list(qc), "algorithm": str(algorithm),
-    }
+    },orientation_policy)
 
 
-def oriented_crop(image, proposal):
-    """Extract an upright crop from an in-memory PIL image without modifying the source."""
-    p = proposal.to_dict() if isinstance(proposal, CropProposal) else dict(proposal)
-    center = (float(p["center_x"]), float(p["center_y"]))
-    length, width = float(p["length"]), float(p["width"])
-    angle = float(p["angle_degrees"])
-    arr = np.asarray(image)
-    matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
-    if arr.ndim == 2:
-        border_value = int(np.median(arr))
+def oriented_crop(image, proposal, orientation_policy=None):
+    """Extract one canonical crop without rotating the whole source plate."""
+    raw=proposal.to_dict() if isinstance(proposal,CropProposal) else dict(proposal)
+    p=apply_orientation_defaults(raw,orientation_policy)
+    length=max(2,int(round(float(p["length"]))));width=max(2,int(round(float(p["width"]))))
+    corners=np.asarray(p.get("corners") or crop_corners(
+        p["center_x"],p["center_y"],p["length"],p["width"],p.get("angle_degrees",0.0)
+    ),dtype=np.float32)
+    if corners.shape!=(4,2):raise ValueError("Crop corners are incomplete")
+    destination=np.asarray(((0,0),(length-1,0),(length-1,width-1),(0,width-1)),dtype=np.float32)
+    matrix=cv2.getPerspectiveTransform(corners,destination)
+    arr=np.asarray(image)
+    if arr.ndim==2:border_value=float(np.median(arr))
     else:
-        med = np.median(arr.reshape(-1, arr.shape[-1]), axis=0)
-        border_value = tuple(float(x) for x in med)
-    rotated = cv2.warpAffine(arr, matrix, (arr.shape[1], arr.shape[0]), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=border_value)
-    x0 = max(0, int(round(center[0] - length / 2)))
-    x1 = min(rotated.shape[1], int(round(center[0] + length / 2)))
-    y0 = max(0, int(round(center[1] - width / 2)))
-    y1 = min(rotated.shape[0], int(round(center[1] + width / 2)))
-    return Image.fromarray(rotated[y0:y1, x0:x1])
+        med=np.median(arr.reshape(-1,arr.shape[-1]),axis=0);border_value=tuple(float(x) for x in med)
+    result=cv2.warpPerspective(
+        arr,matrix,(length,width),flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,borderValue=border_value,
+    )
+    flip_h,flip_v=canonical_orientation_flips(p,orientation_policy)
+    if flip_h:result=cv2.flip(result,1)
+    if flip_v:result=cv2.flip(result,0)
+    return Image.fromarray(result)
 
 
 def proposals_from_detector_boxes(path, boxes, max_preview_dim=1600, safety_margin=0.06):

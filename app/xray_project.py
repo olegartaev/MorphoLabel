@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import sqlite3
 import shutil
 from datetime import datetime, timezone
 import uuid
 
+from .xray_crop import apply_orientation_defaults, normalize_orientation_policy
 from .xray_schema import bundled_scheme, calculate_trait_values, normalize_scheme, scheme_hash
 
 IMAGE_EXTENSIONS={".png",".jpg",".jpeg",".tif",".tiff",".bmp"}
@@ -24,13 +26,46 @@ class XRayProject:
         if not self.db_path.is_file():raise FileNotFoundError(self.db_path)
         self._ensure_schema()
 
+    @staticmethod
+    def _source_files(source):
+        source=Path(source)
+        return [path for path in sorted(source.rglob("*")) if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS]
+
+    @staticmethod
+    def _copy_source_files(source,target,relative_paths=None):
+        source=Path(source);target=Path(target);target.mkdir(parents=True,exist_ok=True)
+        paths=XRayProject._source_files(source) if relative_paths is None else [source/Path(value) for value in relative_paths]
+        hardlinked=copied=0;bytes_total=0
+        for path in paths:
+            if not path.is_file():raise FileNotFoundError(path)
+            relative=path.relative_to(source);destination=target/relative;destination.parent.mkdir(parents=True,exist_ok=True)
+            if destination.exists():raise FileExistsError(destination)
+            try:
+                os.link(path,destination);hardlinked+=1
+            except OSError:
+                shutil.copy2(path,destination);copied+=1
+            try:bytes_total+=int(path.stat().st_size)
+            except OSError:pass
+        return {"files":len(paths),"hardlinked":hardlinked,"copied":copied,"bytes":bytes_total}
+
     @classmethod
-    def create(cls,name,source,destination,scheme,scheme_note="Initial trait scheme"):
+    def create(cls,name,source,destination,scheme,scheme_note="Initial trait scheme",orientation_policy=None):
+        source=Path(source).resolve()
+        if not source.is_dir():raise FileNotFoundError(source)
+        source_files=cls._source_files(source)
         root=Path(destination)/str(name);root.mkdir(parents=True,exist_ok=False);db=root/"xray_project.sqlite3"
-        with sqlite3.connect(db) as c:
-            cls._create_tables(c)
-            c.executemany("INSERT INTO meta(key,value) VALUES(?,?)",(("name",str(name)),("source",str(Path(source).resolve())),("created_at",_now())))
-        project=cls(root);project.save_scheme(scheme,scheme_note);project.scan_source();return project
+        try:
+            cls._copy_source_files(source,root/"source",[path.relative_to(source) for path in source_files])
+            policy=normalize_orientation_policy(orientation_policy)
+            with sqlite3.connect(db) as c:
+                cls._create_tables(c)
+                c.executemany("INSERT INTO meta(key,value) VALUES(?,?)",(
+                    ("name",str(name)),("source","source"),("source_storage","managed_v1"),
+                    ("orientation_policy",_json(policy)),("created_at",_now()),
+                ))
+            project=cls(root);project.save_scheme(scheme,scheme_note);project.scan_source();return project
+        except Exception:
+            shutil.rmtree(root,ignore_errors=True);raise
 
     @staticmethod
     def _create_tables(c):
@@ -92,6 +127,13 @@ class XRayProject:
           annotation_id INTEGER, payload_json TEXT NOT NULL DEFAULT '{}',
           FOREIGN KEY(run_id) REFERENCES annotation_runs(run_id)
         );
+        CREATE TABLE IF NOT EXISTS annotation_archives(
+          archive_id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL,
+          specimen_id TEXT NOT NULL, created_at TEXT NOT NULL, reason TEXT NOT NULL,
+          crop_json TEXT NOT NULL DEFAULT '{}', annotations_json TEXT NOT NULL DEFAULT '[]',
+          schema_version_id TEXT NOT NULL, pass_no INTEGER NOT NULL, source TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT ''
+        );
         CREATE TABLE IF NOT EXISTS trait_results(
           specimen_id TEXT NOT NULL, trait_id TEXT NOT NULL, schema_version_id TEXT NOT NULL,
           value_text TEXT, qc_note TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL,
@@ -132,8 +174,67 @@ class XRayProject:
 
     @property
     def name(self):return self.meta("name",self.root.name)
+
     @property
-    def source(self):return Path(self.meta("source"))
+    def source_storage(self):return self.meta("source_storage","external_v0")
+
+    @property
+    def source(self):
+        value=Path(self.meta("source"))
+        return (self.root/value) if self.source_storage.startswith("managed") or not value.is_absolute() else value
+
+    @property
+    def is_self_contained(self):
+        try:self.source.resolve().relative_to(self.root.resolve());return True
+        except ValueError:return False
+
+    @property
+    def orientation_policy(self):
+        try:return normalize_orientation_policy(json.loads(self.meta("orientation_policy","{}")))
+        except Exception:return normalize_orientation_policy()
+
+    def set_orientation_policy(self,value):
+        policy=normalize_orientation_policy(value)
+        with sqlite3.connect(self.db_path) as c:
+            c.execute("INSERT INTO meta(key,value) VALUES('orientation_policy',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(_json(policy),))
+        return policy
+
+    def make_self_contained(self):
+        """Import a legacy external source once; hard-link on the same volume, copy otherwise."""
+        if self.is_self_contained:return {"changed":False,"files":len(self.source_images()),"hardlinked":0,"copied":0,"bytes":0}
+        source=self.source
+        if not source.is_dir():raise FileNotFoundError(source)
+        self.scan_source();relative=[row["relative_path"] for row in self.source_images()]
+        target=self.root/"source";staging=self.root/".source_importing"
+        if target.exists():raise FileExistsError(target)
+        shutil.rmtree(staging,ignore_errors=True)
+        try:
+            result=self._copy_source_files(source,staging,relative);staging.replace(target)
+            with sqlite3.connect(self.db_path) as c:
+                c.execute("INSERT INTO meta(key,value) VALUES('source','source') ON CONFLICT(key) DO UPDATE SET value='source'")
+                c.execute("INSERT INTO meta(key,value) VALUES('source_storage','managed_v1') ON CONFLICT(key) DO UPDATE SET value='managed_v1'")
+            return {"changed":True,**result}
+        except Exception:
+            shutil.rmtree(staging,ignore_errors=True);raise
+
+    @staticmethod
+    def _tree_bytes(path):
+        path=Path(path)
+        if not path.exists():return 0
+        total=0
+        for item in path.rglob("*"):
+            if item.is_file():
+                try:total+=int(item.stat().st_size)
+                except OSError:pass
+        return total
+
+    def storage_summary(self):
+        return {
+            "self_contained":self.is_self_contained,
+            "source_bytes":self._tree_bytes(self.source),
+            "models_bytes":self._tree_bytes(self.root/"models"),
+            "cache_bytes":self._tree_bytes(self.root/"cache"),
+        }
 
     @property
     def models_root(self):
@@ -259,6 +360,7 @@ class XRayProject:
                 self._event(c,specimen_id,"supersede",source,{"reason":"new_proposal_set","model_id":model_id})
             kept=high=review=0
             for ordinal,crop in enumerate(proposals,1):
+                crop=apply_orientation_defaults(crop,self.orientation_policy)
                 if any(self._bbox_iou(crop,item.get("crop") or {})>=0.25 for item in protected):
                     kept+=1;continue
                 key=f"{image_id}:{source}:{model_id or algorithm}:{ordinal}:{round(float(crop.get('center_x',0)),1)}:{round(float(crop.get('center_y',0)),1)}"
@@ -320,18 +422,18 @@ class XRayProject:
         return sum(1 for item in self.specimens(image_id) if item["crop_status"]=="proposed" and not item["excluded"] and str((item.get("crop") or {}).get("confidence"))=="high")
 
     def update_specimen_crop(self,specimen_id,crop,qc=()):
-        item=self.specimen(specimen_id);crop=dict(crop);crop["confidence"]="high";now=_now()
+        item=self.specimen(specimen_id);crop=apply_orientation_defaults(crop,self.orientation_policy);crop["confidence"]="high";now=_now()
         reviewed=bool(self.source_image(item["image_id"]).get("crop_reviewed"))
         status="confirmed" if reviewed else "proposed"
         with sqlite3.connect(self.db_path) as c:
             c.execute("UPDATE specimens SET crop_json=?,crop_source='manual',crop_status=?,crop_qc_json=?,model_id='',excluded=0,updated_at=? WHERE specimen_id=?",
                       (_json(crop),status,_json(list(qc)),now,specimen_id))
             self._event(c,specimen_id,"edit","human",{"previous_crop":item.get("crop") or {},"crop":crop})
-            self._invalidate_annotation_verification(c,specimen_id,"crop_changed")
+            if crop!=item.get("crop"):_archive=self._invalidate_annotation_verification(c,specimen_id,"crop_changed",item.get("crop") or {})
         return self.specimen(specimen_id)
 
     def add_manual_specimen(self,image_id,crop,label=""):
-        crop=dict(crop);crop["confidence"]="high";specimen_id=str(uuid.uuid4());now=_now()
+        crop=apply_orientation_defaults(crop,self.orientation_policy);crop["confidence"]="high";specimen_id=str(uuid.uuid4());now=_now()
         ordinal=1+max((int(x.get("ordinal") or 0) for x in self.specimens(image_id)),default=0)
         if not label:label=f"{self.source_image_path(image_id).stem}-{ordinal:02d}"
         status="confirmed" if self.source_image(image_id).get("crop_reviewed") else "proposed"
@@ -366,18 +468,18 @@ class XRayProject:
                 specimen_id=str(edit.get("specimen_id") or "");item=rows.get(specimen_id)
                 if item is None:raise KeyError(f"Unknown specimen on this plate: {specimen_id}")
                 if specimen_id in removed_ids:continue
-                crop=dict(edit.get("crop") or {});crop["confidence"]="high"
+                crop=apply_orientation_defaults(edit.get("crop") or {},self.orientation_policy);crop["confidence"]="high"
                 if not crop.get("corners") or not crop.get("bounds"):raise ValueError("Crop geometry is incomplete.")
                 c.execute(
                     "UPDATE specimens SET crop_json=?,crop_source='manual',crop_status=?,crop_qc_json='[]',model_id='',excluded=0,updated_at=? WHERE specimen_id=?",
                     (_json(crop),status,now,specimen_id),
                 )
                 self._event(c,specimen_id,"edit","human",{"previous_crop":item.get("crop") or {},"crop":crop,"action":"apply_crop"})
-                self._invalidate_annotation_verification(c,specimen_id,"crop_changed")
+                if crop!=item.get("crop"):self._invalidate_annotation_verification(c,specimen_id,"crop_changed",item.get("crop") or {})
                 updated+=1
             ordinal=max((int(item.get("ordinal") or 0) for item in rows.values()),default=0);stem=self.source_image_path(image_id).stem
             for entry in new_crops:
-                crop=dict(entry.get("crop") or {});crop["confidence"]="high"
+                crop=apply_orientation_defaults(entry.get("crop") or {},self.orientation_policy);crop["confidence"]="high"
                 if not crop.get("corners") or not crop.get("bounds"):raise ValueError("Crop geometry is incomplete.")
                 ordinal+=1;specimen_id=str(uuid.uuid4());client_id=str(entry.get("client_id") or specimen_id);label=f"{stem}-{ordinal:02d}"
                 c.execute(
@@ -698,13 +800,46 @@ class XRayProject:
         pos=max(0,pos);state["position"]=pos;self.set_ui_state("xray_structure_active_batch",state)
         return {"finished":False,"specimen_id":ids[pos],"state":state}
 
-    def _invalidate_annotation_verification(self,c,specimen_id,reason="source_changed"):
-        run_ids=[row[0] for row in c.execute("SELECT run_id FROM annotation_runs WHERE specimen_id=?",(specimen_id,))]
-        now=_now()
-        if run_ids:
-            c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE specimen_id=?",(now,specimen_id))
-            for run_id in run_ids:self._annotation_event(c,run_id,"invalidate",payload={"reason":str(reason)})
-        c.execute("UPDATE trait_results SET qc_note=?,updated_at=? WHERE specimen_id=?",(str(reason),now,specimen_id))
+    def _invalidate_annotation_verification(self,c,specimen_id,reason="source_changed",previous_crop=None):
+        """Archive coordinate-dependent marks before an upstream crop/orientation change."""
+        now=_now();runs=c.execute(
+            "SELECT run_id,pass_no,source,schema_version_id,status FROM annotation_runs WHERE specimen_id=?",(specimen_id,)
+        ).fetchall()
+        archived=0
+        for run_id,pass_no,source,schema_version_id,status in runs:
+            rows=c.execute(
+                "SELECT annotation_id,structure_id,x,y,sort_order FROM annotations WHERE run_id=? ORDER BY structure_id,sort_order,annotation_id",
+                (run_id,),
+            ).fetchall()
+            if rows:
+                payload=[
+                    {"annotation_id":int(row[0]),"structure_id":row[1],"x":float(row[2]),"y":float(row[3]),"sort_order":int(row[4])}
+                    for row in rows
+                ]
+                cur=c.execute(
+                    """INSERT INTO annotation_archives(
+                         run_id,specimen_id,created_at,reason,crop_json,annotations_json,schema_version_id,pass_no,source,status
+                       ) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                    (run_id,specimen_id,now,str(reason),_json(previous_crop or {}),_json(payload),schema_version_id,int(pass_no),source,status),
+                )
+                archived+=len(payload);c.execute("DELETE FROM annotations WHERE run_id=?",(run_id,))
+                self._annotation_event(c,run_id,"invalidate",payload={"reason":str(reason),"archive_id":int(cur.lastrowid),"archived_annotations":len(payload)})
+            else:self._annotation_event(c,run_id,"invalidate",payload={"reason":str(reason),"archived_annotations":0})
+        if runs:c.execute("UPDATE annotation_runs SET status='stale_crop',updated_at=?,verified_at='' WHERE specimen_id=?",(now,specimen_id))
+        c.execute("UPDATE trait_results SET value_text=NULL,qc_note=?,updated_at=? WHERE specimen_id=?",(str(reason),now,specimen_id))
+        return archived
+
+    def annotation_archives(self,specimen_id):
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row;rows=[dict(row) for row in c.execute(
+                "SELECT * FROM annotation_archives WHERE specimen_id=? ORDER BY archive_id",(str(specimen_id),)
+            )]
+        for row in rows:
+            try:row["crop"]=json.loads(row.pop("crop_json") or "{}")
+            except Exception:row["crop"]={}
+            try:row["annotations"]=json.loads(row.pop("annotations_json") or "[]")
+            except Exception:row["annotations"]=[]
+        return rows
 
     @staticmethod
     def _value_text(value):
@@ -716,8 +851,10 @@ class XRayProject:
 
     def recalculate_trait_results(self,specimen_id):
         record=self.active_scheme_record();scheme=record["scheme"];schema_id=record["version_id"]
-        run=self.annotation_run(specimen_id,1,"human",False);annotations=self.annotations(specimen_id,1,"human") if run else []
-        values=calculate_trait_values(scheme,annotations);qc="" if run and run.get("status")=="verified" else (str((run or {}).get("status") or "not_started"))
+        run=self.annotation_run(specimen_id,1,"human",False);status=str((run or {}).get("status") or "not_started")
+        annotations=self.annotations(specimen_id,1,"human") if run and not status.startswith("stale") else []
+        values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations))
+        qc="" if status=="verified" else status
         now=_now()
         with sqlite3.connect(self.db_path) as c:
             for trait in scheme.get("traits",()):
@@ -734,10 +871,10 @@ class XRayProject:
     def trait_rows(self):
         scheme=self.scheme;rows=[]
         for item in self.structure_specimens(1):
-            run=self.annotation_run(item["specimen_id"],1,"human",False)
-            annotations=self.annotations(item["specimen_id"],1,"human") if run else []
-            values=calculate_trait_values(scheme,annotations)
-            rows.append({**item,"trait_values":values,"result_status":str((run or {}).get("status") or "not_started")})
+            run=self.annotation_run(item["specimen_id"],1,"human",False);status=str((run or {}).get("status") or "not_started")
+            annotations=self.annotations(item["specimen_id"],1,"human") if run and not status.startswith("stale") else []
+            values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations))
+            rows.append({**item,"trait_values":values,"result_status":status})
         return rows
 
     def add_annotation(self,specimen_id,structure_id,x,y,pass_no=1,source="human",replace_single=False):
@@ -823,7 +960,7 @@ class XRayProject:
         return {
             "eligible":len(rows),
             "verified":sum(str(row.get("annotation_status") or "")=="verified" for row in rows),
-            "draft":sum(str(row.get("annotation_status") or "")=="draft" for row in rows),
+            "draft":sum(bool(str(row.get("annotation_status") or "")) and str(row.get("annotation_status") or "")!="verified" for row in rows),
             "unstarted":sum(not row.get("run_id") for row in rows),
         }
 

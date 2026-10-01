@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from app.xray_crop import ALGORITHM_VERSION, crop_from_geometry, detect_specimens
+from app.xray_crop import ALGORITHM_VERSION, canonical_orientation_flips, crop_from_geometry, detect_specimens, oriented_crop
 from app.xray_project import XRayProject
 from app.xray_schema import blank_scheme
 
@@ -57,6 +57,25 @@ class XRayCropDetectionTests(unittest.TestCase):
         self.assertTrue(all(item.algorithm==ALGORITHM_VERSION for item in proposals))
 
 
+class XRayCropCanonicalizationTests(unittest.TestCase):
+    def test_orientation_policy_flips_only_the_required_axes(self):
+        crop=crop_from_geometry(50,30,60,20,0,(100,60),orientation_policy={"head":"left","bottom":"down"})
+        self.assertEqual((False,False),canonical_orientation_flips(crop,{"head":"left","bottom":"down"}))
+        crop["head_side"]="right";self.assertEqual((True,False),canonical_orientation_flips(crop,{"head":"left","bottom":"down"}))
+        crop["bottom_side"]="top";self.assertEqual((True,True),canonical_orientation_flips(crop,{"head":"left","bottom":"down"}))
+
+    def test_oriented_crop_is_canonical_and_keeps_source_unchanged(self):
+        arr=np.zeros((60,100),np.uint8);arr[20:40,20:80]=40;arr[25:35,20:35]=220
+        image=Image.fromarray(arr);before=np.asarray(image).copy()
+        crop=crop_from_geometry(50,30,60,20,0,(100,60),orientation_policy={"head":"left","bottom":"down"})
+        shown=np.asarray(oriented_crop(image,crop,{"head":"left","bottom":"down"}))
+        self.assertEqual((20,60),shown.shape)
+        self.assertGreater(float(shown[:,0:15].mean()),float(shown[:,-15:].mean()))
+        self.assertTrue(np.array_equal(before,np.asarray(image)))
+        crop["head_side"]="right";flipped=np.asarray(oriented_crop(image,crop,{"head":"left","bottom":"down"}))
+        self.assertGreater(float(flipped[:,-15:].mean()),float(flipped[:,0:15].mean()))
+
+
 class XRayCropPersistenceTests(unittest.TestCase):
     def setUp(self):
         self.root=Path(tempfile.mkdtemp());self.source=self.root/"source";self.source.mkdir()
@@ -66,6 +85,8 @@ class XRayCropPersistenceTests(unittest.TestCase):
         Image.fromarray(image).save(self.source/"plate.png")
         destination=self.root/"projects";destination.mkdir()
         self.project=XRayProject.create("xray",self.source,destination,blank_scheme("test"))
+        self.assertTrue(self.project.is_self_contained)
+        self.assertEqual(self.project.root/"source",self.project.source)
 
     def tearDown(self):
         shutil.rmtree(self.root,ignore_errors=True)
@@ -96,6 +117,12 @@ class XRayCropPersistenceTests(unittest.TestCase):
         self.project.confirm_plate(image_id)
         self.assertEqual("confirmed",self.project.specimen(specimen_id)["crop_status"])
         self.assertEqual(1,self.project.training_specimen_count())
+
+    def test_project_keeps_its_own_source_after_original_is_removed(self):
+        image_id=self.project.source_images()[0]["image_id"];managed=self.project.source_image_path(image_id)
+        original=self.source/"plate.png";original.unlink()
+        self.assertTrue(managed.is_file())
+        with Image.open(managed) as image:self.assertEqual((900,500),image.size)
 
     def test_reject_is_persisted(self):
         image_id=self.project.source_images()[0]["image_id"]
