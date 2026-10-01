@@ -1,0 +1,47 @@
+READ-ONLY landmark review snapshot
+{
+  "active_non_excluded_count": 1300,
+  "categories": {
+    "C_final_crop_human_only": 4,
+    "D_final_crop_mixed": 506,
+    "B_final_crop_machine_only": 751,
+    "E_final_crop_review_required": 39
+  },
+  "derived_counts": {
+    "final_crop_unresolved_historical_confirmation": 0,
+    "final_crop_unresolved_no_human_points": 0,
+    "final_crop_no_human_points_locked": 0
+  },
+  "specific_images": {
+    "img_043870.nef": {
+      "crop_exists": true,
+      "crop_provenance": "manual",
+      "crop_human_verified": true,
+      "crop_json_present": true,
+      "transform_json_present": true,
+      "landmark_crop_review_required": true,
+      "image_human_verified": false,
+      "historical_confirmation": false,
+      "human_points": false,
+      "machine_points": true,
+      "resolved": 0,
+      "unresolved": 25,
+      "prediction_locked": false
+    },
+    "img_026614.nef": {
+      "crop_exists": true,
+      "crop_provenance": "manual",
+      "crop_human_verified": true,
+      "crop_json_present": true,
+      "transform_json_present": true,
+      "landmark_crop_review_required": true,
+      "image_human_verified": false,
+      "historical_confirmation": true,
+      "human_points": true,
+      "machine_points": true,
+      "resolved": 0,
+      "unresolved": 25,
+      "prediction_locked": true
+    }
+  }
+}
