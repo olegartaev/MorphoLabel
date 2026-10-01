@@ -257,9 +257,11 @@ class XRayPlateListPanel(ttk.Frame):
 class XRayCropWorkspace:
     """Landmarks-style Crop workspace with multiple specimens on one X-ray plate."""
 
-    def __init__(self,parent,project,on_changed=None):
+    def __init__(self,parent,project,on_changed=None,initial_image_id=None,initial_specimen_id=None,on_selection=None):
         self.parent=parent;self.root=parent.winfo_toplevel();self.project=project;self.on_changed=on_changed or (lambda:None)
+        self.on_selection=on_selection or (lambda _image_id,_specimen_id:None)
         self.selected_image_id=None;self.session=PlateCropEditSession()
+        self._preferred_image_id=str(initial_image_id or "");self._preferred_specimen_id=str(initial_specimen_id or "")
         self.preview=self.photo=None;self.preview_original_size=(1,1);self.display_scale=1.0;self.offset=(0,0);self._photo_key=None
         self._busy=False;self._drag_mode=None;self._drag_anchor=None;self._drag_initial=None;self._drag_changed=False;self._drawing_crop=None
         self._icons={};self.training_batch_size=tk.IntVar(value=6);self.prediction_batch_size=tk.IntVar(value=6);self._tip=Tooltip(self.root)
@@ -383,6 +385,12 @@ class XRayCropWorkspace:
         ),justify="left",wraplength=600).pack(anchor="w",pady=(8,0))
         self._button(frame,"Close",dialog.destroy,"Close this guide.").pack(anchor="e",pady=(14,0));center(self.root,dialog)
 
+    def _notify_selection(self):
+        specimen_id=str(self.session.selected_id or "")
+        if specimen_id.startswith("draft:"):specimen_id=""
+        self._preferred_image_id=str(self.selected_image_id or "");self._preferred_specimen_id=specimen_id
+        self.on_selection(self._preferred_image_id,specimen_id)
+
     def _batch(self):return self.project.get_ui_state("xray_crop_active_batch",{})
 
     def _active_batch(self):
@@ -425,9 +433,10 @@ class XRayCropWorkspace:
 
     def refresh(self,preserve_plate=True):
         previous=self.selected_image_id if preserve_plate else None
-        images=[row for row in self.project.source_images() if not row.get("excluded")]
-        ids=list(self._batch().get("ids") or [])
-        target=previous if previous and any(row["image_id"]==previous for row in images) else (ids[0] if ids else (images[0]["image_id"] if images else None))
+        images=[row for row in self.project.source_images() if not row.get("excluded")];available={row["image_id"] for row in images}
+        batch=self._batch();ids=list(batch.get("ids") or []);position=max(0,min(len(ids)-1,int(batch.get("position",0) or 0))) if ids else 0
+        preferred=self._preferred_image_id if self._preferred_image_id in available else ""
+        target=previous if previous in available else (preferred or (ids[position] if ids and ids[position] in available else (images[0]["image_id"] if images else None)))
         self.plate_list.selected_image_id=target;self.plate_list.refresh(preserve_scroll=preserve_plate,reveal=not preserve_plate)
         if target:self._load_plate(target)
         else:self._clear_canvas()
@@ -448,11 +457,13 @@ class XRayCropWorkspace:
         self.batch_status.configure(text=f"{pos+1}/{len(ids)} · {label}")
 
     def _load_plate(self,image_id):
-        self.selected_image_id=image_id;self.session.load(self.project.specimens(image_id))
+        items=self.project.specimens(image_id)
+        selected=self._preferred_specimen_id if any(item["specimen_id"]==self._preferred_specimen_id for item in items) else None
+        self.selected_image_id=image_id;self.session.load(items,selected_id=selected)
         self._drag_mode=self._drag_anchor=self._drag_initial=None;self._drawing_crop=None;self._drag_changed=False
         try:preview,_scale,original_size=display_preview(self.project.source_image_path(image_id),1400)
         except Exception as exc:messagebox.showerror("X-ray Crops",str(exc),parent=self.root);return
-        self.preview=preview;self.preview_original_size=original_size;self._photo_key=None;self._set_save_status();self._draw();self._refresh_controls()
+        self.preview=preview;self.preview_original_size=original_size;self._photo_key=None;self._set_save_status();self._draw();self._refresh_controls();self._notify_selection()
 
     def _clear_canvas(self):
         self.canvas.delete("all");self.preview=self.photo=None;self._photo_key=None;self.selected_image_id=None;self.session.load(())
@@ -540,10 +551,12 @@ class XRayCropWorkspace:
             if item is None:continue
             hit=self._hit_crop(x,y,item)
             if hit is None:continue
-            self.session.select(item["specimen_id"]);crop=item.get("crop") or {};self._drag_mode=hit;self._drag_anchor=(x,y);self._drag_changed=False
+            self.session.select(item["specimen_id"]);self._preferred_specimen_id=item["specimen_id"];self._notify_selection()
+            crop=item.get("crop") or {};self._drag_mode=hit;self._drag_anchor=(x,y);self._drag_changed=False
             self._drag_initial=(float(crop.get("center_x",0)),float(crop.get("center_y",0)),float(crop.get("length",0)),float(crop.get("width",0)),float(crop.get("angle_degrees",0)))
             self._drawing_crop=None;self._draw();return
-        self.session.select(None);self._drag_mode=("draw",0);self._drag_anchor=(x,y);self._drag_initial=None;self._drag_changed=False;self._drawing_crop=None;self._draw()
+        self.session.select(None);self._preferred_specimen_id="";self._notify_selection()
+        self._drag_mode=("draw",0);self._drag_anchor=(x,y);self._drag_initial=None;self._drag_changed=False;self._drawing_crop=None;self._draw()
 
     def _canvas_drag(self,event):
         if self._drag_mode is None or not self.selected_image_id:return
@@ -584,6 +597,7 @@ class XRayCropWorkspace:
             if not silent:messagebox.showerror("Apply crop",str(exc),parent=self.root)
             return "FAILED"
         self.session.load(self.project.specimens(self.selected_image_id),selected_id=selected)
+        self._preferred_specimen_id=str(selected or "");self._notify_selection()
         self.plate_list.select(self.selected_image_id,reveal=True);self._refresh_controls();self._set_save_status("Crop applied · verified");self._draw();self.on_changed()
         return "SAVED"
 
