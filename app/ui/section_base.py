@@ -18,7 +18,8 @@ def _attention_banner_model(project,stages):
 
 
 class SectionView:
-    def __init__(self, shell, parent): self.shell=shell; self.context=shell.context; self.parent=parent
+    def __init__(self, shell, parent):
+        self.shell=shell; self.context=shell.context; self.parent=parent; self._attention_banner_state=None
     def frame(self, **kwargs):
         from tkinter import ttk
         return ttk.Frame(self.parent, **kwargs)
@@ -37,22 +38,46 @@ class SectionView:
         project=getattr(self.context,"project",None)
         model=_attention_banner_model(project,stages)
         if not model:
+            self._attention_banner_state=None
             return None
         box=ttk.Frame(parent,style="Attention.TFrame",padding=(10,7));box.pack(fill="x",pady=(3,0))
         ttk.Label(box,text="⚠",style="AttentionTitle.TLabel").pack(side="left",anchor="n",padx=(0,8))
         text=ttk.Frame(box,style="Attention.TFrame");text.pack(side="left",fill="x",expand=True)
-        left=int(model["remaining"])
-        noun="image" if left==1 else "images"
-        ttk.Label(text,text=f"{model['title']} — {left} {noun} left",style="AttentionTitle.TLabel").pack(anchor="w")
-        ttk.Label(text,text=model["message"],style="AttentionText.TLabel",wraplength=900,justify="left").pack(anchor="w")
+        title_label=ttk.Label(text,style="AttentionTitle.TLabel");title_label.pack(anchor="w")
+        message_label=ttk.Label(text,style="AttentionText.TLabel",wraplength=900,justify="left");message_label.pack(anchor="w")
+        state={"box":box,"title":title_label,"message":message_label,"stages":set(stages),"generation_id":model.get("generation_id")}
+        self._attention_banner_state=state
+        def apply(value):
+            left=int(value["remaining"]);noun="image" if left==1 else "images"
+            title_label.configure(text=f"{value['title']} — {left} {noun} left")
+            message_label.configure(text=value["message"])
+            state["generation_id"]=value.get("generation_id")
+        apply(model)
         def dismiss():
-            generation=model.get("generation_id")
+            generation=state.get("generation_id")
             if generation:
                 project.set_ui_state("attention_banner_dismissed_generation_id",generation)
+            self._attention_banner_state=None
             box.destroy()
         self.button(box,"×",dismiss,"Hide this reminder. The review queue stays saved.").pack(side="right",padx=(6,0))
         self.button(box,"Continue",command,"Open the saved review queue. Nothing is verified automatically.",style="Primary.TButton").pack(side="right",padx=(12,0))
         return box
+
+    def refresh_attention_banner(self):
+        """Update only banner text during fast queue navigation."""
+        state=self._attention_banner_state
+        if not state:return False
+        box=state.get("box")
+        if box is None or not box.winfo_exists():
+            self._attention_banner_state=None;return False
+        model=_attention_banner_model(getattr(self.context,"project",None),state.get("stages",()))
+        if not model:
+            box.destroy();self._attention_banner_state=None;return False
+        left=int(model["remaining"]);noun="image" if left==1 else "images"
+        state["title"].configure(text=f"{model['title']} — {left} {noun} left")
+        state["message"].configure(text=model["message"])
+        state["generation_id"]=model.get("generation_id")
+        return True
 
     def what_to_do(self, parent, title, text, help_text="Open a short guide for this workspace."):
         """One compact, shared workflow guide button for production sections."""
