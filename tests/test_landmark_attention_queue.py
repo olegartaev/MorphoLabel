@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.landmark_attention_queue import (
- active, classify, complete_current, current, move, record_failure, remove_image, start, stage_counts, user_copy
+ active, banner_copy, classify, complete_current, current, display_summary, move, record_failure, remove_image, start, stage_counts, user_copy
 )
 
 
@@ -98,13 +98,41 @@ class LandmarkAttentionQueueTests(unittest.TestCase):
   self.assertEqual("Review the AI landmark prediction",current(self.project)["reason"])
 
  def test_display_summary_is_persisted_and_does_not_reclassify_whole_queue(self):
-  from app.landmark_attention_queue import display_summary
   start(self.project,("a","b","c"))
   first=current(self.project)
   self.assertEqual("a",first["image_id"])
   with patch("app.landmark_attention_queue.classify",side_effect=AssertionError("status repaint must not classify")):
    shown=display_summary(self.project)
   self.assertEqual(("a",3),(shown["image_id"],shown["remaining"]))
+  self.assertEqual("landmark_prediction",shown["source"])
+  self.assertTrue(shown["generation_id"])
+
+ def test_banner_copy_names_the_work_in_plain_language(self):
+  cases=(
+   ({"stage":"crop","reason":"Crop needs human confirmation"},"Check crops","quick check"),
+   ({"stage":"prediction","reason":"AI prediction is missing or incomplete"},"Finish AI predictions","could not finish"),
+   ({"stage":"landmarks","reason":"Crop confirmed; review landmarks in the new crop"},"Check landmarks after crop changes","crop changed"),
+   ({"stage":"landmarks","reason":"Review the AI landmark prediction"},"Check AI landmarks","most wrong"),
+  )
+  for issue,title,phrase in cases:
+   with self.subTest(stage=issue["stage"],reason=issue["reason"]):
+    copy=banner_copy(issue)
+    self.assertEqual(title,copy["title"])
+    self.assertIn(phrase,copy["message"].lower())
+
+ def test_banner_model_persists_until_dismissed_without_requiring_current_selection(self):
+  from app.ui.section_base import _attention_banner_model
+  start(self.project,("a","b"),batch_id="batch")
+  current(self.project)
+  model=_attention_banner_model(self.project,{"prediction","landmarks"})
+  self.assertEqual("Finish AI predictions",model["title"])
+  self.assertEqual(2,model["remaining"])
+  generation=model["generation_id"]
+  self.project.set_ui_state("attention_banner_dismissed_generation_id",generation)
+  self.assertIsNone(_attention_banner_model(self.project,{"prediction","landmarks"}))
+  start(self.project,("b",),batch_id="new")
+  current(self.project)
+  self.assertIsNotNone(_attention_banner_model(self.project,{"prediction","landmarks"}))
 
  def test_user_copy_explains_why_the_queue_changed_workspace(self):
   crop_copy=user_copy({"stage":"crop","reason":"Crop is missing or invalid"})
