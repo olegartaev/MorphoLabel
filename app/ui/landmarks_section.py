@@ -778,6 +778,7 @@ class LandmarksSection(SectionView):
   except ValueError as exc:
    self._inline_status(str(exc));return True
   self.context.refresh_landmark_state(current)
+  if getattr(self.context,'_counts_cache',None) is not None:self.context.update_image_counts(current)
   self.context.update_landmark_counts(current)
   panel=getattr(self.shell,'photo_panel',None);photos=getattr(panel,'photos',panel)
   refresh_row=getattr(photos,'refresh_image',None)
