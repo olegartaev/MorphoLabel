@@ -10,7 +10,7 @@ from PIL import Image
 from .ai import ImagePrediction, InferenceRequest, LandmarkBackend, LandmarkPrediction
 from .landmark_frames import restore_standardized_frame
 from .landmark_preparation import standardized_metadata, prepare_inference_metadata
-from .project_storage import Project, load_schema, schema_hash, landmark_model_schema_compatible
+from .project_storage import Project, load_schema, schema_hash, landmark_model_schema_compatible, landmark_is_protected_human
 from .ai_hardware import auto_performance_config, record_inference_batch, is_cuda_oom, cuda_batch_candidates, get_hardware_profile
 
 _HUMAN_PROVENANCE = frozenset({"manual", "corrected", "corrected_by_human", "reviewed_by_human"})
@@ -116,7 +116,7 @@ class LandmarkAIService:
         if prediction.model_id != self.backend.model_id: raise PredictionValidationError("prediction model_id does not match backend")
         stored_prediction,adjustments=self._validated_prediction(prediction,request)
         existing=self.project.load_landmarks(request.image_id)
-        skipped_ids={point.landmark_id for point in stored_prediction.landmarks if existing.get(point.landmark_id) and existing[point.landmark_id].get("provenance") in _HUMAN_PROVENANCE}
+        skipped_ids={point.landmark_id for point in stored_prediction.landmarks if landmark_is_protected_human(existing.get(point.landmark_id))}
         run_id,manifest_path=self._write_run_manifest(request,prediction,stored_prediction,skipped_ids,adjustments);saved=skipped=0
         try:
             if hasattr(self.project, "save_machine_landmarks"):
