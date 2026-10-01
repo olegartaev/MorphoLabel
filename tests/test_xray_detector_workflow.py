@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from ai_runtime.xray_detector_runner import _best_validation_metrics
+
 import cv2
 import numpy as np
 from PIL import Image
@@ -83,6 +85,19 @@ class XRayDetectorWorkflowTests(unittest.TestCase):
         self.assertGreaterEqual(result["removed_files"],3)
         self.assertFalse((model_dir/"dataset").exists());self.assertFalse((model_dir/"work_b8").exists());self.assertFalse(old_cache.exists())
         self.assertEqual(b"final",(model_dir/"model.pth").read_bytes());self.assertTrue((model_dir/"config.py").is_file())
+
+    def test_detector_validation_metrics_report_best_real_logged_epoch(self):
+        work=self.root/"metrics";path=work/"20261002_010203"/"vis_data"/"scalars.json";path.parent.mkdir(parents=True)
+        path.write_text(
+            '{"epoch":1,"coco/bbox_mAP":0.31,"coco/bbox_mAP_50":0.55}\n'
+            '{"epoch":2,"coco/bbox_mAP":0.47,"coco/bbox_mAP_50":0.71,"coco/bbox_mAP_75":0.44}\n'
+            '{"epoch":3,"coco/bbox_mAP":0.42,"coco/bbox_mAP_50":0.68}\n',
+            encoding="utf-8",
+        )
+        metrics=_best_validation_metrics(work)
+        self.assertEqual(0.47,metrics["coco/bbox_mAP"])
+        self.assertEqual(0.71,metrics["coco/bbox_mAP_50"])
+        self.assertEqual(0.44,metrics["coco/bbox_mAP_75"])
 
     def test_model_registry_preserves_parent_lineage_and_active_version(self):
         ids=[row["image_id"] for row in self.project.source_images()[:3]]

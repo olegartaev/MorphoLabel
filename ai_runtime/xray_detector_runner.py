@@ -31,6 +31,25 @@ def _dataset(dataset_root,ann_file,pipeline):
                 data_prefix=dict(img=""),metainfo=dict(classes=("specimen",),palette=[(0,255,0)]),
                 filter_cfg=dict(filter_empty_gt=False,min_size=1),pipeline=pipeline)
 
+def _best_validation_metrics(work):
+    """Read the best detector validation row written by MMEngine without rerunning inference."""
+    best={};best_score=None
+    for path in sorted(Path(work).rglob("scalars.json")):
+        try:lines=path.read_text(encoding="utf-8").splitlines()
+        except OSError:continue
+        for line in lines:
+            try:row=json.loads(line)
+            except (TypeError,ValueError):continue
+            score=row.get("coco/bbox_mAP")
+            if not isinstance(score,(int,float)):continue
+            if best_score is None or float(score)>best_score:
+                best_score=float(score);best={}
+                for key in ("coco/bbox_mAP","coco/bbox_mAP_50","coco/bbox_mAP_75","coco/bbox_mAP_s","coco/bbox_mAP_m","coco/bbox_mAP_l"):
+                    value=row.get(key)
+                    if isinstance(value,(int,float)):best[key]=float(value)
+    return best
+
+
 def train(payload):
     import torch
     from mmengine.config import Config
@@ -103,7 +122,7 @@ def train(payload):
     candidates=list(work.glob("best*.pth"))
     if not candidates:candidates=sorted(work.glob("epoch_*.pth"),key=lambda p:p.stat().st_mtime,reverse=True)
     if not candidates:raise RuntimeError("MMDetection did not produce a checkpoint")
-    return {"checkpoint":str(candidates[0]),"config":str(config_path),"metrics":{}}
+    return {"checkpoint":str(candidates[0]),"config":str(config_path),"metrics":_best_validation_metrics(work)}
 
 def _detections(result,threshold):
     instances=result.pred_instances.cpu();detections=[]

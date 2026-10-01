@@ -36,6 +36,12 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertIn('style="StageActive.TButton" if active else "Stage.TButton"',source)
         self.assertNotIn('self._icon(row,"xray",42)',source)
 
+    def test_traits_workspace_has_explicit_visible_project_apply_action(self):
+        source=(Path(__file__).resolve().parents[1]/"app/modules/xray_counts.py").read_text(encoding="utf-8")
+        self.assertIn('"Use these traits for project"',source)
+        self.assertIn("Changes are not saved until you choose this button.",source)
+        self.assertIn("self.apply_button.pack(side=\"right\"",source)
+
     def test_project_has_one_primary_entry_to_trait_configuration(self):
         source=(Path(__file__).resolve().parents[1]/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         self.assertIn('"Traits..."',source)

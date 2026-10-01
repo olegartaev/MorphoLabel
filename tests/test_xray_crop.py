@@ -106,6 +106,15 @@ class XRayCropOrientationSessionTests(unittest.TestCase):
         self.assertTrue(session.dirty)
 
 
+class XRayCropViewportContractTests(unittest.TestCase):
+    def test_crop_workspace_has_landmarks_style_zoom_pan_and_selected_turn_control(self):
+        source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
+        for text in ('"<MouseWheel>"',"def _wheel(","def _pan_start(","def _pan_motion(","def _draw_turn_control(","self._turn_hit"):
+            self.assertIn(text,source)
+        self.assertIn('"Clear crops…"',source)
+        self.assertNotIn("self.rotate_button=",source)
+
+
 class XRayCropPersistenceTests(unittest.TestCase):
     def setUp(self):
         self.root=Path(tempfile.mkdtemp());self.source=self.root/"source";self.source.mkdir()
