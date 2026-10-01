@@ -19,7 +19,7 @@ class CropSection(SectionView):
   actions=ttk.Frame(header,style="Toolbar.TFrame");actions.pack(fill="x")
   self.button(actions,"Apply crop",self.apply_current,"Save this reversible crop and stay on the current image.",style="Primary.TButton").pack(side="left")
   ttk.Label(actions,text="Adjust the green frame; drag the yellow handle to rotate.",style="Muted.TLabel").pack(side="left",padx=10)
-  self.attention_banner(header,lambda:self.navigate_attention_queue(1),stages={"crop"})
+  self.attention_banner(header,self.shell.open_landmark_attention,stages={"crop"})
 
   self.canvas_frame=ttk.Frame(panel);self.canvas_frame.grid(row=1,column=0,sticky="nsew")
   self.canvas=CropCanvasController(self.canvas_frame,self.context,self.refresh);self.canvas.on_image_ready=self._crop_ready
