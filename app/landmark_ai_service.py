@@ -13,8 +13,6 @@ from .landmark_preparation import standardized_metadata, prepare_inference_metad
 from .project_storage import Project, load_schema, schema_hash, landmark_model_schema_compatible, landmark_is_protected_human
 from .ai_hardware import auto_performance_config, record_inference_batch, is_cuda_oom, cuda_batch_candidates, get_hardware_profile
 
-_HUMAN_PROVENANCE = frozenset({"manual", "corrected", "corrected_by_human", "reviewed_by_human"})
-
 class PredictionValidationError(ValueError): pass
 class SchemaMismatchError(PredictionValidationError): pass
 def _is_rank_process_failure(error): return 'rtmpose rank failed (return code' in str(error).lower()
@@ -125,7 +123,7 @@ class LandmarkAIService:
             else:
                 for point in stored_prediction.landmarks:
                     old=existing.get(point.landmark_id)
-                    if old and old.get("provenance") in _HUMAN_PROVENANCE:
+                    if landmark_is_protected_human(old):
                         skipped+=1;continue
                     self.project.save_landmark(request.image_id,point.landmark_id,point.x,point.y,"auto",provenance="machine",model_id=prediction.model_id,predicted_x=point.x,predicted_y=point.y,confidence=point.confidence,prediction_run_id=run_id,reviewed=False)
                     saved+=1
