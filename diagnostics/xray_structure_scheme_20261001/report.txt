@@ -1,0 +1,64 @@
+MorphoLabel X-ray Structures read-only diagnostic
+Date: 2026-10-01
+
+Repository snapshot
+Feature branch: feature/xray-traits-foundation
+Feature HEAD: 532e27ebba476523813ac48d3fe5f07ab7b17490
+Feature status at inspection: clean
+Diagnostic branch: diagnostics/xray-structure-scheme-20261001
+
+Project identification
+The X-ray module does not persist its currently opened project root in the global recent-project preference. That preference points to an unavailable temporary test project, so it cannot identify the live project directly. The inspected project record is the latest persistent X-ray candidate with a nonempty saved X-ray UI batch state: prediction review, 13 entries, position 3. This is the best match to the reported open workflow; binding to the live process could not be independently confirmed.
+
+Project summary (paths, image names, specimen IDs and locality names omitted)
+Source images: 40
+Reviewed plates: 30
+Confirmed specimens: 152
+Specimens eligible for Structures: 152
+
+ACTIVE SCHEME
+schema_version_id: 2cb304ca-82fe-4d0f-b6cb-d5665a1d6836
+name: Untitled X-ray trait scheme
+structures: 0
+traits: 0
+structures: none
+traits: none
+
+SCHEME VERSIONS
+Total: 1
+version_id | created_at | name | structures | traits | active
+2cb304ca-82fe-4d0f-b6cb-d5665a1d6836 | 2026-10-01T11:16:37+00:00 | Untitled X-ray trait scheme | 0 | 0 | YES
+
+BUNDLED SCHEME
+phoxinus_vertebral_counts: exists
+structures: 4
+traits: 7
+
+CURRENT UI / SELECTION STATE
+X-ray ui_state keys: xray_crop_active_batch
+Saved batch state: prediction_review; 13 entries; position 3
+Selected source image or plate stored as a current global selection: NO
+Selected specimen stored as a current global selection: NO
+Shared current specimen across Crops / Structures / Results: NO
+
+WHY THE UI SAYS “NO STRUCTURES”
+In app/xray_structures_ui.py, _build_structure_buttons reads the active scheme's structures and selects the first one, or None if the list is empty. _update_active_structure displays “No structures” when no active structure exists. The inspected active scheme has zero structures, so this matches the stored project state and is not a rendering bug.
+
+The fish/specimen list can still display: refresh() obtains it independently from XRayProject.structure_specimens(), which returns human-confirmed specimen crops without requiring any scheme structures. The inspected project has 152 eligible specimens.
+
+This scheme state is consistent with the code's new-project path: app/modules/xray_counts.py calls XRayProject.create(..., blank_scheme()), and app/xray_schema.py defines blank_scheme() with empty structures and traits. The bundled Phoxinus scheme exists separately; it is not automatically applied to this project's active scheme.
+
+SELECTION PERSISTENCE
+Crops stores selected_image_id and its PlateCropEditSession locally in XRayCropWorkspace. Structures stores selected_specimen_id locally in XRayStructureWorkspace and initializes it from that workspace's own specimen rows. XRayCountsRuntime creates separate Crops and Structures workspaces. No common current specimen is passed between Crops, Structures and Results or stored in ui_state. The saved crop batch is queue state, not a shared selected specimen.
+
+SQLITE READ-ONLY FINGERPRINT
+Before SHA256: 8c5eb382bf9fe7d9fc934852711a7bd6083a5b20a9e1e016fd23613814187f11
+After SHA256:  8c5eb382bf9fe7d9fc934852711a7bd6083a5b20a9e1e016fd23613814187f11
+Before size: 364544 bytes
+After size:  364544 bytes
+Before mtime_ns: 1790854873383372000
+After mtime_ns:  1790854873383372000
+SQLite unchanged: YES
+
+Reviewed code: app/modules/xray_counts.py, app/xray_crop_ui.py, app/xray_structures_ui.py, app/xray_project.py, app/xray_schema.py.
+No source files, SQLite records, models or images were changed by this diagnostic.

@@ -1,0 +1,84 @@
+{
+  "repository": {
+    "feature_branch": "feature/xray-traits-foundation",
+    "feature_head": "532e27ebba476523813ac48d3fe5f07ab7b17490",
+    "feature_status": "clean",
+    "diagnostic_branch": "diagnostics/xray-structure-scheme-20261001"
+  },
+  "project_resolution": {
+    "result": "best_match_inferred_from_persistent_xray_ui_state",
+    "basis": "The most recent persistent X-ray project candidate with a nonempty saved X-ray batch state; the saved batch is a prediction review with 13 entries and position 3.",
+    "direct_project_path_persisted_by_xray_module": false,
+    "identity_caveat": "The active X-ray project root is held by the running module instance and is not written to the global recent-project preference. The preference currently points to an unavailable temporary test project, so live-process binding could not be independently confirmed."
+  },
+  "sqlite": {
+    "access_mode": "read-only URI mode",
+    "fingerprint_before": {
+      "sha256": "8c5eb382bf9fe7d9fc934852711a7bd6083a5b20a9e1e016fd23613814187f11",
+      "size_bytes": 364544,
+      "mtime_ns": 1790854873383372000
+    },
+    "fingerprint_after": {
+      "sha256": "8c5eb382bf9fe7d9fc934852711a7bd6083a5b20a9e1e016fd23613814187f11",
+      "size_bytes": 364544,
+      "mtime_ns": 1790854873383372000
+    },
+    "unchanged": true
+  },
+  "project_counts": {
+    "source_images": 40,
+    "reviewed_plates": 30,
+    "confirmed_specimens": 152,
+    "eligible_structure_specimens": 152
+  },
+  "active_scheme": {
+    "schema_version_id": "2cb304ca-82fe-4d0f-b6cb-d5665a1d6836",
+    "name": "Untitled X-ray trait scheme",
+    "structure_count": 0,
+    "trait_count": 0,
+    "structures": [],
+    "traits": []
+  },
+  "schema_versions": {
+    "total": 1,
+    "items": [
+      {
+        "version_id": "2cb304ca-82fe-4d0f-b6cb-d5665a1d6836",
+        "created_at": "2026-10-01T11:16:37+00:00",
+        "name": "Untitled X-ray trait scheme",
+        "structure_count": 0,
+        "trait_count": 0,
+        "active": true
+      }
+    ]
+  },
+  "bundled_scheme": {
+    "exists": true,
+    "id": "phoxinus_vertebral_counts",
+    "structure_count": 4,
+    "trait_count": 7
+  },
+  "ui_state": {
+    "keys": ["xray_crop_active_batch"],
+    "saved_batch_state": {
+      "type": "prediction_review",
+      "entry_count": 13,
+      "position": 3
+    },
+    "selected_source_image_or_plate_key": null,
+    "selected_specimen_key": null,
+    "shared_current_specimen_across_crops_structures_results": false
+  },
+  "code_findings": {
+    "structures_label_condition": "XRayStructureWorkspace._update_active_structure displays No structures when _structure() returns None; _build_structure_buttons chooses the first active-scheme structure or None.",
+    "specimen_list_condition": "XRayStructureWorkspace.refresh obtains rows independently through project.structure_specimens; this query filters confirmed specimen crops and does not require scheme structures.",
+    "diagnosis": "The matched project's active scheme is empty, which explains No structures while confirmed fish/specimen rows remain visible. This is data state, not a UI rendering bug.",
+    "cross_stage_selection": "Crops.selected_image_id/session.selected_id and Structures.selected_specimen_id are workspace-local fields. XRayCountsRuntime creates each workspace separately; no common current-specimen state is saved or propagated.",
+    "relevant_sources": [
+      "app/modules/xray_counts.py",
+      "app/xray_crop_ui.py",
+      "app/xray_structures_ui.py",
+      "app/xray_project.py"
+    ]
+  }
+}
