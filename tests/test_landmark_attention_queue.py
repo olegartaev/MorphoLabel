@@ -30,7 +30,7 @@ class LandmarkAttentionQueueTests(unittest.TestCase):
   self.frame_ready={image_id:True for image_id in self.project.rows}
   self.patches=[
    patch("app.landmark_attention_queue.crop_frame_record",side_effect=lambda _p,image_id:self.crops.get(str(image_id))),
-   patch("app.landmark_attention_queue.landmark_frame_ready",side_effect=lambda _p,image_id:self.frame_ready.get(str(image_id),False)),
+   patch("app.landmark_attention_queue.landmark_prediction_frame_ready",side_effect=lambda _p,image_id:self.frame_ready.get(str(image_id),False)),
    patch("app.landmark_attention_queue.load_current_landmark_state",side_effect=lambda _p,image_id:SimpleNamespace(complete=self.complete[str(image_id)])),
   ]
   for item in self.patches:item.start()
@@ -64,6 +64,14 @@ class LandmarkAttentionQueueTests(unittest.TestCase):
   self.assertIn("Crop confirmed",issue["reason"])
   copy=user_copy(issue)
   self.assertIn("not be sent back to Crop",copy["message"])
+
+ def test_confirmed_crop_with_incomplete_landmarks_retries_ai_instead_of_manual_completion(self):
+  self.project.crop_review.add("a")
+  self.project.points["a"]={1:{"provenance":"machine","model_id":"m"}}
+  self.complete["a"]=False
+  issue=classify(self.project,"a")
+  self.assertEqual("prediction",issue["stage"])
+  self.assertIn("refresh incomplete landmarks with AI",issue["reason"])
 
  def test_prediction_result_stage_counts_match_next_actions(self):
   self.crops["a"]=None
