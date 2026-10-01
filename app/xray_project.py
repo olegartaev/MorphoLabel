@@ -575,7 +575,14 @@ class XRayProject:
         return rows
 
     def ensure_annotation_run(self,specimen_id,pass_no=1,source="human"):
-        self.specimen(specimen_id);record=self.active_scheme_record();schema_id=record["version_id"];pass_no=int(pass_no);now=_now()
+        specimen=self.specimen(specimen_id);image=self.source_image(specimen["image_id"])
+        if specimen["excluded"] or specimen["crop_status"]!="confirmed" or image["excluded"] or not image["crop_reviewed"]:
+            raise ValueError("Structures can be annotated only on human-confirmed specimen crops.")
+        record=self.active_scheme_record();schema_id=record["version_id"];pass_no=int(pass_no);now=_now()
+        if pass_no>1:
+            first=self.annotation_run(specimen_id,1,source,False)
+            if not first or first.get("status")!="verified":
+                raise ValueError("Verify manual pass 1 before starting repeatability pass 2.")
         with sqlite3.connect(self.db_path) as c:
             row=c.execute(
                 "SELECT run_id FROM annotation_runs WHERE specimen_id=? AND pass_no=? AND source=? AND schema_version_id=?",
@@ -619,7 +626,10 @@ class XRayProject:
         )
 
     def add_annotation(self,specimen_id,structure_id,x,y,pass_no=1,source="human",replace_single=False):
-        structure_id=str(structure_id);x=max(0.0,min(1.0,float(x)));y=max(0.0,min(1.0,float(y)))
+        structure_id=str(structure_id)
+        known={item["id"] for item in self.scheme.get("structures",())}
+        if structure_id not in known:raise KeyError(f"Unknown structure in active scheme: {structure_id}")
+        x=max(0.0,min(1.0,float(x)));y=max(0.0,min(1.0,float(y)))
         run_id=self.ensure_annotation_run(specimen_id,pass_no,source);now=_now()
         with sqlite3.connect(self.db_path) as c:
             if replace_single:

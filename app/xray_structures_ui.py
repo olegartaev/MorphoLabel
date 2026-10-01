@@ -117,7 +117,7 @@ class XRayStructureWorkspace:
             button.pack(side="left",fill="x",expand=True);self._structure_buttons[structure["id"]]=button
             hotkey=str(structure.get("hotkey") or "")
             ttk.Label(row,text=hotkey or "—",style="SectionTitle.TLabel",width=3,anchor="center").pack(side="right")
-            if hotkey:self.root.bind(hotkey,lambda _e,sid=structure["id"]:self._choose_structure(sid),add="+")
+            if hotkey:self.canvas.bind(hotkey,lambda _e,sid=structure["id"]:self._choose_structure(sid))
             self.tip.bind(button,structure.get("description") or structure["name"])
         self._update_active_structure()
 
