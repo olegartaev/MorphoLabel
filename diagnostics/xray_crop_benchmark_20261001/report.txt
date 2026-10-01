@@ -1,0 +1,24 @@
+MorphoLabel X-ray Crop Read-only Benchmark
+Repository branch: diagnostics/xray-crop-benchmark-20261001
+Repository HEAD: 9c78fa9f54a6c9f8b163bc8e3b3ddbe146691f28
+Repository status (excluding this diagnostic package): clean
+Source plates: 17
+Human-confirmed plates: 15
+Human-confirmed specimens: 93
+Active model available: YES
+Active model id: xray_crop_model_v001
+Model parent: none
+Model created: 2026-09-30T23:03:07+00:00
+Model training membership: 12 plates
+SEEN / UNSEEN: 12 / 3
+
+Aggregate metrics — ALL confirmed plates
+HEURISTIC: truth=93; predicted=88; recall@0.30=0.946; recall@0.50=0.925; mean IoU=0.880; mean GT coverage=0.878; coverage>=0.95=55.9%; median area ratio=1.000; median seconds/plate=0.169
+RTMDET: truth=93; predicted=97; recall@0.30=0.946; recall@0.50=0.624; mean IoU=0.582; mean GT coverage=0.917; coverage>=0.95=67.7%; median area ratio=1.670; median seconds/plate=0.713
+
+Plate counts and timings
+Heuristic better / RTMDet better / ties by mean GT coverage: 6 / 8 / 1
+Exact specimen count — heuristic / RTMDet: 11 / 11
+Total missed — heuristic / RTMDet: 5 / 5
+Total extras — heuristic / RTMDet: 0 / 9
+Median seconds/plate — heuristic / RTMDet: 0.169 / 0.713

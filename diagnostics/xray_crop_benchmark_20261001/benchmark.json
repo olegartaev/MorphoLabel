@@ -1,0 +1,2454 @@
+{
+  "active_model": {
+    "created_at": "2026-09-30T23:03:07+00:00",
+    "files_available": true,
+    "membership_plate_count": 12,
+    "metrics": {
+      "backend": "rtmdet_tiny_mmdet_3_2",
+      "batch_size": 8,
+      "coco/bbox_mAP": null,
+      "coco/bbox_mAP_50": null,
+      "coco/bbox_mAP_75": null,
+      "device": "cuda:0",
+      "epochs": 80,
+      "initialization": "rtmdet_tiny_coco_pretrained",
+      "loss": null,
+      "mixed_precision": true,
+      "precision": null,
+      "train_plates": 10,
+      "training_plates": null,
+      "training_specimens": null,
+      "val_plates": 2,
+      "workers": 8
+    },
+    "model_id": "xray_crop_model_v001",
+    "parent_model_id": null,
+    "training_plate_count": 12,
+    "training_specimen_count": 70
+  },
+  "active_model_available": true,
+  "aggregates": {
+    "ALL": {
+      "heuristic": {
+        "count_exact_plates": 11,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 55.913978494623656,
+        "mean_gt_coverage": 0.877562407864941,
+        "mean_matched_polygon_iou": 0.8801030058453799,
+        "median_matched_polygon_iou": 0.9999999084615655,
+        "median_predicted_area_over_gt_area": 1.0,
+        "median_processing_seconds_per_plate": 0.16902880000998266,
+        "plate_count": 15,
+        "predicted_specimen_count": 88,
+        "recall_iou_0_30": 0.946236559139785,
+        "recall_iou_0_50": 0.9247311827956989,
+        "truth_specimen_count": 93,
+        "unmatched_truth": 5
+      },
+      "rtmdet": {
+        "count_exact_plates": 11,
+        "extra_predictions": 9,
+        "gt_coverage_ge_0_95_percent": 67.74193548387096,
+        "mean_gt_coverage": 0.9171271235131497,
+        "mean_matched_polygon_iou": 0.5816361917584273,
+        "median_matched_polygon_iou": 0.5650932750605949,
+        "median_predicted_area_over_gt_area": 1.669824576040793,
+        "median_processing_seconds_per_plate": 0.7128173133416567,
+        "plate_count": 15,
+        "predicted_specimen_count": 97,
+        "recall_iou_0_30": 0.946236559139785,
+        "recall_iou_0_50": 0.6236559139784946,
+        "truth_specimen_count": 93,
+        "unmatched_truth": 5
+      }
+    },
+    "SEEN": {
+      "heuristic": {
+        "count_exact_plates": 10,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 68.57142857142857,
+        "mean_gt_coverage": 0.9240510258877789,
+        "mean_matched_polygon_iou": 0.9253212781446775,
+        "median_matched_polygon_iou": 0.9999999521868459,
+        "median_predicted_area_over_gt_area": 1.0,
+        "median_processing_seconds_per_plate": 0.16732070001307875,
+        "plate_count": 12,
+        "predicted_specimen_count": 68,
+        "recall_iou_0_30": 0.9714285714285714,
+        "recall_iou_0_50": 0.9571428571428572,
+        "truth_specimen_count": 70,
+        "unmatched_truth": 2
+      },
+      "rtmdet": {
+        "count_exact_plates": 9,
+        "extra_predictions": 8,
+        "gt_coverage_ge_0_95_percent": 60.0,
+        "mean_gt_coverage": 0.8933882705388618,
+        "mean_matched_polygon_iou": 0.5552020343867952,
+        "median_matched_polygon_iou": 0.5279419015574568,
+        "median_predicted_area_over_gt_area": 1.7025617507931294,
+        "median_processing_seconds_per_plate": 0.7084498633368639,
+        "plate_count": 12,
+        "predicted_specimen_count": 73,
+        "recall_iou_0_30": 0.9285714285714286,
+        "recall_iou_0_50": 0.6142857142857143,
+        "truth_specimen_count": 70,
+        "unmatched_truth": 5
+      }
+    },
+    "UNSEEN": {
+      "heuristic": {
+        "count_exact_plates": 1,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 17.391304347826086,
+        "mean_gt_coverage": 0.7360753095345648,
+        "mean_matched_polygon_iou": 0.7263608800277683,
+        "median_matched_polygon_iou": 0.7544974466182888,
+        "median_predicted_area_over_gt_area": 0.9850281555526021,
+        "median_processing_seconds_per_plate": 0.19711079998523928,
+        "plate_count": 3,
+        "predicted_specimen_count": 20,
+        "recall_iou_0_30": 0.8695652173913043,
+        "recall_iou_0_50": 0.8260869565217391,
+        "truth_specimen_count": 23,
+        "unmatched_truth": 3
+      },
+      "rtmdet": {
+        "count_exact_plates": 2,
+        "extra_predictions": 1,
+        "gt_coverage_ge_0_95_percent": 91.30434782608695,
+        "mean_gt_coverage": 0.9893758064783738,
+        "mean_matched_polygon_iou": 0.65634141911304,
+        "median_matched_polygon_iou": 0.649897392052762,
+        "median_predicted_area_over_gt_area": 1.5204032853668936,
+        "median_processing_seconds_per_plate": 0.7224963133223354,
+        "plate_count": 3,
+        "predicted_specimen_count": 24,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 0.6521739130434783,
+        "truth_specimen_count": 23,
+        "unmatched_truth": 0
+      }
+    }
+  },
+  "comparison": {
+    "heuristic_median_seconds_per_plate": 0.16902880000998266,
+    "heuristic_total_extras": 0,
+    "heuristic_total_missed": 5,
+    "plates_heuristic_better_gt_coverage": 6,
+    "plates_heuristic_exact_specimen_count": 11,
+    "plates_rtmdet_better_gt_coverage": 8,
+    "plates_rtmdet_exact_specimen_count": 11,
+    "plates_tied_gt_coverage": 1,
+    "rtmdet_median_seconds_per_plate": 0.7128173133416567,
+    "rtmdet_total_extras": 9,
+    "rtmdet_total_missed": 5
+  },
+  "confirmed_plate_count": 15,
+  "confirmed_specimen_count": 93,
+  "holdout_status": "independent unseen plates present",
+  "matching_method": "deterministic greedy highest polygon IoU; primary one-to-one assignment threshold IoU >= 0.30; recall also computed at IoU >= 0.50",
+  "per_plate": [
+    {
+      "heuristic": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 54.54545454545455,
+        "matched_at_iou_0_30": 11,
+        "matched_at_iou_0_50": 11,
+        "mean_gt_coverage": 0.9363800777338157,
+        "mean_matched_polygon_iou": 0.9065246669781086,
+        "median_matched_polygon_iou": 0.9344264407974736,
+        "median_predicted_area_over_gt_area": 1.0,
+        "predicted_specimen_count": 11,
+        "processing_seconds_per_plate": 0.19072429998777807,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 11,
+        "unmatched_truth": 0
+      },
+      "plate_id": "plate_001",
+      "rtmdet": {
+        "count_exact": false,
+        "extra_predictions": 4,
+        "gt_coverage_ge_0_95_percent": 72.72727272727273,
+        "matched_at_iou_0_30": 8,
+        "matched_at_iou_0_50": 3,
+        "mean_gt_coverage": 0.7272727253925813,
+        "mean_matched_polygon_iou": 0.47488750050157547,
+        "median_matched_polygon_iou": 0.4436518668506604,
+        "median_predicted_area_over_gt_area": 2.258723219720938,
+        "predicted_specimen_count": 12,
+        "processing_seconds_per_plate": 0.731382813322125,
+        "recall_iou_0_30": 0.7272727272727273,
+        "recall_iou_0_50": 0.2727272727272727,
+        "truth_specimen_count": 11,
+        "unmatched_truth": 3
+      },
+      "split": "SEEN",
+      "truth": [
+        [
+          [
+            50.06867122395832,
+            2898.1456328125
+          ],
+          [
+            253.13685839257997,
+            1473.7235029084281
+          ],
+          [
+            606.4000000000001,
+            1524.085333333333
+          ],
+          [
+            403.33181283137844,
+            2948.507463237405
+          ]
+        ],
+        [
+          [
+            954.9288020580311,
+            431.46295719903486
+          ],
+          [
+            789.5938268727964,
+            1877.2303697726602
+          ],
+          [
+            437.4026300472033,
+            1836.9545119263673
+          ],
+          [
+            602.7376052324382,
+            391.1870993527422
+          ]
+        ],
+        [
+          [
+            445.298220456287,
+            3027.857113514425
+          ],
+          [
+            761.7224949385695,
+            1476.504515623409
+          ],
+          [
+            1079.121744610008,
+            1541.2433940930998
+          ],
+          [
+            762.6974701277254,
+            3092.5959919841152
+          ]
+        ],
+        [
+          [
+            837.5928252925642,
+            2923.114488788107
+          ],
+          [
+            1209.2365307184227,
+            1429.3420307311085
+          ],
+          [
+            1552.0569233194578,
+            1514.63416496119
+          ],
+          [
+            1180.413217893599,
+            3008.4066230181884
+          ]
+        ],
+        [
+          [
+            1387.200628448709,
+            305.91714385848775
+          ],
+          [
+            1311.6024295346658,
+            1646.4050786361602
+          ],
+          [
+            945.7776545994649,
+            1625.774013345876
+          ],
+          [
+            1021.3758535135082,
+            285.2860785682035
+          ]
+        ],
+        [
+          [
+            1742.5781116388887,
+            271.9165853400671
+          ],
+          [
+            1652.0257326225567,
+            1560.3973780128324
+          ],
+          [
+            1358.6751182021096,
+            1539.7811638071307
+          ],
+          [
+            1449.2274972184416,
+            251.3003711343653
+          ]
+        ],
+        [
+          [
+            1385.8275779827686,
+            2907.1818731764292
+          ],
+          [
+            1594.736651514358,
+            1564.4682199882811
+          ],
+          [
+            1908.3505894032646,
+            1613.2625381628238
+          ],
+          [
+            1699.4415158716752,
+            2955.9761913509715
+          ]
+        ],
+        [
+          [
+            2367.4817358052164,
+            492.17046145845444
+          ],
+          [
+            2094.9168926762727,
+            1634.0532007042646
+          ],
+          [
+            1809.6768245412843,
+            1565.9670376043193
+          ],
+          [
+            2082.241667670228,
+            424.0842983585093
+          ]
+        ],
+        [
+          [
+            1810.0071609993051,
+            3015.5766425484358
+          ],
+          [
+            2057.1372604998264,
+            1436.617257891692
+          ],
+          [
+            2421.276770521263,
+            1493.610385275543
+          ],
+          [
+            2174.146671020742,
+            3072.569769932287
+          ]
+        ],
+        [
+          [
+            2696.7449558324374,
+            1497.3223175770863
+          ],
+          [
+            2721.201253566082,
+            2962.4473808314297
+          ],
+          [
+            2367.2828761988126,
+            2968.3550903010064
+          ],
+          [
+            2342.826578465168,
+            1503.230027046663
+          ]
+        ],
+        [
+          [
+            2768.1162246923436,
+            230.77680016835706
+          ],
+          [
+            2879.2780732227097,
+            1425.6319798589584
+          ],
+          [
+            2550.059505313747,
+            1456.260415171727
+          ],
+          [
+            2438.897656783381,
+            261.40523548112566
+          ]
+        ]
+      ]
+    },
+    {
+      "heuristic": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 80.0,
+        "matched_at_iou_0_30": 5,
+        "matched_at_iou_0_50": 5,
+        "mean_gt_coverage": 0.974403442415319,
+        "mean_matched_polygon_iou": 0.9741077744090814,
+        "median_matched_polygon_iou": 0.9999999259983454,
+        "median_predicted_area_over_gt_area": 1.0,
+        "predicted_specimen_count": 5,
+        "processing_seconds_per_plate": 0.171606799995061,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 0
+      },
+      "plate_id": "plate_002",
+      "rtmdet": {
+        "count_exact": false,
+        "extra_predictions": 1,
+        "gt_coverage_ge_0_95_percent": 20.0,
+        "matched_at_iou_0_30": 5,
+        "matched_at_iou_0_50": 3,
+        "mean_gt_coverage": 0.94657115372486,
+        "mean_matched_polygon_iou": 0.5421240750036995,
+        "median_matched_polygon_iou": 0.5095721166358741,
+        "median_predicted_area_over_gt_area": 1.7270806774702676,
+        "predicted_specimen_count": 6,
+        "processing_seconds_per_plate": 0.7207252133404836,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 0.6,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 0
+      },
+      "split": "SEEN",
+      "truth": [
+        [
+          [
+            -255.77817865402028,
+            57.821100612683075
+          ],
+          [
+            2853.693040122943,
+            -92.69532561994936
+          ],
+          [
+            2895.851969405445,
+            778.2526532789291
+          ],
+          [
+            -213.61924937151824,
+            928.7690795115615
+          ]
+        ],
+        [
+          [
+            -241.20090595805036,
+            895.6636576622969
+          ],
+          [
+            2588.45597190762,
+            617.8811870362587
+          ],
+          [
+            2654.205362682171,
+            1287.643448857135
+          ],
+          [
+            -175.45151518349914,
+            1565.425919483173
+          ]
+        ],
+        [
+          [
+            -243.8301897566518,
+            1552.3911471875047
+          ],
+          [
+            2351.8499962690476,
+            1318.9113638471845
+          ],
+          [
+            2395.8029457908474,
+            1807.5523868895514
+          ],
+          [
+            -199.8772402348517,
+            2041.032170229872
+          ]
+        ],
+        [
+          [
+            -236.3576905088022,
+            1874.4020662044672
+          ],
+          [
+            2416.8941444160178,
+            2062.9507924194654
+          ],
+          [
+            2376.2195851616225,
+            2635.3219303364854
+          ],
+          [
+            -277.0322497631977,
+            2446.773204121487
+          ]
+        ],
+        [
+          [
+            -59.91339474841469,
+            2693.7599854940163
+          ],
+          [
+            2281.382221598056,
+            2352.471580590529
+          ],
+          [
+            2359.232383808096,
+            2886.5367316341826
+          ],
+          [
+            17.936767461625536,
+            3227.82513653767
+          ]
+        ]
+      ]
+    },
+    {
+      "heuristic": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 80.0,
+        "matched_at_iou_0_30": 5,
+        "matched_at_iou_0_50": 5,
+        "mean_gt_coverage": 0.97510353473362,
+        "mean_matched_polygon_iou": 0.974225915925027,
+        "median_matched_polygon_iou": 0.9999999754786729,
+        "median_predicted_area_over_gt_area": 1.0,
+        "predicted_specimen_count": 5,
+        "processing_seconds_per_plate": 0.1318465000076685,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 0
+      },
+      "plate_id": "plate_003",
+      "rtmdet": {
+        "count_exact": false,
+        "extra_predictions": 2,
+        "gt_coverage_ge_0_95_percent": 80.0,
+        "matched_at_iou_0_30": 4,
+        "matched_at_iou_0_50": 2,
+        "mean_gt_coverage": 0.7940445077097735,
+        "mean_matched_polygon_iou": 0.5872905015442715,
+        "median_matched_polygon_iou": 0.5856428317633552,
+        "median_predicted_area_over_gt_area": 1.8150931082367059,
+        "predicted_specimen_count": 6,
+        "processing_seconds_per_plate": 0.6847241133393254,
+        "recall_iou_0_30": 0.8,
+        "recall_iou_0_50": 0.4,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 1
+      },
+      "split": "SEEN",
+      "truth": [
+        [
+          [
+            -84.60267047712269,
+            -195.54337425413235
+          ],
+          [
+            2826.838488840864,
+            -11.3369013443531
+          ],
+          [
+            2775.2760467602156,
+            803.6236903069287
+          ],
+          [
+            -136.16511255777107,
+            619.4172173971493
+          ]
+        ],
+        [
+          [
+            259.72921495576446,
+            774.0114014865543
+          ],
+          [
+            2224.1255946351775,
+            615.5307817185386
+          ],
+          [
+            2255.4437017435,
+            1003.7244694518095
+          ],
+          [
+            291.0473220640867,
+            1162.205089219825
+          ]
+        ],
+        [
+          [
+            103.07507388049537,
+            1102.8394246693033
+          ],
+          [
+            2596.135682672335,
+            1088.658676623706
+          ],
+          [
+            2599.4431032817283,
+            1670.1230684507173
+          ],
+          [
+            106.38249448988887,
+            1684.3038164963148
+          ]
+        ],
+        [
+          [
+            51.12502235188777,
+            1887.4530056459353
+          ],
+          [
+            2151.8212697686126,
+            1601.9558619601448
+          ],
+          [
+            2218.2290336162464,
+            2090.5861106311863
+          ],
+          [
+            117.53278619952127,
+            2376.0832543169763
+          ]
+        ],
+        [
+          [
+            77.26469703180393,
+            2498.369853346604
+          ],
+          [
+            2024.8652139758133,
+            2086.4452751084073
+          ],
+          [
+            2112.6763848396504,
+            2501.620991253644
+          ],
+          [
+            165.0758678956411,
+            2913.545569491841
+          ]
+        ]
+      ]
+    },
+    {
+      "heuristic": {
+        "count_exact": false,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 57.142857142857146,
+        "matched_at_iou_0_30": 6,
+        "matched_at_iou_0_50": 6,
+        "mean_gt_coverage": 0.8023863950184688,
+        "mean_matched_polygon_iou": 0.9293095745422567,
+        "median_matched_polygon_iou": 0.9999999315515475,
+        "median_predicted_area_over_gt_area": 1.0,
+        "predicted_specimen_count": 6,
+        "processing_seconds_per_plate": 0.08863479999126866,
+        "recall_iou_0_30": 0.8571428571428571,
+        "recall_iou_0_50": 0.8571428571428571,
+        "truth_specimen_count": 7,
+        "unmatched_truth": 1
+      },
+      "plate_id": "plate_004",
+      "rtmdet": {
+        "count_exact": true,
+        "extra_predictions": 1,
+        "gt_coverage_ge_0_95_percent": 71.42857142857143,
+        "matched_at_iou_0_30": 6,
+        "matched_at_iou_0_50": 3,
+        "mean_gt_coverage": 0.8480825135422074,
+        "mean_matched_polygon_iou": 0.49666818400548574,
+        "median_matched_polygon_iou": 0.5026868806593565,
+        "median_predicted_area_over_gt_area": 2.0106044912709415,
+        "predicted_specimen_count": 7,
+        "processing_seconds_per_plate": 0.6956476133374963,
+        "recall_iou_0_30": 0.8571428571428571,
+        "recall_iou_0_50": 0.42857142857142855,
+        "truth_specimen_count": 7,
+        "unmatched_truth": 1
+      },
+      "split": "SEEN",
+      "truth": [
+        [
+          [
+            17.37958123953979,
+            2543.1563003114297
+          ],
+          [
+            419.88338192419826,
+            976.7813411078719
+          ],
+          [
+            791.4484070986526,
+            1072.2606093095624
+          ],
+          [
+            388.94460641399417,
+            2638.6355685131202
+          ]
+        ],
+        [
+          [
+            987.5821516630804,
+            966.2164038256321
+          ],
+          [
+            1017.4068794560524,
+            2863.4410094994705
+          ],
+          [
+            626.5011126326222,
+            2869.5861217088236
+          ],
+          [
+            596.6763848396502,
+            972.3615160349855
+          ]
+        ],
+        [
+          [
+            1536.4915470434169,
+            1115.6442052781524
+          ],
+          [
+            1421.5911473973758,
+            2692.3801396078306
+          ],
+          [
+            1049.8361034706165,
+            2665.289488480015
+          ],
+          [
+            1164.7365031166578,
+            1088.5535541503364
+          ]
+        ],
+        [
+          [
+            1942.7098691306705,
+            1265.5464353831564
+          ],
+          [
+            1878.1700340559203,
+            2543.951108783183
+          ],
+          [
+            1559.478110503998,
+            2527.8620529359505
+          ],
+          [
+            1624.0179455787484,
+            1249.457379535924
+          ]
+        ],
+        [
+          [
+            2433.4900857825937,
+            1252.1299500033508
+          ],
+          [
+            2127.7538945162737,
+            2634.1152953283745
+          ],
+          [
+            1801.3879333971386,
+            2561.91345451358
+          ],
+          [
+            2107.1241246634586,
+            1179.9281091885562
+          ]
+        ],
+        [
+          [
+            2831.264828958962,
+            229.05559985400313
+          ],
+          [
+            2736.3686199709487,
+            1438.7716004617062
+          ],
+          [
+            2429.239657854922,
+            1414.6788595534329
+          ],
+          [
+            2524.1358668429352,
+            204.96285894572978
+          ]
+        ],
+        [
+          [
+            2298.5727783103343,
+            1262.6669837934126
+          ],
+          [
+            2592.3291634655793,
+            1226.6581365808345
+          ],
+          [
+            2721.174676009817,
+            2277.7662652312
+          ],
+          [
+            2427.418290854572,
+            2313.775112443778
+          ]
+        ]
+      ]
+    },
+    {
+      "heuristic": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 60.0,
+        "matched_at_iou_0_30": 5,
+        "matched_at_iou_0_50": 5,
+        "mean_gt_coverage": 0.9296963221258381,
+        "mean_matched_polygon_iou": 0.9190828366886177,
+        "median_matched_polygon_iou": 0.9999999529013847,
+        "median_predicted_area_over_gt_area": 1.0,
+        "predicted_specimen_count": 5,
+        "processing_seconds_per_plate": 0.16561260001617484,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 0
+      },
+      "plate_id": "plate_005",
+      "rtmdet": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 100.0,
+        "matched_at_iou_0_30": 5,
+        "matched_at_iou_0_50": 5,
+        "mean_gt_coverage": 0.9950143932560476,
+        "mean_matched_polygon_iou": 0.6229282499601061,
+        "median_matched_polygon_iou": 0.6374096558725998,
+        "median_predicted_area_over_gt_area": 1.5688497895945877,
+        "predicted_specimen_count": 5,
+        "processing_seconds_per_plate": 0.7032555133511778,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 0
+      },
+      "split": "SEEN",
+      "truth": [
+        [
+          [
+            70.79756419988475,
+            6.649599268720558
+          ],
+          [
+            2640.5121106120846,
+            -144.19954227854828
+          ],
+          [
+            2676.9526237045125,
+            476.56445817811226
+          ],
+          [
+            107.23807729231243,
+            627.4135997253811
+          ]
+        ],
+        [
+          [
+            41.39169143956869,
+            370.7023345365121
+          ],
+          [
+            2840.833421394975,
+            759.9939213539642
+          ],
+          [
+            2736.782505667959,
+            1508.236332415555
+          ],
+          [
+            -62.6592242874477,
+            1118.9447455981028
+          ]
+        ],
+        [
+          [
+            157.60373029255604,
+            1301.5591229911906
+          ],
+          [
+            2506.106856115372,
+            1247.1276455751033
+          ],
+          [
+            2518.9145609221,
+            1799.7294892341909
+          ],
+          [
+            170.41143509928455,
+            1854.1609666502782
+          ]
+        ],
+        [
+          [
+            101.78752443008429,
+            1906.7608222098143
+          ],
+          [
+            2794.0685435310866,
+            1592.8719192281626
+          ],
+          [
+            2863.8080959520244,
+            2191.04047976012
+          ],
+          [
+            171.52707685102192,
+            2504.9293827417714
+          ]
+        ],
+        [
+          [
+            298.56353756354093,
+            2307.5565915113184
+          ],
+          [
+            2526.8167388346897,
+            2275.1054160956282
+          ],
+          [
+            2536.5157421289355,
+            2941.0854572713642
+          ],
+          [
+            308.26254085778663,
+            2973.5366326870544
+          ]
+        ]
+      ]
+    },
+    {
+      "heuristic": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 80.0,
+        "matched_at_iou_0_30": 5,
+        "matched_at_iou_0_50": 5,
+        "mean_gt_coverage": 0.9443982002647895,
+        "mean_matched_polygon_iou": 0.9443981957784762,
+        "median_matched_polygon_iou": 0.9999999588766776,
+        "median_predicted_area_over_gt_area": 1.0,
+        "predicted_specimen_count": 5,
+        "processing_seconds_per_plate": 0.16902880000998266,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 0
+      },
+      "plate_id": "plate_006",
+      "rtmdet": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 100.0,
+        "matched_at_iou_0_30": 5,
+        "matched_at_iou_0_50": 5,
+        "mean_gt_coverage": 0.9921706233823503,
+        "mean_matched_polygon_iou": 0.6601070797934968,
+        "median_matched_polygon_iou": 0.6845427616003424,
+        "median_predicted_area_over_gt_area": 1.404538551244473,
+        "predicted_specimen_count": 5,
+        "processing_seconds_per_plate": 0.7128173133416567,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 0
+      },
+      "split": "SEEN",
+      "truth": [
+        [
+          [
+            74.50409402731951,
+            16.70462460051436
+          ],
+          [
+            2969.9198233622224,
+            -151.7871795591226
+          ],
+          [
+            3016.1230846157396,
+            642.1840764745353
+          ],
+          [
+            120.7073552808369,
+            810.6758806341724
+          ]
+        ],
+        [
+          [
+            410.87050436468814,
+            829.8617762441976
+          ],
+          [
+            2893.616098316827,
+            533.0140252225141
+          ],
+          [
+            2979.7294492923356,
+            1253.2402758141232
+          ],
+          [
+            496.98385534019695,
+            1550.0880268358067
+          ]
+        ],
+        [
+          [
+            702.8935992469249,
+            1302.4664887260706
+          ],
+          [
+            3063.562605887201,
+            1313.258418155671
+          ],
+          [
+            3060.459426275691,
+            1992.060107762437
+          ],
+          [
+            699.7904196354149,
+            1981.2681783328364
+          ]
+        ],
+        [
+          [
+            255.1076491576923,
+            1935.0477733670123
+          ],
+          [
+            2347.5019509278777,
+            1931.4469706233895
+          ],
+          [
+            2348.545890191528,
+            2538.070749314013
+          ],
+          [
+            256.1515884213426,
+            2541.6715520576363
+          ]
+        ],
+        [
+          [
+            573.7131105568933,
+            2333.004635316579
+          ],
+          [
+            3003.7875993863013,
+            2564.3360838752915
+          ],
+          [
+            2934.6502009733363,
+            3290.6058113773033
+          ],
+          [
+            504.57571214392783,
+            3059.274362818591
+          ]
+        ]
+      ]
+    },
+    {
+      "heuristic": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 20.0,
+        "matched_at_iou_0_30": 5,
+        "matched_at_iou_0_50": 5,
+        "mean_gt_coverage": 0.8716935870980299,
+        "mean_matched_polygon_iou": 0.7501796773359349,
+        "median_matched_polygon_iou": 0.7463986159794754,
+        "median_predicted_area_over_gt_area": 0.9965574847731548,
+        "predicted_specimen_count": 5,
+        "processing_seconds_per_plate": 0.15633810000144877,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 0
+      },
+      "plate_id": "plate_007",
+      "rtmdet": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 100.0,
+        "matched_at_iou_0_30": 5,
+        "matched_at_iou_0_50": 3,
+        "mean_gt_coverage": 0.9999999922647881,
+        "mean_matched_polygon_iou": 0.5551165134913724,
+        "median_matched_polygon_iou": 0.5015226619035656,
+        "median_predicted_area_over_gt_area": 1.9939278573180947,
+        "predicted_specimen_count": 5,
+        "processing_seconds_per_plate": 0.7042431133333593,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 0.6,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 0
+      },
+      "split": "SEEN",
+      "truth": [
+        [
+          [
+            378.4960895174932,
+            38.02988017672442
+          ],
+          [
+            2847.5439946060446,
+            279.8627201227058
+          ],
+          [
+            2794.149983648384,
+            825.0011344453218
+          ],
+          [
+            325.1020785598325,
+            583.1682944993404
+          ]
+        ],
+        [
+          [
+            285.6863715734177,
+            471.2776308874488
+          ],
+          [
+            2408.0948436561653,
+            776.2671007975339
+          ],
+          [
+            2337.745359460479,
+            1265.826105269375
+          ],
+          [
+            215.33688737773153,
+            960.8366353592899
+          ]
+        ],
+        [
+          [
+            102.0913468999616,
+            1069.750273450225
+          ],
+          [
+            2633.1255352167236,
+            1442.601112755227
+          ],
+          [
+            2535.5799154531933,
+            2104.7728782855115
+          ],
+          [
+            4.545727136431601,
+            1731.9220389805096
+          ]
+        ],
+        [
+          [
+            138.38915477358356,
+            1900.05701731416
+          ],
+          [
+            2454.692653673164,
+            1995.574212893553
+          ],
+          [
+            2429.9466773103745,
+            2595.6671206168744
+          ],
+          [
+            113.64317841079433,
+            2500.1499250374814
+          ]
+        ],
+        [
+          [
+            354.0090715880636,
+            2458.31009402727
+          ],
+          [
+            2513.926664943122,
+            2474.8540182192014
+          ],
+          [
+            2509.241379310345,
+            3086.548725637181
+          ],
+          [
+            349.3237859552866,
+            3070.00480144525
+          ]
+        ]
+      ]
+    },
+    {
+      "heuristic": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 100.0,
+        "matched_at_iou_0_30": 5,
+        "matched_at_iou_0_50": 5,
+        "mean_gt_coverage": 0.9999999935090886,
+        "mean_matched_polygon_iou": 0.9999999870181779,
+        "median_matched_polygon_iou": 0.9999999650259003,
+        "median_predicted_area_over_gt_area": 1.0,
+        "predicted_specimen_count": 5,
+        "processing_seconds_per_plate": 0.1520340999995824,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 0
+      },
+      "plate_id": "plate_008",
+      "rtmdet": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 100.0,
+        "matched_at_iou_0_30": 5,
+        "matched_at_iou_0_50": 4,
+        "mean_gt_coverage": 0.9999999935090886,
+        "mean_matched_polygon_iou": 0.5682896033367684,
+        "median_matched_polygon_iou": 0.5998888705623883,
+        "median_predicted_area_over_gt_area": 1.6669753639132812,
+        "predicted_specimen_count": 5,
+        "processing_seconds_per_plate": 0.6910302133066579,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 0.8,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 0
+      },
+      "split": "SEEN",
+      "truth": [
+        [
+          [
+            105.50066985094972,
+            334.82769657119786
+          ],
+          [
+            2635.7676658844152,
+            88.29866579471854
+          ],
+          [
+            2697.76015821877,
+            724.5627068345507
+          ],
+          [
+            167.49316218530464,
+            971.09173761103
+          ]
+        ],
+        [
+          [
+            379.75430114370494,
+            753.1612640897339
+          ],
+          [
+            2688.918065850849,
+            837.642255987447
+          ],
+          [
+            2666.302879231338,
+            1455.7951481444502
+          ],
+          [
+            357.1391145241943,
+            1371.3141562467372
+          ]
+        ],
+        [
+          [
+            340.08444706686294,
+            1270.4267337183019
+          ],
+          [
+            2747.8074787246164,
+            1405.3109200504696
+          ],
+          [
+            2711.904933706383,
+            2046.182076900932
+          ],
+          [
+            304.18190204862947,
+            1911.2978905687644
+          ]
+        ],
+        [
+          [
+            423.7218222213375,
+            1735.2905327538435
+          ],
+          [
+            2651.1844146183985,
+            2050.202281226094
+          ],
+          [
+            2570.396246768147,
+            2621.6405418427394
+          ],
+          [
+            342.9336543710864,
+            2306.7287933704893
+          ]
+        ],
+        [
+          [
+            -16.27630465535919,
+            2390.2713321212655
+          ],
+          [
+            2277.7220863439175,
+            2434.22991479531
+          ],
+          [
+            2265.9216419331115,
+            3050.041409269383
+          ],
+          [
+            -28.0767490661651,
+            3006.082826595339
+          ]
+        ]
+      ]
+    },
+    {
+      "heuristic": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 100.0,
+        "matched_at_iou_0_30": 1,
+        "matched_at_iou_0_50": 1,
+        "mean_gt_coverage": 1.0000000301026613,
+        "mean_matched_polygon_iou": 1.0000000602053243,
+        "median_matched_polygon_iou": 1.0000000602053243,
+        "median_predicted_area_over_gt_area": 1.0,
+        "predicted_specimen_count": 1,
+        "processing_seconds_per_plate": 0.053331099974457175,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 1,
+        "unmatched_truth": 0
+      },
+      "plate_id": "plate_009",
+      "rtmdet": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 100.0,
+        "matched_at_iou_0_30": 1,
+        "matched_at_iou_0_50": 1,
+        "mean_gt_coverage": 0.9976341870005037,
+        "mean_matched_polygon_iou": 0.5250560870639474,
+        "median_matched_polygon_iou": 0.5250560870639474,
+        "median_predicted_area_over_gt_area": 1.8976867939118112,
+        "predicted_specimen_count": 1,
+        "processing_seconds_per_plate": 0.6568445133045315,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 1,
+        "unmatched_truth": 0
+      },
+      "split": "SEEN",
+      "truth": [
+        [
+          [
+            -82.27431457554665,
+            1106.055077502418
+          ],
+          [
+            2452.202398932236,
+            1306.5968016979662
+          ],
+          [
+            2404.7366674190994,
+            1906.4759126023532
+          ],
+          [
+            -129.74004608868364,
+            1705.934188406805
+          ]
+        ]
+      ]
+    },
+    {
+      "heuristic": {
+        "count_exact": false,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 20.0,
+        "matched_at_iou_0_30": 4,
+        "matched_at_iou_0_50": 4,
+        "mean_gt_coverage": 0.7136341661969601,
+        "mean_matched_polygon_iou": 0.7475205390655927,
+        "median_matched_polygon_iou": 0.724772177690161,
+        "median_predicted_area_over_gt_area": 1.0896302619081684,
+        "predicted_specimen_count": 4,
+        "processing_seconds_per_plate": 0.19711079998523928,
+        "recall_iou_0_30": 0.8,
+        "recall_iou_0_50": 0.8,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 1
+      },
+      "plate_id": "plate_010",
+      "rtmdet": {
+        "count_exact": false,
+        "extra_predictions": 1,
+        "gt_coverage_ge_0_95_percent": 100.0,
+        "matched_at_iou_0_30": 5,
+        "matched_at_iou_0_50": 5,
+        "mean_gt_coverage": 0.9951710468984891,
+        "mean_matched_polygon_iou": 0.788986517906749,
+        "median_matched_polygon_iou": 0.7289755560646394,
+        "median_predicted_area_over_gt_area": 1.371788171925724,
+        "predicted_specimen_count": 6,
+        "processing_seconds_per_plate": 0.7224963133223354,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 0
+      },
+      "split": "UNSEEN",
+      "truth": [
+        [
+          [
+            -79.88600496179579,
+            -38.78288708229661
+          ],
+          [
+            2744.1620014346595,
+            -35.4842293474735
+          ],
+          [
+            2742.8812132951293,
+            1061.0245578094332
+          ],
+          [
+            -81.16679310132604,
+            1057.72590007461
+          ]
+        ],
+        [
+          [
+            -121.65816309032023,
+            1023.1651879370171
+          ],
+          [
+            2664.8378040505045,
+            846.5964665353619
+          ],
+          [
+            2718.344827586207,
+            1691.0104947526238
+          ],
+          [
+            -68.15113955461804,
+            1867.579216154279
+          ]
+        ],
+        [
+          [
+            -39.28165504834984,
+            1293.635107306915
+          ],
+          [
+            2190.3762012268867,
+            1520.406375100059
+          ],
+          [
+            2090.8276967150164,
+            2499.1860385264185
+          ],
+          [
+            -138.8301595602202,
+            2272.4147707332745
+          ]
+        ],
+        [
+          [
+            53.42110216668869,
+            1438.5271677496619
+          ],
+          [
+            2730.213527431137,
+            1762.5742208285928
+          ],
+          [
+            2636.5217391304345,
+            2536.515742128935
+          ],
+          [
+            -40.27068613401378,
+            2212.4686890500043
+          ]
+        ],
+        [
+          [
+            48.69912187386128,
+            2107.1850623621326
+          ],
+          [
+            2777.4392803598203,
+            2445.6011994002997
+          ],
+          [
+            2686.330648199626,
+            3180.234558010527
+          ],
+          [
+            -42.40951028633301,
+            2841.81842097236
+          ]
+        ]
+      ]
+    },
+    {
+      "heuristic": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 80.0,
+        "matched_at_iou_0_30": 5,
+        "matched_at_iou_0_50": 5,
+        "mean_gt_coverage": 0.984936817787119,
+        "mean_matched_polygon_iou": 0.9725717202840355,
+        "median_matched_polygon_iou": 0.9999999809826142,
+        "median_predicted_area_over_gt_area": 1.0,
+        "predicted_specimen_count": 5,
+        "processing_seconds_per_plate": 0.22457979997852817,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 0
+      },
+      "plate_id": "plate_011",
+      "rtmdet": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 0.0,
+        "matched_at_iou_0_30": 5,
+        "matched_at_iou_0_50": 5,
+        "mean_gt_coverage": 0.8606232031226686,
+        "mean_matched_polygon_iou": 0.5859219590261369,
+        "median_matched_polygon_iou": 0.5927905201395209,
+        "median_predicted_area_over_gt_area": 1.3152697300133298,
+        "predicted_specimen_count": 5,
+        "processing_seconds_per_plate": 0.7135009133373387,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 5,
+        "unmatched_truth": 0
+      },
+      "split": "SEEN",
+      "truth": [
+        [
+          [
+            -432.38385336131404,
+            82.19916358477167
+          ],
+          [
+            2659.189561004205,
+            -170.30391445199385
+          ],
+          [
+            2723.4431369832296,
+            616.3979698147178
+          ],
+          [
+            -368.1302773822892,
+            868.9010478514833
+          ]
+        ],
+        [
+          [
+            -378.07046635489735,
+            727.8174616085759
+          ],
+          [
+            2567.3514872968763,
+            718.5467213765679
+          ],
+          [
+            2569.500165409544,
+            1401.206738376306
+          ],
+          [
+            -375.9217882422296,
+            1410.4774786083142
+          ]
+        ],
+        [
+          [
+            -372.91188759435965,
+            1441.723376482834
+          ],
+          [
+            2512.449002311319,
+            1256.585831565557
+          ],
+          [
+            2549.829248147873,
+            1839.1553986409233
+          ],
+          [
+            -335.53164175780506,
+            2024.2929435582002
+          ]
+        ],
+        [
+          [
+            -369.882085456305,
+            1794.1769914351642
+          ],
+          [
+            2696.4871884099834,
+            1973.2734604430502
+          ],
+          [
+            2659.2572502848407,
+            2610.6994184604237
+          ],
+          [
+            -407.1120235814477,
+            2431.6029494525374
+          ]
+        ],
+        [
+          [
+            -475.99883097442347,
+            2441.4061640540285
+          ],
+          [
+            2636.5217391304345,
+            2536.515742128935
+          ],
+          [
+            2614.8839713952716,
+            3244.6252567543097
+          ],
+          [
+            -497.6365987095865,
+            3149.515678679403
+          ]
+        ]
+      ]
+    },
+    {
+      "heuristic": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 83.33333333333333,
+        "matched_at_iou_0_30": 6,
+        "matched_at_iou_0_50": 6,
+        "mean_gt_coverage": 0.9396664347248744,
+        "mean_matched_polygon_iou": 0.9384091859095895,
+        "median_matched_polygon_iou": 0.9999999620545001,
+        "median_predicted_area_over_gt_area": 1.0,
+        "predicted_specimen_count": 6,
+        "processing_seconds_per_plate": 0.17912289997912012,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 6,
+        "unmatched_truth": 0
+      },
+      "plate_id": "plate_012",
+      "rtmdet": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 16.666666666666668,
+        "matched_at_iou_0_30": 6,
+        "matched_at_iou_0_50": 3,
+        "mean_gt_coverage": 0.9277132974459116,
+        "mean_matched_polygon_iou": 0.5083090728169539,
+        "median_matched_polygon_iou": 0.5128947904358295,
+        "median_predicted_area_over_gt_area": 1.6985634849166467,
+        "predicted_specimen_count": 6,
+        "processing_seconds_per_plate": 0.7126566133403684,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 0.5,
+        "truth_specimen_count": 6,
+        "unmatched_truth": 0
+      },
+      "split": "SEEN",
+      "truth": [
+        [
+          [
+            -334.24630048938286,
+            290.9199692925637
+          ],
+          [
+            1961.8520545137878,
+            -30.577424263500724
+          ],
+          [
+            2041.70749045176,
+            539.741149915747
+          ],
+          [
+            -254.39086455141063,
+            861.2385434718112
+          ]
+        ],
+        [
+          [
+            -350.2904948935442,
+            788.0992236121441
+          ],
+          [
+            2183.8239045114633,
+            598.1419836199328
+          ],
+          [
+            2236.7504445526743,
+            1304.205660027411
+          ],
+          [
+            -297.3639548523333,
+            1494.1629000196224
+          ]
+        ],
+        [
+          [
+            -309.71007191471335,
+            1438.9067506004178
+          ],
+          [
+            1764.9093812194014,
+            1180.4807003146166
+          ],
+          [
+            1843.907668239031,
+            1814.6713433784357
+          ],
+          [
+            -230.71178489508412,
+            2073.0973936642367
+          ]
+        ],
+        [
+          [
+            1929.2422031249996,
+            2958.0123020833335
+          ],
+          [
+            2094.7524418459657,
+            723.5378668264814
+          ],
+          [
+            2805.610666666667,
+            776.1919999999998
+          ],
+          [
+            2640.1004279457006,
+            3010.6664352568523
+          ]
+        ],
+        [
+          [
+            -348.4829115987193,
+            2130.323025740245
+          ],
+          [
+            1634.801575619329,
+            1637.9200868700864
+          ],
+          [
+            1804.0358513556162,
+            2319.556379584953
+          ],
+          [
+            -179.248635862432,
+            2811.9593184551118
+          ]
+        ],
+        [
+          [
+            -289.80644704271754,
+            2662.6727316256374
+          ],
+          [
+            1750.9543541323408,
+            2335.359755866723
+          ],
+          [
+            1858.7628313569055,
+            3007.533884754045
+          ],
+          [
+            -181.9979698181529,
+            3334.8468605129597
+          ]
+        ]
+      ]
+    },
+    {
+      "heuristic": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 42.857142857142854,
+        "matched_at_iou_0_30": 7,
+        "matched_at_iou_0_50": 7,
+        "mean_gt_coverage": 0.8690132334116415,
+        "mean_matched_polygon_iou": 0.7815894801279505,
+        "median_matched_polygon_iou": 0.7756688530647495,
+        "median_predicted_area_over_gt_area": 0.979194198000735,
+        "predicted_specimen_count": 7,
+        "processing_seconds_per_plate": 0.15937949999351986,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 1.0,
+        "truth_specimen_count": 7,
+        "unmatched_truth": 0
+      },
+      "plate_id": "plate_013",
+      "rtmdet": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 100.0,
+        "matched_at_iou_0_30": 7,
+        "matched_at_iou_0_50": 3,
+        "mean_gt_coverage": 0.9961043984018026,
+        "mean_matched_polygon_iou": 0.5246746290043999,
+        "median_matched_polygon_iou": 0.46876433833771547,
+        "median_predicted_area_over_gt_area": 2.0480378687433953,
+        "predicted_specimen_count": 7,
+        "processing_seconds_per_plate": 0.7142628133471589,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 0.42857142857142855,
+        "truth_specimen_count": 7,
+        "unmatched_truth": 0
+      },
+      "split": "UNSEEN",
+      "truth": [
+        [
+          [
+            -74.35784277100113,
+            357.76826185521134
+          ],
+          [
+            1863.5489198961398,
+            -122.96085284888832
+          ],
+          [
+            1991.0284857571212,
+            390.9325337331335
+          ],
+          [
+            53.12172308998022,
+            871.6616484372331
+          ]
+        ],
+        [
+          [
+            -163.64617691154433,
+            704.5877061469264
+          ],
+          [
+            1814.870816493273,
+            533.3376424519613
+          ],
+          [
+            1859.2023988005997,
+            1045.5172413793102
+          ],
+          [
+            -119.31459460421765,
+            1216.7673050742753
+          ]
+        ],
+        [
+          [
+            -159.10044977511237,
+            1377.3553223388305
+          ],
+          [
+            1676.0656851178646,
+            990.7703031210383
+          ],
+          [
+            1791.0164917541229,
+            1536.4557721139429
+          ],
+          [
+            -44.14964313885409,
+            1923.0407913317351
+          ]
+        ],
+        [
+          [
+            -129.42741589137518,
+            1927.6457868839482
+          ],
+          [
+            1780.1198265854894,
+            1649.7846367918205
+          ],
+          [
+            1841.0194902548726,
+            2068.3058470764618
+          ],
+          [
+            -68.5277522219917,
+            2346.166997168589
+          ]
+        ],
+        [
+          [
+            1681.765017926395,
+            3102.0944815811185
+          ],
+          [
+            1814.4318103920882,
+            1228.3630724652471
+          ],
+          [
+            2421.731364926856,
+            1271.3620228879167
+          ],
+          [
+            2289.0645724611627,
+            3145.093432003788
+          ]
+        ],
+        [
+          [
+            2176.522607616423,
+            3125.7882731037766
+          ],
+          [
+            2309.2293853073465,
+            1250.0749625187404
+          ],
+          [
+            2874.5612994870294,
+            1290.072213822154
+          ],
+          [
+            2741.854521796106,
+            3165.78552440719
+          ]
+        ],
+        [
+          [
+            -61.65814557677668,
+            2281.513148326392
+          ],
+          [
+            1543.3071058925784,
+            2237.310612955187
+          ],
+          [
+            1559.1844077961018,
+            2813.8050974512744
+          ],
+          [
+            -45.78084367325341,
+            2858.0076328224795
+          ]
+        ]
+      ]
+    },
+    {
+      "heuristic": {
+        "count_exact": false,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 70.0,
+        "matched_at_iou_0_30": 9,
+        "matched_at_iou_0_50": 8,
+        "mean_gt_coverage": 0.8727528063822341,
+        "mean_matched_polygon_iou": 0.8967702685517462,
+        "median_matched_polygon_iou": 0.9999999536881634,
+        "median_predicted_area_over_gt_area": 1.0,
+        "predicted_specimen_count": 9,
+        "processing_seconds_per_plate": 0.34315429997514,
+        "recall_iou_0_30": 0.9,
+        "recall_iou_0_50": 0.8,
+        "truth_specimen_count": 10,
+        "unmatched_truth": 1
+      },
+      "plate_id": "plate_014",
+      "rtmdet": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 20.0,
+        "matched_at_iou_0_30": 10,
+        "matched_at_iou_0_50": 6,
+        "mean_gt_coverage": 0.9094568057082624,
+        "mean_matched_polygon_iou": 0.5712513193895511,
+        "median_matched_polygon_iou": 0.5836651337784574,
+        "median_predicted_area_over_gt_area": 1.4192703521666084,
+        "predicted_specimen_count": 10,
+        "processing_seconds_per_plate": 0.8287098133470863,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 0.6,
+        "truth_specimen_count": 10,
+        "unmatched_truth": 0
+      },
+      "split": "SEEN",
+      "truth": [
+        [
+          [
+            -321.0882347897132,
+            74.77643087165255
+          ],
+          [
+            1862.659132471206,
+            -208.87978356355313
+          ],
+          [
+            1932.8079338622128,
+            331.16571009550483
+          ],
+          [
+            -250.9394333987064,
+            614.8219245307105
+          ]
+        ],
+        [
+          [
+            1137.3699381615736,
+            343.7166345793534
+          ],
+          [
+            3158.2629296332416,
+            181.97398024023536
+          ],
+          [
+            3196.651108263189,
+            661.6149349754518
+          ],
+          [
+            1175.758116791521,
+            823.3575893145697
+          ]
+        ],
+        [
+          [
+            -274.9171719580781,
+            832.936367117621
+          ],
+          [
+            1634.6135836412898,
+            632.1868192277216
+          ],
+          [
+            1687.7861831121145,
+            1137.9648651159887
+          ],
+          [
+            -221.74457248725338,
+            1338.7144130058884
+          ]
+        ],
+        [
+          [
+            1273.1092702128026,
+            988.4406795743711
+          ],
+          [
+            3276.859169200368,
+            934.6558687513266
+          ],
+          [
+            3291.002739784061,
+            1461.5737419337765
+          ],
+          [
+            1287.2528407964958,
+            1515.358552756821
+          ]
+        ],
+        [
+          [
+            -277.14747260384496,
+            1291.5661648482205
+          ],
+          [
+            1816.77581381212,
+            1373.8961411415987
+          ],
+          [
+            1797.8170275020332,
+            1856.080710166773
+          ],
+          [
+            -296.10625891393187,
+            1773.7507338733951
+          ]
+        ],
+        [
+          [
+            1275.344850804248,
+            1745.766581739547
+          ],
+          [
+            3281.473409714164,
+            1700.018555981759
+          ],
+          [
+            3291.553311265468,
+            2142.039343504571
+          ],
+          [
+            1285.4247523555518,
+            2187.787369262359
+          ]
+        ],
+        [
+          [
+            -370.78703512629045,
+            2203.6638545952005
+          ],
+          [
+            1304.623688155922,
+            1891.0224887556221
+          ],
+          [
+            1398.1213679598736,
+            2392.066280337333
+          ],
+          [
+            -277.2893553223389,
+            2704.7076461769116
+          ]
+        ],
+        [
+          [
+            1540.247158326512,
+            2126.768394443151
+          ],
+          [
+            3263.8443911179725,
+            2131.797407517735
+          ],
+          [
+            3262.5897965142713,
+            2561.785509585662
+          ],
+          [
+            1538.9925637228102,
+            2556.7564965110782
+          ]
+        ],
+        [
+          [
+            -126.09822638037714,
+            2580.096165057105
+          ],
+          [
+            1403.2400338513107,
+            2300.764975973692
+          ],
+          [
+            1489.8163673099125,
+            2774.7704016595367
+          ],
+          [
+            -39.521892921775574,
+            3054.1015907429496
+          ]
+        ],
+        [
+          [
+            1409.1726071541436,
+            2376.3464508099596
+          ],
+          [
+            3124.3970442576474,
+            2664.3665943837304
+          ],
+          [
+            3047.1224880780164,
+            3124.553876707204
+          ],
+          [
+            1331.8980509745127,
+            2836.533733133433
+          ]
+        ]
+      ]
+    },
+    {
+      "heuristic": {
+        "count_exact": false,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 0.0,
+        "matched_at_iou_0_30": 9,
+        "matched_at_iou_0_50": 8,
+        "mean_gt_coverage": 0.6616789685844272,
+        "mean_matched_polygon_iou": 0.6740010092663714,
+        "median_matched_polygon_iou": 0.7206969487341269,
+        "median_predicted_area_over_gt_area": 0.9908621131044694,
+        "predicted_specimen_count": 9,
+        "processing_seconds_per_plate": 0.507862300000852,
+        "recall_iou_0_30": 0.8181818181818182,
+        "recall_iou_0_50": 0.7272727272727273,
+        "truth_specimen_count": 11,
+        "unmatched_truth": 2
+      },
+      "plate_id": "plate_015",
+      "rtmdet": {
+        "count_exact": true,
+        "extra_predictions": 0,
+        "gt_coverage_ge_0_95_percent": 81.81818181818181,
+        "matched_at_iou_0_30": 11,
+        "matched_at_iou_0_50": 7,
+        "mean_gt_coverage": 0.982459775063412,
+        "mean_matched_polygon_iou": 0.6798361497304887,
+        "median_matched_polygon_iou": 0.6735190779178342,
+        "median_predicted_area_over_gt_area": 1.480421528977942,
+        "predicted_specimen_count": 11,
+        "processing_seconds_per_plate": 1.2275798132934141,
+        "recall_iou_0_30": 1.0,
+        "recall_iou_0_50": 0.6363636363636364,
+        "truth_specimen_count": 11,
+        "unmatched_truth": 0
+      },
+      "split": "UNSEEN",
+      "truth": [
+        [
+          [
+            -47.590795292932,
+            -16.946647990140832
+          ],
+          [
+            1928.2155296831663,
+            -259.1872698623276
+          ],
+          [
+            2000.119940029985,
+            327.2923538230885
+          ],
+          [
+            24.313615053886735,
+            569.5329756952752
+          ]
+        ],
+        [
+          [
+            778.9643741043744,
+            307.3305750184109
+          ],
+          [
+            2995.6341829085454,
+            127.28035982008993
+          ],
+          [
+            3044.2234091904043,
+            725.4816494631755
+          ],
+          [
+            827.5536003862333,
+            905.5318646614965
+          ]
+        ],
+        [
+          [
+            -107.5647807654031,
+            841.2225925901188
+          ],
+          [
+            1826.1220862501332,
+            644.7701347985574
+          ],
+          [
+            1872.8395802098953,
+            1104.6116941529235
+          ],
+          [
+            -60.84728680564109,
+            1301.064151944485
+          ]
+        ],
+        [
+          [
+            1053.940483334618,
+            1004.4382941521017
+          ],
+          [
+            3068.365817091455,
+            950.0569715142428
+          ],
+          [
+            3082.642497018809,
+            1478.902250234608
+          ],
+          [
+            1068.2171632619725,
+            1533.2835728724667
+          ]
+        ],
+        [
+          [
+            -73.51152391367452,
+            1292.6912599350671
+          ],
+          [
+            1959.208395802099,
+            1345.5352323838079
+          ],
+          [
+            1945.2210641585812,
+            1883.5781980792622
+          ],
+          [
+            -87.49885555719231,
+            1830.7342256305215
+          ]
+        ],
+        [
+          [
+            1156.2311108393756,
+            1690.7448736297283
+          ],
+          [
+            3096.8837894193744,
+            1662.4212041985402
+          ],
+          [
+            3104.7316341829087,
+            2200.1319340329837
+          ],
+          [
+            1164.0789556029104,
+            2228.455603464172
+          ]
+        ],
+        [
+          [
+            -46.08636552279453,
+            1645.3600959093023
+          ],
+          [
+            2410.5685084327924,
+            1881.263541235457
+          ],
+          [
+            2314.674907189461,
+            2879.8817790906974
+          ],
+          [
+            -141.97996676612635,
+            2643.9783337645426
+          ]
+        ],
+        [
+          [
+            -212.02453103831664,
+            2210.125362916471
+          ],
+          [
+            1350.5795586255845,
+            1925.8481806074299
+          ],
+          [
+            1431.904047976012,
+            2372.869565217392
+          ],
+          [
+            -130.70004168788904,
+            2657.1467475264335
+          ]
+        ],
+        [
+          [
+            1185.4353541366365,
+            2027.8130860686977
+          ],
+          [
+            3125.7938690377036,
+            2012.2565604699682
+          ],
+          [
+            3130.7547500300293,
+            2631.025038931303
+          ],
+          [
+            1190.3962351289626,
+            2646.581564530032
+          ]
+        ],
+        [
+          [
+            -279.54702610697314,
+            2536.932508849958
+          ],
+          [
+            1446.355355427398,
+            2363.973526190128
+          ],
+          [
+            1500.089955022489,
+            2900.173913043478
+          ],
+          [
+            -225.81242651188245,
+            3073.1328957033083
+          ]
+        ],
+        [
+          [
+            1310.9118769441477,
+            2294.648115602388
+          ],
+          [
+            3159.280359820091,
+            2672.8875562218896
+          ],
+          [
+            3057.002383466367,
+            3172.696321999783
+          ],
+          [
+            1208.633900590424,
+            2794.456881380281
+          ]
+        ]
+      ]
+    }
+  ],
+  "project_database_fingerprint_after": {
+    "mtime_ns": 1790843348256362100,
+    "sha256": "42551033a4b55f5b36ea23e35c1b185bce96d37c2ec2b04524ff0fc09db02e0a",
+    "size_bytes": 299008
+  },
+  "project_database_fingerprint_before": {
+    "mtime_ns": 1790843348256362100,
+    "sha256": "42551033a4b55f5b36ea23e35c1b185bce96d37c2ec2b04524ff0fc09db02e0a",
+    "size_bytes": 299008
+  },
+  "project_database_unchanged": true,
+  "project_found": true,
+  "repository": {
+    "branch": "diagnostics/xray-crop-benchmark-20261001",
+    "expected_head": "9c78fa9f54a6c9f8b163bc8e3b3ddbe146691f28",
+    "feature_source_status": "clean",
+    "head": "9c78fa9f54a6c9f8b163bc8e3b3ddbe146691f28",
+    "source_code_sha256": {
+      "ai_runtime/xray_detector_runner.py": "53d202afa01de16880be1194bf25f831e0b604d1981cacd437303bba408c17ad",
+      "app/xray_crop.py": "e0afbfb77d6267a93b89e117e0f4a21d52cc39a8f0d3a87d5f89a36219689dd3",
+      "app/xray_detector.py": "ad3d137fdafa8f19141c255d6a9ae9b2dcfb75446a1d7d0fce9c2c50e881979a",
+      "app/xray_project.py": "828f0dbe0bd8a50ecfd5152308a3ccb9fd1a3b6a8af552e05cbad298a0d92943"
+    }
+  },
+  "seen_plate_count": 12,
+  "source_plate_count": 17,
+  "unseen_plate_count": 3
+}
