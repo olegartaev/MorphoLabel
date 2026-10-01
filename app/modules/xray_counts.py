@@ -15,7 +15,7 @@ from app.xray_project import XRayProject
 from app.xray_crop_ui import XRayCropWorkspace
 from app.xray_structures_ui import XRayStructureWorkspace
 from app.xray_schema import (
-    MARKER_COLORS,METHOD_BY_ID,SCHEME_RESOURCE_DIR,SHAPES,TRAIT_METHODS,blank_scheme,normalize_scheme,
+    MARKER_COLORS,METHOD_BY_ID,SCHEME_RESOURCE_DIR,SHAPES,TRAIT_METHODS,blank_scheme,bundled_scheme,normalize_scheme,
     load_scheme_file,save_scheme_file,scheme_change_impact,structure_usage,
 )
 
@@ -134,6 +134,36 @@ def _trait_rule_summary(scheme,trait):
 class XRayCountsRuntime:
     def __init__(self):self.host=None;self.project=None;self.stage="project";self._images={};self._tip=None
     def close(self):self.host=None;self._images.clear();self._tip=None
+    def _selection(self):
+        return self.project.current_selection() if self.project is not None else {"image_id":"","specimen_id":""}
+
+    def _set_selection(self,image_id="",specimen_id=""):
+        if self.project is None:return {"image_id":"","specimen_id":""}
+        try:return self.project.set_current_selection(image_id=image_id,specimen_id=specimen_id)
+        except (KeyError,ValueError):return self.project.current_selection()
+
+    def _ensure_working_scheme(self):
+        if self.project is None:return False
+        return self.project.ensure_initial_bundled_scheme("phoxinus_vertebral_counts")
+
+    @staticmethod
+    def _sample_name(relative_path):
+        parent=Path(str(relative_path)).parent.as_posix()
+        return "Root" if parent in {"",".","/"} else parent
+
+    def _selection_context(self):
+        selection=self._selection();specimen_id=selection.get("specimen_id");image_id=selection.get("image_id")
+        specimen=None
+        if specimen_id:
+            try:specimen=self.project.specimen(specimen_id);image_id=specimen["image_id"]
+            except KeyError:specimen=None
+        if not image_id:return ""
+        try:image=self.project.source_image(image_id)
+        except KeyError:return ""
+        path=Path(image["relative_path"]);sample=self._sample_name(image["relative_path"])
+        if specimen is not None:return f"Locality: {sample}  ·  Plate: {path.name}  ·  Fish №{int(specimen.get('ordinal') or 0)}"
+        return f"Locality: {sample}  ·  Plate: {path.name}"
+
     def render(self,host):
         self.host=host;parent=host.container
         for child in parent.winfo_children():child.destroy()
@@ -168,6 +198,7 @@ class XRayCountsRuntime:
 
     def _select(self,key):
         if self.project is None and key!="project":return
+        if self.project is not None and key in {"structures","results","export"}:self._ensure_working_scheme()
         self.stage=key;self._rerender()
 
     def _render_reference(self,parent,model,wraplength=650):
@@ -241,25 +272,63 @@ class XRayCountsRuntime:
         table.grid(row=1,column=0,sticky="nsew");scroll.grid(row=1,column=1,sticky="ns")
 
     def _render_crops(self,parent):
-        XRayCropWorkspace(parent,self.project)
+        selection=self._selection()
+        XRayCropWorkspace(
+            parent,self.project,
+            initial_image_id=selection.get("image_id"),initial_specimen_id=selection.get("specimen_id"),
+            on_selection=self._set_selection,
+        )
 
     def _render_structures(self,parent):
-        XRayStructureWorkspace(parent,self.project)
+        self._ensure_working_scheme();selection=self._selection()
+        XRayStructureWorkspace(
+            parent,self.project,
+            initial_image_id=selection.get("image_id"),initial_specimen_id=selection.get("specimen_id"),
+            on_selection=self._set_selection,
+        )
 
     @staticmethod
     def _shape_symbol(s):return {"circle":"●","triangle":"▲","diamond":"◆","square":"■","cross":"✚","ring":"○"}.get(s.get("shape"),"●")
 
     def _render_results(self,parent):
+        self._ensure_working_scheme()
         ttk.Label(parent,text="Results",style="PageTitle.TLabel").pack(anchor="w")
-        ttk.Label(parent,text="Calculated traits and QC will update from verified structures.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,10))
-        if not self.project.scheme.get("traits"):
-            self._empty_scheme_state(parent,"No traits to calculate","Open a trait set or create traits in Project first.")
-            return
-        cols=[t.get("abbr") or t["id"] for t in self.project.scheme["traits"]];tree=ttk.Treeview(parent,columns=("specimen",*cols),show="headings",height=12);tree.pack(fill="both",expand=True)
-        tree.heading("specimen",text="Specimen");tree.column("specimen",width=180,anchor="w")
-        for col in cols:tree.heading(col,text=col);tree.column(col,width=90,anchor="center")
+        context=self._selection_context()
+        if context:ttk.Label(parent,text=context,style="SectionTitle.TLabel").pack(anchor="w",pady=(2,3))
+        ttk.Label(parent,text="Calculated directly from the current saved structure markers; no separate results cache is used for display.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(0,8))
+        scheme=self.project.scheme
+        if not scheme.get("traits"):
+            self._empty_scheme_state(parent,"No traits to calculate","Open a trait set or create traits in Project first.");return
+        traits=list(scheme["traits"]);cols=("locality","plate","fish",*(t.get("abbr") or t["id"] for t in traits),"status")
+        host=ttk.Frame(parent);host.pack(fill="both",expand=True);host.columnconfigure(0,weight=1);host.rowconfigure(0,weight=1)
+        tree=ttk.Treeview(host,columns=cols,show="headings",selectmode="browse",height=16)
+        tree.heading("locality",text="Locality");tree.column("locality",width=180,anchor="w")
+        tree.heading("plate",text="Plate");tree.column("plate",width=220,anchor="w")
+        tree.heading("fish",text="Fish №");tree.column("fish",width=62,anchor="center",stretch=False)
+        for trait in traits:
+            col=trait.get("abbr") or trait["id"];tree.heading(col,text=col);tree.column(col,width=78,anchor="center",stretch=False)
+        tree.heading("status",text="Status");tree.column("status",width=90,anchor="center",stretch=False)
+        current=self._selection().get("specimen_id")
+        for index,row in enumerate(self.project.trait_rows()):
+            path=Path(row["relative_path"]);values=row["trait_values"]
+            display=[self._sample_name(row["relative_path"]),path.name,int(row.get("ordinal") or 0)]
+            display.extend("" if values.get(trait["id"]) is None else str(values.get(trait["id"])) for trait in traits)
+            status=str(row.get("result_status") or "not_started")
+            tree.insert("","end",iid=row["specimen_id"],values=(*display,status),tags=("alternate",) if index%2 else ())
+        tree.tag_configure("alternate",background="#f6f8fa")
+        scroll=ttk.Scrollbar(host,orient="vertical",command=tree.yview);tree.configure(yscrollcommand=scroll.set)
+        tree.grid(row=0,column=0,sticky="nsew");scroll.grid(row=0,column=1,sticky="ns")
+        if current and tree.exists(current):tree.selection_set(current);tree.focus(current);tree.see(current)
+        def selected(_event=None):
+            chosen=tree.selection()
+            if not chosen:return
+            specimen=self.project.specimen(chosen[0]);self._set_selection(specimen["image_id"],chosen[0])
+        tree.bind("<<TreeviewSelect>>",selected)
+
     def _render_export(self,parent):
         ttk.Label(parent,text="Export",style="PageTitle.TLabel").pack(anchor="w")
+        context=self._selection_context()
+        if context:ttk.Label(parent,text=context,style="SectionTitle.TLabel").pack(anchor="w",pady=(2,3))
         ttk.Label(parent,text="Export verified traits together with scheme version, QC and provenance.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,10))
         if not self.project.scheme.get("traits"):
             self._empty_scheme_state(parent,"Nothing to export","Open a trait set or create traits in Project first.")
