@@ -114,7 +114,9 @@ class LandmarkAIService:
         if prediction.model_id != self.backend.model_id: raise PredictionValidationError("prediction model_id does not match backend")
         stored_prediction,adjustments=self._validated_prediction(prediction,request)
         existing=self.project.load_landmarks(request.image_id)
-        skipped_ids={point.landmark_id for point in stored_prediction.landmarks if landmark_is_protected_human(existing.get(point.landmark_id))}
+        cutoff_reader=getattr(self.project,"landmark_human_protection_cutoff",None)
+        frame_cutoff=cutoff_reader(request.image_id) if callable(cutoff_reader) else None
+        skipped_ids={point.landmark_id for point in stored_prediction.landmarks if landmark_is_protected_human(existing.get(point.landmark_id),frame_cutoff)}
         run_id,manifest_path=self._write_run_manifest(request,prediction,stored_prediction,skipped_ids,adjustments);saved=skipped=0
         try:
             if hasattr(self.project, "save_machine_landmarks"):
@@ -123,7 +125,7 @@ class LandmarkAIService:
             else:
                 for point in stored_prediction.landmarks:
                     old=existing.get(point.landmark_id)
-                    if landmark_is_protected_human(old):
+                    if landmark_is_protected_human(old,frame_cutoff):
                         skipped+=1;continue
                     self.project.save_landmark(request.image_id,point.landmark_id,point.x,point.y,"auto",provenance="machine",model_id=prediction.model_id,predicted_x=point.x,predicted_y=point.y,confidence=point.confidence,prediction_run_id=run_id,reviewed=False)
                     saved+=1
