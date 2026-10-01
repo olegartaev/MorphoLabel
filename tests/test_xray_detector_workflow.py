@@ -291,8 +291,11 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn('"#d93025"',ui)
         self.assertIn('"#e6a700"',ui)
         self.assertIn('"#188038"',ui)
-        self.assertIn("self.apply_host.grid_forget()",ui)
+        self.assertIn("self.apply_host.pack_forget()",ui)
         self.assertIn("self.batch_actions.grid",ui)
+        self.assertIn('"<MouseWheel>"',ui)
+        self.assertIn("def _draw_turn_control(",ui)
+        self.assertIn('"Clear crops…"',ui)
         self.assertIn("excluded rows stay inspectable/selectable",ui)
 
     def test_runtime_runner_uses_one_class_rtmdet_tiny_and_coco(self):
