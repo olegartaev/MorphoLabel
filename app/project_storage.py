@@ -17,12 +17,20 @@ def natural_key(value):
  return tuple(int(x) if x.isdigit() else x.casefold() for x in re.split(r"(\d+)",str(value)))
 def now(): return datetime.now(timezone.utc).isoformat()
 HUMAN_LANDMARK_PROVENANCE=frozenset({"manual","corrected","corrected_by_human","reviewed_by_human"})
-def landmark_is_protected_human(row):
- """Protect only a still-valid human decision from machine overwrite."""
+def _parse_timestamp(value):
+ if not value:return None
+ try:return datetime.fromisoformat(str(value).replace("Z","+00:00"))
+ except (TypeError,ValueError):return None
+def landmark_is_protected_human(row,frame_changed_at=None):
+ """Protect only a human decision proven to belong to the current Crop frame."""
  if not row or row.get("provenance") not in HUMAN_LANDMARK_PROVENANCE:return False
  if row.get("state")=="missing":return True
  x,y=row.get("x_standardized"),row.get("y_standardized")
- return isinstance(x,(int,float)) and isinstance(y,(int,float)) and math.isfinite(x) and math.isfinite(y)
+ if not (isinstance(x,(int,float)) and isinstance(y,(int,float)) and math.isfinite(x) and math.isfinite(y)):return False
+ if frame_changed_at:
+  row_time=_parse_timestamp(row.get("updated_at"));frame_time=_parse_timestamp(frame_changed_at)
+  if frame_time is not None and (row_time is None or row_time<frame_time):return False
+ return True
 def schema_hash(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def landmark_schema_identity(rows):
  return tuple(str(row.get("abbr") or "").strip() for row in rows)
