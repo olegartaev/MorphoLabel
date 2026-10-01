@@ -13,6 +13,7 @@ from app.ui.icons import TOPBAR_ICON_SIZE,tk_icon
 from app.xray_icons import XRAY_ICON_SIZE,TRAIT_ICON_SIZE,tk_xray_icon,tk_rule_preview
 from app.xray_project import XRayProject
 from app.xray_crop_ui import XRayCropWorkspace
+from app.xray_structures_ui import XRayStructureWorkspace
 from app.xray_schema import (
     MARKER_COLORS,METHOD_BY_ID,SCHEME_RESOURCE_DIR,SHAPES,TRAIT_METHODS,blank_scheme,normalize_scheme,
     load_scheme_file,save_scheme_file,scheme_change_impact,structure_usage,
@@ -243,45 +244,7 @@ class XRayCountsRuntime:
         XRayCropWorkspace(parent,self.project)
 
     def _render_structures(self,parent):
-        ttk.Label(parent,text="Structures",style="PageTitle.TLabel").pack(anchor="w")
-        ttk.Label(parent,text="Place only the anatomical structures required by the current trait scheme.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,10))
-        scheme=self.project.scheme
-        if not scheme.get("structures"):
-            self._empty_scheme_state(parent,"No annotation structures","Choose a scheme or define traits first; required annotation structures are derived from the traits.")
-            return
-        pane=ttk.Panedwindow(parent,orient="horizontal");pane.pack(fill="both",expand=True)
-        canvas=ttk.LabelFrame(pane,text="X-ray",padding=10);tools=ttk.Frame(pane,padding=(8,0,0,0));pane.add(canvas,weight=3);pane.add(tools,weight=1)
-        ttk.Label(canvas,text="Specimen image / annotation canvas",style="Muted.TLabel").pack(expand=True)
-
-        active_box=ttk.LabelFrame(tools,text="Active structure",padding=10);active_box.pack(fill="x",pady=(0,7))
-        active_row=ttk.Frame(active_box);active_row.pack(fill="x")
-        active_marker=tk.Label(active_row,text="●",font=("Segoe UI Symbol",17,"bold"),width=2)
-        active_marker.pack(side="left",padx=(0,5))
-        active_text=ttk.Frame(active_row);active_text.pack(side="left",fill="x",expand=True)
-        active=ttk.Label(active_text,text="",style="SectionTitle.TLabel");active.pack(anchor="w")
-        active_meta=ttk.Label(active_text,text="",style="Muted.TLabel");active_meta.pack(anchor="w",pady=(1,0))
-        ttk.Label(active_box,text="Click repeatedly for repeated structures. Press the number key to switch tools.",style="Muted.TLabel",wraplength=320).pack(anchor="w",pady=(7,0))
-
-        list_box=ttk.LabelFrame(tools,text="Structure keys",padding=8);list_box.pack(fill="x",pady=(0,7))
-        buttons={};markers={}
-        def choose(s):
-            active.configure(text=s["name"])
-            active_meta.configure(text=f"Key {s.get('hotkey') or '—'} · {'Repeated points' if s.get('repeated') else 'Single reference'}")
-            active_marker.configure(text=self._shape_symbol(s),foreground=s.get("color","#1976e9"))
-            for ident,b in buttons.items():b.configure(style="Primary.TButton" if ident==s["id"] else "P.TButton")
-            for ident,m in markers.items():m.configure(font=("Segoe UI Symbol",15,"bold") if ident==s["id"] else ("Segoe UI Symbol",13,"bold"))
-        for s in scheme["structures"]:
-            row=ttk.Frame(list_box);row.pack(fill="x",pady=2)
-            marker=tk.Label(row,text=self._shape_symbol(s),foreground=s.get("color","#1976e9"),font=("Segoe UI Symbol",13,"bold"),width=2)
-            marker.pack(side="left",padx=(0,4));markers[s["id"]]=marker
-            b=self._button(row,s["name"],lambda item=s:choose(item),s.get("description",""));b.pack(side="left",fill="x",expand=True);buttons[s["id"]]=b
-            ttk.Label(row,text=s.get("hotkey") or "—",style="SectionTitle.TLabel",width=3,anchor="center").pack(side="right",padx=(6,0))
-            self._tip.bind(marker,s.get("description","") or f"Annotation structure: {s['name']}.")
-            if s.get("hotkey"):tools.winfo_toplevel().bind(s["hotkey"],lambda _e,item=s:choose(item),add="+")
-        if scheme["structures"]:choose(scheme["structures"][0])
-
-        repeat=ttk.LabelFrame(tools,text="Manual repeatability",padding=10);repeat.pack(fill="x")
-        ttk.Label(repeat,text="Two independent manual annotation passes will use the same specimens and structure keys, matching the Landmarks repeatability workflow.",style="Muted.TLabel",wraplength=320).pack(anchor="w")
+        XRayStructureWorkspace(parent,self.project)
 
     @staticmethod
     def _shape_symbol(s):return {"circle":"●","triangle":"▲","diamond":"◆","square":"■","cross":"✚","ring":"○"}.get(s.get("shape"),"●")
