@@ -284,7 +284,7 @@ class XRayCountsRuntime:
         XRayStructureWorkspace(
             parent,self.project,
             initial_image_id=selection.get("image_id"),initial_specimen_id=selection.get("specimen_id"),
-            on_selection=self._set_selection,
+            on_selection=self._set_selection,on_open_results=lambda:self._select("results"),
         )
 
     @staticmethod
