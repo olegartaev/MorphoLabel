@@ -216,10 +216,25 @@ def restore_standardized_frame(project, image_id, crop=None):
     return target, True
 
 
+def landmark_prediction_frame_ready(project, image_id):
+    """Whether AI may predict in the current persisted final Crop frame.
+
+    A pending landmark_crop_review_required flag means the Crop changed and the
+    downstream landmarks need refresh/review. It must not make that already
+    human-confirmed Crop unusable for the AI refresh that can repair them.
+    """
+    crop = crop_frame_record(project, image_id)
+    return bool(
+        crop
+        and crop.get("provenance") in {"manual", "ai_accepted", "ai_corrected"}
+        and crop.get("human_verified")
+    )
+
+
 def landmark_frame_ready(project, image_id, *, require_final_crop=True):
     crop = crop_frame_record(project, image_id)
     if not crop:
         return False
-    if require_final_crop and (crop.get("provenance") not in {"manual", "ai_accepted", "ai_corrected"} or not crop.get("human_verified")):
+    if require_final_crop and not landmark_prediction_frame_ready(project, image_id):
         return False
     return not project.landmark_crop_review_required(image_id)
