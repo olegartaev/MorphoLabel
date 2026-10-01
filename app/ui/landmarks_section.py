@@ -9,7 +9,7 @@ from app.landmark_ai_review import (active_review_session, activate_review_sessi
 from app.landmark_ai_service import LandmarkAIService
 from app.active_learning import select_ai_worst_first
 from app.smart_selection import create_improvement_selection
-from app.landmark_frames import landmark_frame_ready, landmark_prediction_frame_ready, crop_frame_record
+from app.landmark_frames import landmark_prediction_frame_ready, crop_frame_record
 from app.landmark_attention_queue import (
  active as active_attention_queue, classify as classify_attention_issue,
  complete_current as complete_attention_current, clear_failure as clear_attention_failure,
