@@ -724,11 +724,14 @@ class XRayProject:
                     c.execute("UPDATE annotations SET x=?,y=? WHERE annotation_id=?",(x,y,existing[0]))
                     self._annotation_event(c,run_id,"move",structure_id,existing[0],{"from":[existing[1],existing[2]],"to":[x,y]})
                     c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,run_id))
-                    return int(existing[0])
-            order=c.execute("SELECT COALESCE(MAX(sort_order),-1)+1 FROM annotations WHERE run_id=? AND structure_id=?",(run_id,structure_id)).fetchone()[0]
-            cur=c.execute("INSERT INTO annotations(run_id,structure_id,x,y,sort_order) VALUES(?,?,?,?,?)",(run_id,structure_id,x,y,int(order)))
-            annotation_id=int(cur.lastrowid);self._annotation_event(c,run_id,"add",structure_id,annotation_id,{"at":[x,y],"sort_order":int(order)})
-            c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,run_id))
+                    annotation_id=int(existing[0])
+                else:annotation_id=None
+            else:annotation_id=None
+            if annotation_id is None:
+                order=c.execute("SELECT COALESCE(MAX(sort_order),-1)+1 FROM annotations WHERE run_id=? AND structure_id=?",(run_id,structure_id)).fetchone()[0]
+                cur=c.execute("INSERT INTO annotations(run_id,structure_id,x,y,sort_order) VALUES(?,?,?,?,?)",(run_id,structure_id,x,y,int(order)))
+                annotation_id=int(cur.lastrowid);self._annotation_event(c,run_id,"add",structure_id,annotation_id,{"at":[x,y],"sort_order":int(order)})
+                c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,run_id))
         self.recalculate_trait_results(specimen_id)
         return annotation_id
 

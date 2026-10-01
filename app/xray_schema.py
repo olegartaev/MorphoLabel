@@ -83,7 +83,9 @@ def _safe_derived(expression,values):
             value=visit(node.operand);return +value if isinstance(node.op,ast.UAdd) else -value
         if isinstance(node,ast.BinOp) and isinstance(node.op,(ast.Add,ast.Sub,ast.Mult,ast.Div)):
             left=visit(node.left);right=visit(node.right)
-            if isinstance(node.op,ast.Add):return left+right
+            if isinstance(node.op,ast.Add):
+                if isinstance(left,str) or isinstance(right,str):return str(left)+str(right)
+                return left+right
             if isinstance(node.op,ast.Sub):return left-right
             if isinstance(node.op,ast.Mult):return left*right
             return left/right
