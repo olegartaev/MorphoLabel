@@ -646,15 +646,43 @@ class ProductionShell(tk.Tk):
         for key,label in getattr(self,"status_counts",{}).items():
             label.configure(text=f"{display_labels.get(key,key)}: {self._section_counts().get(key,0)}")
 
-    def open_landmark_attention(self):
+    def _sync_photo_panel_current(self, *, align_top=False, refresh_rows=True):
+        panel=getattr(self,"photo_panel",None)
+        target=getattr(panel,"photos",panel)
+        sync=getattr(target,"sync_current",None)
+        if sync:
+            sync(reveal=True,align_top=align_top,refresh_rows=refresh_rows)
+            return True
+        return False
+
+    def open_landmark_attention(self, issue=None):
+        """Open one persisted attention item without rebuilding the whole workspace."""
         if not self.context.project:return False
-        from app.landmark_attention_queue import current as current_attention
-        issue=current_attention(self.context.project)
+        if issue is None:
+            from app.landmark_attention_queue import current as current_attention
+            issue=current_attention(self.context.project)
         if not issue:
             self._update_status();return False
+        desired_section="crop" if issue.get("stage")=="crop" else "landmarks"
+        same_workspace=bool(
+            self.context.section==desired_section
+            and getattr(self,"current_view",None) is not None
+            and getattr(self,"photo_panel",None) is not None
+        )
         if not self.context.select_image(issue["image_id"]):return False
-        self.context.section="crop" if issue.get("stage")=="crop" else "landmarks"
-        self.render()
+        self.context.section=desired_section
+        if same_workspace:
+            # Queue navigation changes only the selected record. Rebuilding the
+            # whole workspace here used to recompute catalogue-wide counters,
+            # recreate widgets and re-decode the sidebar on every image.
+            self._sync_photo_panel_current(align_top=True,refresh_rows=False)
+            self._selected_image(False)
+            view=getattr(self,"current_view",None)
+            refresh_banner=getattr(view,"refresh_attention_banner",None)
+            if refresh_banner:refresh_banner()
+        else:
+            self._align_selected_top_once=True
+            self.render()
         def show_reason():
             view=getattr(self,"current_view",None)
             if self.context.section=="landmarks" and view is not None and hasattr(view,"_inline_status"):
