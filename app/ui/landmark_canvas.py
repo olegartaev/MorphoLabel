@@ -208,8 +208,20 @@ class LandmarkCanvasController:
         return True
 
     def _prefetch_next_batch_image(self, current_id):
-        """Warm exactly the next persisted batch member while the operator annotates this one."""
+        """Warm one likely next image for finite review/training workflows."""
         try:
+            from app.landmark_attention_queue import active as active_attention
+            from app.landmark_frames import landmark_prediction_frame_ready
+            attention=active_attention(self.context.project)
+            if attention:
+                ids=[str(value) for value in attention.get("image_ids",())]
+                completed=set(map(str,attention.get("completed_ids",())))
+                position=ids.index(str(current_id))
+                for candidate in ids[position+1:]:
+                    if candidate in completed:continue
+                    if landmark_prediction_frame_ready(self.context.project,candidate):
+                        self.prefetch(candidate)
+                    return
             from app.landmark_ai_workflow import load_state
             state = load_state(self.context.project)
             stage = state.get("stage")
