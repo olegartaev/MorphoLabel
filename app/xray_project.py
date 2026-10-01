@@ -463,6 +463,7 @@ class XRayProject:
                 if item["crop_status"] in {"rejected","superseded"} or item["excluded"]:continue
                 c.execute("UPDATE specimens SET crop_status='rejected',excluded=1,updated_at=? WHERE specimen_id=?",(now,specimen_id))
                 self._event(c,specimen_id,"reject","human",{"previous_status":item["crop_status"],"reason":"apply_crop"})
+                self._invalidate_annotation_verification(c,specimen_id,"crop_removed",item.get("crop") or {})
                 removed+=1
             for edit in edits:
                 specimen_id=str(edit.get("specimen_id") or "");item=rows.get(specimen_id)
@@ -488,6 +489,21 @@ class XRayProject:
                 )
                 self._event(c,specimen_id,"add","human",{"crop":crop,"action":"apply_crop"});id_map[client_id]=specimen_id;added+=1
         return {"updated":updated,"added":added,"removed":removed,"id_map":id_map}
+
+    def remove_all_plate_crops(self,image_id):
+        """Retire every current crop on a plate while preserving event/archive history."""
+        self.source_image(image_id);now=_now();removed=0
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row
+            rows=[self._decode_specimen(row) for row in c.execute("SELECT * FROM specimens WHERE image_id=?",(image_id,))]
+            for item in rows:
+                if item["crop_status"] in {"rejected","superseded"} or item["excluded"]:continue
+                c.execute("UPDATE specimens SET crop_status='rejected',excluded=1,updated_at=? WHERE specimen_id=?",(now,item["specimen_id"]))
+                self._event(c,item["specimen_id"],"reject","human",{"previous_status":item["crop_status"],"reason":"clear_plate"})
+                self._invalidate_annotation_verification(c,item["specimen_id"],"crop_removed",item.get("crop") or {})
+                removed+=1
+            c.execute("UPDATE source_images SET crop_reviewed=0,crop_reviewed_at='' WHERE image_id=?",(image_id,))
+        return removed
 
     def set_specimen_excluded(self,specimen_id,excluded=True):
         with sqlite3.connect(self.db_path) as c:
@@ -610,6 +626,40 @@ class XRayProject:
                          VALUES(?,?,?,?,?,?,?,?,?)""",
                       (model_id,now,str(path),str(config_path),parent_model_id,_json(metrics or {}),len(training_plate_ids),int(training_specimen_count),int(bool(activate))))
             c.executemany("INSERT OR IGNORE INTO xray_crop_training_membership(model_id,image_id) VALUES(?,?)",[(model_id,image_id) for image_id in training_plate_ids])
+        return model_id
+
+    def activate_crop_model(self,model_id):
+        """Select a registered crop model as the sole active model."""
+        with sqlite3.connect(self.db_path) as c:
+            if not c.execute("SELECT 1 FROM xray_crop_models WHERE model_id=?",(str(model_id),)).fetchone():
+                raise KeyError(f"Unknown X-ray crop model: {model_id}")
+            c.execute("UPDATE xray_crop_models SET active=CASE WHEN model_id=? THEN 1 ELSE 0 END",(str(model_id),))
+        return self.active_crop_model()
+
+    def delete_crop_model(self,model_id):
+        """Delete a managed model and its registry rows without breaking descendants."""
+        model_id=str(model_id)
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row
+            row=c.execute("SELECT * FROM xray_crop_models WHERE model_id=?",(model_id,)).fetchone()
+            if row is None:raise KeyError(f"Unknown X-ray crop model: {model_id}")
+            child=c.execute("SELECT model_id FROM xray_crop_models WHERE parent_model_id=? LIMIT 1",(model_id,)).fetchone()
+            if child:raise ValueError(f"Model is the training parent of {child[0]} and cannot be deleted yet.")
+            paths=[Path(row["path"])]
+            if row["config_path"]:paths.append(Path(row["config_path"]))
+            resolved=[(self.root/path if not path.is_absolute() else path).resolve() for path in paths]
+            models_root=(self.root/"models").resolve()
+            if any(models_root not in path.parents for path in resolved):
+                raise ValueError("Model files are outside this project's managed models folder.")
+            model_dirs={path.parent for path in resolved}
+            if len(model_dirs)!=1:raise ValueError("Model files do not share one managed model folder.")
+            model_dir=next(iter(model_dirs))
+            if model_dir.name!=model_id:raise ValueError("Model folder does not match its registered model id.")
+            c.execute("DELETE FROM xray_crop_training_membership WHERE model_id=?",(model_id,))
+            c.execute("DELETE FROM xray_crop_models WHERE model_id=?",(model_id,))
+            if row["active"]:
+                c.execute("UPDATE xray_crop_models SET active=1 WHERE model_id=(SELECT model_id FROM xray_crop_models ORDER BY created_at DESC,model_id DESC LIMIT 1)")
+        if model_dir.exists():shutil.rmtree(model_dir)
         return model_id
 
     def crop_summary(self):

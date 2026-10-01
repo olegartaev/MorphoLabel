@@ -131,6 +131,11 @@ def _trait_rule_summary(scheme,trait):
     if method=="derived":return "Calculated from other traits"
     return METHOD_BY_ID[method]["label"]
 
+def orientation_preview_transform(head,bottom):
+    """Pure orientation-preview state, also used by its focused regression test."""
+    return {"flip_x":head=="right","flip_y":bottom=="up","show_head":head!="none","show_bottom":bottom!="none","neutral":head=="none"}
+
+
 class OrientationSetupDialog(tk.Toplevel):
     """One-time project viewing convention; originals are never rewritten."""
     def __init__(self,parent,initial=None):
@@ -157,18 +162,32 @@ class OrientationSetupDialog(tk.Toplevel):
 
     def _draw(self):
         c=self.preview;c.delete("all");w=620;h=170;cx=w/2;cy=h/2
-        c.create_oval(cx-150,cy-36,cx+150,cy+36,fill="#e9eef2",outline="#7c8994",width=2)
-        c.create_polygon(cx+150,cy,cx+195,cy-32,cx+195,cy+32,fill="#e9eef2",outline="#7c8994",width=2)
         head=self.head.get();bottom=self.bottom.get()
-        if head!="none":
-            hx=cx-150 if head=="left" else cx+150;direction=-1 if head=="left" else 1
-            c.create_polygon(hx+direction*20,cy,hx-direction*5,cy-12,hx-direction*5,cy+12,fill="#42a5f5",outline="#1d6fa5")
-            c.create_text(hx+direction*55,cy,text="HEAD",fill="#1d6fa5",font=("Segoe UI",9,"bold"))
-        if bottom!="none":
-            by=cy+36 if bottom=="down" else cy-36;direction=1 if bottom=="down" else -1
-            c.create_line(cx-55,by,cx+55,by,fill="#ffb300",width=5)
-            c.create_polygon(cx,by+direction*20,cx-9,by-direction*2,cx+9,by-direction*2,fill="#ffb300",outline="#b67f00")
-            c.create_text(cx,by+direction*45,text="BOTTOM",fill="#9b6b00",font=("Segoe UI",9,"bold"))
+        state=orientation_preview_transform(head,bottom);flip_x=state["flip_x"];flip_y=state["flip_y"]
+        def point(x,y):return (cx+(x-cx)*(-1 if flip_x else 1),cy+(y-cy)*(-1 if flip_y else 1))
+        if not state["show_head"]:
+            # Without a head convention, avoid implying a canonical left/right direction.
+            c.create_oval(cx-138,cy-34,cx+138,cy+34,fill="#e9eef2",outline="#7c8994",width=2)
+        else:
+            body=[(cx-150,cy),(cx-132,cy-25),(cx-76,cy-34),(cx+68,cy-27),(cx+130,cy-15),(cx+160,cy),(cx+130,cy+15),(cx+68,cy+27),(cx-76,cy+34),(cx-132,cy+25)]
+            tail=[(cx+130,cy),(cx+185,cy-34),(cx+169,cy),(cx+185,cy+34)]
+            dorsal=[(cx-30,cy-27),(cx+12,cy-50),(cx+38,cy-25)]
+            ventral=[(cx-35,cy+27),(cx+6,cy+45),(cx+28,cy+27)]
+            for shape in (tail,body,dorsal,ventral):
+                coords=[v for p in shape for v in point(*p)]
+                c.create_polygon(*coords,fill="#e9eef2",outline="#7c8994",width=2)
+            hx,hy=point(cx-132,cy)
+            c.create_oval(hx-12,hy-12,hx+12,hy+12,fill="#42a5f5",outline="#1d6fa5",width=2)
+            tx,ty=point(cx-106,cy-42 if not flip_y else cy+42)
+            c.create_text(tx,ty,text="HEAD",fill="#1d6fa5",font=("Segoe UI",9,"bold"))
+        if state["show_bottom"]:
+            y=cy+32
+            line=[point(cx-55,y),point(cx+55,y)]
+            c.create_line(*line[0],*line[1],fill="#ffb300",width=5)
+            tip=point(cx,y+20);base1=point(cx-9,y+2);base2=point(cx+9,y+2)
+            c.create_polygon(*tip,*base1,*base2,fill="#ffb300",outline="#b67f00")
+            label=point(cx,y+46)
+            c.create_text(*label,text="BOTTOM",fill="#9b6b00",font=("Segoe UI",9,"bold"))
 
     def _accept(self):
         self.result={"head":self.head.get(),"bottom":self.bottom.get()};self.destroy()
@@ -602,6 +621,8 @@ class TraitSchemeDialog(tk.Toplevel):
         menu.add_command(label="Open...",command=self._open_saved)
         menu.add_separator();menu.add_command(label="Save copy...",command=self._save_copy)
         set_menu.configure(menu=menu);set_menu._menu=menu
+        self.apply_button=self._button(toolbar,"Use these traits for project",self._use_for_project,"Apply this trait set as a new project version. Changes are not saved until you choose this button.",True)
+        self.apply_button.pack(side="right",padx=(8,0))
         self.appearance_button=self._button(toolbar,"Colors & keys...",self._edit_markers,"Optional: change only the color, marker shape, and number key used during X-ray annotation.")
         self.appearance_button.pack(side="right")
 
@@ -640,7 +661,6 @@ class TraitSchemeDialog(tk.Toplevel):
 
         actions=ttk.Frame(outer);actions.grid(row=6,column=0,sticky="ew",pady=(10,0))
         self._button(actions,"Close",self.destroy,"Close without applying this draft to the project.").pack(side="right")
-        self._button(actions,"Use for project",self._use_for_project,"Apply this trait set as a new project version.",True).pack(side="right",padx=(0,6))
 
     def _build_trait_list(self,parent):
         parent.columnconfigure(0,weight=1);parent.rowconfigure(0,weight=1)

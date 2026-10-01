@@ -13,7 +13,7 @@ from app.xray_crop_ui import PlateCropEditSession, apply_and_confirm_plate
 from app.ai_hardware import HardwareProfile
 from app.xray_detector import MIN_TRAINING_PLATES, detector_performance_settings, prepare_training_dataset
 from app.xray_project import XRayProject
-from app.xray_schema import blank_scheme
+from app.xray_schema import blank_scheme, bundled_scheme
 
 
 class XRayDetectorWorkflowTests(unittest.TestCase):
@@ -92,6 +92,35 @@ class XRayDetectorWorkflowTests(unittest.TestCase):
         self.assertEqual("xray_crop_model_v002",active["model_id"])
         self.assertEqual("xray_crop_model_v001",active["parent_model_id"])
         self.assertEqual(2,len(self.project.crop_models()))
+
+    def test_model_registry_can_activate_and_safely_delete_leaf_model_files(self):
+        ids=[row["image_id"] for row in self.project.source_images()[:2]]
+        for version,parent,active in (("xray_crop_model_v001",None,True),("xray_crop_model_v002","xray_crop_model_v001",True)):
+            folder=self.project.models_root/version;folder.mkdir(parents=True)
+            (folder/"model.pth").write_bytes(b"weights");(folder/"config.py").write_text("# config",encoding="utf-8")
+            self.project.register_crop_model(version,f"models/{version}/model.pth",f"models/{version}/config.py",parent,{"mAP":0.5},ids,3,activate=active)
+        with self.assertRaisesRegex(ValueError,"training parent"):
+            self.project.delete_crop_model("xray_crop_model_v001")
+        active=self.project.activate_crop_model("xray_crop_model_v001")
+        self.assertEqual("xray_crop_model_v001",active["model_id"])
+        self.project.delete_crop_model("xray_crop_model_v002")
+        self.assertFalse((self.project.models_root/"xray_crop_model_v002").exists())
+        self.assertEqual("xray_crop_model_v001",self.project.active_crop_model()["model_id"])
+
+    def test_clearing_plate_crops_archives_coordinate_annotations_and_unconfirms_plate(self):
+        self.project.save_scheme(bundled_scheme("phoxinus_vertebral_counts"),"test fixture")
+        image_id=self.project.source_images()[0]["image_id"]
+        crop=crop_from_geometry(450,240,620,190,0,(900,480),algorithm="manual")
+        specimen_id=self.project.add_manual_specimen(image_id,crop);self.project.confirm_plate(image_id)
+        self.project.add_annotation(specimen_id,"vertebra",0.35,0.5)
+        self.assertEqual(1,len(self.project.annotations(specimen_id,1)))
+        self.assertEqual(1,self.project.remove_all_plate_crops(image_id))
+        self.assertEqual([],self.project.specimens(image_id))
+        self.assertEqual("rejected",self.project.specimen(specimen_id)["crop_status"])
+        self.assertEqual([],self.project.annotations(specimen_id,1))
+        self.assertEqual("crop_removed",self.project.annotation_archives(specimen_id)[0]["reason"])
+        self.assertFalse(self.project.source_image(image_id)["crop_reviewed"])
+        self.assertEqual([],self.project.training_plates())
 
     def test_apply_plate_crop_edits_is_explicit_and_keeps_plate_unverified(self):
         image_id=self.project.source_images()[0]["image_id"]

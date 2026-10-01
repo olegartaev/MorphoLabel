@@ -80,6 +80,17 @@ class PlateCropEditSession:
         if self.selected_id not in self.new_ids:self.dirty_ids.add(self.selected_id)
         return True
 
+    def rotate_180(self):
+        """Flip both stored anatomical axes, keeping geometry and provenance intact."""
+        item=self.item()
+        if item is None:return False
+        crop=dict(item.get("crop") or {})
+        crop["head_side"]="right" if crop.get("head_side","left")=="left" else "left"
+        crop["bottom_side"]="top" if crop.get("bottom_side","bottom")=="bottom" else "bottom"
+        crop["orientation_source"]="human";item["crop"]=crop
+        if self.selected_id not in self.new_ids:self.dirty_ids.add(self.selected_id)
+        return True
+
     def delete_selected(self):
         specimen_id=self.selected_id
         if specimen_id is None:return False
@@ -328,6 +339,10 @@ class XRayCropWorkspace:
             self.batch_actions,"Confirm & Next ›",self.confirm_plate_next,
             "Apply these crops, mark this whole plate human-verified, and continue.",style="NavPrimary.TButton",icon="verify",
         );self.confirm_button.pack(side="left")
+        self.clear_plate_button=self._button(actions,"Clear plate crops",self.clear_plate_crops,"Retire every current crop on this plate. Coordinate annotations are archived and the plate becomes eligible for fresh review.")
+        self.clear_plate_button.grid(row=0,column=2,sticky="w",padx=(5,0))
+        self.rotate_button=self._button(actions,"↻ 180°",self.rotate_selected_180,"Flip the selected specimen by 180°; this updates both head and ventral-side orientation metadata.")
+        self.rotate_button.grid(row=0,column=3,sticky="w",padx=(5,0))
 
         canvas_frame=ttk.Frame(main);canvas_frame.grid(row=1,column=0,sticky="nsew");canvas_frame.pack_propagate(False)
         self.canvas=tk.Canvas(canvas_frame,background="#202020",highlightthickness=0,cursor="crosshair",takefocus=True)
@@ -357,6 +372,8 @@ class XRayCropWorkspace:
         self.training_count_label=ttk.Label(two,text="Train-ready: 0 plates · 0 specimens");self.training_count_label.grid(row=1,column=0,sticky="w",pady=(4,0))
         self.train_button=self._button(two,"Train X-ray crop model",self.train_model,"Train from all human-verified X-ray Crop examples.",style="Primary.TButton")
         self.train_button.grid(row=2,column=0,sticky="w",pady=(7,0))
+        self.models_button=self._button(two,"Manage models…",self.manage_models,"View training history, activate a previous model, or remove a model and its managed files.")
+        self.models_button.grid(row=3,column=0,sticky="w",pady=(5,0))
 
         three=self._workflow_card(cards,2,"3. Predict & review","crop_apply","Predict only eligible plates; human-confirmed crops are never overwritten.")
         self.predict_count_label=ttk.Label(three,text="",style="Muted.TLabel");self.predict_count_label.grid(row=0,column=0,columnspan=3,sticky="w")
@@ -464,7 +481,7 @@ class XRayCropWorkspace:
             self.instruction.grid()
             return
         self.apply_host.grid_forget();self.instruction.grid()
-        self.batch_actions.grid(row=0,column=2,sticky="e")
+        self.batch_actions.grid(row=0,column=4,sticky="e")
         ids=list(active.get("ids") or []);pos=ids.index(self.selected_image_id)
         self.status_previous.configure(state="normal" if pos>0 else "disabled")
         label="AI review" if active.get("batch_type")=="prediction_review" else "Training"
@@ -644,6 +661,20 @@ class XRayCropWorkspace:
         if self.session.delete_selected():self._set_save_status();self._draw()
         return "break"
 
+    def rotate_selected_180(self):
+        if self.session.rotate_180():
+            self._set_save_status("Turned 180° · apply crop");self._draw()
+
+    def clear_plate_crops(self):
+        if not self.selected_image_id:return
+        count=len(self.session.active_items())
+        if not count:
+            messagebox.showinfo("Clear plate crops","This plate has no current crops.",parent=self.root);return
+        if not messagebox.askyesno("Clear all crops on this plate",f"Retire all {count} current crop(s) on this plate?\n\nCoordinate annotations will be archived, not discarded. You can then create and confirm new crops.",parent=self.root,default="no"):return
+        try:removed=self.project.remove_all_plate_crops(self.selected_image_id)
+        except Exception as exc:messagebox.showerror("Clear plate crops",str(exc),parent=self.root);return
+        self.session.load(());self._preferred_specimen_id="";self._notify_selection();self.plate_list.refresh(preserve_scroll=True,reveal=True);self._refresh_controls();self._set_save_status(f"Cleared {removed} crop(s)");self._draw();self.on_changed()
+
     def apply_current(self,silent=False):
         if not self.selected_image_id:return "FAILED"
         selected=self.session.selected_id
@@ -725,6 +756,46 @@ class XRayCropWorkspace:
                         messagebox.showinfo("Crop training",f"Model ready: {result['model_id']}\nTraining plates: {result['training_plates']}\nTraining specimens: {result['training_specimens']}",parent=self.root);return
             except queue.Empty:self.root.after(150,poll)
         poll()
+
+    def manage_models(self):
+        dialog=tk.Toplevel(self.root);dialog.title("X-ray crop models");dialog.transient(self.root);dialog.geometry("900x390")
+        frame=ttk.Frame(dialog,padding=12);frame.pack(fill="both",expand=True);frame.columnconfigure(0,weight=1);frame.rowconfigure(1,weight=1)
+        ttk.Label(frame,text="Registered models · quality values are shown only when recorded",style="PageSubtitle.TLabel").grid(row=0,column=0,sticky="w",pady=(0,8))
+        columns=("model","date","source","training","quality","active")
+        tree=ttk.Treeview(frame,columns=columns,show="headings",selectmode="browse")
+        headers=(("model","Model",180),("date","Trained",145),("source","Started from",180),("training","Training plates / specimens",170),("quality","Validation",120),("active","Status",90))
+        for key,label,width in headers:tree.heading(key,text=label);tree.column(key,width=width,anchor="w")
+        tree.grid(row=1,column=0,sticky="nsew");scroll=ttk.Scrollbar(frame,orient="vertical",command=tree.yview);scroll.grid(row=1,column=1,sticky="ns");tree.configure(yscrollcommand=scroll.set)
+        def refresh():
+            tree.delete(*tree.get_children())
+            for model in self.project.crop_models():
+                metrics=model.get("metrics") or {};stamp=str(model.get("created_at") or "").replace("T"," ")[:16]
+                source=str(metrics.get("initialization") or model.get("parent_model_id") or "Pretrained RTMDet")
+                quality=[]
+                for key in ("mAP","coco/bbox_mAP","val_loss","validation_loss"):
+                    value=metrics.get(key)
+                    if isinstance(value,(int,float)):quality.append(f"{key} {value:.3g}")
+                tree.insert("","end",iid=model["model_id"],values=(model["model_id"],stamp,source,f"{model.get('training_plate_count',0)} / {model.get('training_specimen_count',0)}",", ".join(quality) or "Not recorded","Active" if model.get("active") else "Available"))
+        def selected_model():
+            selected=tree.selection();return selected[0] if selected else None
+        actions=ttk.Frame(frame);actions.grid(row=2,column=0,columnspan=2,sticky="ew",pady=(10,0))
+        def activate():
+            model_id=selected_model()
+            if not model_id:return
+            try:self.project.activate_crop_model(model_id)
+            except Exception as exc:messagebox.showerror("X-ray models",str(exc),parent=dialog);return
+            refresh();self._refresh_controls()
+        def delete():
+            model_id=selected_model()
+            if not model_id:return
+            if not messagebox.askyesno("Delete X-ray model",f"Delete {model_id} and its managed model files? This cannot be undone.",parent=dialog,default="no"):return
+            try:self.project.delete_crop_model(model_id)
+            except Exception as exc:messagebox.showerror("X-ray models",str(exc),parent=dialog);return
+            refresh();self._refresh_controls()
+        self._button(actions,"Make selected active",activate,"Use this registered model for future predictions.").pack(side="left")
+        self._button(actions,"Delete model…",delete,"Delete the selected model and its managed files; models with dependent descendants are protected.").pack(side="left",padx=(6,0))
+        self._button(actions,"Close",dialog.destroy).pack(side="right")
+        refresh();center(self.root,dialog)
 
     def predict_batch(self,count):
         if self._busy:return

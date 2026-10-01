@@ -11,6 +11,7 @@ from PIL import Image
 from app.xray_crop import ALGORITHM_VERSION, canonical_orientation_flips, crop_from_geometry, detect_specimens, oriented_crop
 from app.xray_project import XRayProject
 from app.xray_crop_ui import PlateCropEditSession
+from app.modules.xray_counts import orientation_preview_transform
 from app.xray_schema import blank_scheme
 
 
@@ -59,6 +60,12 @@ class XRayCropDetectionTests(unittest.TestCase):
 
 
 class XRayCropCanonicalizationTests(unittest.TestCase):
+    def test_orientation_preview_whole_object_transform_and_neutral_options(self):
+        self.assertEqual({"flip_x":True,"flip_y":True,"show_head":True,"show_bottom":True,"neutral":False},orientation_preview_transform("right","up"))
+        self.assertFalse(orientation_preview_transform("none","down")["show_head"])
+        self.assertFalse(orientation_preview_transform("left","none")["show_bottom"])
+        self.assertTrue(orientation_preview_transform("none","none")["neutral"])
+
     def test_orientation_policy_flips_only_the_required_axes(self):
         crop=crop_from_geometry(50,30,60,20,0,(100,60),orientation_policy={"head":"left","bottom":"down"})
         self.assertEqual((False,False),canonical_orientation_flips(crop,{"head":"left","bottom":"down"}))
@@ -86,6 +93,15 @@ class XRayCropOrientationSessionTests(unittest.TestCase):
         moved=crop_from_geometry(55,30,60,20,0,(100,60),orientation_policy={"head":"left","bottom":"down"})
         session.update_selected(moved)
         self.assertEqual("right",session.item()["crop"]["head_side"])
+        self.assertEqual("human",session.item()["crop"]["orientation_source"])
+        self.assertTrue(session.dirty)
+
+    def test_quick_180_turn_updates_both_orientation_axes_and_provenance(self):
+        crop=crop_from_geometry(50,30,60,20,0,(100,60),orientation_policy={"head":"left","bottom":"down"})
+        session=PlateCropEditSession(({"specimen_id":"s1","ordinal":1,"crop":crop},),"s1")
+        self.assertTrue(session.rotate_180())
+        self.assertEqual("right",session.item()["crop"]["head_side"])
+        self.assertEqual("top",session.item()["crop"]["bottom_side"])
         self.assertEqual("human",session.item()["crop"]["orientation_source"])
         self.assertTrue(session.dirty)
 
