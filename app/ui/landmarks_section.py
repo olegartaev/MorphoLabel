@@ -140,7 +140,8 @@ def _repeatability_pass_controls(run,p1,p2,available):
 def _prediction_context_text(project,row):
  if not row or row.get("human_verified") or row.get("status_color")=="green":return ""
  points=project.load_landmarks(str(row.get("image_id")))
- ai=[point for point in points.values() if point.get("provenance")=="machine" or point.get("model_id") or point.get("prediction_run_id")]
+ human={"manual","corrected","corrected_by_human","reviewed_by_human"}
+ ai=[point for point in points.values() if point.get("provenance") not in human and (point.get("provenance")=="machine" or point.get("model_id") or point.get("prediction_run_id"))]
  if not ai:return ""
  models=sorted({str(point.get("model_id")) for point in ai if point.get("model_id")})
  model=", ".join(models) if models else "AI model"
