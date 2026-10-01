@@ -740,10 +740,7 @@ class LandmarksSection(SectionView):
   self.shell._update_status()
  def _sync_photo_selection(self):
   """Keep the queued image at the top of the visible list without rebuilding it."""
-  panel=getattr(self.shell,'photo_panel',None)
-  sync=getattr(panel,'sync_current',None)
-  if sync is None:sync=getattr(getattr(panel,'photos',None),'sync_current',None)
-  if sync:sync(reveal=True,align_top=True,refresh_rows=False)
+  self.shell._sync_photo_panel_current(align_top=True,refresh_rows=False)
  def _select_review_image(self,session):
   ids=list(session.get('image_ids',()))
   image_id=session.get('current_image_id')
