@@ -7,6 +7,7 @@ scientific source of truth.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from .landmark_frames import crop_frame_record, landmark_prediction_frame_ready
 from .landmark_state import load_current_landmark_state
@@ -33,11 +34,11 @@ def _unique(values):
  return result
 
 def start(project,image_ids,*,batch_id=None,failure_reasons=None,source="landmark_prediction"):
- ids=_unique(image_ids)
+ ids=_unique(image_ids);created_at=_now()
  value={
   "format_version":_FORMAT_VERSION,
-  "generation_id":_now(),
-  "created_at":_now(),
+  "generation_id":str(uuid4()),
+  "created_at":created_at,
   "source":str(source),
   "batch_id":None if batch_id is None else str(batch_id),
   "image_ids":ids,
