@@ -12,8 +12,7 @@ from .landmark_frames import restore_standardized_frame
 from .landmark_preparation import standardized_metadata, prepare_inference_metadata
 from .project_storage import Project, load_schema, schema_hash, landmark_model_schema_compatible
 from .ai_hardware import auto_performance_config, record_inference_batch, is_cuda_oom, cuda_batch_candidates, get_hardware_profile
-
-_HUMAN_PROVENANCE = frozenset({"manual", "corrected", "corrected_by_human", "reviewed_by_human"})
+from .landmark_prediction_policy import human_landmark_protected
 
 class PredictionValidationError(ValueError): pass
 class SchemaMismatchError(PredictionValidationError): pass
@@ -116,7 +115,7 @@ class LandmarkAIService:
         if prediction.model_id != self.backend.model_id: raise PredictionValidationError("prediction model_id does not match backend")
         stored_prediction,adjustments=self._validated_prediction(prediction,request)
         existing=self.project.load_landmarks(request.image_id)
-        skipped_ids={point.landmark_id for point in stored_prediction.landmarks if existing.get(point.landmark_id) and existing[point.landmark_id].get("provenance") in _HUMAN_PROVENANCE}
+        skipped_ids={point.landmark_id for point in stored_prediction.landmarks if human_landmark_protected(existing.get(point.landmark_id))}
         run_id,manifest_path=self._write_run_manifest(request,prediction,stored_prediction,skipped_ids,adjustments);saved=skipped=0
         try:
             if hasattr(self.project, "save_machine_landmarks"):
@@ -125,7 +124,7 @@ class LandmarkAIService:
             else:
                 for point in stored_prediction.landmarks:
                     old=existing.get(point.landmark_id)
-                    if old and old.get("provenance") in _HUMAN_PROVENANCE:
+                    if human_landmark_protected(old):
                         skipped+=1;continue
                     self.project.save_landmark(request.image_id,point.landmark_id,point.x,point.y,"auto",provenance="machine",model_id=prediction.model_id,predicted_x=point.x,predicted_y=point.y,confidence=point.confidence,prediction_run_id=run_id,reviewed=False)
                     saved+=1
