@@ -1,12 +1,13 @@
 import inspect
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from app.ui.photo_list_panel import PhotoListPanel
 from app.ui.shell import ProductionShell
 from app.ui.landmarks_section import LandmarksSection
 from app.ui.crop_section import CropSection
+from app.ui.landmark_canvas import LandmarkCanvasController
 
 
 class AttentionNavigationFastPathTests(unittest.TestCase):
@@ -55,6 +56,18 @@ class AttentionNavigationFastPathTests(unittest.TestCase):
   self.assertTrue(shell._align_selected_top_once)
   shell.render.assert_called_once()
   shell._selected_image.assert_not_called()
+
+ def test_attention_queue_prefetches_next_pending_frame(self):
+  controller=SimpleNamespace(
+   context=SimpleNamespace(project=object()),
+   prefetch=Mock(),
+  )
+  attention={"image_ids":["a","b","c"],"completed_ids":["b"]}
+  with patch("app.landmark_attention_queue.active",return_value=attention), \
+       patch("app.landmark_frames.landmark_prediction_frame_ready",return_value=True), \
+       patch("app.landmark_ai_workflow.load_state",side_effect=AssertionError("attention queue should win")):
+   LandmarkCanvasController._prefetch_next_batch_image(controller,"a")
+  controller.prefetch.assert_called_once_with("c")
 
  def test_attention_verify_uses_delta_counter_update_not_global_invalidation(self):
   landmark_source=inspect.getsource(LandmarksSection.navigate_attention_queue)
