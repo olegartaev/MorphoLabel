@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from app.xray_crop import crop_from_geometry, proposals_from_detector_boxes
+from app.xray_crop import HYBRID_ALGORITHM_VERSION, crop_from_geometry, merge_detector_proposals, proposals_from_detector_boxes
 from app.xray_crop_ui import PlateCropEditSession, apply_and_confirm_plate
 from app.ai_hardware import HardwareProfile
 from app.xray_detector import MIN_TRAINING_PLATES, detector_performance_settings, prepare_training_dataset
@@ -174,6 +174,44 @@ class XRayDetectorWorkflowTests(unittest.TestCase):
         self.assertEqual(["a1","b1","c1","a2"],XRayProject._round_robin_series(images,4))
 
 
+class XRayHybridGeometryTests(unittest.TestCase):
+    @staticmethod
+    def _proposal(cx,cy,length,width,confidence="high",algorithm="test"):
+        return crop_from_geometry(cx,cy,length,width,0,(1200,800),confidence=confidence,algorithm=algorithm)
+
+    def test_hybrid_a_uses_heuristic_geometry_when_detectors_agree(self):
+        heuristic=[self._proposal(300,250,400,120)]
+        rtmdet=[self._proposal(305,250,520,180,algorithm="rtmdet-tiny-v1")]
+        merged=merge_detector_proposals(heuristic,rtmdet)
+        self.assertEqual(1,len(merged))
+        self.assertAlmostEqual(400.0,merged[0]["length"])
+        self.assertAlmostEqual(120.0,merged[0]["width"])
+        self.assertEqual("agreed",merged[0]["detector_provenance"]["mode"])
+        self.assertEqual(HYBRID_ALGORITHM_VERSION,merged[0]["algorithm"])
+
+    def test_hybrid_a_keeps_rtmdet_only_as_review_and_drops_heuristic_only(self):
+        heuristic=[self._proposal(250,250,260,90)]
+        rtmdet=[
+            self._proposal(250,250,360,140,algorithm="rtmdet-tiny-v1"),
+            self._proposal(850,500,300,120,algorithm="rtmdet-tiny-v1"),
+        ]
+        merged=merge_detector_proposals(heuristic,rtmdet)
+        self.assertEqual(2,len(merged))
+        review=[item for item in merged if item["detector_provenance"]["mode"]=="rtmdet_only"]
+        self.assertEqual(1,len(review))
+        self.assertEqual("review",review[0]["confidence"])
+        self.assertIn("detector_disagreement",review[0]["qc"])
+        only_heuristic=[self._proposal(100,700,200,80)]
+        self.assertEqual([],merge_detector_proposals(only_heuristic,[]))
+
+    def test_hybrid_a_center_fallback_matches_low_iou_nested_detection(self):
+        heuristic=[self._proposal(400,300,240,70)]
+        rtmdet=[self._proposal(400,300,720,260,algorithm="rtmdet-tiny-v1")]
+        merged=merge_detector_proposals(heuristic,rtmdet)
+        self.assertEqual(1,len(merged))
+        self.assertEqual("center_fallback",merged[0]["detector_provenance"]["agreement_rule"])
+
+
 class XRayDetectorGeometryTests(unittest.TestCase):
     def test_detector_box_is_never_trimmed_by_rotation_refinement(self):
         root=Path(tempfile.mkdtemp())
@@ -240,6 +278,8 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn('"mixed_precision"',detector)
         self.assertIn('"pin_memory"',detector)
         self.assertIn('"predict_many"',detector)
+        self.assertIn("merge_detector_proposals",detector)
+        self.assertIn("HYBRID_ALGORITHM_VERSION",detector)
         self.assertIn("TemporaryDirectory",detector)
         self.assertIn("compact_disposable_ai_artifacts",detector)
         spec=(root/"packaging/morpholabel.spec").read_text(encoding="utf-8")

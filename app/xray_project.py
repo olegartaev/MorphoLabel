@@ -268,8 +268,8 @@ class XRayProject:
     def replace_auto_proposals(self,image_id,proposals,algorithm):
         return self._replace_proposals(image_id,proposals,"auto",algorithm)
 
-    def replace_model_proposals(self,image_id,proposals,model_id):
-        return self._replace_proposals(image_id,proposals,"model","rtmdet-tiny-v1",model_id)
+    def replace_model_proposals(self,image_id,proposals,model_id,algorithm="rtmdet-tiny-v1"):
+        return self._replace_proposals(image_id,proposals,"model",str(algorithm),model_id)
 
     def confirm_specimen(self,specimen_id,source="human"):
         item=self.specimen(specimen_id)

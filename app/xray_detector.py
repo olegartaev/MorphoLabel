@@ -15,7 +15,7 @@ from .ai_delivery import ensure_ai_runtime
 from .ai_hardware import get_hardware_profile, get_inference_config, get_training_config, is_cuda_oom
 from .process_utils import hidden_window_kwargs
 from .runtime_paths import resource_path
-from .xray_crop import display_preview, proposals_from_detector_boxes
+from .xray_crop import HYBRID_ALGORITHM_VERSION, detect_specimens, display_preview, merge_detector_proposals, proposals_from_detector_boxes
 
 DETECTOR_BACKEND="rtmdet_tiny_mmdet_3_2"
 RTMDET_TINY_COCO_URL="https://download.openmmlab.com/mmdetection/v3.0/rtmdet/rtmdet_tiny_8xb32-300e_coco/rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth"
@@ -151,9 +151,15 @@ def _save_prediction(project,model,image_id,scale,detections):
         bbox=item.get("bbox") or []
         if len(bbox)!=4:continue
         boxes.append({"bbox":[float(v)/scale for v in bbox],"score":float(item.get("score",0.0))})
-    proposals=proposals_from_detector_boxes(project.source_image_path(image_id),boxes)
-    saved=project.replace_model_proposals(image_id,proposals,model["model_id"])
-    return {"image_id":image_id,"detections":len(proposals),"model_id":model["model_id"],"saved":saved}
+    source_path=project.source_image_path(image_id)
+    rtmdet=proposals_from_detector_boxes(source_path,boxes)
+    heuristic=detect_specimens(source_path)
+    proposals=merge_detector_proposals(heuristic,rtmdet)
+    saved=project.replace_model_proposals(image_id,proposals,model["model_id"],algorithm=HYBRID_ALGORITHM_VERSION)
+    agreed=sum(1 for item in proposals if (item.get("detector_provenance") or {}).get("mode")=="agreed")
+    review=sum(1 for item in proposals if str(item.get("confidence"))=="review")
+    return {"image_id":image_id,"detections":len(proposals),"agreed":agreed,"review":review,
+            "model_id":model["model_id"],"algorithm":HYBRID_ALGORITHM_VERSION,"saved":saved}
 
 def predict_plate(project,image_id,model=None,score_threshold=0.25):
     model=model or project.active_crop_model()

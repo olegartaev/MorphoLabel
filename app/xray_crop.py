@@ -9,6 +9,7 @@ import numpy as np
 from PIL import Image
 
 ALGORITHM_VERSION = "xray-otsu-pca-v1"
+HYBRID_ALGORITHM_VERSION = "xray-hybrid-a-v1"
 
 
 @dataclass(frozen=True)
@@ -269,6 +270,96 @@ def display_preview(path, max_dim=1200):
     """Return an 8-bit display-only preview plus scale and original size."""
     preview, scale, original_size = _read_gray(path, max_dim)
     return Image.fromarray(preview), scale, original_size
+
+
+def _proposal_dict(item):
+    return item.to_dict() if hasattr(item,"to_dict") else dict(item)
+
+
+def _proposal_polygon(item):
+    raw=item.corners if hasattr(item,"corners") else item.get("corners") or ()
+    return np.asarray(raw,dtype=np.float32).reshape((-1,1,2))
+
+
+def _proposal_area(item):
+    polygon=_proposal_polygon(item)
+    if len(polygon)<3:return 0.0
+    return abs(float(cv2.contourArea(polygon)))
+
+
+def _proposal_iou(left,right):
+    left_poly=_proposal_polygon(left);right_poly=_proposal_polygon(right)
+    if len(left_poly)<3 or len(right_poly)<3:return 0.0
+    try:intersection,_=cv2.intersectConvexConvex(left_poly,right_poly)
+    except cv2.error:return 0.0
+    intersection=max(0.0,float(intersection));union=_proposal_area(left)+_proposal_area(right)-intersection
+    return intersection/union if union>0 else 0.0
+
+
+def _proposal_center(item):
+    if hasattr(item,"center_x"):return float(item.center_x),float(item.center_y)
+    return float(item.get("center_x",0.0)),float(item.get("center_y",0.0))
+
+
+def _proposal_size(item):
+    if hasattr(item,"length"):return float(item.length),float(item.width)
+    return float(item.get("length",0.0)),float(item.get("width",0.0))
+
+
+def merge_detector_proposals(heuristic,rtmdet,iou_threshold=0.30,center_distance_ratio=0.35):
+    """Merge heuristic geometry with RTMDet specimen existence (validated Hybrid A).
+
+    Agreement is deterministic one-to-one matching. If the methods agree,
+    compact heuristic geometry is retained. RTMDet-only detections are kept
+    conservatively for human review so the hybrid cannot silently lose a
+    specimen that the learned detector found.
+    """
+    heuristic=list(heuristic or ());rtmdet=list(rtmdet or ())
+    candidates=[]
+    for hi,hp in enumerate(heuristic):
+        hx,hy=_proposal_center(hp)
+        for ri,rp in enumerate(rtmdet):
+            score=_proposal_iou(hp,rp);rule=""
+            if score>=float(iou_threshold):
+                rule="polygon_iou"
+            else:
+                polygon=_proposal_polygon(rp);inside=False
+                if len(polygon)>=3:
+                    inside=cv2.pointPolygonTest(polygon,(hx,hy),False)>=0
+                rx,ry=_proposal_center(rp);length,width=_proposal_size(rp)
+                diagonal=math.hypot(length,width)
+                if inside and diagonal>0 and math.hypot(hx-rx,hy-ry)<=float(center_distance_ratio)*diagonal:
+                    rule="center_fallback"
+            if rule:candidates.append((float(score),hi,ri,rule))
+    candidates.sort(key=lambda value:(-value[0],value[1],value[2]))
+    used_h=set();used_r=set();pairs=[]
+    for score,hi,ri,rule in candidates:
+        if hi in used_h or ri in used_r:continue
+        used_h.add(hi);used_r.add(ri);pairs.append((hi,ri,score,rule))
+
+    merged=[]
+    for hi,ri,score,rule in pairs:
+        item=_proposal_dict(heuristic[hi]);existing_qc=list(item.get("qc") or ())
+        item["algorithm"]=HYBRID_ALGORITHM_VERSION
+        item["confidence"]="review" if existing_qc else "high"
+        item["qc"]=existing_qc
+        item["detector_provenance"]={
+            "mode":"agreed","agreement_rule":rule,"agreement_iou":float(score),
+            "geometry_source":"heuristic","existence_source":"rtmdet",
+        }
+        merged.append(item)
+    for ri,rp in enumerate(rtmdet):
+        if ri in used_r:continue
+        item=_proposal_dict(rp);qc=list(item.get("qc") or ())
+        if "detector_disagreement" not in qc:qc.append("detector_disagreement")
+        item["algorithm"]=HYBRID_ALGORITHM_VERSION;item["confidence"]="review";item["qc"]=qc
+        item["detector_provenance"]={
+            "mode":"rtmdet_only","geometry_source":"rtmdet","existence_source":"rtmdet",
+        }
+        merged.append(item)
+
+    merged.sort(key=lambda item:(float(item.get("center_y",0.0)),float(item.get("center_x",0.0))))
+    return merged
 
 
 def crop_corners(center_x, center_y, length, width, angle_degrees):
