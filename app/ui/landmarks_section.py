@@ -62,6 +62,8 @@ def _prediction_candidate_ids(project,rows):
   image_id=str(item['image_id'])
   if item.get('excluded') or project.landmark_prediction_locked(image_id):continue
   points=project.load_landmarks(image_id)
+  if not points:
+   result.append(image_id);continue
   status_reader=getattr(project,'annotation_status',None)
   if status_reader is not None and not status_reader(image_id).get('complete'):
    result.append(image_id);continue
