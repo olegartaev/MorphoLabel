@@ -120,6 +120,13 @@ class LandmarkAttentionQueueTests(unittest.TestCase):
     self.assertEqual(title,copy["title"])
     self.assertIn(phrase,copy["message"].lower())
 
+ def test_new_queue_generation_is_unique_even_when_created_at_matches(self):
+  with patch("app.landmark_attention_queue._now",return_value="2026-10-01T12:00:00+00:00"):
+   first=start(self.project,("a",),batch_id="one")
+   second=start(self.project,("b",),batch_id="two")
+  self.assertEqual(first["created_at"],second["created_at"])
+  self.assertNotEqual(first["generation_id"],second["generation_id"])
+
  def test_banner_model_persists_until_dismissed_without_requiring_current_selection(self):
   from app.ui.section_base import _attention_banner_model
   start(self.project,("a","b"),batch_id="batch")
