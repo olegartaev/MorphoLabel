@@ -640,6 +640,13 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   self.assertIn("display_reason='Inspect all landmarks' if reason.startswith('Correction history:') else reason",source)
   self.assertIn("self._inline_status('Review AI predictions: '+display_reason)",source)
 
+ def test_predict_batches_rank_successful_predictions_before_attention_queue(self):
+  source=(Path(__file__).parents[1]/'app'/'ui'/'landmarks_section.py').read_text(encoding='utf8')
+  self.assertIn("Ranking predicted images for review",source)
+  self.assertIn("select_ai_worst_first(self.context.project,size=None,image_ids=tuple(data['prediction_runs']))",source)
+  self.assertIn("tuple(ranked)+tuple(successful)+tuple(failed)+tuple(blocked)",source)
+  self.assertIn("landmark_prediction_frame_ready",source)
+
  def test_landmark_loading_reports_preparation_stages(self):
   source=(Path(__file__).parents[1]/'app'/'ui'/'landmark_canvas.py').read_text(encoding='utf8')
   self.assertIn('progress("Checking saved crop frame")',source)
