@@ -108,6 +108,20 @@ class LandmarkAIGateOneTests(unittest.TestCase):
   self.assertFalse(self.project.landmark_prediction_locked(image_id))
   self.assertIn(image_id,_prediction_candidate_ids(self.project,self.project.catalog_rows()))
 
+ def test_machine_only_refresh_clears_stale_crop_review_flag(self):
+  image_id=self.ids[0]
+  self.project.set_attribute(image_id,"landmark_crop_review_required","true")
+  self.service().predict_one(image_id)
+  self.assertFalse(self.project.landmark_crop_review_required(image_id))
+
+ def test_human_point_keeps_crop_review_flag_while_ai_fills_other_slots(self):
+  image_id=self.ids[0]
+  self.project.save_landmark(image_id,1,7,8,"manual",provenance="manual")
+  self.project.set_attribute(image_id,"landmark_crop_review_required","true")
+  self.service().predict_one(image_id)
+  self.assertTrue(self.project.landmark_crop_review_required(image_id))
+  self.assertEqual("manual",self.points(image_id)[1]["provenance"])
+
  def test_prediction_attention_order_starts_with_ranked_worst_predictions(self):
   from app.ui.landmarks_section import _prediction_attention_order
   order=_prediction_attention_order(("less","worst","partial"),("failed",),("crop",),("worst","less"))
