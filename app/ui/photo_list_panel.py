@@ -80,10 +80,11 @@ class PhotoListPanel(ttk.Frame):
    if index not in self.visible_indices:return False
    visible=self.visible_indices.index(index);self.canvas.set_row(visible,self._row_data(index,row));return True
   return False
- def sync_current(self,reveal=True,align_top=False):
-  # Refresh first. Restoring the old y-position after see() could hide the
-  # selected image again when another workflow changed the current specimen.
-  self.refresh(preserve_scroll=not reveal)
+ def sync_current(self,reveal=True,align_top=False,refresh_rows=True):
+  """Synchronize selection without rebuilding the full catalogue when only the target changed."""
+  if refresh_rows or self.context.selected not in self.visible_indices:
+   # Filters/exclusion changes can alter membership and require a real rebuild.
+   self.refresh(preserve_scroll=not reveal)
   if self.context.selected in self.visible_indices:
    visible=self.visible_indices.index(self.context.selected);self.canvas.selection_set(visible)
    if reveal:self.canvas.see(visible,align_top=align_top)
