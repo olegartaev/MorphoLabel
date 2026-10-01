@@ -8,7 +8,7 @@ import shutil
 from datetime import datetime, timezone
 import uuid
 
-from .xray_schema import normalize_scheme, scheme_hash
+from .xray_schema import bundled_scheme, calculate_trait_values, normalize_scheme, scheme_hash
 
 IMAGE_EXTENSIONS={".png",".jpg",".jpeg",".tif",".tiff",".bmp"}
 
@@ -327,6 +327,7 @@ class XRayProject:
             c.execute("UPDATE specimens SET crop_json=?,crop_source='manual',crop_status=?,crop_qc_json=?,model_id='',excluded=0,updated_at=? WHERE specimen_id=?",
                       (_json(crop),status,_json(list(qc)),now,specimen_id))
             self._event(c,specimen_id,"edit","human",{"previous_crop":item.get("crop") or {},"crop":crop})
+            self._invalidate_annotation_verification(c,specimen_id,"crop_changed")
         return self.specimen(specimen_id)
 
     def add_manual_specimen(self,image_id,crop,label=""):
@@ -372,6 +373,7 @@ class XRayProject:
                     (_json(crop),status,now,specimen_id),
                 )
                 self._event(c,specimen_id,"edit","human",{"previous_crop":item.get("crop") or {},"crop":crop,"action":"apply_crop"})
+                self._invalidate_annotation_verification(c,specimen_id,"crop_changed")
                 updated+=1
             ordinal=max((int(item.get("ordinal") or 0) for item in rows.values()),default=0);stem=self.source_image_path(image_id).stem
             for entry in new_crops:
@@ -544,6 +546,45 @@ class XRayProject:
     @property
     def scheme(self):return self.active_scheme_record()["scheme"]
 
+    def ensure_initial_bundled_scheme(self,scheme_id="phoxinus_vertebral_counts"):
+        """Upgrade only the untouched program-created blank placeholder, preserving its history."""
+        record=self.active_scheme_record();scheme=record["scheme"];history=self.schema_history()
+        untouched=(
+            len(history)==1 and not scheme.get("structures") and not scheme.get("traits")
+            and str(scheme.get("name") or "")=="Untitled X-ray trait scheme"
+        )
+        if not untouched:return False
+        with sqlite3.connect(self.db_path) as c:
+            annotations=int(c.execute("SELECT COUNT(*) FROM annotations").fetchone()[0])
+            results=int(c.execute("SELECT COUNT(*) FROM trait_results").fetchone()[0])
+        if annotations or results:return False
+        self.save_scheme(bundled_scheme(scheme_id),"Built-in starter scheme activated for untouched blank project")
+        return True
+
+    def current_selection(self):
+        state=dict(self.get_ui_state("xray_current_selection",{}) or {})
+        image_id=str(state.get("image_id") or "");specimen_id=str(state.get("specimen_id") or "")
+        if specimen_id:
+            try:
+                specimen=self.specimen(specimen_id)
+                if specimen["excluded"] or specimen["crop_status"] in {"rejected","superseded"}:specimen_id=""
+                else:image_id=str(specimen["image_id"])
+            except KeyError:specimen_id=""
+        if image_id:
+            try:
+                image=self.source_image(image_id)
+                if image["excluded"]:image_id="";specimen_id=""
+            except KeyError:image_id="";specimen_id=""
+        return {"image_id":image_id,"specimen_id":specimen_id}
+
+    def set_current_selection(self,image_id=None,specimen_id=None):
+        specimen_id=str(specimen_id or "");image_id=str(image_id or "")
+        if specimen_id:
+            specimen=self.specimen(specimen_id);image_id=str(specimen["image_id"])
+        if image_id:self.source_image(image_id)
+        value={"image_id":image_id,"specimen_id":specimen_id}
+        self.set_ui_state("xray_current_selection",value);return value
+
     def schema_history(self):
         with sqlite3.connect(self.db_path) as c:
             c.row_factory=sqlite3.Row
@@ -625,6 +666,48 @@ class XRayProject:
             (run_id,_now(),str(action),str(structure_id or ""),annotation_id,_json(payload or {})),
         )
 
+    def _invalidate_annotation_verification(self,c,specimen_id,reason="source_changed"):
+        run_ids=[row[0] for row in c.execute("SELECT run_id FROM annotation_runs WHERE specimen_id=?",(specimen_id,))]
+        now=_now()
+        if run_ids:
+            c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE specimen_id=?",(now,specimen_id))
+            for run_id in run_ids:self._annotation_event(c,run_id,"invalidate",payload={"reason":str(reason)})
+        c.execute("UPDATE trait_results SET qc_note=?,updated_at=? WHERE specimen_id=?",(str(reason),now,specimen_id))
+
+    @staticmethod
+    def _value_text(value):
+        if value is None:return None
+        if isinstance(value,float):
+            if abs(value-round(value))<1e-9:return str(int(round(value)))
+            return f"{value:.6g}"
+        return str(value)
+
+    def recalculate_trait_results(self,specimen_id):
+        record=self.active_scheme_record();scheme=record["scheme"];schema_id=record["version_id"]
+        run=self.annotation_run(specimen_id,1,"human",False);annotations=self.annotations(specimen_id,1,"human") if run else []
+        values=calculate_trait_values(scheme,annotations);qc="" if run and run.get("status")=="verified" else (str((run or {}).get("status") or "not_started"))
+        now=_now()
+        with sqlite3.connect(self.db_path) as c:
+            for trait in scheme.get("traits",()):
+                ident=trait["id"];text=self._value_text(values.get(ident))
+                c.execute(
+                    """INSERT INTO trait_results(specimen_id,trait_id,schema_version_id,value_text,qc_note,updated_at)
+                       VALUES(?,?,?,?,?,?)
+                       ON CONFLICT(specimen_id,trait_id,schema_version_id) DO UPDATE SET
+                         value_text=excluded.value_text,qc_note=excluded.qc_note,updated_at=excluded.updated_at""",
+                    (specimen_id,ident,schema_id,text,qc,now),
+                )
+        return {"values":values,"status":qc or "verified","schema_version_id":schema_id}
+
+    def trait_rows(self):
+        scheme=self.scheme;rows=[]
+        for item in self.structure_specimens(1):
+            run=self.annotation_run(item["specimen_id"],1,"human",False)
+            annotations=self.annotations(item["specimen_id"],1,"human") if run else []
+            values=calculate_trait_values(scheme,annotations)
+            rows.append({**item,"trait_values":values,"result_status":str((run or {}).get("status") or "not_started")})
+        return rows
+
     def add_annotation(self,specimen_id,structure_id,x,y,pass_no=1,source="human",replace_single=False):
         structure_id=str(structure_id)
         known={item["id"] for item in self.scheme.get("structures",())}
@@ -646,27 +729,32 @@ class XRayProject:
             cur=c.execute("INSERT INTO annotations(run_id,structure_id,x,y,sort_order) VALUES(?,?,?,?,?)",(run_id,structure_id,x,y,int(order)))
             annotation_id=int(cur.lastrowid);self._annotation_event(c,run_id,"add",structure_id,annotation_id,{"at":[x,y],"sort_order":int(order)})
             c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,run_id))
+        self.recalculate_trait_results(specimen_id)
         return annotation_id
 
     def move_annotation(self,annotation_id,x,y):
-        x=max(0.0,min(1.0,float(x)));y=max(0.0,min(1.0,float(y)));now=_now()
+        x=max(0.0,min(1.0,float(x)));y=max(0.0,min(1.0,float(y)));now=_now();specimen_id=None
         with sqlite3.connect(self.db_path) as c:
-            row=c.execute("SELECT run_id,structure_id,x,y FROM annotations WHERE annotation_id=?",(int(annotation_id),)).fetchone()
+            row=c.execute("""SELECT a.run_id,a.structure_id,a.x,a.y,r.specimen_id
+                             FROM annotations a JOIN annotation_runs r ON r.run_id=a.run_id
+                             WHERE a.annotation_id=?""",(int(annotation_id),)).fetchone()
             if row is None:raise KeyError(f"Unknown annotation: {annotation_id}")
-            c.execute("UPDATE annotations SET x=?,y=? WHERE annotation_id=?",(x,y,int(annotation_id)))
+            specimen_id=row[4];c.execute("UPDATE annotations SET x=?,y=? WHERE annotation_id=?",(x,y,int(annotation_id)))
             self._annotation_event(c,row[0],"move",row[1],int(annotation_id),{"from":[row[2],row[3]],"to":[x,y]})
             c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,row[0]))
-        return True
+        self.recalculate_trait_results(specimen_id);return True
 
     def delete_annotation(self,annotation_id):
-        now=_now()
+        now=_now();specimen_id=None
         with sqlite3.connect(self.db_path) as c:
-            row=c.execute("SELECT run_id,structure_id,x,y,sort_order FROM annotations WHERE annotation_id=?",(int(annotation_id),)).fetchone()
+            row=c.execute("""SELECT a.run_id,a.structure_id,a.x,a.y,a.sort_order,r.specimen_id
+                             FROM annotations a JOIN annotation_runs r ON r.run_id=a.run_id
+                             WHERE a.annotation_id=?""",(int(annotation_id),)).fetchone()
             if row is None:return False
-            self._annotation_event(c,row[0],"delete",row[1],int(annotation_id),{"at":[row[2],row[3]],"sort_order":row[4]})
+            specimen_id=row[5];self._annotation_event(c,row[0],"delete",row[1],int(annotation_id),{"at":[row[2],row[3]],"sort_order":row[4]})
             c.execute("DELETE FROM annotations WHERE annotation_id=?",(int(annotation_id),))
             c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,row[0]))
-        return True
+        self.recalculate_trait_results(specimen_id);return True
 
     def verify_annotations(self,specimen_id,pass_no=1,source="human"):
         scheme=self.scheme;run=self.annotation_run(specimen_id,pass_no,source,True);rows=self.annotations(specimen_id,pass_no,source)
@@ -680,6 +768,7 @@ class XRayProject:
         with sqlite3.connect(self.db_path) as c:
             c.execute("UPDATE annotation_runs SET status='verified',updated_at=?,verified_at=? WHERE run_id=?",(now,now,run["run_id"]))
             self._annotation_event(c,run["run_id"],"verify",payload={"counts":counts})
+        self.recalculate_trait_results(specimen_id)
         return {"run_id":run["run_id"],"counts":counts}
 
     def annotation_events(self,specimen_id,pass_no=1,source="human"):
