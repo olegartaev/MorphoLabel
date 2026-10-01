@@ -85,12 +85,19 @@ class TrainingConfigImportContractTests(unittest.TestCase):
             )
             text=child.read_text(encoding="utf-8")
             self.assertIn('backbone=dict(init_cfg=dict(_delete_=True, type="Pretrained"',text)
+            self.assertIn("checkpoint=dict(type='CheckpointHook'",text)
+            self.assertIn("train_cfg = dict(type='EpochBasedTrainLoop'",text)
             if importlib.util.find_spec("mmengine") is not None:
                 from mmengine.config import Config
+                from mmengine.hooks import CheckpointHook
+                from mmengine.registry import HOOKS
                 backbone=Config.fromfile(str(child)).model.backbone
                 self.assertEqual("CSPNeXt",backbone.type)
                 self.assertEqual("Pretrained",backbone.init_cfg.type)
                 self.assertEqual(str((root/"base.pth").resolve()),backbone.init_cfg.checkpoint)
+                self.assertEqual("EpochBasedTrainLoop",Config.fromfile(str(child)).train_cfg.type)
+                checkpoint_hook=HOOKS.build(Config.fromfile(str(child)).default_hooks.checkpoint)
+                self.assertIsInstance(checkpoint_hook,CheckpointHook)
 
 if __name__=="__main__":
     unittest.main()
