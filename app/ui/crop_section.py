@@ -168,7 +168,8 @@ class CropSection(SectionView):
    if outcome=='DEFERRED':
     self._defer_crop_action('attention');return True
    if outcome!='SAVED':return True
-  self.context.refresh_landmark_state(current);self.context.update_landmark_counts(current)
+  self.context.refresh_landmark_state(current)
+  if getattr(self.context,'_landmark_counts_cache',None) is not None:self.context.update_landmark_counts(current)
   self.shell.open_landmark_attention();return True
 
  def navigate_batch(self,step):
