@@ -160,7 +160,7 @@ class LandmarksSection(SectionView):
 
   header=ttk.Frame(panel);header.grid(row=0,column=0,sticky="ew",pady=(0,4))
   controls=ttk.Frame(header,style="Toolbar.TFrame");controls.pack(fill="x")
-  self.attention_banner(header,lambda:self.navigate_attention_queue(1),stages={"prediction","landmarks"})
+  self.attention_banner(header,self.shell.open_landmark_attention,stages={"prediction","landmarks"})
   self.canvas_frame=ttk.Frame(panel);self.canvas_frame.grid(row=1,column=0,sticky="nsew")
   # The image canvas must consume only the space left after the workflow dock.
   # A packed Tk Canvas otherwise propagates its requested height upward and can
