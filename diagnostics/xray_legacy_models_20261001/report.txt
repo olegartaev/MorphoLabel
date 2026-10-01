@@ -1,0 +1,64 @@
+READ-ONLY LEGACY MODEL INVENTORY
+================================
+
+Repository feature baseline: b9639e940cbf38118e72f6ec90c7c2cce8545ff8
+Snapshot contains anonymized file metadata and SHA256 only. No weights, databases,
+images, dataset annotations, local paths, locality names, or sample names are included.
+
+Search scope and result
+----------------------
+The explicitly named old working-data location was inspected. The similarly named
+copy location was absent. The requested backup location contained only prior
+diagnostic helper artifacts. MorphoLabel's saved recent-project preference pointed
+to a location that no longer exists; no recent X-ray project database was found.
+No X-ray-specific project database was found in the inspected old project tree.
+
+The targeted model-artifact inventory contains 28 candidate files:
+- 21 .pth RTMPose landmark checkpoints (including final/best checkpoint files);
+- 7 .npz NumPy ridge crop-regression models.
+Each candidate's size, SHA256, timestamp, safe sibling filenames, and available
+metadata are in models.json. The historical tree also contains intermediate epoch
+checkpoints; these were not included in the candidate list.
+
+Most informative Structure/marker candidate
+--------------------------------------------
+legacy_model_021 is the latest fully described RTMPose checkpoint in the inventory:
+- 56,999,990 bytes; SHA256 is in models.json;
+- sibling config.py, inference_config.py, model.json, environment.json, and
+  finalization.json are present;
+- RTMPose / MMPose; input 640 x 320; one fish instance and 25 keypoints;
+- keypoint names and sanitized inference/preprocessing contract are in
+  legacy_configs/rtmpose_contract.json;
+- best checkpoint epoch 70; validation median / p90 / p95 normalized errors are
+  included in that sanitized contract.
+
+Safe checkpoint inspection was attempted with the installed managed Python and
+torch.load(map_location="cpu", weights_only=True). It was refused with
+_pickle.UnpicklingError because the checkpoint references an unsupported NumPy
+reconstruction global. No unsafe pickle fallback was attempted; tensor keys and
+shapes therefore remain unavailable.
+
+Crop candidates
+---------------
+The seven .npz files are metadata-identified as numpy_ridge_image_regression.
+The newest described contract uses a 32 x 24 grayscale input and six outputs:
+x1, y1, x2, y2, sin(rotation), cos(rotation). It is an oriented crop-geometry
+regressor, not an RTMDet detector. The latest local candidate's validation IoU,
+boundary error, and rotation error are in models.json.
+
+Compatibility and portable packaging facts
+-------------------------------------------
+- Directly compatible with current X-ray Crops RTMDet: NO for both legacy
+  families. RTMPose emits 25 keypoints; current X-ray RTMDet emits specimen boxes.
+  The NumPy crop model emits a single oriented crop geometry, not RTMDet detections.
+- Likely roles: RTMPose = Structure/marker; NumPy ridge models = Crop geometry.
+- A checkpoint/config/environment set exists for RTMPose in the old project, but
+  this snapshot does not establish portable inference without path normalization
+  and the matching managed runtime. Training reproducibility is not established;
+  datasets and annotations were deliberately excluded.
+- Current generic AI package code has landmark and NumPy crop package paths. Current
+  X-ray model registration is a separate xray_crop_models contract with checkpoint
+  and config paths. The inspected legacy records do not constitute an X-ray RTMDet
+  portable package, and no X-ray project/schema was available to verify import.
+
+This is measurement and inventory only; no production code or project data changed.

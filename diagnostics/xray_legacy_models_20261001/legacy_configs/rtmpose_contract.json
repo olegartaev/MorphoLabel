@@ -1,0 +1,37 @@
+{
+  "backend": "MMPose RTMPose",
+  "model_role": "landmark / structure-marker prediction",
+  "architecture": {
+    "estimator": "TopdownPoseEstimator",
+    "backbone": "CSPNeXt",
+    "head": "RTMCCHead"
+  },
+  "framework_versions": {
+    "torch": "2.1.0+cu121",
+    "mmengine": "0.10.7",
+    "mmcv": "2.1.0",
+    "mmpose": "1.3.2"
+  },
+  "input_size_wh": [640, 320],
+  "preprocessing": {
+    "bgr_to_rgb": true,
+    "mean": [123.675, 116.28, 103.53],
+    "std": [58.395, 57.12, 57.375],
+    "topdown_affine": true
+  },
+  "instance_classes": ["fish"],
+  "keypoint_count": 25,
+  "keypoints": [
+    "SnT", "NarP", "OrbD", "OrbP", "OrbV", "OrbA", "JawP", "SOccP", "OpD", "OpP",
+    "OpV", "PecO", "DorO", "DorI", "PelO", "AnO", "AnI", "CPminD", "CPminV", "VCend",
+    "PecTip", "PelTip", "DorHtTip", "AnHtTip", "CauUTip"
+  ],
+  "best_epoch": 70,
+  "engineering_validation": {
+    "median_error_percent": 0.189274,
+    "p90_error_percent": 0.436191,
+    "p95_error_percent": 0.551071
+  },
+  "source_paths_removed": true,
+  "dataset_and_image_data_excluded": true
+}
