@@ -181,7 +181,10 @@ class ProductionShell(tk.Tk):
         return self.open_module("landmarks")
 
     def _module_host(self):
-        return ModuleHost(self.root,self.context.project,self.show_module_hub,self.open_project,self.new_project)
+        return ModuleHost(
+            self.root,self.context.project,self.show_module_hub,self.open_project,self.new_project,
+            self._menus,
+        )
 
     def _create_module_runtime(self,spec):
         internal=create_internal_runtime(spec,self)
