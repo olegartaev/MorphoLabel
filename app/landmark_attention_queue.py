@@ -174,6 +174,33 @@ def display_summary(project):
   "total":len(ids),
   "remaining":max(0,len(ids)-len(completed)),
   "batch_id":value.get("batch_id"),
+  "source":value.get("source"),
+  "generation_id":value.get("generation_id"),
+ }
+
+
+def banner_copy(issue):
+ """Short user-facing label for the kind of saved work that remains."""
+ stage=str((issue or {}).get("stage") or "")
+ reason=_short_reason((issue or {}).get("reason"))
+ if stage=="crop":
+  return {
+   "title":"Check crops",
+   "message":"These crops need a quick check before you continue.",
+  }
+ if stage=="prediction":
+  return {
+   "title":"Finish AI predictions",
+   "message":"AI could not finish some images automatically.",
+  }
+ if stage=="landmarks" and reason.startswith("Crop confirmed;"):
+  return {
+   "title":"Check landmarks after crop changes",
+   "message":"The crop changed, so these landmarks should be checked again.",
+  }
+ return {
+  "title":"Check AI landmarks",
+  "message":"Start with the images where AI may be most wrong.",
  }
 
 def summary(project):
