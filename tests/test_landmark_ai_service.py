@@ -99,6 +99,29 @@ class LandmarkAIGateOneTests(unittest.TestCase):
   self.assertEqual((9,10,"manual"),(rows[2]["x_standardized"],rows[2]["y_standardized"],rows[2]["provenance"]))
   self.assertEqual(1,result.skipped_human_landmarks)
 
+ def test_stale_human_coordinates_from_older_crop_are_replaced_by_current_ai(self):
+  image_id=self.ids[0]
+  self.project.save_landmark(image_id,1,7,8,"corrected",provenance="corrected_by_human")
+  with self.project.transaction() as db:
+   db.execute("UPDATE landmarks SET model_id='old-model',prediction_run_id='old-run',updated_at='2026-01-01T00:00:00+00:00' WHERE image_id=? AND landmark_abbr='P1'",(image_id,))
+   db.execute("UPDATE crops SET reviewed_at='2026-02-01T00:00:00+00:00',updated_at='2026-02-01T00:00:00+00:00' WHERE image_id=?",(image_id,))
+  self.project.set_attribute(image_id,"landmark_crop_review_required","true")
+  result=self.service(coordinate_overrides={1:(31,32)}).predict_one(image_id)
+  row=self.points(image_id)[1]
+  self.assertEqual((31,32,"machine","mock-landmark-v1"),(row["x_standardized"],row["y_standardized"],row["provenance"],row["model_id"]))
+  self.assertEqual(0,result.skipped_human_landmarks)
+
+ def test_human_correction_made_after_crop_change_stays_protected(self):
+  image_id=self.ids[0]
+  with self.project.transaction() as db:
+   db.execute("UPDATE crops SET reviewed_at='2026-01-01T00:00:00+00:00',updated_at='2026-01-01T00:00:00+00:00' WHERE image_id=?",(image_id,))
+  self.project.set_attribute(image_id,"landmark_crop_review_required","true")
+  self.project.save_landmark(image_id,1,7,8,"corrected",provenance="corrected_by_human")
+  result=self.service(coordinate_overrides={1:(31,32)}).predict_one(image_id)
+  row=self.points(image_id)[1]
+  self.assertEqual((7,8,"corrected_by_human"),(row["x_standardized"],row["y_standardized"],row["provenance"]))
+  self.assertEqual(1,result.skipped_human_landmarks)
+
  def test_confirmed_crop_pending_landmark_review_is_prediction_ready(self):
   from app.landmark_frames import landmark_frame_ready, landmark_prediction_frame_ready
   image_id=self.ids[0]
