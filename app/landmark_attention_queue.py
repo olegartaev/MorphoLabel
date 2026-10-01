@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from .landmark_frames import crop_frame_record, landmark_frame_ready
+from .landmark_frames import crop_frame_record, landmark_prediction_frame_ready
+from .landmark_prediction_policy import ai_editable_unresolved_landmark_ids, landmark_prediction_needed
 from .landmark_state import load_current_landmark_state
 
 _STATE_KEY="landmark_attention_queue"
@@ -74,17 +75,19 @@ def classify(project,image_id):
  if crop.get("provenance") not in {"manual","ai_accepted","ai_corrected"} or not crop.get("human_verified"):
   return {"image_id":image_id,"stage":"crop","reason":"Crop needs human confirmation"}
  current=load_current_landmark_state(project,image_id)
- if project.landmark_crop_review_required(image_id):
-  reason="Crop confirmed; review landmarks in the new crop" if current.complete else "Crop confirmed; complete landmarks in the new crop"
+ crop_review=project.landmark_crop_review_required(image_id)
+ if crop_review:
+  if not current.complete and ai_editable_unresolved_landmark_ids(project,image_id) and not project.landmark_prediction_locked(image_id) and landmark_prediction_frame_ready(project,image_id):
+   return {"image_id":image_id,"stage":"prediction","reason":"AI needs to refresh non-human landmarks on the confirmed Crop"}
+  reason="Review landmarks after the Crop change" if current.complete else "Complete the protected human landmarks after the Crop change"
   return {"image_id":image_id,"stage":"landmarks","reason":reason}
  if project.landmark_ai_review_ready(image_id):
   return {"image_id":image_id,"stage":"resolved","reason":"Landmarks verified"}
  points=project.load_landmarks(image_id)
- locked=project.landmark_prediction_locked(image_id)
  if not current.complete:
-  if locked:
-   return {"image_id":image_id,"stage":"landmarks","reason":"Complete the protected human-confirmed landmark set manually"}
-  if landmark_frame_ready(project,image_id):
+  if project.landmark_prediction_locked(image_id) or not ai_editable_unresolved_landmark_ids(project,image_id):
+   return {"image_id":image_id,"stage":"landmarks","reason":"Complete the protected human landmark set manually"}
+  if landmark_prediction_frame_ready(project,image_id):
    return {"image_id":image_id,"stage":"prediction","reason":"AI prediction is missing or incomplete"}
   return {"image_id":image_id,"stage":"crop","reason":"Landmark frame is not ready"}
  if any(_machine_origin(point) for point in points.values()):
@@ -118,11 +121,14 @@ def user_copy(issue):
   }.get(reason,reason or "This image needs its crop checked before landmark prediction can continue.")
   return {"title":"Crop needs attention","message":detail+" Adjust the frame if needed, then confirm it. The review queue will continue automatically.","action":"Confirm crop & continue","help":"Save and confirm this crop, then continue the same prediction-review queue."}
  if stage=="prediction":
-  detail="AI could not finish landmark prediction for this image."
-  if reason and reason!="AI prediction is missing or incomplete":detail+=" "+reason
-  return {"title":"AI prediction needs attention","message":detail+" Retry AI. If it fails again, check the crop or exclude the image.","action":"Retry AI","help":"Retry landmark prediction for this queued image without changing human-confirmed images."}
- if reason.startswith("Crop confirmed;"):
-  message="The Crop is already confirmed. Check the landmarks in this updated Crop, correct or complete them if needed, then verify the image. You will not be sent back to Crop."
+  if reason.startswith("AI needs to refresh"):
+   detail="The Crop is already confirmed. AI needs to refresh only the non-human landmarks on this current frame."
+  else:
+   detail="AI could not finish landmark prediction for this image."
+   if reason and reason!="AI prediction is missing or incomplete":detail+=" "+reason
+  return {"title":"AI prediction needs attention","message":detail+" Retry AI. Human-placed landmarks are protected.","action":"Retry AI","help":"Retry landmark prediction for this queued image without changing human-protected landmarks."}
+ if "Crop change" in reason:
+  message="The Crop is already confirmed. Check the remaining protected human landmarks and the current AI result, then verify the image. You will not be sent back to Crop."
  else:
   message="Check the landmark positions and correct any that are wrong. When they are ready, verify the image and continue the same queue."
  return {"title":"Review landmarks","message":message,"action":"Verify & continue","help":"Verify this landmark set after review and continue to the next queued image."}

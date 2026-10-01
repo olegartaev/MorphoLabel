@@ -9,7 +9,8 @@ from app.landmark_ai_review import (active_review_session, activate_review_sessi
 from app.landmark_ai_service import LandmarkAIService
 from app.active_learning import select_ai_worst_first
 from app.smart_selection import create_improvement_selection
-from app.landmark_frames import landmark_frame_ready, crop_frame_record
+from app.landmark_frames import landmark_prediction_frame_ready, crop_frame_record
+from app.landmark_prediction_policy import landmark_prediction_needed
 from app.landmark_attention_queue import (
  active as active_attention_queue, classify as classify_attention_issue,
  complete_current as complete_attention_current, clear_failure as clear_attention_failure,
@@ -52,21 +53,27 @@ def _format_percent(value,digits=2):
  return f"{float(value):.{int(digits)}f}%"
 
 def _prediction_candidate_ids(project,rows):
- """Empty or previously AI-predicted images that remain AI-editable.
+ """Images with at least one AI-editable landmark slot.
 
- Frame/Crop readiness is not filtered here: blocked candidates must enter the
- attention queue instead of disappearing from Predict all.
+ Human-placed/corrected landmarks and Mark missing are protected slot-by-slot.
+ Frame/Crop readiness is checked separately so genuine Crop problems can still
+ enter the attention queue instead of disappearing from Predict all.
  """
  result=[]
  for item in rows:
   image_id=str(item['image_id'])
-  if item.get('excluded') or project.landmark_prediction_locked(image_id):continue
-  points=project.load_landmarks(image_id)
-  if not points:
-   result.append(image_id);continue
-  if any(point.get('provenance')=='machine' or point.get('model_id') is not None or point.get('prediction_run_id') is not None for point in points.values()):
-   result.append(image_id)
+  if item.get('excluded') or not landmark_prediction_needed(project,image_id):continue
+  result.append(image_id)
  return tuple(result)
+
+def _prediction_attention_order(successful,failed,blocked,ranked_successful=()):
+ """Worst-first completed predictions, then unranked/incomplete and hard failures."""
+ successful=[str(value) for value in successful];failed=[str(value) for value in failed];blocked=[str(value) for value in blocked]
+ successful_set=set(successful);ranked=[str(value) for value in ranked_successful if str(value) in successful_set]
+ seen=set();result=[]
+ for image_id in tuple(ranked)+tuple(successful)+tuple(failed)+tuple(blocked):
+  if image_id and image_id not in seen:seen.add(image_id);result.append(image_id)
+ return result
 
 def _next_prediction_candidates(project,rows,start_image_id,count):
  candidates=set(_prediction_candidate_ids(project,rows))
@@ -803,14 +810,12 @@ class LandmarksSection(SectionView):
   else:self.button(actions,'Close',dialog.destroy,'Close this result summary.').pack(side='right')
   center(self.shell,dialog)
 
- def _start_prediction_attention(self,batch,blocked=(),offer_results=False):
+ def _start_prediction_attention(self,batch,blocked=(),offer_results=False,ranked_successful=()):
   failures={str(key):str(value) for key,value in (batch.get('failures') or {}).items()}
   selected=[str(item.get('image_id')) for item in batch.get('selected_images',())]
   failed=[image_id for image_id in selected if image_id in failures]
   successful=[image_id for image_id in selected if image_id in (batch.get('prediction_runs') or {})]
-  ordered=[];seen=set()
-  for image_id in tuple(blocked)+tuple(failed)+tuple(successful):
-   if image_id and image_id not in seen:seen.add(image_id);ordered.append(image_id)
+  ordered=_prediction_attention_order(successful,failed,blocked,ranked_successful)
   if not ordered:
    self.shell.render();return False
   from app.landmark_ai_review import supersede_unfinished_reviews
@@ -933,18 +938,29 @@ class LandmarksSection(SectionView):
     model,backend=active_backend(self.context.project)
     blocked=()
     if explicit_ids is not None:
-     ids=tuple(image_id for image_id in explicit_ids if landmark_frame_ready(self.context.project,image_id));blocked=tuple(image_id for image_id in explicit_ids if image_id not in ids);mode=selection_mode or 'explicit'
+     ids=tuple(image_id for image_id in explicit_ids if landmark_prediction_frame_ready(self.context.project,image_id));blocked=tuple(image_id for image_id in explicit_ids if image_id not in ids);mode=selection_mode or 'explicit'
     elif remaining:
      candidates=_prediction_candidate_ids(self.context.project,self.context.rows)
-     ids=tuple(image_id for image_id in candidates if landmark_frame_ready(self.context.project,image_id));blocked=tuple(image_id for image_id in candidates if image_id not in ids);mode='all_prediction_targets'
+     ids=tuple(image_id for image_id in candidates if landmark_prediction_frame_ready(self.context.project,image_id));blocked=tuple(image_id for image_id in candidates if image_id not in ids);mode='all_prediction_targets'
     else:
      candidates=_next_prediction_candidates(self.context.project,self.context.rows,row['image_id'],int(count))
-     ids=tuple(image_id for image_id in candidates if landmark_frame_ready(self.context.project,image_id));blocked=tuple(image_id for image_id in candidates if image_id not in ids);mode='next_prediction_targets'
+     ids=tuple(image_id for image_id in candidates if landmark_prediction_frame_ready(self.context.project,image_id));blocked=tuple(image_id for image_id in candidates if image_id not in ids);mode='next_prediction_targets'
     if not ids:
      if blocked:events.put(('attention_only',blocked));return
      events.put(('empty','No images need AI landmark prediction.'));return
     data,path=create_batch_for_ids(self.context.project,model['model_id'],ids,selection_mode=mode)
-    data,path=run_batch(self.context.project,path,LandmarkAIService(self.context.project,backend),progress=lambda done,total,name,image_id=None:events.put(('progress',done,total,name,image_id)),status=lambda text:events.put(('status',text)),retry_failures=True);events.put(('done',data,blocked))
+    data,path=run_batch(self.context.project,path,LandmarkAIService(self.context.project,backend),progress=lambda done,total,name,image_id=None:events.put(('progress',done,total,name,image_id)),status=lambda text:events.put(('status',text)),retry_failures=True)
+    ranked=()
+    if not attention_retry:
+     successful=tuple(str(image_id) for image_id in (data.get('prediction_runs') or {}))
+     if successful:
+      events.put(('status','Ranking predictions for review…'))
+      try:ranked=tuple(item['image_id'] for item in select_ai_worst_first(self.context.project,None,progress=lambda text,*_args:events.put(('status',text)),image_ids=successful))
+      except Exception:
+       # Ranking is review ergonomics, not scientific persistence. A ranking
+       # failure must never discard an already successful prediction batch.
+       ranked=()
+    events.put(('done',data,blocked,ranked))
    except Exception as exc:events.put(('error',exc))
   threading.Thread(target=worker,daemon=True,name='production-landmark-predict').start()
   def poll():
@@ -961,7 +977,7 @@ class LandmarksSection(SectionView):
        refresh_one=getattr(photos,'refresh_image',None)
        if refresh_one:refresh_one(image_id)
      elif kind=='done':
-      batch=value[0];blocked=value[1] if len(value)>1 else ()
+      batch=value[0];blocked=value[1] if len(value)>1 else ();ranked=value[2] if len(value)>2 else ()
       for item in batch.get('selected_images',()):self.context.refresh_landmark_state(item['image_id'])
       self.context.invalidate_counts();dialog.destroy()
       if attention_retry:
@@ -969,7 +985,7 @@ class LandmarksSection(SectionView):
        if current_id in (batch.get('failures') or {}):record_attention_failure(self.context.project,current_id,batch['failures'][current_id])
        else:clear_attention_failure(self.context.project,current_id)
        self.shell.open_landmark_attention();return
-      self._start_prediction_attention(batch,blocked,offer_results=bool(remaining and explicit_ids is None));return
+      self._start_prediction_attention(batch,blocked,offer_results=bool(remaining and explicit_ids is None),ranked_successful=ranked);return
      elif kind=='attention_only':
       dialog.destroy();blocked=tuple(value[0]);start_attention_queue(self.context.project,blocked,batch_id=None)
       if remaining and explicit_ids is None:self._show_prediction_results(blocked,0,0)

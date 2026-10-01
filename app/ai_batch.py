@@ -10,7 +10,7 @@ from .project_storage import schema_hash, landmark_model_schema_compatible, land
 from .extensions.api import BackendContext
 from .extensions.builtins import backend_registry
 from .ai_hardware import auto_performance_config
-from .landmark_frames import landmark_frame_ready
+from .landmark_frames import landmark_prediction_frame_ready
 
 BATCH_FORMAT_VERSION=1
 class BatchError(ValueError): pass
@@ -60,7 +60,7 @@ def prospective_candidates(project,model_id,start_image_id,count,*,allow_small=F
  start=order.index(start_image_id);ordered=order[start+1:]+order[:start+1];chosen=[]
  for image_id in ordered:
   row=next(row for row in catalog if row['image_id']==image_id)
-  if row.get('excluded') or image_id in held or image_id in development or not landmark_frame_ready(project,image_id):continue
+  if row.get('excluded') or image_id in held or image_id in development or not landmark_prediction_frame_ready(project,image_id):continue
   if project.load_landmarks(image_id):continue
   chosen.append(image_id)
   if len(chosen)==int(count):break
@@ -85,7 +85,7 @@ def create_batch_for_ids(project,model_id,image_ids,*,selection_mode='explicit')
  if not model or not model.get("active"):raise BatchError("requested model is not the active landmark model")
  catalog={row["image_id"]:row for row in project.catalog_rows()};ids=tuple(map(str,image_ids));mode=str(selection_mode)
  if not ids or any(i not in catalog for i in ids):raise BatchError("requested prediction image IDs are unavailable")
- invalid=[i for i in ids if catalog[i].get("excluded") or not landmark_frame_ready(project,i)]
+ invalid=[i for i in ids if catalog[i].get("excluded") or not landmark_prediction_frame_ready(project,i)]
  if invalid:raise BatchError("requested prediction image IDs are not crop-ready: "+", ".join(invalid[:5]))
  locked=[i for i in ids if project.landmark_prediction_locked(i)]
  if locked:raise BatchError("requested prediction image IDs include human-confirmed images: "+", ".join(locked[:5]))

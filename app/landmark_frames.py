@@ -216,10 +216,23 @@ def restore_standardized_frame(project, image_id, crop=None):
     return target, True
 
 
-def landmark_frame_ready(project, image_id, *, require_final_crop=True):
+def landmark_prediction_frame_ready(project, image_id, *, require_final_crop=True):
+    """Return whether AI can use the persisted current Crop as its input frame.
+
+    A pending landmark review after a Crop change must not block prediction:
+    the Crop itself is already final. Training/final-data readiness remains
+    stricter and is handled by landmark_frame_ready below.
+    """
     crop = crop_frame_record(project, image_id)
     if not crop:
         return False
     if require_final_crop and (crop.get("provenance") not in {"manual", "ai_accepted", "ai_corrected"} or not crop.get("human_verified")):
+        return False
+    return True
+
+
+def landmark_frame_ready(project, image_id, *, require_final_crop=True):
+    """Strict downstream readiness: final Crop plus no pending Crop-change landmark review."""
+    if not landmark_prediction_frame_ready(project, image_id, require_final_crop=require_final_crop):
         return False
     return not project.landmark_crop_review_required(image_id)
