@@ -1,0 +1,49 @@
+MorphoLabel X-ray Hybrid Benchmark — read-only diagnostic
+Feature source HEAD: 9c78fa9f54a6c9f8b163bc8e3b3ddbe146691f28
+Diagnostic branch: diagnostics/xray-hybrid-benchmark-20261001
+Confirmed plates: 15 (SEEN 12, UNSEEN 3)
+Confirmed specimens: 93
+SQLite unchanged: YES; size=299008 bytes; mtime_ns=1790843348256362100; SHA256=42551033a4b55f5b36ea23e35c1b185bce96d37c2ec2b04524ff0fc09db02e0a
+
+Metrics — ALL
+method | truth | predicted | exact plates | misses | extras | recall@.30 | recall@.50 | mean IoU | mean coverage | coverage>=.95% | median area ratio | median sec/plate
+HEURISTIC | 93 | 88 | 11 | 5 | 0 | 0.946 | 0.925 | 0.880 | 0.878 | 55.9% | 1.000 | 0.168
+RTMDET | 93 | 97 | 11 | 5 | 9 | 0.946 | 0.624 | 0.582 | 0.917 | 67.7% | 1.670 | 0.993
+HYBRID_A | 93 | 97 | 11 | 0 | 4 | 1.000 | 0.946 | 0.864 | 0.929 | 59.1% | 1.000 | 1.154
+HYBRID_B | 93 | 97 | 11 | 0 | 4 | 1.000 | 0.946 | 0.864 | 0.929 | 59.1% | 1.000 | 1.154
+HYBRID_C | 93 | 97 | 11 | 5 | 9 | 0.946 | 0.774 | 0.806 | 0.892 | 63.4% | 1.000 | 1.154
+
+Metrics — SEEN
+method | plates | truth | predicted | exact plates | misses | extras | recall@.30 | recall@.50 | mean IoU | mean coverage | coverage>=.95% | median area ratio | median sec/plate
+HEURISTIC | 12 | 70 | 68 | 10 | 2 | 0 | 0.971 | 0.957 | 0.925 | 0.924 | 68.6% | 1.000 | 0.166
+RTMDET | 12 | 70 | 73 | 9 | 5 | 8 | 0.929 | 0.614 | 0.555 | 0.893 | 60.0% | 1.703 | 0.978
+HYBRID_A | 12 | 70 | 73 | 9 | 0 | 3 | 1.000 | 0.957 | 0.911 | 0.953 | 71.4% | 1.000 | 1.136
+HYBRID_B | 12 | 70 | 73 | 9 | 0 | 3 | 1.000 | 0.957 | 0.911 | 0.953 | 71.4% | 1.000 | 1.136
+HYBRID_C | 12 | 70 | 73 | 9 | 5 | 8 | 0.929 | 0.771 | 0.855 | 0.898 | 74.3% | 1.000 | 1.136
+
+Metrics — UNSEEN
+method | plates | truth | predicted | exact plates | misses | extras | recall@.30 | recall@.50 | mean IoU | mean coverage | coverage>=.95% | median area ratio | median sec/plate
+HEURISTIC | 3 | 23 | 20 | 1 | 3 | 0 | 0.870 | 0.826 | 0.726 | 0.736 | 17.4% | 0.985 | 0.199
+RTMDET | 3 | 23 | 24 | 2 | 0 | 1 | 1.000 | 0.652 | 0.656 | 0.989 | 91.3% | 1.520 | 1.000
+HYBRID_A | 3 | 23 | 24 | 2 | 0 | 1 | 1.000 | 0.913 | 0.723 | 0.858 | 21.7% | 0.999 | 1.179
+HYBRID_B | 3 | 23 | 24 | 2 | 0 | 1 | 1.000 | 0.913 | 0.723 | 0.858 | 21.7% | 0.999 | 1.179
+HYBRID_C | 3 | 23 | 24 | 2 | 0 | 1 | 1.000 | 0.783 | 0.665 | 0.871 | 30.4% | 1.021 | 1.179
+
+Hybrid source/review diagnostics (count)
+split | hybrid | heuristic geometry (agreed) | RTMDet-only review retained | heuristic-only rejected | RTMDet-only false/extras @ IoU .30
+ALL | HYBRID_A | 88 | 9 | 0 | 4
+ALL | HYBRID_B | 88 | 9 | 0 | 4
+ALL | HYBRID_C | 70 | 27 | 18 | 9
+SEEN | HYBRID_A | 68 | 5 | 0 | 3
+SEEN | HYBRID_B | 68 | 5 | 0 | 3
+SEEN | HYBRID_C | 54 | 19 | 14 | 8
+UNSEEN | HYBRID_A | 20 | 4 | 0 | 1
+UNSEEN | HYBRID_B | 20 | 4 | 0 | 1
+UNSEEN | HYBRID_C | 16 | 8 | 4 | 1
+
+Agreement rules
+HYBRID_A: polygon IoU >= 0.30 OR heuristic center inside RTMDet polygon and center distance <= 0.35 RTMDet crop diagonal
+HYBRID_B: polygon IoU >= 0.20
+HYBRID_C: polygon IoU >= 0.40
+Timing for each hybrid includes heuristic detection + RTMDet preview/inference/conversion + merge.
+Ground truth and detector matching use deterministic one-to-one greedy polygon-IoU matching.
