@@ -200,7 +200,7 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         self.project.verify_annotations(self.specimen_id,1)
         crop=dict(self.project.specimen(self.specimen_id)["crop"]);crop["center_x"]+=3
         self.project.update_specimen_crop(self.specimen_id,crop)
-        self.assertEqual("draft",self.project.annotation_run(self.specimen_id,1)["status"])
+        self.assertEqual("stale_crop",self.project.annotation_run(self.specimen_id,1)["status"])
 
 class XRayStructureUIContractTests(unittest.TestCase):
     def test_structures_workspace_is_interactive_and_not_placeholder(self):
