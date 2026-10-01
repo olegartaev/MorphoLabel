@@ -50,6 +50,21 @@ class LandmarkAIGateOneTests(unittest.TestCase):
   self.assertIsNone(rows[1]["predicted_x"]);self.assertEqual(result.saved_landmarks,4);self.assertEqual(result.skipped_human_landmarks,1)
   self.assertTrue(all(rows[i]["provenance"]=="machine" for i in (2,3,4,5)))
 
+ def test_mark_missing_is_never_overwritten_by_ai(self):
+  image_id=self.ids[0];self.project.save_landmark(image_id,1,None,None,"missing",provenance="missing")
+  result=self.service().predict_one(image_id);rows=self.points(image_id)
+  self.assertEqual("missing",rows[1]["state"]);self.assertEqual("missing",rows[1]["provenance"])
+  self.assertIsNone(rows[1]["x_standardized"]);self.assertIsNone(rows[1]["y_standardized"])
+  self.assertEqual(4,result.saved_landmarks);self.assertEqual(1,result.skipped_human_landmarks)
+
+ def test_partial_manual_image_remains_predictable_for_unplaced_slots(self):
+  from app.ui.landmarks_section import _prediction_candidate_ids
+  image_id=self.ids[0];self.project.save_landmark(image_id,1,7,8,"manual",provenance="manual")
+  self.assertIn(image_id,_prediction_candidate_ids(self.project,self.project.catalog_rows()))
+  self.service().predict_one(image_id);rows=self.points(image_id)
+  self.assertEqual("manual",rows[1]["provenance"])
+  self.assertTrue(all(rows[i]["provenance"]=="machine" for i in (2,3,4,5)))
+
  def test_predict_all_targets_only_empty_or_unconfirmed_ai_images(self):
   from app.ui.landmarks_section import _prediction_candidate_ids
   empty,ai_only,mixed,verified_ai,manual_only=self.ids
@@ -84,6 +99,19 @@ class LandmarkAIGateOneTests(unittest.TestCase):
   self.assertFalse(self.project.annotation_status(image_id)["verified"])
   self.assertTrue(self.project.landmark_prediction_locked(image_id))
   self.assertNotIn(image_id,_prediction_candidate_ids(self.project,self.project.catalog_rows()))
+
+ def test_crop_change_unlocks_only_machine_refresh_after_historical_confirmation(self):
+  from app.ui.landmarks_section import _prediction_candidate_ids
+  image_id=self.ids[0]
+  self.service().predict_one(image_id);self.project.mark_checked(image_id)
+  self.project.set_attribute(image_id,"landmark_crop_review_required","true");self.project.clear_checked(image_id)
+  self.assertFalse(self.project.landmark_prediction_locked(image_id))
+  self.assertIn(image_id,_prediction_candidate_ids(self.project,self.project.catalog_rows()))
+
+ def test_prediction_attention_order_starts_with_ranked_worst_predictions(self):
+  from app.ui.landmarks_section import _prediction_attention_order
+  order=_prediction_attention_order(("less","worst","partial"),("failed",),("crop",),("worst","less"))
+  self.assertEqual(["worst","less","partial","failed","crop"],order)
 
  def test_reprediction_replaces_machine_points_but_preserves_human_correction(self):
   image_id=self.ids[0]
