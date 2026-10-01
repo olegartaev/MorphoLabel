@@ -955,7 +955,11 @@ class LandmarksSection(SectionView):
      successful=tuple(str(image_id) for image_id in (data.get('prediction_runs') or {}))
      if successful:
       events.put(('status','Ranking predictions for review…'))
-      ranked=tuple(item['image_id'] for item in select_ai_worst_first(self.context.project,None,progress=lambda text,*_args:events.put(('status',text)),image_ids=successful))
+      try:ranked=tuple(item['image_id'] for item in select_ai_worst_first(self.context.project,None,progress=lambda text,*_args:events.put(('status',text)),image_ids=successful))
+      except Exception:
+       # Ranking is review ergonomics, not scientific persistence. A ranking
+       # failure must never discard an already successful prediction batch.
+       ranked=()
     events.put(('done',data,blocked,ranked))
    except Exception as exc:events.put(('error',exc))
   threading.Thread(target=worker,daemon=True,name='production-landmark-predict').start()
