@@ -9,6 +9,7 @@ from PIL import Image
 from app.xray_crop import crop_from_geometry
 from app.xray_project import XRayProject
 from app.xray_schema import blank_scheme, bundled_scheme, calculate_trait_values
+from app.xray_structure_display import DEFAULT_PALETTE, DEFAULT_SIZE, load_xray_structure_display, save_xray_structure_display
 
 
 class XRayStructurePersistenceTests(unittest.TestCase):
@@ -130,6 +131,40 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         self.assertEqual(3,values["dac"])
         self.assertEqual("6+3",values["formv"])
 
+    def test_repeated_markers_are_renumbered_in_anatomical_order(self):
+        one=self.project.add_annotation(self.specimen_id,"vertebra",0.20,0.5,1)
+        two=self.project.add_annotation(self.specimen_id,"vertebra",0.40,0.5,1)
+        three=self.project.add_annotation(self.specimen_id,"vertebra",0.30,0.5,1)
+        rows=[row for row in self.project.annotations(self.specimen_id,1) if row["structure_id"]=="vertebra"]
+        self.assertEqual([one,three,two],[row["annotation_id"] for row in rows])
+        self.assertEqual([0,1,2],[row["sort_order"] for row in rows])
+        self.project.move_annotation(one,0.50,0.5)
+        rows=[row for row in self.project.annotations(self.specimen_id,1) if row["structure_id"]=="vertebra"]
+        self.assertEqual([three,two,one],[row["annotation_id"] for row in rows])
+        self.assertEqual([0,1,2],[row["sort_order"] for row in rows])
+
+    def test_structure_batch_is_persisted_and_advances(self):
+        crop=crop_from_geometry(450,240,700,260,0,(900,480),algorithm="manual")
+        second=self.project.add_manual_specimen(self.image_ids[1],crop)
+        self.project.confirm_plate(self.image_ids[1])
+        state=self.project.start_structure_batch(2,1,self.specimen_id)
+        self.assertEqual(2,len(state["ids"]))
+        reopened=XRayProject(self.project.root)
+        self.assertEqual(state["ids"],reopened.structure_batch(1)["ids"])
+        moved=reopened.move_structure_batch(state["ids"][0],1,1)
+        self.assertEqual(state["ids"][1],moved["specimen_id"])
+
+    def test_xray_marker_display_defaults_are_bright_distinct_and_persistent(self):
+        structures=self.project.scheme["structures"]
+        settings=load_xray_structure_display(self.project,structures)
+        self.assertEqual(DEFAULT_SIZE,settings["size"])
+        self.assertEqual(len(structures),len(set(settings["colors"].values())))
+        self.assertEqual(tuple(settings["colors"][item["id"]] for item in structures),DEFAULT_PALETTE[:len(structures)])
+        settings["size"]=12;settings["colors"][structures[0]["id"]]="#12ff34"
+        save_xray_structure_display(self.project,settings,structures)
+        reopened=load_xray_structure_display(XRayProject(self.project.root),structures)
+        self.assertEqual(12,reopened["size"]);self.assertEqual("#12ff34",reopened["colors"][structures[0]["id"]])
+
     def test_marker_change_updates_live_result_and_crop_edit_invalidates_verification(self):
         self._complete_pass_one()
         before=self.project.recalculate_trait_results(self.specimen_id)
@@ -151,13 +186,15 @@ class XRayStructureUIContractTests(unittest.TestCase):
         module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         for text in (
             "Manual pass","Verify & Next","Sample","Specimen","Locality:","Plate:","Fish №",
-            "Marker actions:","Click = place · drag = correct","PhotoListCanvas","status_shape=\"square\"",
-            "delete_selected","move_annotation","replace_single",
+            "Marker actions:","Wheel = zoom","right-drag = pan","1–9 = marker","Space/→ = Verify & Next",
+            "Display…","PhotoListCanvas","status_shape=\"square\"","Annotation batch","Repeatability","Training data","Open Results",
+            "delete_selected","move_annotation","replace_single","_wheel","_pan_motion","_key_pressed",
         ):
             self.assertIn(text,ui)
         self.assertIn("XRayStructureWorkspace(",module)
         self.assertIn("initial_specimen_id=selection.get(\"specimen_id\")",module)
         self.assertIn("on_selection=self._set_selection",module)
+        self.assertIn('on_open_results=lambda:self._select("results")',module)
         self.assertNotIn("Specimen image / annotation canvas",module)
         self.assertNotIn("Structures to mark",ui)
         self.assertIn("trait_rows()",module)
@@ -168,6 +205,8 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn("oriented_crop",ui)
         self.assertIn("crop_normalized_v1",(root/"app/xray_project.py").read_text(encoding="utf-8"))
         self.assertNotIn(".save(",ui)
+        self.assertIn("draw_xray_marker",ui)
+        self.assertIn('self.canvas.move(f"annotation:{self._drag_annotation}"',ui)
 
 
 if __name__=="__main__":
