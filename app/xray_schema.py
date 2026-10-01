@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 import hashlib
+import ast
+import math
 import json
 from pathlib import Path
 
@@ -66,6 +68,74 @@ def normalize_scheme(scheme):
         missing=set((trait.get("rule") or {}).get("depends_on",()))-trait_ids
         if missing:raise ValueError(f"Trait {trait['id']} depends on missing traits: {sorted(missing)}")
     return value
+
+
+def _safe_derived(expression,values):
+    """Evaluate simple arithmetic/string trait expressions without Python eval."""
+    tree=ast.parse(str(expression or ""),mode="eval")
+    def visit(node):
+        if isinstance(node,ast.Expression):return visit(node.body)
+        if isinstance(node,ast.Constant) and isinstance(node.value,(int,float,str)):return node.value
+        if isinstance(node,ast.Name):
+            if node.id not in values or values[node.id] is None:raise ValueError(node.id)
+            return values[node.id]
+        if isinstance(node,ast.UnaryOp) and isinstance(node.op,(ast.UAdd,ast.USub)):
+            value=visit(node.operand);return +value if isinstance(node.op,ast.UAdd) else -value
+        if isinstance(node,ast.BinOp) and isinstance(node.op,(ast.Add,ast.Sub,ast.Mult,ast.Div)):
+            left=visit(node.left);right=visit(node.right)
+            if isinstance(node.op,ast.Add):return left+right
+            if isinstance(node.op,ast.Sub):return left-right
+            if isinstance(node.op,ast.Mult):return left*right
+            return left/right
+        raise ValueError("Unsupported derived trait expression")
+    return visit(tree)
+
+
+def calculate_trait_values(scheme,annotations):
+    """Calculate current trait values directly from current structure annotations."""
+    scheme=normalize_scheme(scheme);grouped={}
+    for row in annotations or ():
+        grouped.setdefault(str(row["structure_id"]),[]).append(dict(row))
+    for rows in grouped.values():rows.sort(key=lambda row:(int(row.get("sort_order",0)),int(row.get("annotation_id",0))))
+    values={}
+    def points(structure_id):return grouped.get(str(structure_id),[])
+    def nearest_index(series,reference):
+        if not series or not reference:return None
+        rx=float(reference["x"]);ry=float(reference["y"])
+        return min(range(len(series)),key=lambda i:(float(series[i]["x"])-rx)**2+(float(series[i]["y"])-ry)**2)
+    for trait in scheme["traits"]:
+        ident=trait["id"];method=trait["method"];ids=list(trait.get("structures") or ());rule=trait.get("rule") or {};value=None
+        primary=points(ids[0]) if ids else []
+        if method=="count":
+            value=len(primary)+int(rule.get("offset",0) or 0)
+        elif method in {"count_to","position"} and len(ids)>=2:
+            refs=points(ids[1]);index=nearest_index(primary,refs[0] if refs else None)
+            if index is not None:
+                if method=="position":value=index+1+int(rule.get("offset",0) or 0)
+                else:
+                    side=str(rule.get("side") or "through")
+                    count=index if side=="before" else len(primary)-index if side=="from" else index+1
+                    value=count+int(rule.get("offset",0) or 0)
+        elif method=="count_between" and len(ids)>=3:
+            one=points(ids[1]);two=points(ids[2]);a=nearest_index(primary,one[0] if one else None);b=nearest_index(primary,two[0] if two else None)
+            if a is not None and b is not None:value=abs(b-a)+1+int(rule.get("offset",0) or 0)
+        elif method=="presence":
+            value=1 if primary else 0
+        elif method=="distance" and len(ids)>=2:
+            one=points(ids[0]);two=points(ids[1])
+            if one and two:value=math.hypot(float(two[0]["x"])-float(one[0]["x"]),float(two[0]["y"])-float(one[0]["y"]))
+        elif method=="angle" and len(ids)>=3:
+            a=points(ids[0]);b=points(ids[1]);c=points(ids[2])
+            if a and b and c:
+                ax=float(a[0]["x"])-float(b[0]["x"]);ay=float(a[0]["y"])-float(b[0]["y"])
+                cx=float(c[0]["x"])-float(b[0]["x"]);cy=float(c[0]["y"])-float(b[0]["y"])
+                denom=max(1e-12,math.hypot(ax,ay)*math.hypot(cx,cy))
+                value=math.degrees(math.acos(max(-1.0,min(1.0,(ax*cx+ay*cy)/denom))))
+        elif method=="derived":
+            try:value=_safe_derived(rule.get("expression",""),values)
+            except (ValueError,TypeError,ZeroDivisionError):value=None
+        values[ident]=value
+    return values
 
 
 def load_scheme_file(path):
