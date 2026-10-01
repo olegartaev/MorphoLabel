@@ -335,12 +335,13 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
    c.execute("INSERT INTO image_review(image_id,human_verified,updated_at) VALUES (?,?,?) ON CONFLICT(image_id) DO UPDATE SET human_verified=0,updated_at=excluded.updated_at",(image_id,0,timestamp))
   self._auto_verify_if_fully_human(image_id)
  def save_machine_landmarks(self,image_id,points,*,model_id,prediction_run_id):
-  """Persist one complete machine prediction without invalidating identical reviewed state.
+  """Persist one machine prediction while preserving valid human decisions.
 
-  Human-derived points are never overwritten. Refreshing an unconfirmed prediction whose
-  scientific coordinates are identical to the current machine state preserves
-  its reviewed flag and the image Checked state; only a real coordinate/state
-  change invalidates human verification.
+  Human points with valid coordinates, and explicit human Missing decisions,
+  are never overwritten. Historical human rows whose coordinates were
+  invalidated by a Crop change are fillable again. Refreshing an unconfirmed
+  prediction whose scientific coordinates are identical to the current machine
+  state preserves its reviewed flag and Checked state.
   """
   self.reconcile_landmark_schema();timestamp=now();saved=skipped=0;scientific_changed=False
   with self.transaction() as c:
