@@ -77,12 +77,20 @@ class XRayProject:
         CREATE TABLE IF NOT EXISTS annotation_runs(
           run_id TEXT PRIMARY KEY, specimen_id TEXT NOT NULL, pass_no INTEGER NOT NULL,
           source TEXT NOT NULL, schema_version_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'draft',
-          created_at TEXT NOT NULL, UNIQUE(specimen_id,pass_no,source,schema_version_id)
+          coordinate_space TEXT NOT NULL DEFAULT 'crop_normalized_v1',
+          created_at TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT '', verified_at TEXT NOT NULL DEFAULT '',
+          UNIQUE(specimen_id,pass_no,source,schema_version_id)
         );
         CREATE TABLE IF NOT EXISTS annotations(
           annotation_id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL,
           structure_id TEXT NOT NULL, x REAL NOT NULL, y REAL NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0,
           FOREIGN KEY(run_id) REFERENCES annotation_runs(run_id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS annotation_events(
+          event_id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL,
+          created_at TEXT NOT NULL, action TEXT NOT NULL, structure_id TEXT NOT NULL DEFAULT '',
+          annotation_id INTEGER, payload_json TEXT NOT NULL DEFAULT '{}',
+          FOREIGN KEY(run_id) REFERENCES annotation_runs(run_id)
         );
         CREATE TABLE IF NOT EXISTS trait_results(
           specimen_id TEXT NOT NULL, trait_id TEXT NOT NULL, schema_version_id TEXT NOT NULL,
@@ -111,6 +119,11 @@ class XRayProject:
                 "crop_qc_json":"TEXT NOT NULL DEFAULT '[]'",
                 "model_id":"TEXT NOT NULL DEFAULT ''",
                 "updated_at":"TEXT NOT NULL DEFAULT ''",
+            })
+            self._ensure_columns(c,"annotation_runs",{
+                "coordinate_space":"TEXT NOT NULL DEFAULT 'crop_normalized_v1'",
+                "updated_at":"TEXT NOT NULL DEFAULT ''",
+                "verified_at":"TEXT NOT NULL DEFAULT ''",
             })
 
     def meta(self,key,default=""):
@@ -535,6 +548,150 @@ class XRayProject:
         with sqlite3.connect(self.db_path) as c:
             c.row_factory=sqlite3.Row
             return [dict(row) for row in c.execute("SELECT version_id,created_at,scheme_hash,note,active FROM schema_versions ORDER BY created_at DESC")]
+
+    def structure_specimens(self,pass_no=1):
+        """Confirmed specimen crops eligible for structure annotation."""
+        schema_id=self.active_scheme_record()["version_id"];pass_no=int(pass_no)
+        sql="""
+            SELECT s.*,i.relative_path,i.crop_reviewed,i.excluded AS image_excluded,
+                   r.run_id,r.status AS annotation_status,r.updated_at AS annotation_updated_at
+            FROM specimens s
+            JOIN source_images i ON i.image_id=s.image_id
+            LEFT JOIN annotation_runs r
+              ON r.specimen_id=s.specimen_id AND r.pass_no=? AND r.source='human' AND r.schema_version_id=?
+            WHERE s.crop_status='confirmed' AND s.excluded=0 AND i.excluded=0 AND i.crop_reviewed=1
+            ORDER BY i.relative_path,s.ordinal,s.label
+        """
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row;rows=[dict(row) for row in c.execute(sql,(pass_no,schema_id))]
+        if pass_no>1:
+            verified=set()
+            with sqlite3.connect(self.db_path) as c:
+                verified={row[0] for row in c.execute(
+                    "SELECT specimen_id FROM annotation_runs WHERE pass_no=1 AND source='human' AND schema_version_id=? AND status='verified'",
+                    (schema_id,),
+                )}
+            rows=[row for row in rows if row["specimen_id"] in verified]
+        return rows
+
+    def ensure_annotation_run(self,specimen_id,pass_no=1,source="human"):
+        self.specimen(specimen_id);record=self.active_scheme_record();schema_id=record["version_id"];pass_no=int(pass_no);now=_now()
+        with sqlite3.connect(self.db_path) as c:
+            row=c.execute(
+                "SELECT run_id FROM annotation_runs WHERE specimen_id=? AND pass_no=? AND source=? AND schema_version_id=?",
+                (specimen_id,pass_no,str(source),schema_id),
+            ).fetchone()
+            if row:return row[0]
+            run_id=str(uuid.uuid4())
+            c.execute(
+                """INSERT INTO annotation_runs(
+                     run_id,specimen_id,pass_no,source,schema_version_id,status,coordinate_space,created_at,updated_at
+                   ) VALUES(?,?,?,?,?,'draft','crop_normalized_v1',?,?)""",
+                (run_id,specimen_id,pass_no,str(source),schema_id,now,now),
+            )
+        return run_id
+
+    def annotation_run(self,specimen_id,pass_no=1,source="human",create=False):
+        schema_id=self.active_scheme_record()["version_id"]
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row;row=c.execute(
+                "SELECT * FROM annotation_runs WHERE specimen_id=? AND pass_no=? AND source=? AND schema_version_id=?",
+                (specimen_id,int(pass_no),str(source),schema_id),
+            ).fetchone()
+        if row is None and create:
+            self.ensure_annotation_run(specimen_id,pass_no,source);return self.annotation_run(specimen_id,pass_no,source,False)
+        return dict(row) if row is not None else None
+
+    def annotations(self,specimen_id,pass_no=1,source="human"):
+        run=self.annotation_run(specimen_id,pass_no,source,False)
+        if run is None:return []
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row
+            return [dict(row) for row in c.execute(
+                "SELECT annotation_id,run_id,structure_id,x,y,sort_order FROM annotations WHERE run_id=? ORDER BY structure_id,sort_order,annotation_id",
+                (run["run_id"],),
+            )]
+
+    def _annotation_event(self,c,run_id,action,structure_id="",annotation_id=None,payload=None):
+        c.execute(
+            "INSERT INTO annotation_events(run_id,created_at,action,structure_id,annotation_id,payload_json) VALUES(?,?,?,?,?,?)",
+            (run_id,_now(),str(action),str(structure_id or ""),annotation_id,_json(payload or {})),
+        )
+
+    def add_annotation(self,specimen_id,structure_id,x,y,pass_no=1,source="human",replace_single=False):
+        structure_id=str(structure_id);x=max(0.0,min(1.0,float(x)));y=max(0.0,min(1.0,float(y)))
+        run_id=self.ensure_annotation_run(specimen_id,pass_no,source);now=_now()
+        with sqlite3.connect(self.db_path) as c:
+            if replace_single:
+                existing=c.execute(
+                    "SELECT annotation_id,x,y FROM annotations WHERE run_id=? AND structure_id=? ORDER BY annotation_id LIMIT 1",
+                    (run_id,structure_id),
+                ).fetchone()
+                if existing:
+                    c.execute("UPDATE annotations SET x=?,y=? WHERE annotation_id=?",(x,y,existing[0]))
+                    self._annotation_event(c,run_id,"move",structure_id,existing[0],{"from":[existing[1],existing[2]],"to":[x,y]})
+                    c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,run_id))
+                    return int(existing[0])
+            order=c.execute("SELECT COALESCE(MAX(sort_order),-1)+1 FROM annotations WHERE run_id=? AND structure_id=?",(run_id,structure_id)).fetchone()[0]
+            cur=c.execute("INSERT INTO annotations(run_id,structure_id,x,y,sort_order) VALUES(?,?,?,?,?)",(run_id,structure_id,x,y,int(order)))
+            annotation_id=int(cur.lastrowid);self._annotation_event(c,run_id,"add",structure_id,annotation_id,{"at":[x,y],"sort_order":int(order)})
+            c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,run_id))
+        return annotation_id
+
+    def move_annotation(self,annotation_id,x,y):
+        x=max(0.0,min(1.0,float(x)));y=max(0.0,min(1.0,float(y)));now=_now()
+        with sqlite3.connect(self.db_path) as c:
+            row=c.execute("SELECT run_id,structure_id,x,y FROM annotations WHERE annotation_id=?",(int(annotation_id),)).fetchone()
+            if row is None:raise KeyError(f"Unknown annotation: {annotation_id}")
+            c.execute("UPDATE annotations SET x=?,y=? WHERE annotation_id=?",(x,y,int(annotation_id)))
+            self._annotation_event(c,row[0],"move",row[1],int(annotation_id),{"from":[row[2],row[3]],"to":[x,y]})
+            c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,row[0]))
+        return True
+
+    def delete_annotation(self,annotation_id):
+        now=_now()
+        with sqlite3.connect(self.db_path) as c:
+            row=c.execute("SELECT run_id,structure_id,x,y,sort_order FROM annotations WHERE annotation_id=?",(int(annotation_id),)).fetchone()
+            if row is None:return False
+            self._annotation_event(c,row[0],"delete",row[1],int(annotation_id),{"at":[row[2],row[3]],"sort_order":row[4]})
+            c.execute("DELETE FROM annotations WHERE annotation_id=?",(int(annotation_id),))
+            c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,row[0]))
+        return True
+
+    def verify_annotations(self,specimen_id,pass_no=1,source="human"):
+        scheme=self.scheme;run=self.annotation_run(specimen_id,pass_no,source,True);rows=self.annotations(specimen_id,pass_no,source)
+        counts={}
+        for row in rows:counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
+        missing=[s["id"] for s in scheme.get("structures",()) if s.get("required",True) and counts.get(s["id"],0)<1]
+        if missing:
+            names={s["id"]:s["name"] for s in scheme.get("structures",())}
+            raise ValueError("Missing required structures: "+", ".join(names.get(item,item) for item in missing))
+        now=_now()
+        with sqlite3.connect(self.db_path) as c:
+            c.execute("UPDATE annotation_runs SET status='verified',updated_at=?,verified_at=? WHERE run_id=?",(now,now,run["run_id"]))
+            self._annotation_event(c,run["run_id"],"verify",payload={"counts":counts})
+        return {"run_id":run["run_id"],"counts":counts}
+
+    def annotation_events(self,specimen_id,pass_no=1,source="human"):
+        run=self.annotation_run(specimen_id,pass_no,source,False)
+        if run is None:return []
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row;rows=[dict(row) for row in c.execute(
+                "SELECT * FROM annotation_events WHERE run_id=? ORDER BY event_id",(run["run_id"],)
+            )]
+        for row in rows:
+            try:row["payload"]=json.loads(row.pop("payload_json") or "{}")
+            except Exception:row["payload"]={}
+        return rows
+
+    def annotation_summary(self,pass_no=1):
+        rows=self.structure_specimens(pass_no)
+        return {
+            "eligible":len(rows),
+            "verified":sum(str(row.get("annotation_status") or "")=="verified" for row in rows),
+            "draft":sum(str(row.get("annotation_status") or "")=="draft" for row in rows),
+            "unstarted":sum(not row.get("run_id") for row in rows),
+        }
 
     def annotation_counts_by_structure(self):
         with sqlite3.connect(self.db_path) as c:
