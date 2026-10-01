@@ -71,7 +71,7 @@ max_epochs = {int(max_epochs)}
 codec = dict(type='SimCCLabel', input_size={size!r}, sigma=({sigma:.12g}, {sigma:.12g}), simcc_split_ratio=2.0, normalize=False, use_dark=False)
 metainfo = {meta!r}
 model = dict(
-    backbone=dict(init_cfg=dict(type="Pretrained", checkpoint={backbone_load!r}, prefix="backbone.")),
+    backbone=dict(init_cfg=dict(_delete_=True, type="Pretrained", checkpoint={backbone_load!r}, prefix="backbone.")),
     head=dict(out_channels={n}, input_size=codec['input_size'], in_featuremap_size={featuremap!r}, decoder=codec),
     test_cfg=dict(flip_test=False))
 load_from = {parent_load!r}
