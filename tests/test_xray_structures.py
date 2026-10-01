@@ -10,6 +10,7 @@ from app.xray_crop import crop_from_geometry
 from app.xray_project import XRayProject
 from app.xray_schema import blank_scheme, bundled_scheme, calculate_trait_values
 from app.xray_structure_display import DEFAULT_PALETTE, DEFAULT_SIZE, load_xray_structure_display, save_xray_structure_display
+from app.xray_structures_ui import _structure_button_order
 
 
 class XRayStructurePersistenceTests(unittest.TestCase):
@@ -155,6 +156,12 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         self.assertEqual(state["ids"],reopened.structure_batch(1)["ids"])
         moved=reopened.move_structure_batch(state["ids"][0],1,1)
         self.assertEqual(state["ids"][1],moved["specimen_id"])
+
+    def test_marker_tools_follow_numeric_hotkeys(self):
+        structures=[
+            {"id":"a","hotkey":"1"},{"id":"c","hotkey":"3"},{"id":"b","hotkey":"2"},{"id":"d","hotkey":"4"},
+        ]
+        self.assertEqual(["a","b","c","d"],[item["id"] for item in _structure_button_order(structures)])
 
     def test_xray_marker_display_defaults_are_bright_distinct_and_persistent(self):
         structures=self.project.scheme["structures"]
