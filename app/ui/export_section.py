@@ -2,7 +2,7 @@
 import os
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-from app.export_formats import available_groups, export_landmark_tps, export_landmark_csv_long, export_landmark_wide, export_morphoj_text
+from app.export_formats import available_groups, selected_groups, export_landmark_tps, export_landmark_csv_long, export_landmark_wide, export_morphoj_text
 from app.measurements import export_measurements
 from .icons import WORKFLOW_ICON_SIZE
 from .section_base import SectionView
@@ -28,18 +28,18 @@ class ExportSection(SectionView):
   mode=tk.StringVar(value='all');groups=available_groups(self.context.project);chosen={name:tk.BooleanVar(value=True) for name in groups};checks=[]
   ttk.Label(land,text='Landmarks to include',style='SectionTitle.TLabel').grid(row=1,column=0,columnspan=3,sticky='w')
   all_choice=ttk.Radiobutton(land,text='All landmarks',variable=mode,value='all');all_choice.grid(row=2,column=0,sticky='w',pady=(4,0))
-  selected_choice=ttk.Radiobutton(land,text='Selected groups',variable=mode,value='groups');selected_choice.grid(row=2,column=1,sticky='w',padx=(10,0),pady=(4,0))
+  selected_choice=ttk.Radiobutton(land,text='Choose groups',variable=mode,value='groups');selected_choice.grid(row=2,column=1,sticky='w',padx=(10,0),pady=(4,0))
   self.shell.tip.bind(all_choice,'Export every landmark in the active project scheme.');self.shell.tip.bind(selected_choice,'Export only the groups selected below.')
-  line=ttk.Frame(land);line.grid(row=3,column=0,columnspan=3,sticky='w',pady=(6,2))
+  line=ttk.Frame(land);line.grid(row=3,column=0,columnspan=3,sticky='ew',pady=(6,2));line.columnconfigure(0,weight=1);line.columnconfigure(1,weight=1)
   if groups:
-   for name,var in chosen.items():
-    check=ttk.Checkbutton(line,text=name,variable=var);check.pack(side='left',padx=(0,8));checks.append(check)
+   for index,(name,var) in enumerate(chosen.items()):
+    check=ttk.Checkbutton(line,text=name,variable=var);check.grid(row=index//2,column=index%2,sticky='w',padx=(0,12),pady=(2,2));checks.append(check)
   else:
    ttk.Label(line,text='No landmark groups are defined; use All landmarks.',style='Muted.TLabel').pack(anchor='w')
   def update(*_):
    for check in checks:check.state(['!disabled'] if mode.get()=='groups' else ['disabled'])
   mode.trace_add('write',update);update()
-  self.button(land,'Export landmark coordinates…',lambda:self.landmarks(mode.get(),[name for name,var in chosen.items() if var.get()]),'Choose an output format and destination.',style='Primary.TButton').grid(row=4,column=0,columnspan=3,sticky='w',pady=(12,0))
+  self.button(land,'Export landmark coordinates…',lambda:self.landmarks(mode.get(),selected_groups(tuple(chosen),{name:var.get() for name,var in chosen.items()})),'Choose an output format and destination.',style='Primary.TButton').grid(row=4,column=0,columnspan=3,sticky='w',pady=(12,0))
 
   measurement=ttk.LabelFrame(cards,labelwidget=card_header('export_measurements','Measurements'),padding=14);measurement.grid(row=0,column=1,sticky='nsew',padx=(5,0))
   ttk.Label(measurement,text='Export the active named distances as a table for statistical analysis.',style='Muted.TLabel',wraplength=430,justify='left').pack(anchor='w',pady=(0,10))

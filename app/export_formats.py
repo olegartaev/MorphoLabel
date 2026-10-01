@@ -13,6 +13,9 @@ def group_label(item):
  """Use real schema category first; role is the canonical fallback for older schemes."""
  return str(item.get('category') or item.get('role') or item.get('morphometry_role') or '').strip()
 def available_groups(project):return sorted({group_label(item) for item in project.schema if group_label(item)},key=str.casefold)
+def selected_groups(groups, checked):
+ """Return checked group labels in stable display order."""
+ return tuple(name for name in groups if bool(checked.get(name)))
 def _allowed(project,groups):
  selected={str(value) for value in groups if str(value)}
  return [item for item in project.schema if not selected or group_label(item) in selected]
