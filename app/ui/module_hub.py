@@ -26,7 +26,6 @@ class ModuleHub:
         ttk.Label(brand,image=self.logo).pack()
         ttk.Label(brand,text=APP_NAME,style="HubTitle.TLabel").pack(pady=(12,2))
         ttk.Label(brand,text="Open-source software for scalable and reproducible extraction of morphological data from biological images.",style="PageSubtitle.TLabel",wraplength=620,justify="center").pack()
-        ttk.Label(brand,text="MorphoLabel combines annotation, human review and quality control into a structured workflow for large image datasets.",style="Muted.TLabel",wraplength=620,justify="center").pack(pady=(4,0))
         ttk.Label(brand,text=f"v{APP_VERSION} · {APP_STATUS}",style="Muted.TLabel").pack(pady=(4,0))
 
         modules=ttk.Frame(host)
@@ -37,12 +36,11 @@ class ModuleHub:
             card.columnconfigure(0,weight=1)
             ttk.Label(card,text=spec.display_name,style="ModuleTitle.TLabel").grid(row=0,column=0,sticky="w")
             ttk.Label(card,text=spec.description,style="Muted.TLabel").grid(row=1,column=0,sticky="w",pady=(3,10))
-            ttk.Label(card,text="Author: Oleg Artaev",style="Muted.TLabel").grid(row=2,column=0,sticky="w",pady=(0,9))
             remembered=getattr(self.shell,"_remembered_project_path",None)
             if remembered:
-                ttk.Label(card,text=f"Last project: {Path(remembered).name}",style="Muted.TLabel").grid(row=3,column=0,sticky="w",pady=(0,9))
+                ttk.Label(card,text=f"Last project: {Path(remembered).name}",style="Muted.TLabel").grid(row=2,column=0,sticky="w",pady=(0,9))
             self.shell.control_button(card,"Open module",lambda key=spec.module_id:self.shell.open_module(key),
-                                      f"Open {spec.display_name}.",primary=True).grid(row=4,column=0,sticky="ew")
+                                      f"Open {spec.display_name}.",primary=True).grid(row=3,column=0,sticky="ew")
 
         planned=ttk.LabelFrame(host,text="Planned modules",padding=(14,9))
         planned.grid(row=2,column=0,sticky="n",pady=(16,0))
@@ -55,5 +53,5 @@ class ModuleHub:
             footer,
             "About MorphoLabel",
             self.shell.show_about,
-            "Version, author, license and project links.",
+            "Version, license and project link.",
         ).pack(side="left")
