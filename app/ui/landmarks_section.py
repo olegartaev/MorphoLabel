@@ -739,11 +739,11 @@ class LandmarksSection(SectionView):
   if panel:panel.refresh(preserve_scroll=True)
   self.shell._update_status()
  def _sync_photo_selection(self):
-  """Reveal the selected image for either plain or landmark-composite lists."""
+  """Keep the queued image at the top of the visible list without rebuilding it."""
   panel=getattr(self.shell,'photo_panel',None)
   sync=getattr(panel,'sync_current',None)
   if sync is None:sync=getattr(getattr(panel,'photos',None),'sync_current',None)
-  if sync:sync(reveal=True)
+  if sync:sync(reveal=True,align_top=True,refresh_rows=False)
  def _select_review_image(self,session):
   ids=list(session.get('image_ids',()))
   image_id=session.get('current_image_id')
@@ -756,7 +756,7 @@ class LandmarksSection(SectionView):
   current=(self.context.current() or {}).get('image_id')
   if not active_attention_queue(self.context.project) or not current:return False
   if int(step)<0:
-   move_attention_queue(self.context.project,-1);self.shell.open_landmark_attention();return True
+   issue=move_attention_queue(self.context.project,-1);self.shell.open_landmark_attention(issue);return True
   issue=classify_attention_issue(self.context.project,current)
   if issue.get('stage')=='prediction':
    self.predict(False,1,explicit_ids=(current,),title='Retry landmark prediction',selection_mode='attention_retry',attention_retry=True)
@@ -780,9 +780,13 @@ class LandmarksSection(SectionView):
    else:self.context.project.mark_checked(current)
   except ValueError as exc:
    self._inline_status(str(exc));return True
-  self.context.refresh_landmark_state(current);self.context.invalidate_counts()
-  complete_attention_current(self.context.project,current)
-  self.shell.open_landmark_attention();return True
+  self.context.refresh_landmark_state(current)
+  self.context.update_landmark_counts(current)
+  panel=getattr(self.shell,'photo_panel',None);photos=getattr(panel,'photos',panel)
+  refresh_row=getattr(photos,'refresh_image',None)
+  if refresh_row:refresh_row(current)
+  next_issue=complete_attention_current(self.context.project,current)
+  self.shell.open_landmark_attention(next_issue);return True
 
  def _show_prediction_results(self,ordered,predicted_count,failed_count):
   counts=attention_stage_counts(self.context.project,ordered)
