@@ -148,7 +148,7 @@ def select_ai_worst_first(project,size=None,progress=None,image_ids=None):
     """Review worst v2: hard checks -> learned correction risk -> geometry/confidence -> light diversity."""
     _emit_progress(progress,"Reading verified human corrections…")
     wanted=None if image_ids is None else {str(image_id) for image_id in image_ids}
-    snapshot=_review_snapshot(project);catalog=[row for row in snapshot.catalog_rows() if not row.get("excluded") and (wanted is None or str(row.get("image_id")) in wanted)]
+    snapshot=_review_snapshot(project);catalog=[row for row in snapshot.catalog_rows() if not row.get("excluded")]
     context=build_review_context(snapshot,catalog,dimensions_by_id=snapshot.dimensions_by_id)
     calibration=_verified_error_calibration(snapshot)
     if calibration["usable"]:
@@ -160,6 +160,7 @@ def select_ai_worst_first(project,size=None,progress=None,image_ids=None):
     eligible=[]
     for order,image in enumerate(catalog):
         image_id=str(image["image_id"]);rows=snapshot.load_landmarks(image_id) or {}
+        if wanted is not None and image_id not in wanted:continue
         if not _ai_worst_first_eligible(project,snapshot,image_id,rows):continue
         if image_id not in snapshot.dimensions_by_id:continue
         eligible.append((order,image,image_id,rows))
