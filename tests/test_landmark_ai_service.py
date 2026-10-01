@@ -52,7 +52,8 @@ class LandmarkAIGateOneTests(unittest.TestCase):
 
  def test_predict_all_targets_only_empty_or_unconfirmed_ai_images(self):
   from app.ui.landmarks_section import _prediction_candidate_ids
-  empty,ai_only,mixed,verified_ai,manual_only=self.ids
+  partial_manual,ai_only,mixed,verified_ai,manual_only=self.ids
+  self.project.save_landmark(partial_manual,1,7,8,"manual",provenance="manual")
 
   self.service().predict_one(ai_only)
 
@@ -67,13 +68,13 @@ class LandmarkAIGateOneTests(unittest.TestCase):
    self.project.save_landmark(manual_only,ident,10*ident,12,"manual",provenance="manual")
 
   targets=_prediction_candidate_ids(self.project,self.project.catalog_rows())
-  self.assertIn(empty,targets)
+  self.assertIn(partial_manual,targets)
   self.assertIn(ai_only,targets)
   self.assertIn(mixed,targets)
   self.assertNotIn(verified_ai,targets)
   self.assertNotIn(manual_only,targets)
 
- def test_historical_confirmation_remains_prediction_locked(self):
+ def test_historical_confirmation_does_not_lock_changed_current_state(self):
   from app.ui.landmarks_section import _prediction_candidate_ids
   image_id=self.ids[0]
   self.service().predict_one(image_id)
@@ -82,8 +83,28 @@ class LandmarkAIGateOneTests(unittest.TestCase):
   with self.project.transaction() as c:
    c.execute("UPDATE image_review SET human_verified=0 WHERE image_id=?",(image_id,))
   self.assertFalse(self.project.annotation_status(image_id)["verified"])
-  self.assertTrue(self.project.landmark_prediction_locked(image_id))
-  self.assertNotIn(image_id,_prediction_candidate_ids(self.project,self.project.catalog_rows()))
+  self.assertFalse(self.project.landmark_prediction_locked(image_id))
+  self.assertIn(image_id,_prediction_candidate_ids(self.project,self.project.catalog_rows()))
+
+ def test_invalidated_human_row_is_refilled_but_valid_human_point_is_protected(self):
+  image_id=self.ids[0]
+  self.project.save_landmark(image_id,1,7,8,"manual",provenance="manual")
+  self.project.save_landmark(image_id,2,9,10,"manual",provenance="manual")
+  with self.project.transaction() as c:
+   c.execute("UPDATE landmarks SET x_standardized=NULL,y_standardized=NULL,state='unresolved' WHERE image_id=? AND landmark_abbr='P1'",(image_id,))
+   c.execute("UPDATE image_review SET human_verified=0 WHERE image_id=?",(image_id,))
+  result=self.service(coordinate_overrides={1:(31,32),2:(41,42)}).predict_one(image_id)
+  rows=self.points(image_id)
+  self.assertEqual((31,32,"machine"),(rows[1]["x_standardized"],rows[1]["y_standardized"],rows[1]["provenance"]))
+  self.assertEqual((9,10,"manual"),(rows[2]["x_standardized"],rows[2]["y_standardized"],rows[2]["provenance"]))
+  self.assertEqual(1,result.skipped_human_landmarks)
+
+ def test_confirmed_crop_pending_landmark_review_is_prediction_ready(self):
+  from app.landmark_frames import landmark_frame_ready, landmark_prediction_frame_ready
+  image_id=self.ids[0]
+  self.project.set_attribute(image_id,"landmark_crop_review_required","true")
+  self.assertFalse(landmark_frame_ready(self.project,image_id))
+  self.assertTrue(landmark_prediction_frame_ready(self.project,image_id))
 
  def test_reprediction_replaces_machine_points_but_preserves_human_correction(self):
   image_id=self.ids[0]
