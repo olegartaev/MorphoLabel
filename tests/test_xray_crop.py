@@ -10,7 +10,7 @@ from PIL import Image
 
 from app.xray_crop import ALGORITHM_VERSION, aligned_crop, canonical_orientation_flips, crop_from_geometry, detect_specimens, oriented_crop
 from app.xray_project import XRayProject
-from app.xray_crop_ui import PlateCropEditSession
+from app.xray_crop_ui import PlateCropEditSession, crop_flip_button_state
 from app.modules.xray_counts import orientation_preview_transform
 from app.xray_schema import blank_scheme
 
@@ -109,9 +109,16 @@ class XRayCropOrientationSessionTests(unittest.TestCase):
 
 
 class XRayCropViewportContractTests(unittest.TestCase):
+    def test_flip_buttons_are_disabled_without_selection_and_enabled_with_crop(self):
+        self.assertEqual("disabled",crop_flip_button_state(False))
+        self.assertEqual("normal",crop_flip_button_state(True))
+        source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
+        self.assertIn("state=crop_flip_button_state(bool(self.session.selected_id))",source)
+        self.assertIn("self._refresh_flip_controls()",source)
+
     def test_crop_workspace_has_landmarks_style_zoom_pan_and_two_icon_flips(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
-        for text in ('"<MouseWheel>"',"def _wheel(","def _pan_start(","def _pan_motion(","flip_horizontal","flip_vertical","Flip the selected crop left ↔ right","Flip the selected crop top ↕ bottom"):
+        for text in ('"<MouseWheel>"',"def _wheel(","def _pan_start(","def _pan_motion(","flip_horizontal","flip_vertical","Flip left ↔ right (head).","Flip top ↕ bottom (ventral).","#54f0aa","#168ff0","#ffad1f"):
             self.assertIn(text,source)
         self.assertIn('"Clear crops…"',source)
         self.assertNotIn("rotate_180",source);self.assertNotIn("turn180",source)

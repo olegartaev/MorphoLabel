@@ -21,6 +21,11 @@ from .xray_detector import predict_plates, train_detector
 from .xray_icons import tk_xray_icon
 
 
+def crop_flip_button_state(crop_selected):
+    """The flip controls depend only on whether a crop is selected."""
+    return "normal" if crop_selected else "disabled"
+
+
 class PlateCropEditSession:
     """In-memory edits for one plate; persistence happens only on explicit confirmation."""
 
@@ -340,11 +345,11 @@ class XRayCropWorkspace:
         self.orientation_actions=ttk.Frame(self.left_actions,style="Toolbar.TFrame");self.orientation_actions.pack(side="left",padx=(8,0))
         self.flip_h_button=self._orientation_button(
             self.orientation_actions,"flip_horizontal",self.flip_selected_horizontal,
-            "Flip the selected crop left ↔ right. Use this when the head is on the wrong side.",
+            "Flip left ↔ right (head).",
         );self.flip_h_button.pack(side="left")
         self.flip_v_button=self._orientation_button(
             self.orientation_actions,"flip_vertical",self.flip_selected_vertical,
-            "Flip the selected crop top ↕ bottom. Use this when the ventral (belly) side is on the wrong side.",
+            "Flip top ↕ bottom (ventral).",
         );self.flip_v_button.pack(side="left",padx=(2,0))
         self.instruction=ttk.Label(
             actions,text="Wheel = zoom · right-drag = pan · blue = head · orange = ventral side",
@@ -481,10 +486,12 @@ class XRayCropWorkspace:
         self.predict_count_label.configure(text=f"Unresolved {len(self.project.prediction_candidate_ids())} · review {summary['ai_pending_plates']} · verified {summary['verified_plates']}")
         state="normal" if model else "disabled";self.predict_next_button.configure(state=state);self.predict_all_button.configure(state=state)
         self.review_button.configure(state="normal" if summary["ai_pending_plates"] else "disabled")
-        selected=bool(self.session.selected_id);policy=self.project.orientation_policy
-        self.flip_h_button.configure(state="normal" if selected and policy.get("head")!="none" else "disabled")
-        self.flip_v_button.configure(state="normal" if selected and policy.get("bottom")!="none" else "disabled")
+        self._refresh_flip_controls()
         self._update_batch_controls()
+
+    def _refresh_flip_controls(self):
+        state=crop_flip_button_state(bool(self.session.selected_id))
+        self.flip_h_button.configure(state=state);self.flip_v_button.configure(state=state)
 
     def refresh(self,preserve_plate=True):
         previous=self.selected_image_id if preserve_plate else None
@@ -578,8 +585,13 @@ class XRayCropWorkspace:
             if len(corners)!=4:continue
             selected=item["specimen_id"]==self.session.selected_id;pts=[]
             for x,y in corners:pts.extend(self._screen(x,y))
-            color="#35d07f" if selected else "#6ba987" if item.get("crop_status")=="confirmed" else "#d3a63d"
-            self.canvas.create_polygon(*pts,outline=color,fill="",width=3 if selected else 2,tags="crop")
+            if selected:
+                self.canvas.create_polygon(*pts,outline="#071521",fill="",width=7,tags="crop")
+                self.canvas.create_polygon(*pts,outline="#54f0aa",fill="",width=3.5,tags="crop")
+            else:
+                color="#69c9b3" if item.get("crop_status")=="confirmed" else "#f0bd54"
+                self.canvas.create_polygon(*pts,outline="#101b24",fill="",width=4,tags="crop")
+                self.canvas.create_polygon(*pts,outline=color,fill="",width=1.6,tags="crop")
             cx,cy=self._screen(crop.get("center_x",0),crop.get("center_y",0))
             self.canvas.create_text(cx,cy,text=str(item.get("ordinal") or ""),fill="white",font=("Segoe UI",9,"bold"),tags="crop")
             self._draw_orientation_markers(crop,selected)
@@ -589,7 +601,8 @@ class XRayCropWorkspace:
             for x,y in self._drawing_crop.get("corners") or ():pts.extend(self._screen(x,y))
             if len(pts)==8:self.canvas.create_polygon(*pts,outline="#35d07f",fill="",width=2,dash=(5,3),tags="crop")
         hint="Selected crop · Delete removes it" if self.session.selected_id else "Drag empty space to draw a new crop"
-        self.canvas.create_text(12,12,anchor="nw",fill="white",text=hint,tags="crop_hint")
+        self.canvas.create_text(12,12,anchor="nw",fill="#071521",text=hint,tags="crop_hint_shadow")
+        self.canvas.create_text(11,11,anchor="nw",fill="white",text=hint,tags="crop_hint")
 
     @staticmethod
     def _orientation_geometry(crop):
@@ -614,26 +627,33 @@ class XRayCropWorkspace:
             dx=mx-cx;dy=my-cy;length=max(1.0,math.hypot(dx,dy));ux=dx/length;uy=dy/length;px=-uy;py=ux
             tip=(mx+ux*size,my+uy*size);base=(mx-ux*size*.30,my-uy*size*.30)
             return (tip[0],tip[1],base[0]+px*size*.55,base[1]+py*size*.55,base[0]-px*size*.55,base[1]-py*size*.55)
-        head_color="#2196f3";bottom_color="#ffad1f"
+        head_color="#168ff0";bottom_color="#ffad1f"
         h1,h2=geometry["head_edge"];x1,y1=self._screen(*h1);x2,y2=self._screen(*h2)
+        self.canvas.create_line(x1+(x2-x1)*.22,y1+(y2-y1)*.22,x1+(x2-x1)*.78,y1+(y2-y1)*.78,fill="#081722",width=9,tags=("crop","orientation"))
         self.canvas.create_line(x1+(x2-x1)*.22,y1+(y2-y1)*.22,x1+(x2-x1)*.78,y1+(y2-y1)*.78,fill=head_color,width=5,tags=("crop","orientation"))
-        self.canvas.create_polygon(*outward_triangle(hx,hy,head_color,8),fill=head_color,outline="white",width=1,tags=("crop","orientation"))
-        self.canvas.create_oval(hx-2,hy-2,hx+2,hy+2,fill="white",outline=head_color,width=1,tags=("crop","orientation"))
+        self.canvas.create_polygon(*outward_triangle(hx,hy,head_color,10),fill="#081722",outline="white",width=2,tags=("crop","orientation"))
+        self.canvas.create_polygon(*outward_triangle(hx,hy,head_color,7),fill=head_color,outline="white",width=1,tags=("crop","orientation"))
         e1,e2=geometry["bottom_edge"];x1,y1=self._screen(*e1);x2,y2=self._screen(*e2)
+        self.canvas.create_line(x1+(x2-x1)*.28,y1+(y2-y1)*.28,x1+(x2-x1)*.72,y1+(y2-y1)*.72,fill="#081722",width=9,tags=("crop","orientation"))
         self.canvas.create_line(x1+(x2-x1)*.28,y1+(y2-y1)*.28,x1+(x2-x1)*.72,y1+(y2-y1)*.72,fill=bottom_color,width=5,tags=("crop","orientation"))
-        self.canvas.create_polygon(*outward_triangle(bx,by,bottom_color,7),fill=bottom_color,outline="white",width=1,tags=("crop","orientation"))
+        self.canvas.create_polygon(*outward_triangle(bx,by,bottom_color,9),fill="#081722",outline="white",width=2,tags=("crop","orientation"))
+        self.canvas.create_polygon(*outward_triangle(bx,by,bottom_color,6),fill=bottom_color,outline="white",width=1,tags=("crop","orientation"))
 
     def _draw_handles(self,crop):
         corners=crop.get("corners") or []
         for point in corners:
-            hx,hy=self._screen(*point);self.canvas.create_rectangle(hx-5,hy-5,hx+5,hy+5,fill="#35d07f",outline="white",tags="crop_handle")
+            hx,hy=self._screen(*point)
+            self.canvas.create_oval(hx-7,hy-7,hx+7,hy+7,fill="#071521",outline="white",width=1,tags="crop_handle")
+            self.canvas.create_oval(hx-4,hy-4,hx+4,hy+4,fill="#54f0aa",outline="#071521",width=1,tags="crop_handle")
         angle=math.radians(float(crop.get("angle_degrees",0)));major=(math.cos(angle),math.sin(angle))
         reach=float(crop.get("length",0))/2+35/max(self.display_scale,1e-6)
         rx=float(crop.get("center_x",0))+reach*major[0];ry=float(crop.get("center_y",0))+reach*major[1]
         ex=float(crop.get("center_x",0))+float(crop.get("length",0))/2*major[0];ey=float(crop.get("center_y",0))+float(crop.get("length",0))/2*major[1]
         sx,sy=self._screen(rx,ry);tx,ty=self._screen(ex,ey)
-        self.canvas.create_line(tx,ty,sx,sy,fill="#ffcc00",width=2,tags="crop_handle")
-        self.canvas.create_oval(sx-7,sy-7,sx+7,sy+7,fill="#ffcc00",outline="white",tags="crop_handle")
+        self.canvas.create_line(tx,ty,sx,sy,fill="#071521",width=5,tags="crop_handle")
+        self.canvas.create_line(tx,ty,sx,sy,fill="#ffd34e",width=2.5,tags="crop_handle")
+        self.canvas.create_oval(sx-9,sy-9,sx+9,sy+9,fill="#071521",outline="white",width=1,tags="crop_handle")
+        self.canvas.create_oval(sx-5,sy-5,sx+5,sy+5,fill="#ffd34e",outline="#071521",width=1,tags="crop_handle")
 
     @staticmethod
     def _inside(point,polygon):
@@ -665,11 +685,11 @@ class XRayCropWorkspace:
             if item is None:continue
             hit=self._hit_crop(x,y,item)
             if hit is None:continue
-            self.session.select(item["specimen_id"]);self._preferred_specimen_id=item["specimen_id"];self._notify_selection()
+            self.session.select(item["specimen_id"]);self._preferred_specimen_id=item["specimen_id"];self._notify_selection();self._refresh_flip_controls()
             crop=item.get("crop") or {};self._drag_mode=hit;self._drag_anchor=(x,y);self._drag_changed=False
             self._drag_initial=(float(crop.get("center_x",0)),float(crop.get("center_y",0)),float(crop.get("length",0)),float(crop.get("width",0)),float(crop.get("angle_degrees",0)))
             self._drawing_crop=None;self._draw();return
-        self.session.select(None);self._preferred_specimen_id="";self._notify_selection()
+        self.session.select(None);self._preferred_specimen_id="";self._notify_selection();self._refresh_flip_controls()
         self._drag_mode=("draw",0);self._drag_anchor=(x,y);self._drag_initial=None;self._drag_changed=False;self._drawing_crop=None;self._draw()
 
     def _canvas_drag(self,event):
@@ -695,12 +715,12 @@ class XRayCropWorkspace:
         if self._drag_mode is None:return
         if self._drag_mode[0]=="draw":
             crop=self._drawing_crop;self._drag_mode=self._drag_anchor=self._drag_initial=None;self._drawing_crop=None
-            if crop is not None and float(crop.get("length",0))>=20 and float(crop.get("width",0))>=20:self.session.add(crop);self._set_save_status()
+            if crop is not None and float(crop.get("length",0))>=20 and float(crop.get("width",0))>=20:self.session.add(crop);self._set_save_status();self._refresh_flip_controls()
             self._draw();return
         self._drag_mode=self._drag_anchor=self._drag_initial=None;self._drag_changed=False;self._draw()
 
     def delete_selected(self,_event=None):
-        if self.session.delete_selected():self._set_save_status();self._draw()
+        if self.session.delete_selected():self._set_save_status();self._draw();self._refresh_flip_controls()
         return "break"
 
     def flip_selected_horizontal(self):

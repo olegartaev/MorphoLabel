@@ -147,25 +147,25 @@ class OrientationSetupDialog(tk.Toplevel):
         initial=initial or {"head":"left","bottom":"down"};self.result=None
         self.head=tk.StringVar(master=self,value=str(initial.get("head") or "left"))
         self.bottom=tk.StringVar(master=self,value=str(initial.get("bottom") or "down"))
-        outer=ttk.Frame(self,padding=16);outer.pack(fill="both",expand=True)
+        outer=ttk.Frame(self,padding=14);outer.pack(fill="both",expand=True)
         ttk.Label(outer,text="Standard orientation",style="PageTitle.TLabel").pack(anchor="w")
-        ttk.Label(outer,text="Choose one consistent view for every cropped animal.",style="PageSubtitle.TLabel",wraplength=620).pack(anchor="w",pady=(2,10))
-        self.preview=tk.Canvas(outer,width=620,height=170,background="white",highlightthickness=1,highlightbackground="#d6dbe0");self.preview.pack(fill="x")
-        controls=ttk.Frame(outer);controls.pack(fill="x",pady=(10,0))
-        head_box=ttk.LabelFrame(controls,text="Head faces",padding=8);head_box.pack(side="left",fill="x",expand=True,padx=(0,5))
+        ttk.Label(outer,text="Choose a consistent view for cropped animals.",style="PageSubtitle.TLabel",wraplength=600).pack(anchor="w",pady=(2,8))
+        self.preview=tk.Canvas(outer,width=600,height=160,background="#f8fafc",highlightthickness=1,highlightbackground="#d6dbe0");self.preview.pack(fill="x")
+        controls=ttk.Frame(outer);controls.pack(fill="x",pady=(8,0))
+        head_box=ttk.LabelFrame(controls,text="Head faces",padding=9);head_box.pack(side="left",fill="x",expand=True,padx=(0,5))
         for text,value in (("Left","left"),("Right","right"),("Don't standardize","none")):
             ttk.Radiobutton(head_box,text=text,value=value,variable=self.head,command=self._draw).pack(anchor="w")
-        bottom_box=ttk.LabelFrame(controls,text="Ventral side faces",padding=8);bottom_box.pack(side="left",fill="x",expand=True,padx=(5,0))
+        bottom_box=ttk.LabelFrame(controls,text="Ventral side faces",padding=9);bottom_box.pack(side="left",fill="x",expand=True,padx=(5,0))
         for text,value in (("Down","down"),("Up","up"),("Don't standardize","none")):
             ttk.Radiobutton(bottom_box,text=text,value=value,variable=self.bottom,command=self._draw).pack(anchor="w")
-        ttk.Label(outer,text="Blue = head · orange = ventral side. MorphoLabel learns these directions from crops you confirm. Original X-rays are never changed.",style="Muted.TLabel",wraplength=620).pack(anchor="w",pady=(8,0))
-        actions=ttk.Frame(outer);actions.pack(anchor="e",pady=(12,0))
+        ttk.Label(outer,text="Blue = head · orange = ventral side. Confirmed crops teach orientation. Original X-rays stay unchanged.",style="Muted.TLabel",wraplength=600).pack(anchor="w",pady=(8,0))
+        actions=ttk.Frame(outer);actions.pack(anchor="e",pady=(10,0))
         ttk.Button(actions,text="Cancel",command=self.destroy).pack(side="left")
         ttk.Button(actions,text="Create project",style="Primary.TButton",command=self._accept).pack(side="left",padx=(6,0))
         self._draw();self.grab_set()
 
     def _draw(self):
-        c=self.preview;c.delete("all");w=620;h=170;cx=w/2;cy=h/2
+        c=self.preview;c.delete("all");w=600;h=160;cx=w/2;cy=h/2
         head=self.head.get();bottom=self.bottom.get()
         state=orientation_preview_transform(head,bottom);flip_x=state["flip_x"];flip_y=state["flip_y"]
         def point(x,y):return (cx+(x-cx)*(-1 if flip_x else 1),cy+(y-cy)*(-1 if flip_y else 1))

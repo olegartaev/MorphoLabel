@@ -14,7 +14,9 @@ class XRayOrientationAndStorageContractTests(unittest.TestCase):
         self.assertIn("class OrientationSetupDialog",source)
         self.assertIn("Head faces",source)
         self.assertIn("Ventral side faces",source)
-        self.assertIn("MorphoLabel learns these directions from crops you confirm.",source)
+        self.assertIn("Confirmed crops teach orientation.",source)
+        self.assertIn("Original X-rays stay unchanged.",source)
+        self.assertIn("Don't standardize",source)
         self.assertIn("Make self-contained",source)
         self.assertIn("Clear reproducible cache",source)
 
