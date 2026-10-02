@@ -1,3 +1,4 @@
+import ast
 import shutil
 import tempfile
 import unittest
@@ -323,6 +324,19 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn("def verify_next(self):",ui)
         self.assertIn("if not batch or self.selected_specimen_id not in batch.get(\"ids\",()):return",ui)
         self.assertNotIn("self.pass_box",ui)
+
+    def test_restored_marker_style_signature_is_used_by_every_ui_call(self):
+        root=Path(__file__).resolve().parents[1]
+        ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
+        tree=ast.parse(ui)
+        calls=[
+            node for node in ast.walk(tree)
+            if isinstance(node,ast.Call) and isinstance(node.func,ast.Name) and node.func.id=="marker_style"
+        ]
+        self.assertEqual(3,len(calls))
+        for call in calls:
+            self.assertEqual(3,len(call.args))
+            self.assertEqual([],[(keyword.arg or "**") for keyword in call.keywords])
 
     def test_structure_toolbar_keeps_current_layout_and_restores_original_marker_display(self):
         root=Path(__file__).resolve().parents[1]
