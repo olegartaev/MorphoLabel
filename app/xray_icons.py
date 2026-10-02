@@ -14,6 +14,7 @@ TRAIT_ICON_SIZE=20
 XRAY_ICON_NAMES=frozenset({
     "xray","xray_project","xray_crops","xray_structures","xray_results","xray_export",
     "count","count_to","count_between","position","presence","distance","angle","derived","counted_element","reference_mark","annotation_setup","trait_setup",
+    "flip_horizontal","flip_vertical",
 })
 
 XRAY_DARK="#31485b"
@@ -249,6 +250,17 @@ def render_xray_icon(name,size=XRAY_ICON_SIZE):
         _vertebra(d,p,23.0,17.0,.48,XRAY_DARK)
         _line(d,p,[(26.5,6.0),(26.5,27.0)],GREEN,2.0)
         d.polygon([(p(26.5),p(5.0)),(p(22.5),p(10.0)),(p(30.5),p(10.0))],fill=GREEN)
+    elif name=="flip_horizontal":
+        _line(d,p,[(5,16),(27,16)],MUTED,1.0)
+        d.polygon([(p(4),p(16)),(p(10),p(11)),(p(10),p(21))],fill=BLUE)
+        d.polygon([(p(28),p(16)),(p(22),p(11)),(p(22),p(21))],fill=BLUE)
+        _line(d,p,[(16,7),(16,25)],XRAY_DARK,1.2)
+    elif name=="flip_vertical":
+        _line(d,p,[(16,5),(16,27)],MUTED,1.0)
+        d.polygon([(p(16),p(4)),(p(11),p(10)),(p(21),p(10))],fill=ACCENT_ORANGE)
+        d.polygon([(p(16),p(28)),(p(11),p(22)),(p(21),p(22))],fill=ACCENT_ORANGE)
+        _line(d,p,[(7,16),(25,16)],XRAY_DARK,1.2)
+
     elif name=="trait_setup":
         # Step 2: anatomical annotations are combined into an output trait.
         _vertebra(d,p,7.5,12.0,.38,BLUE)

@@ -91,34 +91,29 @@ class XRayCropCanonicalizationTests(unittest.TestCase):
 
 
 class XRayCropOrientationSessionTests(unittest.TestCase):
-    def test_orientation_toggle_is_a_crop_edit_and_survives_geometry_changes(self):
+    def test_horizontal_and_vertical_flips_are_independent_human_orientation_edits(self):
         crop=crop_from_geometry(50,30,60,20,0,(100,60),orientation_policy={"head":"left","bottom":"down"})
+        crop["orientation_verified"]=True
         session=PlateCropEditSession(({"specimen_id":"s1","ordinal":1,"crop":crop},),"s1")
-        self.assertTrue(session.toggle_orientation("head"))
-        self.assertEqual("right",session.item()["crop"]["head_side"])
+        self.assertTrue(session.flip_horizontal())
+        self.assertEqual("right",session.item()["crop"]["head_side"]);self.assertEqual("bottom",session.item()["crop"]["bottom_side"])
+        self.assertFalse(session.item()["crop"]["orientation_verified"])
+        self.assertTrue(session.flip_vertical())
+        self.assertEqual("right",session.item()["crop"]["head_side"]);self.assertEqual("top",session.item()["crop"]["bottom_side"])
+        self.assertEqual("human",session.item()["crop"]["orientation_source"])
         moved=crop_from_geometry(55,30,60,20,0,(100,60),orientation_policy={"head":"left","bottom":"down"})
         session.update_selected(moved)
-        self.assertEqual("right",session.item()["crop"]["head_side"])
-        self.assertEqual("human",session.item()["crop"]["orientation_source"])
-        self.assertTrue(session.dirty)
-
-    def test_quick_180_turn_updates_both_orientation_axes_and_provenance(self):
-        crop=crop_from_geometry(50,30,60,20,0,(100,60),orientation_policy={"head":"left","bottom":"down"})
-        session=PlateCropEditSession(({"specimen_id":"s1","ordinal":1,"crop":crop},),"s1")
-        self.assertTrue(session.rotate_180())
-        self.assertEqual("right",session.item()["crop"]["head_side"])
-        self.assertEqual("top",session.item()["crop"]["bottom_side"])
-        self.assertEqual("human",session.item()["crop"]["orientation_source"])
+        self.assertEqual("right",session.item()["crop"]["head_side"]);self.assertEqual("top",session.item()["crop"]["bottom_side"])
         self.assertTrue(session.dirty)
 
 
 class XRayCropViewportContractTests(unittest.TestCase):
-    def test_crop_workspace_has_landmarks_style_zoom_pan_and_selected_turn_control(self):
+    def test_crop_workspace_has_landmarks_style_zoom_pan_and_two_icon_flips(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
-        for text in ('"<MouseWheel>"',"def _wheel(","def _pan_start(","def _pan_motion(","def _draw_turn_control(","self._turn_hit"):
+        for text in ('"<MouseWheel>"',"def _wheel(","def _pan_start(","def _pan_motion(","flip_horizontal","flip_vertical","Flip the selected crop left ↔ right","Flip the selected crop top ↕ bottom"):
             self.assertIn(text,source)
         self.assertIn('"Clear crops…"',source)
-        self.assertNotIn("self.rotate_button=",source)
+        self.assertNotIn("rotate_180",source);self.assertNotIn("turn180",source)
 
 
 class XRayCropPersistenceTests(unittest.TestCase):

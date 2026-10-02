@@ -133,7 +133,11 @@ def _trait_rule_summary(scheme,trait):
 
 def orientation_preview_transform(head,bottom):
     """Pure orientation-preview state, also used by its focused regression test."""
-    return {"flip_x":head=="right","flip_y":bottom=="up","show_head":head!="none","show_bottom":bottom!="none","neutral":head=="none"}
+    return {
+        "flip_x":head=="right","flip_y":bottom=="up",
+        "show_head":head!="none","show_tail":head!="none","show_bottom":bottom!="none",
+        "neutral":head=="none",
+    }
 
 
 class OrientationSetupDialog(tk.Toplevel):
@@ -145,16 +149,16 @@ class OrientationSetupDialog(tk.Toplevel):
         self.bottom=tk.StringVar(master=self,value=str(initial.get("bottom") or "down"))
         outer=ttk.Frame(self,padding=16);outer.pack(fill="both",expand=True)
         ttk.Label(outer,text="Standard orientation",style="PageTitle.TLabel").pack(anchor="w")
-        ttk.Label(outer,text="Choose how each cropped animal should be shown to later annotation and AI. Original X-rays are never changed.",style="PageSubtitle.TLabel",wraplength=620).pack(anchor="w",pady=(2,10))
+        ttk.Label(outer,text="Choose one consistent view for every cropped animal.",style="PageSubtitle.TLabel",wraplength=620).pack(anchor="w",pady=(2,10))
         self.preview=tk.Canvas(outer,width=620,height=170,background="white",highlightthickness=1,highlightbackground="#d6dbe0");self.preview.pack(fill="x")
         controls=ttk.Frame(outer);controls.pack(fill="x",pady=(10,0))
-        head_box=ttk.LabelFrame(controls,text="Head direction",padding=8);head_box.pack(side="left",fill="x",expand=True,padx=(0,5))
-        for text,value in (("Left","left"),("Right","right"),("Do not standardize","none")):
+        head_box=ttk.LabelFrame(controls,text="Head faces",padding=8);head_box.pack(side="left",fill="x",expand=True,padx=(0,5))
+        for text,value in (("Left","left"),("Right","right"),("Don't standardize","none")):
             ttk.Radiobutton(head_box,text=text,value=value,variable=self.head,command=self._draw).pack(anchor="w")
-        bottom_box=ttk.LabelFrame(controls,text="Anatomical bottom / ventral side",padding=8);bottom_box.pack(side="left",fill="x",expand=True,padx=(5,0))
-        for text,value in (("Down","down"),("Up","up"),("Do not standardize","none")):
+        bottom_box=ttk.LabelFrame(controls,text="Ventral side faces",padding=8);bottom_box.pack(side="left",fill="x",expand=True,padx=(5,0))
+        for text,value in (("Down","down"),("Up","up"),("Don't standardize","none")):
             ttk.Radiobutton(bottom_box,text=text,value=value,variable=self.bottom,command=self._draw).pack(anchor="w")
-        ttk.Label(outer,text="These settings make asymmetry comparable and reduce variation seen by the AI. You can flip an individual crop if the animal lies the other way.",style="Muted.TLabel",wraplength=620).pack(anchor="w",pady=(8,0))
+        ttk.Label(outer,text="Blue = head · orange = ventral side. MorphoLabel learns these directions from crops you confirm. Original X-rays are never changed.",style="Muted.TLabel",wraplength=620).pack(anchor="w",pady=(8,0))
         actions=ttk.Frame(outer);actions.pack(anchor="e",pady=(12,0))
         ttk.Button(actions,text="Cancel",command=self.destroy).pack(side="left")
         ttk.Button(actions,text="Create project",style="Primary.TButton",command=self._accept).pack(side="left",padx=(6,0))
@@ -166,28 +170,24 @@ class OrientationSetupDialog(tk.Toplevel):
         state=orientation_preview_transform(head,bottom);flip_x=state["flip_x"];flip_y=state["flip_y"]
         def point(x,y):return (cx+(x-cx)*(-1 if flip_x else 1),cy+(y-cy)*(-1 if flip_y else 1))
         if not state["show_head"]:
-            # Without a head convention, avoid implying a canonical left/right direction.
-            c.create_oval(cx-138,cy-34,cx+138,cy+34,fill="#e9eef2",outline="#7c8994",width=2)
+            c.create_oval(cx-142,cy-35,cx+142,cy+35,fill="#edf2f5",outline="#71818d",width=2)
+            c.create_line(cx-95,cy,cx+95,cy,fill="#a7b2ba",width=2)
         else:
-            body=[(cx-150,cy),(cx-132,cy-25),(cx-76,cy-34),(cx+68,cy-27),(cx+130,cy-15),(cx+160,cy),(cx+130,cy+15),(cx+68,cy+27),(cx-76,cy+34),(cx-132,cy+25)]
-            tail=[(cx+130,cy),(cx+185,cy-34),(cx+169,cy),(cx+185,cy+34)]
-            dorsal=[(cx-30,cy-27),(cx+12,cy-50),(cx+38,cy-25)]
-            ventral=[(cx-35,cy+27),(cx+6,cy+45),(cx+28,cy+27)]
-            for shape in (tail,body,dorsal,ventral):
-                coords=[v for p in shape for v in point(*p)]
-                c.create_polygon(*coords,fill="#e9eef2",outline="#7c8994",width=2)
-            hx,hy=point(cx-132,cy)
-            c.create_oval(hx-12,hy-12,hx+12,hy+12,fill="#42a5f5",outline="#1d6fa5",width=2)
-            tx,ty=point(cx-106,cy-42 if not flip_y else cy+42)
-            c.create_text(tx,ty,text="HEAD",fill="#1d6fa5",font=("Segoe UI",9,"bold"))
+            body=[(cx-118,cy-30),(cx-55,cy-42),(cx+45,cy-37),(cx+112,cy-20),(cx+132,cy),(cx+112,cy+20),(cx+45,cy+37),(cx-55,cy+42),(cx-118,cy+30),(cx-142,cy+12),(cx-142,cy-12)]
+            tail=[(cx+108,cy-18),(cx+182,cy-50),(cx+160,cy),(cx+182,cy+50),(cx+108,cy+18)]
+            coords=[v for p in body for v in point(*p)];c.create_polygon(*coords,fill="#edf2f5",outline="#71818d",width=2)
+            coords=[v for p in tail for v in point(*p)];c.create_polygon(*coords,fill="#edf2f5",outline="#71818d",width=2)
+            hx,hy=point(cx-139,cy);c.create_oval(hx-18,hy-20,hx+18,hy+20,fill="#dfe8ee",outline="#71818d",width=2)
+            eye=point(cx-148,cy-7);c.create_oval(eye[0]-3,eye[1]-3,eye[0]+3,eye[1]+3,fill="#2196f3",outline="#ffffff")
+            marker=point(cx-160,cy);c.create_polygon(marker[0]-9,marker[1],marker[0]+5,marker[1]-8,marker[0]+5,marker[1]+8,fill="#2196f3",outline="#ffffff")
+            label=point(cx-126,cy-54);c.create_text(*label,text="Head",fill="#176fa7",font=("Segoe UI",9,"bold"))
         if state["show_bottom"]:
-            y=cy+32
-            line=[point(cx-55,y),point(cx+55,y)]
-            c.create_line(*line[0],*line[1],fill="#ffb300",width=5)
-            tip=point(cx,y+20);base1=point(cx-9,y+2);base2=point(cx+9,y+2)
-            c.create_polygon(*tip,*base1,*base2,fill="#ffb300",outline="#b67f00")
-            label=point(cx,y+46)
-            c.create_text(*label,text="BOTTOM",fill="#9b6b00",font=("Segoe UI",9,"bold"))
+            y=cy+38
+            line=[point(cx-62,y),point(cx+62,y)]
+            c.create_line(*line[0],*line[1],fill="#ffad1f",width=6)
+            tip=point(cx,y+19);base1=point(cx-9,y+2);base2=point(cx+9,y+2)
+            c.create_polygon(*tip,*base1,*base2,fill="#ffad1f",outline="#ffffff")
+            label=point(cx,y+45);c.create_text(*label,text="Ventral side",fill="#9a6500",font=("Segoe UI",9,"bold"))
 
     def _accept(self):
         self.result={"head":self.head.get(),"bottom":self.bottom.get()};self.destroy()

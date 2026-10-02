@@ -299,7 +299,7 @@ class XRayDetectorContractTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_crop_ui.py").read_text(encoding="utf-8")
         for text in (
-            "Apply crop","1. Training batch","Start first batch","Add next batch","2. Train","Train X-ray crop model",
+            "Apply crop","1. Training batch","Start first batch","Add next batch","2. Train","Train Crop AI",
             "3. Predict & review","Predict next","Predict all","Review AI crops","Confirm & Next",
             "Drag empty space","<Delete>","WorkflowCard.TLabelframe","PhotoListCanvas","Sample","Plate","Show excluded",
             "NavPrimary.TButton","apply_and_confirm_plate",
@@ -317,7 +317,9 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn("self.apply_host.pack_forget()",ui)
         self.assertIn("self.batch_actions.grid",ui)
         self.assertIn('"<MouseWheel>"',ui)
-        self.assertIn("def _draw_turn_control(",ui)
+        self.assertIn("flip_selected_horizontal",ui)
+        self.assertIn("flip_selected_vertical",ui)
+        self.assertNotIn("rotate_selected_180",ui)
         self.assertIn('"Clear crops…"',ui)
         self.assertIn("excluded rows stay inspectable/selectable",ui)
 
@@ -352,8 +354,12 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn("HYBRID_ALGORITHM_VERSION",detector)
         self.assertIn("TemporaryDirectory",detector)
         self.assertIn("compact_disposable_ai_artifacts",detector)
+        orientation=(root/"ai_runtime/xray_orientation_runner.py").read_text(encoding="utf-8")
+        self.assertIn("mobilenet_v3_small",orientation)
+        self.assertIn("train_orientation",orientation)
+        self.assertIn("predict_orientation_many",orientation)
         spec=(root/"packaging/morpholabel.spec").read_text(encoding="utf-8")
-        self.assertIn("xray_detector_runner.py",spec)
+        self.assertIn("xray_detector_runner.py",spec);self.assertIn("xray_orientation_runner.py",spec)
 
 
 if __name__=="__main__":

@@ -12,8 +12,9 @@ class XRayOrientationAndStorageContractTests(unittest.TestCase):
     def test_project_creation_exposes_orientation_and_portable_source(self):
         source=(Path(__file__).resolve().parents[1]/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         self.assertIn("class OrientationSetupDialog",source)
-        self.assertIn("Head direction",source)
-        self.assertIn("Anatomical bottom / ventral side",source)
+        self.assertIn("Head faces",source)
+        self.assertIn("Ventral side faces",source)
+        self.assertIn("MorphoLabel learns these directions from crops you confirm.",source)
         self.assertIn("Make self-contained",source)
         self.assertIn("Clear reproducible cache",source)
 
@@ -150,7 +151,7 @@ class XRayModuleContractTests(unittest.TestCase):
         required={
             "xray","xray_project","xray_crops","xray_structures","xray_results","xray_export",
             "count","count_to","count_between","derived","counted_element","reference_mark",
-            "annotation_setup","trait_setup",
+            "annotation_setup","trait_setup","flip_horizontal","flip_vertical",
         }
         self.assertTrue(required.issubset(XRAY_ICON_NAMES))
         for name in required:
