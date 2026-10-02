@@ -1094,6 +1094,49 @@ class XRayProject:
             counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
         return [s for s in self.scheme.get("structures",()) if s.get("required",True) and counts.get(s["id"],0)<1]
 
+    def clear_annotations(self,specimen_id,pass_no=1,source="human",structure_id=None):
+        run=self.annotation_run(specimen_id,pass_no,source,False)
+        if run is None:return {"annotations":0,"roles":0}
+        run_id=run["run_id"];now=_now();structure_id=None if structure_id is None else str(structure_id)
+        if structure_id is not None:
+            known={item["id"] for item in self.scheme.get("structures",())}
+            if structure_id not in known:raise KeyError(f"Unknown structure in active scheme: {structure_id}")
+        with sqlite3.connect(self.db_path) as c:
+            if structure_id is None:
+                annotations=int(c.execute("SELECT COUNT(*) FROM annotations WHERE run_id=?",(run_id,)).fetchone()[0])
+                roles=int(c.execute("SELECT COUNT(*) FROM annotation_roles WHERE run_id=?",(run_id,)).fetchone()[0])
+                if not annotations and not roles:return {"annotations":0,"roles":0}
+                self._annotation_event(c,run_id,"clear_all",payload={"annotations":annotations,"roles":roles})
+                c.execute("DELETE FROM annotation_roles WHERE run_id=?",(run_id,))
+                c.execute("DELETE FROM annotations WHERE run_id=?",(run_id,))
+            else:
+                annotations=int(c.execute(
+                    "SELECT COUNT(*) FROM annotations WHERE run_id=? AND structure_id=?",(run_id,structure_id)
+                ).fetchone()[0])
+                direct_roles=int(c.execute(
+                    "SELECT COUNT(*) FROM annotation_roles WHERE run_id=? AND structure_id=?",(run_id,structure_id)
+                ).fetchone()[0])
+                attached_roles=int(c.execute(
+                    """SELECT COUNT(*) FROM annotation_roles
+                       WHERE run_id=? AND annotation_id IN (
+                           SELECT annotation_id FROM annotations WHERE run_id=? AND structure_id=?
+                       )""",(run_id,run_id,structure_id)
+                ).fetchone()[0])
+                roles=direct_roles+attached_roles
+                if not annotations and not roles:return {"annotations":0,"roles":0}
+                self._annotation_event(c,run_id,"clear_structure",structure_id,payload={"annotations":annotations,"roles":roles})
+                c.execute("DELETE FROM annotation_roles WHERE run_id=? AND structure_id=?",(run_id,structure_id))
+                c.execute(
+                    """DELETE FROM annotation_roles
+                       WHERE run_id=? AND annotation_id IN (
+                           SELECT annotation_id FROM annotations WHERE run_id=? AND structure_id=?
+                       )""",(run_id,run_id,structure_id)
+                )
+                c.execute("DELETE FROM annotations WHERE run_id=? AND structure_id=?",(run_id,structure_id))
+            c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,run_id))
+        self.recalculate_trait_results(specimen_id)
+        return {"annotations":annotations,"roles":roles}
+
     def verify_annotations(self,specimen_id,pass_no=1,source="human"):
         scheme=self.scheme;run=self.annotation_run(specimen_id,pass_no,source,True);rows=self.effective_annotations(specimen_id,pass_no,source)
         counts={}

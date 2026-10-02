@@ -83,6 +83,37 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         refs=[row for row in self.project.effective_annotations(self.specimen_id,1) if row["structure_id"]=="first_caudal"]
         self.assertEqual(1,len(refs));self.assertEqual(vertebra,refs[0]["annotation_id"])
 
+    def test_clear_one_marker_category_keeps_other_categories_and_removes_attached_roles(self):
+        v1=self.project.add_annotation(self.specimen_id,"vertebra",0.2,0.5,1)
+        v2=self.project.add_annotation(self.specimen_id,"vertebra",0.4,0.5,1)
+        p=self.project.add_annotation(self.specimen_id,"preanal_pterygiophore",0.5,0.7,1)
+        self.project.assign_annotation_role(v2,"first_caudal")
+        result=self.project.clear_annotations(self.specimen_id,1,structure_id="vertebra")
+        self.assertEqual(2,result["annotations"]);self.assertEqual(1,result["roles"])
+        remaining=self.project.annotations(self.specimen_id,1)
+        self.assertEqual([p],[row["annotation_id"] for row in remaining])
+        self.assertEqual([],self.project.annotation_roles(self.specimen_id,1))
+        self.assertEqual("clear_structure",self.project.annotation_events(self.specimen_id,1)[-1]["action"])
+
+    def test_clear_reference_category_removes_role_without_deleting_base_marker(self):
+        v=self.project.add_annotation(self.specimen_id,"vertebra",0.3,0.5,1)
+        self.project.assign_annotation_role(v,"first_caudal")
+        result=self.project.clear_annotations(self.specimen_id,1,structure_id="first_caudal")
+        self.assertEqual(0,result["annotations"]);self.assertEqual(1,result["roles"])
+        self.assertEqual([v],[row["annotation_id"] for row in self.project.annotations(self.specimen_id,1)])
+        self.assertEqual([],self.project.annotation_roles(self.specimen_id,1))
+
+    def test_clear_all_markers_keeps_annotation_run_but_empties_current_specimen(self):
+        v=self.project.add_annotation(self.specimen_id,"vertebra",0.2,0.5,1)
+        self.project.add_annotation(self.specimen_id,"preanal_pterygiophore",0.5,0.7,1)
+        self.project.assign_annotation_role(v,"last_predorsal")
+        result=self.project.clear_annotations(self.specimen_id,1)
+        self.assertEqual(2,result["annotations"]);self.assertEqual(1,result["roles"])
+        self.assertEqual([],self.project.annotations(self.specimen_id,1))
+        self.assertEqual([],self.project.annotation_roles(self.specimen_id,1))
+        self.assertEqual("draft",self.project.annotation_run(self.specimen_id,1)["status"])
+        self.assertEqual("clear_all",self.project.annotation_events(self.specimen_id,1)[-1]["action"])
+
     def test_verify_warns_with_missing_category_names_and_accepts_shared_roles(self):
         v1=self.project.add_annotation(self.specimen_id,"vertebra",0.2,0.5,1)
         v2=self.project.add_annotation(self.specimen_id,"vertebra",0.4,0.5,1)
