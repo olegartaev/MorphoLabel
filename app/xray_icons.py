@@ -15,6 +15,7 @@ XRAY_ICON_NAMES=frozenset({
     "xray","xray_project","xray_crops","xray_structures","xray_results","xray_export",
     "count","count_to","count_between","position","presence","distance","angle","derived","counted_element","reference_mark","annotation_setup","trait_setup",
     "flip_horizontal","flip_vertical","delete_crop","clear_crops",
+    "structure_apply","structure_previous","structure_next","clear_marker_set","clear_all_markers",
 })
 
 XRAY_DARK="#31485b"
@@ -260,6 +261,28 @@ def render_xray_icon(name,size=XRAY_ICON_SIZE):
         d.polygon([(p(16),p(4)),(p(11),p(10)),(p(21),p(10))],fill=ACCENT_ORANGE)
         d.polygon([(p(16),p(28)),(p(11),p(22)),(p(21),p(22))],fill=ACCENT_ORANGE)
         _line(d,p,[(7,16),(25,16)],XRAY_DARK,1.2)
+
+    elif name=="structure_apply":
+        d.ellipse((p(5),p(5),p(27),p(27)),fill="#eef9f2",outline=GREEN,width=w(1.5))
+        _line(d,p,[(9,16),(14,21),(24,10)],GREEN,3.1)
+    elif name=="structure_previous":
+        _line(d,p,[(25,8),(12,16),(25,24)],BLUE,2.6)
+        _line(d,p,[(11,7),(11,25)],XRAY_MID,1.2)
+    elif name=="structure_next":
+        _line(d,p,[(7,8),(20,16),(7,24)],BLUE,2.6)
+        d.ellipse((p(19),p(18),p(30),p(29)),fill="#eef9f2",outline=GREEN,width=w(1.0))
+        _line(d,p,[(21,24),(24,27),(28,21)],GREEN,2.1)
+    elif name=="clear_marker_set":
+        _node(d,p,9,9,fill="#ffffff",outline=BLUE,r=2.5,width=1.0)
+        _node(d,p,16,16,fill="#ffffff",outline=ACCENT_ORANGE,r=2.5,width=1.0)
+        _node(d,p,23,23,fill="#ffffff",outline=GREEN,r=2.5,width=1.0)
+        d.polygon([(p(5),p(25)),(p(10),p(29)),(p(18),p(20)),(p(13),p(16))],fill="#f6f8fa",outline=XRAY_DARK)
+        _line(d,p,[(11,27),(18,20)],RED,1.8)
+    elif name=="clear_all_markers":
+        for x,y,c in ((8,9,BLUE),(16,12,ACCENT_ORANGE),(24,9,GREEN),(11,22,"#cc79a7"),(22,22,BLUE)):
+            _node(d,p,x,y,fill="#ffffff",outline=c,r=2.2,width=.9)
+        _line(d,p,[(5,27),(27,5)],RED,3.0)
+        d.polygon([(p(4),p(22)),(p(8),p(27)),(p(13),p(22)),(p(9),p(18))],fill="#f6f8fa",outline=XRAY_DARK)
 
     elif name=="delete_crop":
         d.rounded_rectangle((p(5),p(7),p(24),p(25)),radius=p(1.8),fill="#f8fbfd",outline=BLUE,width=w(1.5))
