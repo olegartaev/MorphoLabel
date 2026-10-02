@@ -107,6 +107,20 @@ class XRayProject:
           FOREIGN KEY(model_id) REFERENCES xray_crop_models(model_id),
           FOREIGN KEY(image_id) REFERENCES source_images(image_id)
         );
+        CREATE TABLE IF NOT EXISTS xray_structure_models(
+          model_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, path TEXT NOT NULL,
+          metadata_path TEXT NOT NULL, parent_model_id TEXT, schema_digest TEXT NOT NULL,
+          backend TEXT NOT NULL, metrics_json TEXT NOT NULL DEFAULT '{}',
+          training_specimen_count INTEGER NOT NULL DEFAULT 0,
+          validation_specimen_count INTEGER NOT NULL DEFAULT 0,
+          active INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS xray_structure_training_membership(
+          model_id TEXT NOT NULL, specimen_id TEXT NOT NULL, split TEXT NOT NULL,
+          PRIMARY KEY(model_id,specimen_id),
+          FOREIGN KEY(model_id) REFERENCES xray_structure_models(model_id),
+          FOREIGN KEY(specimen_id) REFERENCES specimens(specimen_id)
+        );
         CREATE TABLE IF NOT EXISTS ui_state(
           key TEXT PRIMARY KEY, payload_json TEXT NOT NULL DEFAULT '{}'
         );
@@ -683,6 +697,224 @@ class XRayProject:
                 c.execute("UPDATE xray_crop_models SET active=1 WHERE model_id=(SELECT model_id FROM xray_crop_models ORDER BY created_at DESC,model_id DESC LIMIT 1)")
         if model_dir.exists():shutil.rmtree(model_dir)
         return model_id
+
+    def next_structure_model_id(self):
+        with sqlite3.connect(self.db_path) as c:
+            existing={str(row[0]) for row in c.execute("SELECT model_id FROM xray_structure_models")}
+        number=1
+        while True:
+            candidate=f"xray_structure_model_v{number:03d}"
+            if candidate not in existing and not (self.models_root/candidate).exists():return candidate
+            number+=1
+
+    @staticmethod
+    def _structure_model_dict(row):
+        if row is None:return None
+        out=dict(row)
+        try:out["metrics"]=json.loads(out.pop("metrics_json") or "{}")
+        except Exception:out["metrics"]={}
+        return out
+
+    def active_structure_model(self):
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row
+            row=c.execute("SELECT * FROM xray_structure_models WHERE active=1 ORDER BY created_at DESC LIMIT 1").fetchone()
+        return self._structure_model_dict(row)
+
+    def structure_models(self):
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row
+            rows=[self._structure_model_dict(row) for row in c.execute(
+                "SELECT * FROM xray_structure_models ORDER BY created_at DESC,model_id DESC"
+            )]
+        return rows
+
+    def register_structure_model(
+        self,model_id,path,metadata_path,parent_model_id,schema_digest,backend,metrics,membership=(),
+        training_specimen_count=None,validation_specimen_count=None,activate=True,
+    ):
+        model_id=str(model_id);rows=[dict(item) for item in membership]
+        train_count=sum(str(item.get("split"))=="train" for item in rows) if training_specimen_count is None else int(training_specimen_count)
+        val_count=sum(str(item.get("split"))=="val" for item in rows) if validation_specimen_count is None else int(validation_specimen_count)
+        now=_now()
+        with sqlite3.connect(self.db_path) as c:
+            if parent_model_id and not c.execute(
+                "SELECT 1 FROM xray_structure_models WHERE model_id=?",(str(parent_model_id),)
+            ).fetchone():
+                raise KeyError(f"Unknown parent X-ray structure model: {parent_model_id}")
+            if activate:c.execute("UPDATE xray_structure_models SET active=0")
+            c.execute(
+                """INSERT INTO xray_structure_models(
+                     model_id,created_at,path,metadata_path,parent_model_id,schema_digest,backend,metrics_json,
+                     training_specimen_count,validation_specimen_count,active
+                   ) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                (model_id,now,str(path),str(metadata_path),parent_model_id,str(schema_digest),str(backend),
+                 _json(metrics or {}),train_count,val_count,int(bool(activate))),
+            )
+            c.executemany(
+                "INSERT OR IGNORE INTO xray_structure_training_membership(model_id,specimen_id,split) VALUES(?,?,?)",
+                [(model_id,str(item["specimen_id"]),str(item["split"])) for item in rows],
+            )
+        return model_id
+
+    def structure_model_membership(self,model_id):
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row
+            return [dict(row) for row in c.execute(
+                "SELECT model_id,specimen_id,split FROM xray_structure_training_membership WHERE model_id=? ORDER BY split,specimen_id",
+                (str(model_id),),
+            )]
+
+    def activate_structure_model(self,model_id):
+        model_id=str(model_id)
+        with sqlite3.connect(self.db_path) as c:
+            if not c.execute("SELECT 1 FROM xray_structure_models WHERE model_id=?",(model_id,)).fetchone():
+                raise KeyError(f"Unknown X-ray structure model: {model_id}")
+            c.execute("UPDATE xray_structure_models SET active=CASE WHEN model_id=? THEN 1 ELSE 0 END",(model_id,))
+        return self.active_structure_model()
+
+    def delete_structure_model(self,model_id):
+        model_id=str(model_id)
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row
+            row=c.execute("SELECT * FROM xray_structure_models WHERE model_id=?",(model_id,)).fetchone()
+            if row is None:raise KeyError(f"Unknown X-ray structure model: {model_id}")
+            child=c.execute(
+                "SELECT model_id FROM xray_structure_models WHERE parent_model_id=? LIMIT 1",(model_id,)
+            ).fetchone()
+            if child:raise ValueError(f"Model is the training parent of {child[0]} and cannot be deleted yet.")
+            paths=[Path(row["path"]),Path(row["metadata_path"])]
+            resolved=[(self.root/path if not path.is_absolute() else path).resolve() for path in paths]
+            models_root=self.models_root.resolve()
+            if any(models_root not in path.parents for path in resolved):
+                raise ValueError("Structure model files are outside this project's managed models folder.")
+            model_dirs={path.parent for path in resolved}
+            if len(model_dirs)!=1:raise ValueError("Structure model files do not share one managed model folder.")
+            model_dir=next(iter(model_dirs))
+            if model_dir.name!=model_id:raise ValueError("Structure model folder does not match its registered model id.")
+            c.execute("DELETE FROM xray_structure_training_membership WHERE model_id=?",(model_id,))
+            c.execute("DELETE FROM xray_structure_models WHERE model_id=?",(model_id,))
+            if row["active"]:
+                c.execute(
+                    "UPDATE xray_structure_models SET active=1 WHERE model_id=("
+                    "SELECT model_id FROM xray_structure_models ORDER BY created_at DESC,model_id DESC LIMIT 1)"
+                )
+        if model_dir.exists():shutil.rmtree(model_dir)
+        return model_id
+
+    def structure_prediction_candidate_ids(self):
+        ids=[]
+        for row in self.structure_specimens(1):
+            status=str(row.get("annotation_status") or "")
+            if status=="verified":continue
+            if not row.get("run_id"):
+                ids.append(str(row["specimen_id"]));continue
+            if status.startswith("stale") and not self.annotations(row["specimen_id"],1,"human") and not self.annotation_roles(row["specimen_id"],1,"human"):
+                ids.append(str(row["specimen_id"]))
+        return ids
+
+    def select_structure_prediction_ids(self,count,seed=42):
+        return self._sample_crop_plate_ids(self.structure_prediction_candidate_ids(),max(1,int(count)),seed=seed)
+
+    def structure_ai_review_ids(self):
+        schema_id=self.active_scheme_record()["version_id"]
+        with sqlite3.connect(self.db_path) as c:
+            rows=c.execute(
+                """SELECT r.specimen_id,e.event_id
+                   FROM annotation_events e
+                   JOIN annotation_runs r ON r.run_id=e.run_id
+                   JOIN specimens s ON s.specimen_id=r.specimen_id
+                   JOIN source_images i ON i.image_id=s.image_id
+                   WHERE e.action='model_seed' AND r.pass_no=1 AND r.source='human'
+                     AND r.schema_version_id=? AND r.status='draft'
+                     AND s.crop_status='confirmed' AND s.excluded=0 AND i.excluded=0 AND i.crop_reviewed=1
+                   ORDER BY e.event_id""",
+                (schema_id,),
+            ).fetchall()
+        seen=set();result=[]
+        for specimen_id,_event_id in rows:
+            specimen_id=str(specimen_id)
+            if specimen_id not in seen:seen.add(specimen_id);result.append(specimen_id)
+        return result
+
+    def seed_structure_predictions(self,specimen_id,predictions,model_id,role_tolerance=0.035):
+        specimen_id=str(specimen_id);specimen=self.specimen(specimen_id);image=self.source_image(specimen["image_id"])
+        if specimen["excluded"] or specimen["crop_status"]!="confirmed" or image["excluded"] or not image["crop_reviewed"]:
+            raise ValueError("AI structure markers can be seeded only on confirmed specimen crops.")
+        run=self.annotation_run(specimen_id,1,"human",False)
+        if run and not str(run.get("status") or "").startswith("stale"):
+            return {"protected":True,"annotations":0,"roles":0,"model_id":str(model_id)}
+        if run is None:
+            self.ensure_annotation_run(specimen_id,1,"human")
+            run=self.annotation_run(specimen_id,1,"human",False)
+        run_id=str(run["run_id"]);now=_now()
+        structures=list(self.scheme.get("structures") or ());by_id={str(item["id"]):item for item in structures}
+        grouped={}
+        for raw in predictions or ():
+            sid=str(raw.get("structure_id") or "")
+            if sid not in by_id:continue
+            try:x=max(0.0,min(1.0,float(raw["x"])));y=max(0.0,min(1.0,float(raw["y"])));score=float(raw.get("score") or 0.0)
+            except (KeyError,TypeError,ValueError):continue
+            grouped.setdefault(sid,[]).append({"x":x,"y":y,"score":score})
+        inserted=[];role_count=0
+        with sqlite3.connect(self.db_path) as c:
+            c.execute("DELETE FROM annotation_roles WHERE run_id=?",(run_id,))
+            c.execute("DELETE FROM annotations WHERE run_id=?",(run_id,))
+            for structure in structures:
+                sid=str(structure["id"])
+                if not bool(structure.get("repeated")):continue
+                points=sorted(grouped.get(sid,()),key=lambda point:(point["x"],point["y"],-point["score"]))
+                for order,point in enumerate(points):
+                    cur=c.execute(
+                        "INSERT INTO annotations(run_id,structure_id,x,y,sort_order) VALUES(?,?,?,?,?)",
+                        (run_id,sid,point["x"],point["y"],order),
+                    )
+                    inserted.append({"annotation_id":int(cur.lastrowid),"structure_id":sid,**point})
+            compatibility={
+                str(base["id"]):{str(role["id"]) for role in compatible_reference_roles(self.scheme,str(base["id"]))}
+                for base in structures if bool(base.get("repeated"))
+            }
+            for structure in structures:
+                sid=str(structure["id"])
+                if bool(structure.get("repeated")):continue
+                points=sorted(grouped.get(sid,()),key=lambda point:point["score"],reverse=True)
+                if not points:continue
+                point=points[0];near=None
+                for base in inserted:
+                    if sid not in compatibility.get(base["structure_id"],set()):continue
+                    distance=((base["x"]-point["x"])**2+(base["y"]-point["y"])**2)**0.5
+                    if distance<=float(role_tolerance) and (near is None or distance<near[0]):near=(distance,base)
+                if near is not None:
+                    c.execute(
+                        "INSERT INTO annotation_roles(run_id,annotation_id,structure_id,created_at) VALUES(?,?,?,?)",
+                        (run_id,int(near[1]["annotation_id"]),sid,now),
+                    )
+                    role_count+=1
+                else:
+                    cur=c.execute(
+                        "INSERT INTO annotations(run_id,structure_id,x,y,sort_order) VALUES(?,?,?,?,0)",
+                        (run_id,sid,point["x"],point["y"]),
+                    )
+                    inserted.append({"annotation_id":int(cur.lastrowid),"structure_id":sid,**point})
+            safe_predictions=[
+                {"structure_id":sid,"points":[
+                    {"x":round(point["x"],8),"y":round(point["y"],8),"score":round(point["score"],6)}
+                    for point in grouped.get(sid,())
+                ]}
+                for sid in by_id if grouped.get(sid)
+            ]
+            self._annotation_event(
+                c,run_id,"model_seed",payload={
+                    "model_id":str(model_id),"predictions":safe_predictions,
+                    "annotations":len(inserted),"roles":role_count,
+                },
+            )
+            c.execute(
+                "UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",
+                (now,run_id),
+            )
+        self.recalculate_trait_results(specimen_id)
+        return {"protected":False,"annotations":len(inserted),"roles":role_count,"model_id":str(model_id)}
 
     def crop_summary(self):
         images=self.source_images();rows=self.specimens()
