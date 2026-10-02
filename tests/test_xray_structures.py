@@ -9,8 +9,8 @@ from PIL import Image
 from app.xray_crop import crop_from_geometry
 from app.xray_project import XRayProject
 from app.xray_schema import blank_scheme, bundled_scheme, calculate_trait_values, compatible_reference_roles
-from app.xray_structure_display import DEFAULT_PALETTE, DEFAULT_SIZE, load_xray_structure_display, save_xray_structure_display
-from app.xray_structures_ui import _structure_button_order
+from app.xray_structure_display import DEFAULT_OTHER, DEFAULT_SELECTED, DEFAULT_SIZE, ROLE_PALETTE, load_xray_structure_display, save_xray_structure_display
+from app.xray_structures_ui import _first_structure_id, _structure_button_order
 
 
 class XRayStructurePersistenceTests(unittest.TestCase):
@@ -225,31 +225,32 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         moved=reopened.move_structure_batch(state["ids"][0],1,1)
         self.assertEqual(state["ids"][1],moved["specimen_id"])
 
-    def test_marker_tools_follow_numeric_hotkeys(self):
+    def test_marker_tools_follow_numeric_hotkeys_and_new_specimen_starts_with_marker_one(self):
         structures=[
             {"id":"a","hotkey":"1"},{"id":"c","hotkey":"3"},{"id":"b","hotkey":"2"},{"id":"d","hotkey":"4"},
         ]
         self.assertEqual(["a","b","c","d"],[item["id"] for item in _structure_button_order(structures)])
+        self.assertEqual("a",_first_structure_id(structures))
 
-    def test_marker_display_uses_colorblind_palette_and_migrates_legacy_defaults(self):
-        structures=self.project.scheme["structures"]
-        self.project.set_ui_state("xray_structure_display",{"colors":{
-            structures[0]["id"]:"#00e5ff",structures[1]["id"]:"#ff2bd6",structures[2]["id"]:"#ffd400",structures[3]["id"]:"#6dff5c"
-        }})
-        migrated=load_xray_structure_display(self.project,structures)
-        self.assertEqual(DEFAULT_PALETTE[0],migrated["colors"][structures[0]["id"]])
-        self.assertEqual(DEFAULT_PALETTE[1],migrated["colors"][structures[1]["id"]])
-        self.assertEqual(2,migrated["design_version"])
-    def test_xray_marker_display_defaults_are_bright_distinct_and_persistent(self):
+    def test_marker_display_matches_landmarks_selected_other_language_and_keeps_role_colors(self):
         structures=self.project.scheme["structures"]
         settings=load_xray_structure_display(self.project,structures)
         self.assertEqual(DEFAULT_SIZE,settings["size"])
-        self.assertEqual(len(structures),len(set(settings["colors"].values())))
-        self.assertEqual(tuple(settings["colors"][item["id"]] for item in structures),DEFAULT_PALETTE[:len(structures)])
-        settings["size"]=12;settings["colors"][structures[0]["id"]]="#12ff34"
+        self.assertEqual(DEFAULT_SELECTED,settings["selected_color"])
+        self.assertEqual(DEFAULT_OTHER,settings["other_color"])
+        self.assertEqual(tuple(settings["role_colors"][item["id"]] for item in structures),ROLE_PALETTE[:len(structures)])
+        self.assertEqual(3,settings["design_version"])
+        settings["size"]=12;settings["selected_color"]="#12ff34";settings["other_color"]="#334455"
         save_xray_structure_display(self.project,settings,structures)
         reopened=load_xray_structure_display(XRayProject(self.project.root),structures)
-        self.assertEqual(12,reopened["size"]);self.assertEqual("#12ff34",reopened["colors"][structures[0]["id"]])
+        self.assertEqual(12,reopened["size"]);self.assertEqual("#12ff34",reopened["selected_color"]);self.assertEqual("#334455",reopened["other_color"])
+
+    def test_legacy_structure_colors_survive_only_as_semantic_role_colors(self):
+        structures=self.project.scheme["structures"]
+        self.project.set_ui_state("xray_structure_display",{"colors":{structures[0]["id"]:"#123456"}})
+        migrated=load_xray_structure_display(self.project,structures)
+        self.assertEqual(DEFAULT_SELECTED,migrated["selected_color"]);self.assertEqual(DEFAULT_OTHER,migrated["other_color"])
+        self.assertEqual("#123456",migrated["role_colors"][structures[0]["id"]])
 
     def test_crop_archive_preserves_shared_role_provenance(self):
         vertebra=self.project.add_annotation(self.specimen_id,"vertebra",0.3,0.5,1)
@@ -316,11 +317,24 @@ class XRayStructureUIContractTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         self.assertIn("self.batch_nav.grid_remove()",ui)
-        self.assertIn("self.batch_separator.grid_remove()",ui)
+        self.assertIn("self.apply_separator=ttk.Separator",ui)
+        self.assertNotIn("self.batch_separator",ui)
         self.assertIn("command=self.verify_current",ui)
         self.assertIn("command=self.verify_next",ui)
         self.assertIn("if not batch or self.selected_specimen_id not in batch.get(\"ids\",()):return",ui)
         self.assertNotIn("self.pass_box",ui)
+
+    def test_structure_toolbar_matches_landmarks_layout_and_resets_first_marker_on_load(self):
+        root=Path(__file__).resolve().parents[1]
+        ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
+        display=(root/"app/xray_structure_display.py").read_text(encoding="utf-8")
+        for text in ('text="Clear type…"', 'text="Clear all markers"', 'text="Display…"', 'text="Apply"', 'text="Markers:"'):
+            self.assertIn(text,ui)
+        self.assertIn("self.apply_separator=ttk.Separator",ui)
+        self.assertIn('self.active_structure_id=_first_structure_id(self.project.scheme.get("structures",()))',ui)
+        self.assertIn("DEFAULT_SELECTED",display);self.assertIn("DEFAULT_OTHER",display)
+        self.assertIn("draw_marker",display);self.assertIn("draw_label",display)
+        self.assertNotIn("Marker icons and colors",ui)
 
     def test_structures_use_project_orientation_and_one_plate_source_cache(self):
         root=Path(__file__).resolve().parents[1]
