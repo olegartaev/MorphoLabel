@@ -403,7 +403,7 @@ def predict_structures(project, specimen_ids=None, count=None, cancel=None, prog
         )
     if not ids:
         return {"success": [], "failures": [], "model_id": model["model_id"]}
-    runtime, _ = ensure_ai_runtime(project=project, progress=progress)
+    runtime, _ = ensure_ai_runtime(project=project)
     settings = structure_performance_settings()["inference"]
     checkpoint = project.root / str(model["path"])
     metadata = project.root / str(model["metadata_path"])
