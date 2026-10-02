@@ -200,6 +200,15 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         ]
         self.assertEqual(["a","b","c","d"],[item["id"] for item in _structure_button_order(structures)])
 
+    def test_marker_display_uses_colorblind_palette_and_migrates_legacy_defaults(self):
+        structures=self.project.scheme["structures"]
+        self.project.set_ui_state("xray_structure_display",{"colors":{
+            structures[0]["id"]:"#00e5ff",structures[1]["id"]:"#ff2bd6",structures[2]["id"]:"#ffd400",structures[3]["id"]:"#6dff5c"
+        }})
+        migrated=load_xray_structure_display(self.project,structures)
+        self.assertEqual(DEFAULT_PALETTE[0],migrated["colors"][structures[0]["id"]])
+        self.assertEqual(DEFAULT_PALETTE[1],migrated["colors"][structures[1]["id"]])
+        self.assertEqual(2,migrated["design_version"])
     def test_xray_marker_display_defaults_are_bright_distinct_and_persistent(self):
         structures=self.project.scheme["structures"]
         settings=load_xray_structure_display(self.project,structures)
@@ -211,6 +220,16 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         reopened=load_xray_structure_display(XRayProject(self.project.root),structures)
         self.assertEqual(12,reopened["size"]);self.assertEqual("#12ff34",reopened["colors"][structures[0]["id"]])
 
+    def test_crop_archive_preserves_shared_role_provenance(self):
+        vertebra=self.project.add_annotation(self.specimen_id,"vertebra",0.3,0.5,1)
+        self.project.assign_annotation_role(vertebra,"first_caudal")
+        crop=dict(self.project.specimen(self.specimen_id)["crop"]);crop["center_x"]+=2
+        from app.xray_crop import crop_corners
+        crop["corners"]=[list(point) for point in crop_corners(crop["center_x"],crop["center_y"],crop["length"],crop["width"],crop["angle_degrees"])]
+        self.project.update_specimen_crop(self.specimen_id,crop)
+        archived=self.project.annotation_archives(self.specimen_id)[-1]["annotations"]
+        row=next(item for item in archived if item["annotation_id"]==vertebra)
+        self.assertEqual(["first_caudal"],row["role_structure_ids"])
     def test_crop_change_archives_and_hides_coordinate_dependent_markers(self):
         self._complete_pass_one()
         before=self.project.annotations(self.specimen_id,1);self.assertTrue(before)
@@ -266,6 +285,15 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn("self.project.orientation_policy",ui)
         self.assertIn("align_top=True",ui)
 
+    def test_shared_role_ui_uses_context_menu_badges_and_preserves_right_drag_pan(self):
+        root=Path(__file__).resolve().parents[1]
+        ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
+        display=(root/"app/xray_structure_display.py").read_text(encoding="utf-8")
+        for text in ("Use this point as…","compatible_reference_roles","assign_annotation_role","remove_annotation_role","_right_start","_right_motion","_right_end"):
+            self.assertIn(text,ui)
+        self.assertIn("draw_xray_role_badges",ui);self.assertIn("draw_xray_role_badges",display)
+        self.assertNotIn('("<Button-3>",self._pan_start)',ui)
+        self.assertIn('("<Button-2>",self._pan_start)',ui)
     def test_structures_ui_renders_oriented_crop_without_project_image_copy(self):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
