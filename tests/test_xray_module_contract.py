@@ -154,6 +154,7 @@ class XRayModuleContractTests(unittest.TestCase):
             "xray","xray_project","xray_crops","xray_structures","xray_results","xray_export",
             "count","count_to","count_between","derived","counted_element","reference_mark",
             "annotation_setup","trait_setup","flip_horizontal","flip_vertical","delete_crop","clear_crops",
+            "structure_apply","structure_previous","structure_next","clear_marker_set","clear_all_markers",
         }
         self.assertTrue(required.issubset(XRAY_ICON_NAMES))
         for name in required:

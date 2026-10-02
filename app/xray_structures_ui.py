@@ -242,7 +242,7 @@ class XRayStructureWorkspace:
 
         workflow=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(0,4,0,0));workflow.grid(row=3,column=0,sticky="ew")
         workflow.columnconfigure(0,weight=1);workflow.columnconfigure(1,weight=1);workflow.columnconfigure(2,weight=1);workflow.columnconfigure(3,weight=1)
-        one=self._workflow_card(workflow,0,"1. Annotation batch","Work through a finite saved set with Verify & Next.")
+        one=self._workflow_card(workflow,0,"1. Annotation batch","Work through a finite saved set with batch-only previous / next controls.")
         self.batch_summary=ttk.Label(one,text="",style="Muted.TLabel");self.batch_summary.grid(row=0,column=0,columnspan=3,sticky="w")
         ttk.Label(one,text="Batch").grid(row=1,column=0,sticky="w",pady=(4,0))
         ttk.Spinbox(one,from_=1,to=500,textvariable=self.batch_size,width=5).grid(row=1,column=1,sticky="w",padx=4,pady=(4,0))
@@ -616,9 +616,7 @@ class XRayStructureWorkspace:
         if not self.selected_specimen_id:return
         count=sum(1 for row in self.project.effective_annotations(self.selected_specimen_id,self.pass_no.get()) if row["structure_id"]==structure_id)
         if not count:return
-        structure=self._structure(structure_id);extra="
-
-Any start / stop roles attached to those points are removed with them." if structure and structure.get("repeated") else ""
+        structure=self._structure(structure_id);extra="\n\nAny start / stop roles attached to those points are removed with them." if structure and structure.get("repeated") else ""
         if not messagebox.askyesno(
             "Clear marker category",
             f"Remove all ‘{name}’ markers from this specimen?\n\nOther marker categories are kept.{extra}",

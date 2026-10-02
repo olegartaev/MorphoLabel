@@ -295,11 +295,15 @@ class XRayStructureUIContractTests(unittest.TestCase):
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         for text in (
-            "Manual pass","Verify & Next","Sample","Specimen","Locality:","Plate:","Fish №",
-            "Marker actions:","Display…","PhotoListCanvas","status_shape=\"square\"","Annotation batch","Repeatability","Training data","Open Results",
-            "delete_selected","move_annotation","replace_single","_wheel","_pan_motion","_key_pressed","_structure_button_order",
+            "Apply","Sample","Specimen","Locality:","Plate:","Fish №",
+            "PhotoListCanvas","status_shape=\"square\"","Annotation batch","Repeatability","Training data","Open Results",
+            "delete_selected","clear_marker_category","clear_all_markers","clear_type_button",
+            "move_annotation","replace_single","_wheel","_pan_motion","_key_pressed","_structure_button_order",
         ):
             self.assertIn(text,ui)
+        self.assertNotIn("Manual pass",ui)
+        self.assertNotIn("Verify & Next",ui)
+        self.assertNotIn("Marker actions:",ui)
         self.assertIn("XRayStructureWorkspace(",module)
         self.assertIn("initial_specimen_id=selection.get(\"specimen_id\")",module)
         self.assertIn("on_selection=self._set_selection",module)
@@ -307,6 +311,16 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertNotIn("Specimen image / annotation canvas",module)
         self.assertNotIn("Structures to mark",ui)
         self.assertIn("trait_rows()",module)
+
+    def test_structure_navigation_is_batch_only_and_apply_is_always_separate(self):
+        root=Path(__file__).resolve().parents[1]
+        ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
+        self.assertIn("self.batch_nav.grid_remove()",ui)
+        self.assertIn("self.batch_separator.grid_remove()",ui)
+        self.assertIn("command=self.verify_current",ui)
+        self.assertIn("command=self.verify_next",ui)
+        self.assertIn("if not batch or self.selected_specimen_id not in batch.get(\"ids\",()):return",ui)
+        self.assertNotIn("self.pass_box",ui)
 
     def test_structures_use_project_orientation_and_one_plate_source_cache(self):
         root=Path(__file__).resolve().parents[1]
