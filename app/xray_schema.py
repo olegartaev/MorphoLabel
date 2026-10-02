@@ -50,11 +50,18 @@ def normalize_scheme(scheme):
         if not ident or ident in structure_ids:raise ValueError("Every structure needs a unique id")
         structure_ids.add(ident)
         structure.setdefault("annotation","point");structure.setdefault("repeated",False);structure.setdefault("required",True)
+        structure.setdefault("reuse_from",[])
+        structure["reuse_from"]=[str(item) for item in (structure.get("reuse_from") or ()) if str(item)]
         structure.setdefault("shape",SHAPES[index%len(SHAPES)]);structure.setdefault("color",MARKER_COLORS[index%len(MARKER_COLORS)])
         hotkey=str(structure.get("hotkey","")).strip()
         if hotkey:
             if hotkey in hotkeys:raise ValueError("Structure hotkeys must be unique")
             hotkeys.add(hotkey)
+    for structure in value["structures"]:
+        missing=set(structure.get("reuse_from") or ())-structure_ids
+        if missing:raise ValueError(f"Structure {structure['id']} reuses missing structures: {sorted(missing)}")
+        if structure.get("repeated") and structure.get("reuse_from"):
+            raise ValueError(f"Repeated structure {structure['id']} cannot reuse another annotation point")
     trait_ids=set()
     for trait in value["traits"]:
         ident=str(trait.get("id","")).strip()
@@ -92,6 +99,29 @@ def _safe_derived(expression,values):
         raise ValueError("Unsupported derived trait expression")
     return visit(tree)
 
+
+def compatible_reference_roles(scheme,base_structure_id):
+    """Return single-marker roles that may share one existing point.
+
+    Explicit reuse_from declarations are supported, while the common case is
+    inferred from trait semantics: a start/stop reference used with a repeated
+    primary series can reuse a point from that series.
+    """
+    scheme=normalize_scheme(scheme);base_structure_id=str(base_structure_id)
+    structures={item["id"]:item for item in scheme.get("structures",())}
+    if base_structure_id not in structures:return []
+    allowed=set()
+    for item in scheme.get("structures",()):
+        if item.get("repeated"):continue
+        if base_structure_id in set(item.get("reuse_from") or ()):allowed.add(item["id"])
+    for trait in scheme.get("traits",()):
+        ids=list(trait.get("structures") or ())
+        if not ids or ids[0]!=base_structure_id:continue
+        if trait.get("method") not in {"count_to","count_between","position"}:continue
+        for ident in ids[1:]:
+            item=structures.get(ident)
+            if item is not None and not item.get("repeated"):allowed.add(ident)
+    return [item for item in scheme.get("structures",()) if item["id"] in allowed and not item.get("repeated")]
 
 def calculate_trait_values(scheme,annotations):
     """Calculate current trait values directly from current structure annotations."""
