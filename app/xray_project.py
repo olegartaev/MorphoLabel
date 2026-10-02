@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 import uuid
 
 from .xray_crop import apply_orientation_defaults, normalize_orientation_policy
-from .xray_schema import bundled_scheme, calculate_trait_values, normalize_scheme, scheme_hash
+from .xray_schema import bundled_scheme, calculate_trait_values, compatible_reference_roles, normalize_scheme, scheme_hash
 
 IMAGE_EXTENSIONS={".png",".jpg",".jpeg",".tif",".tiff",".bmp"}
 
@@ -121,6 +121,14 @@ class XRayProject:
           annotation_id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL,
           structure_id TEXT NOT NULL, x REAL NOT NULL, y REAL NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0,
           FOREIGN KEY(run_id) REFERENCES annotation_runs(run_id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS annotation_roles(
+          role_id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL,
+          annotation_id INTEGER NOT NULL, structure_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          UNIQUE(run_id,structure_id),
+          FOREIGN KEY(run_id) REFERENCES annotation_runs(run_id) ON DELETE CASCADE,
+          FOREIGN KEY(annotation_id) REFERENCES annotations(annotation_id) ON DELETE CASCADE
         );
         CREATE TABLE IF NOT EXISTS annotation_events(
           event_id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL,
@@ -825,6 +833,80 @@ class XRayProject:
                 "SELECT annotation_id,run_id,structure_id,x,y,sort_order FROM annotations WHERE run_id=? ORDER BY structure_id,sort_order,annotation_id",
                 (run["run_id"],),
             )]
+
+    def annotation_roles(self,specimen_id,pass_no=1,source="human"):
+        run=self.annotation_run(specimen_id,pass_no,source,False)
+        if run is None:return []
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row
+            return [dict(row) for row in c.execute(
+                """SELECT ar.role_id,ar.run_id,ar.annotation_id,ar.structure_id,
+                          a.structure_id AS base_structure_id,a.x,a.y,a.sort_order
+                   FROM annotation_roles ar
+                   JOIN annotations a ON a.annotation_id=ar.annotation_id
+                   WHERE ar.run_id=? ORDER BY ar.role_id""",
+                (run["run_id"],),
+            )]
+
+    def effective_annotations(self,specimen_id,pass_no=1,source="human"):
+        rows=[dict(row) for row in self.annotations(specimen_id,pass_no,source)]
+        for role in self.annotation_roles(specimen_id,pass_no,source):
+            rows.append({
+                "annotation_id":int(role["annotation_id"]),"run_id":role["run_id"],
+                "structure_id":role["structure_id"],"x":float(role["x"]),"y":float(role["y"]),
+                "sort_order":int(role.get("sort_order",0) or 0),"role_source_annotation_id":int(role["annotation_id"]),
+            })
+        return rows
+
+    def assign_annotation_role(self,annotation_id,role_structure_id):
+        annotation_id=int(annotation_id);role_structure_id=str(role_structure_id);now=_now()
+        with sqlite3.connect(self.db_path) as c:
+            row=c.execute(
+                """SELECT a.run_id,a.structure_id,r.specimen_id
+                   FROM annotations a JOIN annotation_runs r ON r.run_id=a.run_id
+                   WHERE a.annotation_id=?""",(annotation_id,)
+            ).fetchone()
+            if row is None:raise KeyError(f"Unknown annotation: {annotation_id}")
+            run_id,base_structure_id,specimen_id=row
+            allowed={item["id"] for item in compatible_reference_roles(self.scheme,base_structure_id)}
+            if role_structure_id not in allowed:
+                raise ValueError("This marker cannot use the selected point as that start / stop role.")
+            standalone=c.execute(
+                "SELECT annotation_id,x,y,sort_order FROM annotations WHERE run_id=? AND structure_id=? ORDER BY annotation_id",
+                (run_id,role_structure_id),
+            ).fetchall()
+            for existing in standalone:
+                self._annotation_event(c,run_id,"replace_reference_with_role",role_structure_id,int(existing[0]),{"at":[existing[1],existing[2]],"sort_order":existing[3]})
+                c.execute("DELETE FROM annotation_roles WHERE annotation_id=?",(int(existing[0]),))
+                c.execute("DELETE FROM annotations WHERE annotation_id=?",(int(existing[0]),))
+            previous=c.execute(
+                "SELECT role_id,annotation_id FROM annotation_roles WHERE run_id=? AND structure_id=?",
+                (run_id,role_structure_id),
+            ).fetchone()
+            if previous and int(previous[1])==annotation_id:return False
+            if previous:c.execute("DELETE FROM annotation_roles WHERE role_id=?",(int(previous[0]),))
+            c.execute("INSERT INTO annotation_roles(run_id,annotation_id,structure_id,created_at) VALUES(?,?,?,?)",(run_id,annotation_id,role_structure_id,now))
+            self._annotation_event(c,run_id,"assign_role",role_structure_id,annotation_id,{"base_structure_id":base_structure_id})
+            c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,run_id))
+        self.recalculate_trait_results(specimen_id);return True
+
+    def remove_annotation_role(self,annotation_id,role_structure_id):
+        annotation_id=int(annotation_id);role_structure_id=str(role_structure_id);now=_now();specimen_id=None
+        with sqlite3.connect(self.db_path) as c:
+            row=c.execute(
+                """SELECT ar.role_id,ar.run_id,r.specimen_id,a.structure_id
+                   FROM annotation_roles ar
+                   JOIN annotation_runs r ON r.run_id=ar.run_id
+                   JOIN annotations a ON a.annotation_id=ar.annotation_id
+                   WHERE ar.annotation_id=? AND ar.structure_id=?""",
+                (annotation_id,role_structure_id),
+            ).fetchone()
+            if row is None:return False
+            role_id,run_id,specimen_id,base_structure_id=row
+            c.execute("DELETE FROM annotation_roles WHERE role_id=?",(int(role_id),))
+            self._annotation_event(c,run_id,"remove_role",role_structure_id,annotation_id,{"base_structure_id":base_structure_id})
+            c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,run_id))
+        self.recalculate_trait_results(specimen_id);return True
 
     def _annotation_event(self,c,run_id,action,structure_id="",annotation_id=None,payload=None):
         c.execute(
