@@ -16,6 +16,7 @@ from .ai_hardware import get_hardware_profile, get_inference_config, get_trainin
 from .process_utils import hidden_window_kwargs
 from .runtime_paths import resource_path
 from .xray_crop import HYBRID_ALGORITHM_VERSION, detect_specimens, display_preview, merge_detector_proposals, proposals_from_detector_boxes
+from .xray_orientation import predict_orientation_batch, train_orientation_model
 
 DETECTOR_BACKEND="rtmdet_tiny_mmdet_3_2"
 RTMDET_TINY_COCO_URL="https://download.openmmlab.com/mmdetection/v3.0/rtmdet/rtmdet_tiny_8xb32-300e_coco/rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth"
@@ -133,6 +134,7 @@ def train_detector(project,seed=42,epochs=80,progress=None):
                  "initialization":(parent or {}).get("model_id") or "rtmdet_tiny_coco_pretrained","batch_size":used_batch,
                  "workers":int(settings.get("workers") or 0),"mixed_precision":bool(settings.get("mixed_precision")),
                  "hardware":hardware_settings,**dict(result.get("metrics") or {})}
+        metrics.update(train_orientation_model(project,model_id,directory,runtime,settings,seed=seed,progress=progress))
         training_plate_ids=list(dataset["plate_ids"]);training_specimens=int(dataset["training_specimens"])
     project.register_crop_model(model_id,str(final_checkpoint.relative_to(project.root)),str(final_config.relative_to(project.root)),
                                 (parent or {}).get("model_id"),metrics,training_plate_ids,training_specimens,activate=True)
@@ -145,7 +147,7 @@ def _prediction_input(project,image_id,target):
     preview.convert("RGB").save(target,format="PNG")
     return target,scale,original_size
 
-def _save_prediction(project,model,image_id,scale,detections):
+def _prediction_proposals(project,image_id,scale,detections):
     boxes=[]
     for item in detections or []:
         bbox=item.get("bbox") or []
@@ -154,7 +156,10 @@ def _save_prediction(project,model,image_id,scale,detections):
     source_path=project.source_image_path(image_id)
     rtmdet=proposals_from_detector_boxes(source_path,boxes)
     heuristic=detect_specimens(source_path)
-    proposals=merge_detector_proposals(heuristic,rtmdet)
+    return merge_detector_proposals(heuristic,rtmdet)
+
+
+def _save_prediction(project,model,image_id,proposals):
     saved=project.replace_model_proposals(image_id,proposals,model["model_id"],algorithm=HYBRID_ALGORITHM_VERSION)
     agreed=sum(1 for item in proposals if (item.get("detector_provenance") or {}).get("mode")=="agreed")
     review=sum(1 for item in proposals if str(item.get("confidence"))=="review")
@@ -203,14 +208,21 @@ def predict_plates(project,image_ids,cancel=None,progress=None,score_threshold=0
                 reason=f"{type(exc).__name__}: {exc}"
                 for image_id,_path,_scale in prepared:failures.append({"image_id":image_id,"reason":reason})
                 index+=len(chunk);continue
-            returned=list(result.get("results") or [])
+            returned=list(result.get("results") or []);pending=[]
             for offset,(image_id,_path,scale) in enumerate(prepared):
                 row=returned[offset] if offset<len(returned) else {"error":"missing prediction result"}
-                if row.get("error"):
-                    failures.append({"image_id":image_id,"reason":str(row["error"])})
+                if row.get("error"):failures.append({"image_id":image_id,"reason":str(row["error"])})
                 else:
-                    try:success.append(_save_prediction(project,model,image_id,scale,row.get("detections") or []))
+                    try:pending.append({"image_id":image_id,"proposals":_prediction_proposals(project,image_id,scale,row.get("detections") or [])})
                     except Exception as exc:failures.append({"image_id":image_id,"reason":f"{type(exc).__name__}: {exc}"})
+            if pending:
+                try:
+                    pending=predict_orientation_batch(project,model,pending,runtime,scratch,settings)
+                    for item in pending:success.append(_save_prediction(project,model,item["image_id"],item["proposals"]))
+                except Exception as exc:
+                    reason=f"{type(exc).__name__}: {exc}"
+                    for item in pending:failures.append({"image_id":item["image_id"],"reason":reason})
+            for offset,(image_id,_path,_scale) in enumerate(prepared):
                 if progress:progress(index+offset+1,len(ids),image_id)
             index+=len(chunk)
     return {"success":len(success),"successful_ids":[row["image_id"] for row in success],"failures":failures,

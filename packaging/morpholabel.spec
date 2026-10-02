@@ -9,6 +9,7 @@ a = Analysis(
     datas=[
         (str(ROOT / "ai_runtime" / "rtmpose_runner.py"), "ai_runtime"),
         (str(ROOT / "ai_runtime" / "xray_detector_runner.py"), "ai_runtime"),
+        (str(ROOT / "ai_runtime" / "xray_orientation_runner.py"), "ai_runtime"),
         (str(ROOT / "app" / "resources" / "xray_trait_schemes"), "app/resources/xray_trait_schemes"),
         (str(ROOT / "LICENSE"), "."),
         (str(ROOT / "NOTICE"), "."),

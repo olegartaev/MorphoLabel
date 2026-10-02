@@ -34,6 +34,7 @@ def apply_orientation_defaults(crop,policy=None):
     value["head_side"]=head if head in {"left","right"} else default_head
     value["bottom_side"]=bottom if bottom in {"top","bottom"} else default_bottom
     value["orientation_source"]=str(value.get("orientation_source") or "default")
+    value["orientation_verified"]=bool(value.get("orientation_verified",False))
     return value
 
 
@@ -425,13 +426,12 @@ def crop_from_geometry(center_x, center_y, length, width, angle_degrees, image_s
     },orientation_policy)
 
 
-def oriented_crop(image, proposal, orientation_policy=None):
-    """Extract one canonical crop without rotating the whole source plate."""
+def aligned_crop(image, proposal):
+    """Extract the geometry-aligned crop without applying head/ventral flips."""
     raw=proposal.to_dict() if isinstance(proposal,CropProposal) else dict(proposal)
-    p=apply_orientation_defaults(raw,orientation_policy)
-    length=max(2,int(round(float(p["length"]))));width=max(2,int(round(float(p["width"]))))
-    corners=np.asarray(p.get("corners") or crop_corners(
-        p["center_x"],p["center_y"],p["length"],p["width"],p.get("angle_degrees",0.0)
+    length=max(2,int(round(float(raw["length"]))));width=max(2,int(round(float(raw["width"]))))
+    corners=np.asarray(raw.get("corners") or crop_corners(
+        raw["center_x"],raw["center_y"],raw["length"],raw["width"],raw.get("angle_degrees",0.0)
     ),dtype=np.float32)
     if corners.shape!=(4,2):raise ValueError("Crop corners are incomplete")
     destination=np.asarray(((0,0),(length-1,0),(length-1,width-1),(0,width-1)),dtype=np.float32)
@@ -444,6 +444,14 @@ def oriented_crop(image, proposal, orientation_policy=None):
         arr,matrix,(length,width),flags=cv2.INTER_LINEAR,
         borderMode=cv2.BORDER_CONSTANT,borderValue=border_value,
     )
+    return Image.fromarray(result)
+
+
+def oriented_crop(image, proposal, orientation_policy=None):
+    """Extract one canonical crop without rotating the whole source plate."""
+    raw=proposal.to_dict() if isinstance(proposal,CropProposal) else dict(proposal)
+    p=apply_orientation_defaults(raw,orientation_policy)
+    result=np.asarray(aligned_crop(image,p))
     flip_h,flip_v=canonical_orientation_flips(p,orientation_policy)
     if flip_h:result=cv2.flip(result,1)
     if flip_v:result=cv2.flip(result,0)

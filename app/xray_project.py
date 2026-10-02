@@ -386,12 +386,19 @@ class XRayProject:
     def replace_model_proposals(self,image_id,proposals,model_id,algorithm="rtmdet-tiny-v1"):
         return self._replace_proposals(image_id,proposals,"model",str(algorithm),model_id)
 
+    @staticmethod
+    def _orientation_verified_crop(crop,source,now):
+        value=dict(crop or {});value["orientation_verified"]=True
+        value["orientation_verified_at"]=str(now);value["orientation_verified_by"]=str(source)
+        return value
+
     def confirm_specimen(self,specimen_id,source="human"):
         item=self.specimen(specimen_id)
-        if item["crop_status"]=="confirmed" and not item["excluded"]:return False
+        if item["crop_status"]=="confirmed" and not item["excluded"] and bool((item.get("crop") or {}).get("orientation_verified")):return False
+        now=_now();crop=self._orientation_verified_crop(item.get("crop") or {},source,now)
         with sqlite3.connect(self.db_path) as c:
-            c.execute("UPDATE specimens SET crop_status='confirmed',excluded=0,updated_at=? WHERE specimen_id=?",(_now(),specimen_id))
-            self._event(c,specimen_id,"confirm",source,{"previous_status":item["crop_status"]})
+            c.execute("UPDATE specimens SET crop_json=?,crop_status='confirmed',excluded=0,updated_at=? WHERE specimen_id=?",(_json(crop),now,specimen_id))
+            self._event(c,specimen_id,"confirm",source,{"previous_status":item["crop_status"],"orientation_verified":True})
         return True
 
     def confirm_plate(self,image_id,source="human"):
@@ -400,10 +407,10 @@ class XRayProject:
         now=_now();confirmed=0
         with sqlite3.connect(self.db_path) as c:
             for item in rows:
-                if item["crop_status"]!="confirmed":
-                    c.execute("UPDATE specimens SET crop_status='confirmed',excluded=0,updated_at=? WHERE specimen_id=?",(now,item["specimen_id"]))
-                    self._event(c,item["specimen_id"],"confirm_plate",source,{"previous_status":item["crop_status"]})
-                    confirmed+=1
+                crop=self._orientation_verified_crop(item.get("crop") or {},source,now)
+                if item["crop_status"]!="confirmed":confirmed+=1
+                c.execute("UPDATE specimens SET crop_json=?,crop_status='confirmed',excluded=0,updated_at=? WHERE specimen_id=?",(_json(crop),now,item["specimen_id"]))
+                self._event(c,item["specimen_id"],"confirm_plate",source,{"previous_status":item["crop_status"],"orientation_verified":True})
             c.execute("UPDATE source_images SET crop_reviewed=1,crop_reviewed_at=? WHERE image_id=?",(now,image_id))
         return {"specimens":len(rows),"newly_confirmed":confirmed}
 
@@ -422,7 +429,7 @@ class XRayProject:
         return sum(1 for item in self.specimens(image_id) if item["crop_status"]=="proposed" and not item["excluded"] and str((item.get("crop") or {}).get("confidence"))=="high")
 
     def update_specimen_crop(self,specimen_id,crop,qc=()):
-        item=self.specimen(specimen_id);crop=apply_orientation_defaults(crop,self.orientation_policy);crop["confidence"]="high";now=_now()
+        item=self.specimen(specimen_id);crop=apply_orientation_defaults(crop,self.orientation_policy);crop["confidence"]="high";crop["orientation_verified"]=False;now=_now()
         reviewed=bool(self.source_image(item["image_id"]).get("crop_reviewed"))
         status="confirmed" if reviewed else "proposed"
         with sqlite3.connect(self.db_path) as c:
@@ -433,7 +440,7 @@ class XRayProject:
         return self.specimen(specimen_id)
 
     def add_manual_specimen(self,image_id,crop,label=""):
-        crop=apply_orientation_defaults(crop,self.orientation_policy);crop["confidence"]="high";specimen_id=str(uuid.uuid4());now=_now()
+        crop=apply_orientation_defaults(crop,self.orientation_policy);crop["confidence"]="high";crop["orientation_verified"]=False;specimen_id=str(uuid.uuid4());now=_now()
         ordinal=1+max((int(x.get("ordinal") or 0) for x in self.specimens(image_id)),default=0)
         if not label:label=f"{self.source_image_path(image_id).stem}-{ordinal:02d}"
         status="confirmed" if self.source_image(image_id).get("crop_reviewed") else "proposed"
@@ -469,7 +476,7 @@ class XRayProject:
                 specimen_id=str(edit.get("specimen_id") or "");item=rows.get(specimen_id)
                 if item is None:raise KeyError(f"Unknown specimen on this plate: {specimen_id}")
                 if specimen_id in removed_ids:continue
-                crop=apply_orientation_defaults(edit.get("crop") or {},self.orientation_policy);crop["confidence"]="high"
+                crop=apply_orientation_defaults(edit.get("crop") or {},self.orientation_policy);crop["confidence"]="high";crop["orientation_verified"]=False
                 if not crop.get("corners") or not crop.get("bounds"):raise ValueError("Crop geometry is incomplete.")
                 c.execute(
                     "UPDATE specimens SET crop_json=?,crop_source='manual',crop_status=?,crop_qc_json='[]',model_id='',excluded=0,updated_at=? WHERE specimen_id=?",
@@ -480,7 +487,7 @@ class XRayProject:
                 updated+=1
             ordinal=max((int(item.get("ordinal") or 0) for item in rows.values()),default=0);stem=self.source_image_path(image_id).stem
             for entry in new_crops:
-                crop=apply_orientation_defaults(entry.get("crop") or {},self.orientation_policy);crop["confidence"]="high"
+                crop=apply_orientation_defaults(entry.get("crop") or {},self.orientation_policy);crop["confidence"]="high";crop["orientation_verified"]=False
                 if not crop.get("corners") or not crop.get("bounds"):raise ValueError("Crop geometry is incomplete.")
                 ordinal+=1;specimen_id=str(uuid.uuid4());client_id=str(entry.get("client_id") or specimen_id);label=f"{stem}-{ordinal:02d}"
                 c.execute(
@@ -538,6 +545,19 @@ class XRayProject:
 
     def training_specimen_count(self):
         return sum(len(row["specimens"]) for row in self.training_plates())
+
+    def orientation_training_rows(self):
+        """Human-confirmed crop orientation truth, separate from detector truth."""
+        rows=[]
+        for plate in self.training_plates():
+            for specimen in plate["specimens"]:
+                crop=dict(specimen.get("crop") or {})
+                if not bool(crop.get("orientation_verified")):continue
+                rows.append({**specimen,"relative_path":plate["relative_path"],"crop":crop})
+        return rows
+
+    def orientation_training_specimen_count(self):
+        return len(self.orientation_training_rows())
 
     def untouched_plate_ids(self):
         result=[]

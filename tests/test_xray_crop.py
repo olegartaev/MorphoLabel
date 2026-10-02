@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from app.xray_crop import ALGORITHM_VERSION, canonical_orientation_flips, crop_from_geometry, detect_specimens, oriented_crop
+from app.xray_crop import ALGORITHM_VERSION, aligned_crop, canonical_orientation_flips, crop_from_geometry, detect_specimens, oriented_crop
 from app.xray_project import XRayProject
 from app.xray_crop_ui import PlateCropEditSession
 from app.modules.xray_counts import orientation_preview_transform
@@ -71,6 +71,12 @@ class XRayCropCanonicalizationTests(unittest.TestCase):
         self.assertEqual((False,False),canonical_orientation_flips(crop,{"head":"left","bottom":"down"}))
         crop["head_side"]="right";self.assertEqual((True,False),canonical_orientation_flips(crop,{"head":"left","bottom":"down"}))
         crop["bottom_side"]="top";self.assertEqual((True,True),canonical_orientation_flips(crop,{"head":"left","bottom":"down"}))
+
+    def test_aligned_crop_keeps_raw_anatomical_side_before_canonical_flip(self):
+        arr=np.zeros((60,100),np.uint8);arr[20:40,20:80]=40;arr[25:35,20:35]=220
+        image=Image.fromarray(arr)
+        crop=crop_from_geometry(50,30,60,20,0,(100,60),orientation_policy={"head":"left","bottom":"down"})
+        raw=np.asarray(aligned_crop(image,crop));self.assertGreater(float(raw[:,0:15].mean()),float(raw[:,-15:].mean()))
 
     def test_oriented_crop_is_canonical_and_keeps_source_unchanged(self):
         arr=np.zeros((60,100),np.uint8);arr[20:40,20:80]=40;arr[25:35,20:35]=220

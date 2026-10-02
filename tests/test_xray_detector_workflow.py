@@ -15,6 +15,7 @@ from app.xray_crop_ui import PlateCropEditSession, apply_and_confirm_plate
 from app.ai_hardware import HardwareProfile
 from app.xray_detector import MIN_TRAINING_PLATES, detector_performance_settings, prepare_training_dataset
 from app.xray_project import XRayProject
+from app.xray_orientation import ORIENTATION_CONFIDENCE_THRESHOLD, apply_orientation_prediction, prepare_orientation_dataset
 from app.xray_schema import blank_scheme, bundled_scheme
 
 
@@ -98,6 +99,28 @@ class XRayDetectorWorkflowTests(unittest.TestCase):
         self.assertEqual(0.47,metrics["coco/bbox_mAP"])
         self.assertEqual(0.71,metrics["coco/bbox_mAP_50"])
         self.assertEqual(0.44,metrics["coco/bbox_mAP_75"])
+
+    def test_orientation_prediction_assigns_raw_sides_and_requires_review_when_uncertain(self):
+        crop=crop_from_geometry(450,240,400,140,0,(900,480),algorithm="manual")
+        strong=apply_orientation_prediction(crop,{"head_right_probability":0.9,"bottom_down_probability":0.1},{"head":"left","bottom":"down"},"m1")
+        self.assertEqual("right",strong["head_side"]);self.assertEqual("top",strong["bottom_side"]);self.assertEqual("model",strong["orientation_source"])
+        weak=apply_orientation_prediction(crop,{"head_right_probability":0.55,"bottom_down_probability":0.52},{"head":"left","bottom":"down"},"m1",ORIENTATION_CONFIDENCE_THRESHOLD)
+        self.assertEqual("model_review",weak["orientation_source"]);self.assertIn("orientation_uncertain",weak["qc"]);self.assertEqual("review",weak["confidence"])
+
+    def test_orientation_dataset_uses_only_human_verified_truth_and_balances_flips(self):
+        ids=[row["image_id"] for row in self.project.source_images()[:2]]
+        for image_id in ids:
+            crop=crop_from_geometry(450,240,400,140,0,(900,480),algorithm="manual")
+            self.project.add_manual_specimen(image_id,crop);self.project.confirm_plate(image_id)
+        rows=self.project.orientation_training_rows();self.assertEqual(2,len(rows))
+        # duplicate verified examples so the orientation learner crosses its small-data safety gate
+        for image_id in ids:
+            for x in (300,600):
+                crop=crop_from_geometry(x,240,220,100,0,(900,480),algorithm="manual")
+                self.project.add_manual_specimen(image_id,crop)
+            self.project.confirm_plate(image_id)
+        dataset=prepare_orientation_dataset(self.project,self.root/"orientation",seed=3)
+        self.assertTrue(dataset["enabled"]);self.assertGreaterEqual(dataset["train_examples"],4);self.assertGreaterEqual(dataset["val_examples"],4)
 
     def test_model_registry_preserves_parent_lineage_and_active_version(self):
         ids=[row["image_id"] for row in self.project.source_images()[:3]]
