@@ -18,6 +18,7 @@ from app.ui.photo_list_panel import filtered_photo_indices, photo_search_cache
 from app.ui.tooltips import Tooltip
 from .xray_crop import crop_corners, crop_from_geometry, detect_specimens, display_preview
 from .xray_detector import predict_plates, train_detector
+from .xray_icons import tk_xray_icon
 
 
 class PlateCropEditSession:
@@ -63,33 +64,27 @@ class PlateCropEditSession:
         item=self.item()
         if item is None:return False
         previous=dict(item.get("crop") or {});updated=dict(crop)
-        for key in ("head_side","bottom_side","orientation_source"):
+        for key in ("head_side","bottom_side","orientation_source","orientation_model_id"):
             if key in previous:updated[key]=previous[key]
+        updated["orientation_verified"]=False
         item["crop"]=updated
         if self.selected_id not in self.new_ids:self.dirty_ids.add(self.selected_id)
         return True
 
-    def toggle_orientation(self,kind):
+    def _flip(self,axis):
         item=self.item()
         if item is None:return False
         crop=dict(item.get("crop") or {})
-        if kind=="head":crop["head_side"]="right" if crop.get("head_side")=="left" else "left"
-        elif kind=="bottom":crop["bottom_side"]="top" if crop.get("bottom_side")=="bottom" else "bottom"
+        if axis=="horizontal":crop["head_side"]="right" if crop.get("head_side","left")=="left" else "left"
+        elif axis=="vertical":crop["bottom_side"]="top" if crop.get("bottom_side","bottom")=="bottom" else "bottom"
         else:return False
-        crop["orientation_source"]="human";item["crop"]=crop
+        crop["orientation_source"]="human";crop["orientation_verified"]=False
+        crop.pop("orientation_confidence",None);item["crop"]=crop
         if self.selected_id not in self.new_ids:self.dirty_ids.add(self.selected_id)
         return True
 
-    def rotate_180(self):
-        """Flip both stored anatomical axes, keeping geometry and provenance intact."""
-        item=self.item()
-        if item is None:return False
-        crop=dict(item.get("crop") or {})
-        crop["head_side"]="right" if crop.get("head_side","left")=="left" else "left"
-        crop["bottom_side"]="top" if crop.get("bottom_side","bottom")=="bottom" else "bottom"
-        crop["orientation_source"]="human";item["crop"]=crop
-        if self.selected_id not in self.new_ids:self.dirty_ids.add(self.selected_id)
-        return True
+    def flip_horizontal(self):return self._flip("horizontal")
+    def flip_vertical(self):return self._flip("vertical")
 
     def delete_selected(self):
         specimen_id=self.selected_id
@@ -288,7 +283,7 @@ class XRayCropWorkspace:
         self.selected_image_id=None;self.session=PlateCropEditSession()
         self._preferred_image_id=str(initial_image_id or "");self._preferred_specimen_id=str(initial_specimen_id or "")
         self.preview=self.photo=None;self.preview_original_size=(1,1);self.display_scale=1.0;self.offset=(0,0);self._photo_key=None
-        self.zoom=1.0;self.pan=None;self.pan_drag=None;self._turn_hit=None
+        self.zoom=1.0;self.pan=None;self.pan_drag=None
         self._busy=False;self._drag_mode=None;self._drag_anchor=None;self._drag_initial=None;self._drag_changed=False;self._drawing_crop=None
         self._icons={};self.training_batch_size=tk.IntVar(value=6);self.prediction_batch_size=tk.IntVar(value=6);self._tip=Tooltip(self.root)
         self._build();self.refresh(preserve_plate=False)
@@ -304,9 +299,18 @@ class XRayCropWorkspace:
         return button
 
     def _icon(self,master,name,size=WORKFLOW_ICON_SIZE):
-        key=(name,size)
+        key=("core",name,size)
         if key not in self._icons:self._icons[key]=tk_icon(master,name,size)
         return self._icons[key]
+
+    def _xray_icon(self,master,name,size=CONTROL_ICON_SIZE):
+        key=("xray",name,size)
+        if key not in self._icons:self._icons[key]=tk_xray_icon(master,name,size)
+        return self._icons[key]
+
+    def _orientation_button(self,parent,name,command,help_text):
+        button=ttk.Button(parent,text="",image=self._xray_icon(parent,name),style="Icon.TButton",command=command,width=3)
+        self._tip.bind(button,help_text);return button
 
     def _build(self):
         outer=ttk.Frame(self.parent,padding=(0,0));outer.pack(fill="both",expand=True)
@@ -333,8 +337,17 @@ class XRayCropWorkspace:
             "Retire all crops on this plate and start crop placement again. Existing coordinate annotations are archived.",icon="delete",
         )
         self.clear_plate_button.pack(side="left",padx=(8,0))
+        self.orientation_actions=ttk.Frame(self.left_actions,style="Toolbar.TFrame");self.orientation_actions.pack(side="left",padx=(8,0))
+        self.flip_h_button=self._orientation_button(
+            self.orientation_actions,"flip_horizontal",self.flip_selected_horizontal,
+            "Flip the selected crop left ↔ right. Use this when the head is on the wrong side.",
+        );self.flip_h_button.pack(side="left")
+        self.flip_v_button=self._orientation_button(
+            self.orientation_actions,"flip_vertical",self.flip_selected_vertical,
+            "Flip the selected crop top ↕ bottom. Use this when the ventral (belly) side is on the wrong side.",
+        );self.flip_v_button.pack(side="left",padx=(2,0))
         self.instruction=ttk.Label(
-            actions,text="Wheel = zoom · right-drag = pan · select a crop for head / bottom / ↻ controls",
+            actions,text="Wheel = zoom · right-drag = pan · blue = head · orange = ventral side",
             style="Muted.TLabel",anchor="center",
         );self.instruction.grid(row=0,column=1,sticky="ew",padx=10)
 
@@ -359,46 +372,44 @@ class XRayCropWorkspace:
             self.canvas.bind(f"<ButtonRelease-{button}>",self._pan_end)
         self.canvas.bind("<Delete>",self.delete_selected);self.canvas.bind("<BackSpace>",self.delete_selected)
 
-        workflow=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(0,2,0,0));workflow.grid(row=2,column=0,sticky="ew",pady=(4,0))
+        workflow=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(0,1,0,0));workflow.grid(row=2,column=0,sticky="ew",pady=(2,0))
         workflow.columnconfigure(0,weight=1)
-        wh=ttk.Frame(workflow,style="WorkflowDock.TFrame");wh.grid(row=0,column=0,sticky="ew",pady=(0,2));wh.columnconfigure(0,weight=1)
+        wh=ttk.Frame(workflow,style="WorkflowDock.TFrame");wh.grid(row=0,column=0,sticky="ew",pady=(0,1));wh.columnconfigure(0,weight=1)
         ttk.Label(wh,text="Workflow",style="WorkflowDockTitle.TLabel").grid(row=0,column=0,sticky="w")
         self._button(wh,"Help",self._show_help,"Open a short X-ray Crop guide.").grid(row=0,column=1,sticky="e")
         cards=ttk.Frame(workflow,style="WorkflowDock.TFrame");cards.grid(row=1,column=0,sticky="ew")
         for column in range(3):cards.columnconfigure(column,weight=1,uniform="workflow")
 
-        one=self._workflow_card(cards,0,"1. Training batch","crop_training","Create or continue human-corrected plate examples used for detector training.")
-        ttk.Label(one,text="Human corrected plates",style="Muted.TLabel").grid(row=0,column=0,columnspan=3,sticky="w")
-        ttk.Label(one,text="Batch").grid(row=1,column=0,sticky="w",pady=(5,0))
-        ttk.Spinbox(one,from_=1,to=100,textvariable=self.training_batch_size,width=5).grid(row=1,column=1,sticky="w",padx=4,pady=(5,0))
-        ttk.Label(one,text="6–10 recommended",style="Muted.TLabel").grid(row=1,column=2,sticky="w",pady=(5,0))
-        self.training_button=self._button(one,"Start first batch",self.start_training_batch,"Prepare diverse plates for manual Crop correction.")
-        self.training_button.grid(row=2,column=0,columnspan=3,sticky="w",pady=(7,0))
+        one=self._workflow_card(cards,0,"1. Training batch","crop_training","Create human-confirmed crop and orientation examples.")
+        row=ttk.Frame(one);row.grid(row=0,column=0,sticky="ew");row.columnconfigure(4,weight=1)
+        ttk.Label(row,text="Batch").grid(row=0,column=0,sticky="w")
+        ttk.Spinbox(row,from_=1,to=100,textvariable=self.training_batch_size,width=4).grid(row=0,column=1,sticky="w",padx=(4,3))
+        ttk.Label(row,text="6–10",style="Muted.TLabel").grid(row=0,column=2,sticky="w")
+        self.training_button=self._button(row,"Start first batch",self.start_training_batch,"Prepare diverse plates for manual crop and orientation correction.")
+        self.training_button.grid(row=0,column=3,sticky="e",padx=(8,0))
 
-        two=self._workflow_card(cards,1,"2. Train","crop_train","Train a new X-ray Crop detector from all human-confirmed plates.")
-        self.model_label=ttk.Label(two,text="Active: none",style="StatusChip.TLabel",anchor="w");self.model_label.grid(row=0,column=0,sticky="ew")
-        self.training_count_label=ttk.Label(two,text="Train-ready: 0 plates · 0 specimens");self.training_count_label.grid(row=1,column=0,sticky="w",pady=(4,0))
-        self.train_button=self._button(two,"Train X-ray crop model",self.train_model,"Train from all human-verified X-ray Crop examples.",style="Primary.TButton")
-        self.train_button.grid(row=2,column=0,sticky="w",pady=(7,0))
-        self.models_button=self._button(two,"Manage models…",self.manage_models,"View training history, activate a previous model, or remove a model and its managed files.")
-        self.models_button.grid(row=3,column=0,sticky="w",pady=(5,0))
+        two=self._workflow_card(cards,1,"2. Train","crop_train","Train crop detection plus head / ventral orientation from verified examples.")
+        self.model_label=ttk.Label(two,text="Active: none",style="StatusChip.TLabel",anchor="w");self.model_label.grid(row=0,column=0,columnspan=2,sticky="ew")
+        self.training_count_label=ttk.Label(two,text="Ready: 0 plates · 0 crops · orientation 0",style="Muted.TLabel");self.training_count_label.grid(row=1,column=0,columnspan=2,sticky="w",pady=(2,0))
+        train_actions=ttk.Frame(two);train_actions.grid(row=2,column=0,columnspan=2,sticky="ew",pady=(4,0));train_actions.columnconfigure(0,weight=1)
+        self.train_button=self._button(train_actions,"Train Crop AI",self.train_model,"Train crop detection and, when enough verified examples exist, head / ventral orientation.",style="Primary.TButton")
+        self.train_button.grid(row=0,column=0,sticky="w")
+        self.models_button=self._button(train_actions,"Models…",self.manage_models,"View quality, activate a previous model, or safely remove a model.")
+        self.models_button.grid(row=0,column=1,sticky="e",padx=(6,0))
 
         three=self._workflow_card(cards,2,"3. Predict & review","crop_apply","Predict only eligible plates; human-confirmed crops are never overwritten.")
-        self.predict_count_label=ttk.Label(three,text="",style="Muted.TLabel");self.predict_count_label.grid(row=0,column=0,columnspan=3,sticky="w")
-        batch_row=ttk.Frame(three);batch_row.grid(row=1,column=0,columnspan=3,sticky="w",pady=(5,0))
-        ttk.Label(batch_row,text="Next").pack(side="left")
-        ttk.Spinbox(batch_row,from_=1,to=500,textvariable=self.prediction_batch_size,width=5).pack(side="left",padx=4)
-        ttk.Label(batch_row,text="plates",style="Muted.TLabel").pack(side="left")
-        predict_actions=ttk.Frame(three);predict_actions.grid(row=2,column=0,columnspan=3,sticky="ew",pady=(7,0))
-        predict_actions.columnconfigure(0,weight=1,uniform="predict");predict_actions.columnconfigure(1,weight=1,uniform="predict")
+        self.predict_count_label=ttk.Label(three,text="",style="Muted.TLabel");self.predict_count_label.grid(row=0,column=0,columnspan=5,sticky="w")
+        predict_actions=ttk.Frame(three);predict_actions.grid(row=1,column=0,columnspan=5,sticky="ew",pady=(4,0))
+        ttk.Label(predict_actions,text="Next").pack(side="left")
+        ttk.Spinbox(predict_actions,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(4,6))
         self.predict_next_button=self._button(predict_actions,"Predict next",lambda:self.predict_batch(self.prediction_batch_size.get()),"Predict the next eligible X-rays.")
-        self.predict_next_button.grid(row=0,column=0,sticky="ew",padx=(0,3))
+        self.predict_next_button.pack(side="left")
         self.predict_all_button=self._button(predict_actions,"Predict all",lambda:self.predict_batch(None),"Predict every remaining eligible X-ray.")
-        self.predict_all_button.grid(row=0,column=1,sticky="ew",padx=(3,0))
+        self.predict_all_button.pack(side="left",padx=(4,0))
         self.review_button=self._button(
-            three,"Review AI crops",self.review_ai,
-            "Review model-proposed crops before human confirmation.",style="ReviewAction.TButton",icon="review_worst",
-        );self.review_button.grid(row=3,column=0,columnspan=3,sticky="ew",pady=(5,0))
+            predict_actions,"Review",self.review_ai,
+            "Review model-proposed crops and orientation before human confirmation.",style="ReviewAction.TButton",icon="review_worst",
+        );self.review_button.pack(side="right")
 
     def _set_initial_sash(self):
         try:
@@ -408,7 +419,7 @@ class XRayCropWorkspace:
     def _workflow_card(self,parent,column,title,icon,help_text):
         label=ttk.Frame(parent);ttk.Label(label,image=self._icon(label,icon)).pack(side="left",padx=(0,6))
         ttk.Label(label,text=title,style="WorkflowCardTitle.TLabel").pack(side="left")
-        card=ttk.LabelFrame(parent,labelwidget=label,padding=(7,5),style="WorkflowCard.TLabelframe")
+        card=ttk.LabelFrame(parent,labelwidget=label,padding=(6,3),style="WorkflowCard.TLabelframe")
         card.grid(row=0,column=column,sticky="nsew",padx=(0 if column==0 else 4,0));self._tip.bind(card,help_text);self._tip.bind(label,help_text)
         return card
 
@@ -417,10 +428,10 @@ class XRayCropWorkspace:
         frame=ttk.Frame(dialog,padding=16);frame.pack(fill="both",expand=True)
         ttk.Label(frame,text="X-ray Crop — quick guide",font=("Segoe UI",11,"bold")).pack(anchor="w")
         ttk.Label(frame,text=(
-            "1. Adjust crops and orientation\nSelect, move, resize or rotate specimen rectangles. Wheel zooms and right-drag pans like Landmarks. The blue marker shows the head side; the orange edge shows the anatomical bottom. A selected crop also shows a small ↻ control for a one-click 180° turn. Drag empty image space to add a missed specimen; Delete removes the selected crop.\n\n"
+            "1. Adjust crops and orientation\nWheel zooms and right-drag pans like Landmarks. Select a crop, then use the two flip icons when head or ventral side is wrong. Blue marks the head edge; orange marks the ventral edge. Drag empty image space to add a missed specimen; Delete removes the selected crop.\n\n"
             "2. Apply crop\nOutside a finite batch, Apply crop saves and human-confirms the whole current plate.\n\n"
             "3. Training / review batch\nInside a batch, the same operation is Confirm & Next; Previous never silently confirms.\n\n"
-            "4. Train and predict\nTrain only from human-confirmed plates, then predict the next batch or all remaining plates."
+            "4. Train and predict\nCrop detection learns from confirmed plates. Head / ventral orientation learns from the orientation you confirm, then is proposed automatically on later crops."
         ),justify="left",wraplength=600).pack(anchor="w",pady=(8,0))
         self._button(frame,"Close",dialog.destroy,"Close this guide.").pack(anchor="e",pady=(14,0));center(self.root,dialog)
 
@@ -462,12 +473,17 @@ class XRayCropWorkspace:
 
     def _refresh_controls(self):
         summary=self.project.crop_summary();model=self.project.active_crop_model();training=self.project.training_plates()
+        orientation_ready=self.project.orientation_training_specimen_count()
         self.training_button.configure(text="Start first batch" if not training else "Add next batch")
-        self.model_label.configure(text=f"Active: {(model or {}).get('model_id') or 'none'}")
-        self.training_count_label.configure(text=f"Train-ready: {len(training)} plates · {summary['training_specimens']} specimens")
-        self.predict_count_label.configure(text=f"Unresolved {len(self.project.prediction_candidate_ids())} · AI review {summary['ai_pending_plates']} · Verified {summary['verified_plates']}")
+        model_metrics=(model or {}).get("metrics") or {};orientation_mark=" · orientation ✓" if model_metrics.get("orientation/enabled") else ""
+        self.model_label.configure(text=f"Active: {(model or {}).get('model_id') or 'none'}{orientation_mark}")
+        self.training_count_label.configure(text=f"Ready: {len(training)} plates · {summary['training_specimens']} crops · orientation {orientation_ready}")
+        self.predict_count_label.configure(text=f"Unresolved {len(self.project.prediction_candidate_ids())} · review {summary['ai_pending_plates']} · verified {summary['verified_plates']}")
         state="normal" if model else "disabled";self.predict_next_button.configure(state=state);self.predict_all_button.configure(state=state)
         self.review_button.configure(state="normal" if summary["ai_pending_plates"] else "disabled")
+        selected=bool(self.session.selected_id);policy=self.project.orientation_policy
+        self.flip_h_button.configure(state="normal" if selected and policy.get("head")!="none" else "disabled")
+        self.flip_v_button.configure(state="normal" if selected and policy.get("bottom")!="none" else "disabled")
         self._update_batch_controls()
 
     def refresh(self,preserve_plate=True):
@@ -500,7 +516,7 @@ class XRayCropWorkspace:
         selected=self._preferred_specimen_id if any(item["specimen_id"]==self._preferred_specimen_id for item in items) else None
         self.selected_image_id=image_id;self.session.load(items,selected_id=selected)
         self._drag_mode=self._drag_anchor=self._drag_initial=None;self._drawing_crop=None;self._drag_changed=False
-        self.zoom=1.0;self.pan=None;self.pan_drag=None;self._turn_hit=None
+        self.zoom=1.0;self.pan=None;self.pan_drag=None
         try:preview,_scale,original_size=display_preview(self.project.source_image_path(image_id),1400)
         except Exception as exc:messagebox.showerror("X-ray Crops",str(exc),parent=self.root);return
         self.preview=preview;self.preview_original_size=original_size;self._photo_key=None;self._set_save_status();self._draw();self._refresh_controls();self._notify_selection()
@@ -554,7 +570,7 @@ class XRayCropWorkspace:
         self.pan_drag=None;self.canvas.configure(cursor="crosshair");return "break"
 
     def _draw(self):
-        self.canvas.delete("all");self._turn_hit=None;photo=self._fit()
+        self.canvas.delete("all");photo=self._fit()
         if photo is None:return
         self.canvas.create_image(self.offset[0],self.offset[1],anchor="nw",image=photo,tags="plate")
         for item in self.session.active_items():
@@ -567,8 +583,7 @@ class XRayCropWorkspace:
             cx,cy=self._screen(crop.get("center_x",0),crop.get("center_y",0))
             self.canvas.create_text(cx,cy,text=str(item.get("ordinal") or ""),fill="white",font=("Segoe UI",9,"bold"),tags="crop")
             self._draw_orientation_markers(crop,selected)
-            if selected:
-                self._draw_handles(crop);self._draw_turn_control(crop)
+            if selected:self._draw_handles(crop)
         if self._drawing_crop is not None:
             pts=[]
             for x,y in self._drawing_crop.get("corners") or ():pts.extend(self._screen(x,y))
@@ -585,38 +600,28 @@ class XRayCropWorkspace:
         bottom_edge=(c0,c1) if crop.get("bottom_side")=="top" else (c3,c2)
         midpoint=lambda a,b:((a[0]+b[0])/2,(a[1]+b[1])/2)
         return {
-            "head":midpoint(*head_edge),
-            "bottom":midpoint(*bottom_edge),
-            "bottom_edge":bottom_edge,
+            "head":midpoint(*head_edge),"head_edge":head_edge,
+            "bottom":midpoint(*bottom_edge),"bottom_edge":bottom_edge,
             "center":(float(crop.get("center_x",0)),float(crop.get("center_y",0))),
         }
 
     def _draw_orientation_markers(self,crop,selected):
+        if not selected:return
         geometry=self._orientation_geometry(crop)
         if geometry is None:return
         cx,cy=self._screen(*geometry["center"]);hx,hy=self._screen(*geometry["head"]);bx,by=self._screen(*geometry["bottom"])
-        def triangle(mx,my,center_x,center_y,color,size):
-            dx=mx-center_x;dy=my-center_y;length=max(1.0,math.hypot(dx,dy));ux=dx/length;uy=dy/length;px=-uy;py=ux
-            tip=(mx+ux*size,my+uy*size);base=(mx-ux*size*.45,my-uy*size*.45)
+        def outward_triangle(mx,my,color,size):
+            dx=mx-cx;dy=my-cy;length=max(1.0,math.hypot(dx,dy));ux=dx/length;uy=dy/length;px=-uy;py=ux
+            tip=(mx+ux*size,my+uy*size);base=(mx-ux*size*.30,my-uy*size*.30)
             return (tip[0],tip[1],base[0]+px*size*.55,base[1]+py*size*.55,base[0]-px*size*.55,base[1]-py*size*.55)
-        head_color="#42a5f5" if selected else "#6f8fa8";bottom_color="#ffb300" if selected else "#9d874d"
-        size=8 if selected else 5
-        self.canvas.create_polygon(*triangle(hx,hy,cx,cy,head_color,size),fill=head_color,outline="white" if selected else head_color,width=1,tags=("crop","orientation"))
+        head_color="#2196f3";bottom_color="#ffad1f"
+        h1,h2=geometry["head_edge"];x1,y1=self._screen(*h1);x2,y2=self._screen(*h2)
+        self.canvas.create_line(x1+(x2-x1)*.22,y1+(y2-y1)*.22,x1+(x2-x1)*.78,y1+(y2-y1)*.78,fill=head_color,width=5,tags=("crop","orientation"))
+        self.canvas.create_polygon(*outward_triangle(hx,hy,head_color,8),fill=head_color,outline="white",width=1,tags=("crop","orientation"))
+        self.canvas.create_oval(hx-2,hy-2,hx+2,hy+2,fill="white",outline=head_color,width=1,tags=("crop","orientation"))
         e1,e2=geometry["bottom_edge"];x1,y1=self._screen(*e1);x2,y2=self._screen(*e2)
-        mx1=x1+(x2-x1)*.32;my1=y1+(y2-y1)*.32;mx2=x1+(x2-x1)*.68;my2=y1+(y2-y1)*.68
-        self.canvas.create_line(mx1,my1,mx2,my2,fill=bottom_color,width=4 if selected else 2,tags=("crop","orientation"))
-        if selected:
-            self.canvas.create_polygon(*triangle(bx,by,cx,cy,bottom_color,7),fill=bottom_color,outline="white",width=1,tags=("crop","orientation"))
-
-    def _draw_turn_control(self,crop):
-        corners=crop.get("corners") or []
-        if len(corners)!=4:return
-        center=self._screen(float(crop.get("center_x",0)),float(crop.get("center_y",0)))
-        corner=self._screen(*corners[1]);dx=corner[0]-center[0];dy=corner[1]-center[1];length=max(1.0,math.hypot(dx,dy))
-        bx=corner[0]+dx/length*24;by=corner[1]+dy/length*24;radius=12
-        self.canvas.create_oval(bx-radius,by-radius,bx+radius,by+radius,fill="#263238",outline="white",width=2,tags=("crop","turn180"))
-        self.canvas.create_text(bx,by-1,text="↻",fill="white",font=("Segoe UI Symbol",13,"bold"),tags=("crop","turn180"))
-        self._turn_hit=(bx,by,radius+3)
+        self.canvas.create_line(x1+(x2-x1)*.28,y1+(y2-y1)*.28,x1+(x2-x1)*.72,y1+(y2-y1)*.72,fill=bottom_color,width=5,tags=("crop","orientation"))
+        self.canvas.create_polygon(*outward_triangle(bx,by,bottom_color,7),fill=bottom_color,outline="white",width=1,tags=("crop","orientation"))
 
     def _draw_handles(self,crop):
         corners=crop.get("corners") or []
@@ -643,12 +648,6 @@ class XRayCropWorkspace:
         crop=item.get("crop") or {};corners=crop.get("corners") or []
         if len(corners)!=4:return None
         tol=12/max(self.display_scale,1e-6)
-        if item.get("specimen_id")==self.session.selected_id:
-            geometry=self._orientation_geometry(crop)
-            if geometry is not None:
-                for kind in ("head","bottom"):
-                    mx,my=geometry[kind]
-                    if (x-mx)**2+(y-my)**2<=(tol*1.35)**2:return (kind,0)
         for index,(cx,cy) in enumerate(corners):
             if (x-cx)**2+(y-cy)**2<=tol**2:return ("corner",index)
         angle=math.radians(float(crop.get("angle_degrees",0)));major=(math.cos(angle),math.sin(angle))
@@ -660,20 +659,13 @@ class XRayCropWorkspace:
 
     def _canvas_down(self,event):
         if not self.selected_image_id or self.preview is None:return
-        self.canvas.focus_set()
-        if self._turn_hit is not None:
-            bx,by,radius=self._turn_hit
-            if (event.x-bx)**2+(event.y-by)**2<=radius**2:
-                self.rotate_selected_180();return
-        x,y=self._original(event.x,event.y);selected=self.session.item()
+        self.canvas.focus_set();x,y=self._original(event.x,event.y);selected=self.session.item()
         ordered=([selected] if selected else [])+[item for item in reversed(self.session.active_items()) if selected is None or item["specimen_id"]!=selected["specimen_id"]]
         for item in ordered:
             if item is None:continue
             hit=self._hit_crop(x,y,item)
             if hit is None:continue
             self.session.select(item["specimen_id"]);self._preferred_specimen_id=item["specimen_id"];self._notify_selection()
-            if hit[0] in {"head","bottom"}:
-                self.session.toggle_orientation(hit[0]);self._set_save_status("Orientation changed · apply crop");self._draw();return
             crop=item.get("crop") or {};self._drag_mode=hit;self._drag_anchor=(x,y);self._drag_changed=False
             self._drag_initial=(float(crop.get("center_x",0)),float(crop.get("center_y",0)),float(crop.get("length",0)),float(crop.get("width",0)),float(crop.get("angle_degrees",0)))
             self._drawing_crop=None;self._draw();return
@@ -711,9 +703,13 @@ class XRayCropWorkspace:
         if self.session.delete_selected():self._set_save_status();self._draw()
         return "break"
 
-    def rotate_selected_180(self):
-        if self.session.rotate_180():
-            self._set_save_status("Turned 180° · apply crop");self._draw()
+    def flip_selected_horizontal(self):
+        if self.session.flip_horizontal():
+            self._set_save_status("Flipped left ↔ right · apply crop");self._draw();self._refresh_controls()
+
+    def flip_selected_vertical(self):
+        if self.session.flip_vertical():
+            self._set_save_status("Flipped top ↕ bottom · apply crop");self._draw();self._refresh_controls()
 
     def clear_plate_crops(self):
         if not self.selected_image_id:return
@@ -802,8 +798,15 @@ class XRayCropWorkspace:
                     elif event[0]=="error":
                         self._busy=False;dialog.destroy();messagebox.showerror("Crop training",str(event[1]),parent=self.root);return
                     else:
-                        self._busy=False;dialog.destroy();result=event[1];self._refresh_controls()
-                        messagebox.showinfo("Crop training",f"Model ready: {result['model_id']}\nTraining plates: {result['training_plates']}\nTraining specimens: {result['training_specimens']}",parent=self.root);return
+                        self._busy=False;dialog.destroy();result=event[1];self._refresh_controls();metrics=result.get("metrics") or {}
+                        detail=f"Model ready: {result['model_id']}\nTraining plates: {result['training_plates']}\nTraining crops: {result['training_specimens']}"
+                        if metrics.get("orientation/enabled"):
+                            head=metrics.get("orientation/head_accuracy");bottom=metrics.get("orientation/bottom_accuracy");parts=[]
+                            if isinstance(head,(int,float)):parts.append(f"head {head*100:.0f}%")
+                            if isinstance(bottom,(int,float)):parts.append(f"ventral {bottom*100:.0f}%")
+                            detail+="\nOrientation: "+(" · ".join(parts) if parts else "trained")
+                        else:detail+="\nOrientation: not trained yet — confirm more crop orientations."
+                        messagebox.showinfo("Crop training",detail,parent=self.root);return
             except queue.Empty:self.root.after(150,poll)
         poll()
 
@@ -811,9 +814,9 @@ class XRayCropWorkspace:
         dialog=tk.Toplevel(self.root);dialog.title("X-ray crop models");dialog.transient(self.root);dialog.geometry("900x390")
         frame=ttk.Frame(dialog,padding=12);frame.pack(fill="both",expand=True);frame.columnconfigure(0,weight=1);frame.rowconfigure(1,weight=1)
         ttk.Label(frame,text="Registered models · quality values are shown only when recorded",style="PageSubtitle.TLabel").grid(row=0,column=0,sticky="w",pady=(0,8))
-        columns=("model","date","source","training","quality","active")
+        columns=("model","date","source","training","crop_quality","orientation_quality","active")
         tree=ttk.Treeview(frame,columns=columns,show="headings",selectmode="browse")
-        headers=(("model","Model",180),("date","Trained",145),("source","Started from",180),("training","Training plates / specimens",170),("quality","Validation",120),("active","Status",90))
+        headers=(("model","Model",165),("date","Trained",130),("source","Started from",165),("training","Plates / crops",130),("crop_quality","Crop validation",150),("orientation_quality","Orientation",170),("active","Status",80))
         for key,label,width in headers:tree.heading(key,text=label);tree.column(key,width=width,anchor="w")
         tree.grid(row=1,column=0,sticky="nsew");scroll=ttk.Scrollbar(frame,orient="vertical",command=tree.yview);scroll.grid(row=1,column=1,sticky="ns");tree.configure(yscrollcommand=scroll.set)
         def refresh():
@@ -825,7 +828,15 @@ class XRayCropWorkspace:
                 for key,label in (("coco/bbox_mAP","mAP"),("coco/bbox_mAP_50","AP50"),("coco/bbox_mAP_75","AP75"),("mAP","mAP")):
                     value=metrics.get(key)
                     if isinstance(value,(int,float)) and not any(part.startswith(label+" ") for part in quality):quality.append(f"{label} {value:.3f}")
-                tree.insert("","end",iid=model["model_id"],values=(model["model_id"],stamp,source,f"{model.get('training_plate_count',0)} / {model.get('training_specimen_count',0)}"," · ".join(quality) or "Not recorded","Active" if model.get("active") else "Available"))
+                orientation=[]
+                for key,label in (("orientation/head_accuracy","Head"),("orientation/bottom_accuracy","Ventral"),("orientation/joint_accuracy","Joint")):
+                    value=metrics.get(key)
+                    if isinstance(value,(int,float)):orientation.append(f"{label} {value*100:.0f}%")
+                if not metrics.get("orientation/enabled"):orientation=["Not trained"]
+                tree.insert("","end",iid=model["model_id"],values=(
+                    model["model_id"],stamp,source,f"{model.get('training_plate_count',0)} / {model.get('training_specimen_count',0)}",
+                    " · ".join(quality) or "Not recorded"," · ".join(orientation),"Active" if model.get("active") else "Available",
+                ))
         def selected_model():
             selected=tree.selection();return selected[0] if selected else None
         actions=ttk.Frame(frame);actions.grid(row=2,column=0,columnspan=2,sticky="ew",pady=(10,0))
