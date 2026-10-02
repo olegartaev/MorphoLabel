@@ -104,7 +104,7 @@ class XRayStructurePersistenceTests(unittest.TestCase):
 
     def test_verify_requires_all_required_structure_roles(self):
         self.project.add_annotation(self.specimen_id,"vertebra",0.2,0.5,1)
-        with self.assertRaisesRegex(ValueError,"Missing required structures"):
+        with self.assertRaisesRegex(ValueError,"Before continuing, mark every required category"):
             self.project.verify_annotations(self.specimen_id,1)
         result=self._complete_pass_one()
         self.assertEqual("verified",self.project.annotation_run(self.specimen_id,1)["status"])
