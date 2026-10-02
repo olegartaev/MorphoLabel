@@ -9,7 +9,7 @@ from PIL import Image
 from app.xray_crop import crop_from_geometry
 from app.xray_project import XRayProject
 from app.xray_schema import blank_scheme, bundled_scheme, calculate_trait_values, compatible_reference_roles
-from app.xray_structure_display import DEFAULT_OTHER, DEFAULT_SELECTED, DEFAULT_SIZE, ROLE_PALETTE, load_xray_structure_display, save_xray_structure_display
+from app.xray_structure_display import DEFAULT_PALETTE, DEFAULT_SIZE, load_xray_structure_display, save_xray_structure_display
 from app.xray_structures_ui import _first_structure_id, _structure_button_order
 
 
@@ -232,25 +232,22 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         self.assertEqual(["a","b","c","d"],[item["id"] for item in _structure_button_order(structures)])
         self.assertEqual("a",_first_structure_id(structures))
 
-    def test_marker_display_matches_landmarks_selected_other_language_and_keeps_role_colors(self):
+    def test_xray_marker_display_defaults_are_bright_distinct_and_persistent(self):
         structures=self.project.scheme["structures"]
         settings=load_xray_structure_display(self.project,structures)
         self.assertEqual(DEFAULT_SIZE,settings["size"])
-        self.assertEqual(DEFAULT_SELECTED,settings["selected_color"])
-        self.assertEqual(DEFAULT_OTHER,settings["other_color"])
-        self.assertEqual(tuple(settings["role_colors"][item["id"]] for item in structures),ROLE_PALETTE[:len(structures)])
-        self.assertEqual(3,settings["design_version"])
-        settings["size"]=12;settings["selected_color"]="#12ff34";settings["other_color"]="#334455"
+        self.assertEqual(len(structures),len(set(settings["colors"].values())))
+        self.assertEqual(tuple(settings["colors"][item["id"]] for item in structures),DEFAULT_PALETTE[:len(structures)])
+        settings["size"]=12;settings["colors"][structures[0]["id"]]="#12ff34"
         save_xray_structure_display(self.project,settings,structures)
         reopened=load_xray_structure_display(XRayProject(self.project.root),structures)
-        self.assertEqual(12,reopened["size"]);self.assertEqual("#12ff34",reopened["selected_color"]);self.assertEqual("#334455",reopened["other_color"])
+        self.assertEqual(12,reopened["size"]);self.assertEqual("#12ff34",reopened["colors"][structures[0]["id"]])
 
-    def test_legacy_structure_colors_survive_only_as_semantic_role_colors(self):
+    def test_landmarks_style_intermediate_settings_restore_old_role_colors_as_marker_colors(self):
         structures=self.project.scheme["structures"]
-        self.project.set_ui_state("xray_structure_display",{"colors":{structures[0]["id"]:"#123456"}})
-        migrated=load_xray_structure_display(self.project,structures)
-        self.assertEqual(DEFAULT_SELECTED,migrated["selected_color"]);self.assertEqual(DEFAULT_OTHER,migrated["other_color"])
-        self.assertEqual("#123456",migrated["role_colors"][structures[0]["id"]])
+        self.project.set_ui_state("xray_structure_display",{"role_colors":{structures[0]["id"]:"#123456"}})
+        restored=load_xray_structure_display(self.project,structures)
+        self.assertEqual("#123456",restored["colors"][structures[0]["id"]])
 
     def test_crop_archive_preserves_shared_role_provenance(self):
         vertebra=self.project.add_annotation(self.specimen_id,"vertebra",0.3,0.5,1)
@@ -353,6 +350,15 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn("draw_xray_role_badges",ui);self.assertIn("draw_xray_role_badges",display)
         self.assertNotIn('("<Button-3>",self._pan_start)',ui)
         self.assertIn('("<Button-2>",self._pan_start)',ui)
+    def test_display_dialog_restores_per_structure_colors_and_symbols(self):
+        root=Path(__file__).resolve().parents[1]
+        ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
+        display=(root/"app/xray_structure_display.py").read_text(encoding="utf-8")
+        for text in ("X-ray marker display","High-contrast defaults stay visible on black, white and gray radiographs.","Marker icons and colors","color_vars","symbol_vars"):
+            self.assertIn(text,ui)
+        self.assertIn("DEFAULT_PALETTE",display)
+        self.assertIn('"colors":colors',display);self.assertIn('"symbols":symbols',display)
+        self.assertNotIn("Same marker language as Landmarks.",ui)
     def test_structures_ui_renders_oriented_crop_without_project_image_copy(self):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")

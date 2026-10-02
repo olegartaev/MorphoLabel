@@ -17,8 +17,7 @@ from .xray_crop import oriented_crop
 from .xray_icons import tk_xray_icon
 from .xray_schema import compatible_reference_roles
 from .xray_structure_display import (
-    DEFAULT_HALO, DEFAULT_LABEL_SIZE, DEFAULT_OTHER, DEFAULT_SELECTED, DEFAULT_SIZE,
-    HALO_LABELS, HALO_NAMES, SYMBOL_LABELS, SYMBOL_NAMES,
+    DEFAULT_LABEL_SIZE, DEFAULT_SIZE, SYMBOL_LABELS, SYMBOL_NAMES,
     draw_xray_marker, draw_xray_role_badges, load_xray_structure_display, marker_style, role_color,
     normalize_xray_structure_display, save_xray_structure_display,
 )
@@ -487,11 +486,11 @@ class XRayStructureWorkspace:
             index,structure=pair;rows=sorted(rows,key=lambda row:(row["sort_order"],row["annotation_id"]))
             for seq,row in enumerate(rows,1):
                 selected=row["annotation_id"]==self.selected_annotation_id
-                style=marker_style(settings,structure,index,selected=selected)
+                style=marker_style(settings,structure,index)
                 sx,sy=self._screen(row["x"],row["y"]);label=str(seq) if structure.get("repeated") else ""
                 draw_xray_marker(
                     self.canvas,sx,sy,color=style["color"],size=style["size"],symbol=style["symbol"],label=label,
-                    label_size=style["label_size"],halo=style["halo"],tags=(f"annotation:{row['annotation_id']}",),
+                    label_size=style["label_size"],selected=selected,tags=(f"annotation:{row['annotation_id']}",),
                 )
                 role_colors=[]
                 for role in roles_by_annotation.get(int(row["annotation_id"]),()):
@@ -653,36 +652,39 @@ class XRayStructureWorkspace:
 
     def open_display_settings(self):
         structures=list(self.project.scheme.get("structures") or ());current=load_xray_structure_display(self.project,structures)
-        dialog=tk.Toplevel(self.root);dialog.title("Marker display");dialog.transient(self.root);dialog.resizable(False,False)
+        dialog=tk.Toplevel(self.root);dialog.title("X-ray marker display");dialog.transient(self.root);dialog.resizable(False,False)
         frame=ttk.Frame(dialog,padding=14);frame.pack(fill="both",expand=True);frame.columnconfigure(0,weight=1)
-        ttk.Label(frame,text="Marker display",style="SectionTitle.TLabel").grid(row=0,column=0,sticky="w")
-        ttk.Label(frame,text="Same marker language as Landmarks.",style="Muted.TLabel").grid(row=1,column=0,sticky="w",pady=(2,10))
-        selected=tk.StringVar(master=dialog,value=current["selected_color"]);other=tk.StringVar(master=dialog,value=current["other_color"])
+        ttk.Label(frame,text="X-ray marker display",style="SectionTitle.TLabel").grid(row=0,column=0,sticky="w")
+        ttk.Label(frame,text="High-contrast defaults stay visible on black, white and gray radiographs.",style="Muted.TLabel").grid(row=1,column=0,sticky="w",pady=(2,10))
         size=tk.IntVar(master=dialog,value=current["size"]);label_size=tk.IntVar(master=dialog,value=current["label_size"])
-        symbol=tk.StringVar(master=dialog,value=SYMBOL_NAMES.get(current["symbol"],"Circle"));halo=tk.StringVar(master=dialog,value=HALO_NAMES.get(current["halo"],"None"))
-        common=ttk.LabelFrame(frame,text="Markers",padding=(10,8));common.grid(row=2,column=0,sticky="ew")
-        def color_button(row,label,var):
-            ttk.Label(common,text=label).grid(row=row,column=0,sticky="w",pady=3)
-            def choose():
-                value=colorchooser.askcolor(color=var.get(),parent=dialog,title=label)[1]
-                if value:var.set(value)
-            ttk.Button(common,text="Color…",command=choose).grid(row=row,column=1,sticky="w",padx=(8,18))
-        color_button(0,"Selected",selected);color_button(1,"Other",other)
-        ttk.Label(common,text="Size").grid(row=0,column=2,sticky="w");ttk.Spinbox(common,from_=3,to=12,textvariable=size,width=5).grid(row=0,column=3,sticky="w",padx=(8,18))
-        ttk.Label(common,text="Number size").grid(row=1,column=2,sticky="w");ttk.Spinbox(common,from_=8,to=24,textvariable=label_size,width=5).grid(row=1,column=3,sticky="w",padx=(8,18))
-        ttk.Label(common,text="Symbol").grid(row=2,column=0,sticky="w",pady=(6,0));ttk.Combobox(common,textvariable=symbol,values=tuple(SYMBOL_LABELS),state="readonly",width=14).grid(row=2,column=1,sticky="w",padx=(8,18),pady=(6,0))
-        ttk.Label(common,text="Halo").grid(row=2,column=2,sticky="w",pady=(6,0));ttk.Combobox(common,textvariable=halo,values=tuple(HALO_LABELS),state="readonly",width=10).grid(row=2,column=3,sticky="w",padx=(8,0),pady=(6,0))
-        status=tk.StringVar(master=dialog,value="");ttk.Label(frame,textvariable=status,style="Muted.TLabel").grid(row=3,column=0,sticky="w",pady=(8,0))
-        actions=ttk.Frame(frame);actions.grid(row=4,column=0,sticky="e",pady=(10,0))
+        common=ttk.LabelFrame(frame,text="Common size",padding=(10,8));common.grid(row=2,column=0,sticky="ew")
+        ttk.Label(common,text="Marker size").grid(row=0,column=0,sticky="w");ttk.Spinbox(common,from_=4,to=18,textvariable=size,width=5).grid(row=0,column=1,sticky="w",padx=(8,18))
+        ttk.Label(common,text="Number size").grid(row=0,column=2,sticky="w");ttk.Spinbox(common,from_=8,to=24,textvariable=label_size,width=5).grid(row=0,column=3,sticky="w",padx=(8,0))
+        types=ttk.LabelFrame(frame,text="Marker icons and colors",padding=(10,8));types.grid(row=3,column=0,sticky="ew",pady=(8,0));types.columnconfigure(1,weight=1)
+        color_vars={};symbol_vars={};previews={}
+        def paint(ident):
+            canvas=previews[ident];canvas.delete("all");canvas.create_rectangle(1,1,31,19,fill=color_vars[ident].get(),outline="#333333")
+        for row,structure in enumerate(structures):
+            ident=structure["id"];color_vars[ident]=tk.StringVar(master=dialog,value=current["colors"][ident]);symbol_vars[ident]=tk.StringVar(master=dialog,value=SYMBOL_NAMES.get(current["symbols"][ident],"Circle"))
+            ttk.Label(types,text=structure["name"]).grid(row=row,column=0,sticky="w",pady=3)
+            preview=tk.Canvas(types,width=32,height=20,highlightthickness=0);preview.grid(row=row,column=1,sticky="w",padx=(10,6));previews[ident]=preview;paint(ident)
+            def choose(sid=ident,name=structure["name"]):
+                value=colorchooser.askcolor(color=color_vars[sid].get(),parent=dialog,title=name)[1]
+                if value:color_vars[sid].set(value);paint(sid)
+            ttk.Button(types,text="Color…",command=choose).grid(row=row,column=2,sticky="w",padx=(0,6))
+            ttk.Combobox(types,textvariable=symbol_vars[ident],values=tuple(SYMBOL_LABELS),state="readonly",width=15).grid(row=row,column=3,sticky="w")
+        status=tk.StringVar(master=dialog,value="");ttk.Label(frame,textvariable=status,style="Muted.TLabel").grid(row=4,column=0,sticky="w",pady=(8,0))
+        actions=ttk.Frame(frame);actions.grid(row=5,column=0,sticky="e",pady=(10,0))
         def reset():
-            defaults=normalize_xray_structure_display({},structures)
-            selected.set(defaults["selected_color"]);other.set(defaults["other_color"]);size.set(defaults["size"]);label_size.set(defaults["label_size"])
-            symbol.set(SYMBOL_NAMES.get(defaults["symbol"],"Circle"));halo.set(HALO_NAMES.get(defaults["halo"],"None"));status.set("Defaults loaded.")
+            defaults=normalize_xray_structure_display({},structures);size.set(DEFAULT_SIZE);label_size.set(DEFAULT_LABEL_SIZE)
+            for structure in structures:
+                ident=structure["id"];color_vars[ident].set(defaults["colors"][ident]);symbol_vars[ident].set(SYMBOL_NAMES.get(defaults["symbols"][ident],"Circle"));paint(ident)
+            status.set("Bright high-contrast defaults loaded. Click Apply.")
         def apply():
             save_xray_structure_display(self.project,{
-                "selected_color":selected.get(),"other_color":other.get(),"size":size.get(),"label_size":label_size.get(),
-                "symbol":SYMBOL_LABELS.get(symbol.get(),"circle"),"halo":HALO_LABELS.get(halo.get(),"none"),
-                "role_colors":current.get("role_colors",{}),
+                "size":size.get(),"label_size":label_size.get(),
+                "colors":{sid:var.get() for sid,var in color_vars.items()},
+                "symbols":{sid:SYMBOL_LABELS.get(var.get(),"circle") for sid,var in symbol_vars.items()},
             },structures)
             self.display_settings=load_xray_structure_display(self.project,structures);self._build_marker_buttons();self._draw_overlays();status.set("Applied.")
         ttk.Button(actions,text="Reset",command=reset).pack(side="left")

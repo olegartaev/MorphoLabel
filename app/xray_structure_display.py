@@ -1,19 +1,19 @@
-"""Project-persistent display preferences for X-ray structure markers.
-
-The base marker language intentionally mirrors Landmarks: one selected colour,
-one other colour, one symbol, one size, and optional halo. Semantic start/stop
-roles use small outer colour arcs so multiple meanings do not stack markers.
-"""
+"""Project-persistent display preferences for X-ray structure markers."""
 from __future__ import annotations
 
-from app.ui.landmark_display import (
-    DEFAULT_HALO, DEFAULT_LABEL_SIZE, DEFAULT_OTHER, DEFAULT_SELECTED,
-    DEFAULT_SIZE, DEFAULT_SYMBOL, HALO_LABELS, HALO_NAMES,
-    SYMBOL_LABELS, SYMBOL_NAMES, draw_label, draw_marker,
-)
-
-ROLE_PALETTE=("#56b4e9","#e69f00","#009e73","#cc79a7","#d55e00","#0072b2","#f0e442","#8e6cff")
-DISPLAY_DESIGN_VERSION=3
+DEFAULT_SIZE=7
+DEFAULT_LABEL_SIZE=10
+DEFAULT_PALETTE=("#00e5ff","#ff2bd6","#ffd400","#6dff5c","#ff7043","#b388ff","#00ff95","#ff4d6d")
+SYMBOL_LABELS={
+    "Circle":"circle",
+    "Filled circle":"filled_circle",
+    "Target":"target",
+    "Cross":"cross",
+    "Diamond":"diamond",
+    "Square":"square",
+    "Triangle":"triangle",
+}
+SYMBOL_NAMES={value:key for key,value in SYMBOL_LABELS.items()}
 
 
 def _color(value,fallback):
@@ -31,28 +31,23 @@ def normalize_xray_structure_display(value=None,structures=()):
     except (TypeError,ValueError):size=DEFAULT_SIZE
     try:label_size=int(value.get("label_size",DEFAULT_LABEL_SIZE))
     except (TypeError,ValueError):label_size=DEFAULT_LABEL_SIZE
-    symbol=str(value.get("symbol",DEFAULT_SYMBOL))
-    if symbol not in SYMBOL_NAMES:symbol=DEFAULT_SYMBOL
-    halo=str(value.get("halo",DEFAULT_HALO))
-    if halo not in HALO_NAMES:halo=DEFAULT_HALO
-
-    # Keep old per-structure colours only as semantic role colours. Base points
-    # now follow the same selected/other colour language as Landmarks.
-    legacy_colors=value.get("colors") if isinstance(value.get("colors"),dict) else {}
-    raw_role=value.get("role_colors") if isinstance(value.get("role_colors"),dict) else legacy_colors
-    role_colors={}
+    raw_colors=value.get("colors") if isinstance(value.get("colors"),dict) else {}
+    if not raw_colors and isinstance(value.get("role_colors"),dict):raw_colors=value.get("role_colors")
+    raw_symbols=value.get("symbols") if isinstance(value.get("symbols"),dict) else {}
+    colors={};symbols={}
     for index,structure in enumerate(structures):
         ident=str(structure.get("id") or "")
-        role_colors[ident]=_color(raw_role.get(ident),ROLE_PALETTE[index%len(ROLE_PALETTE)])
+        fallback=DEFAULT_PALETTE[index%len(DEFAULT_PALETTE)]
+        colors[ident]=_color(raw_colors.get(ident),fallback)
+        symbol=str(raw_symbols.get(ident) or structure.get("shape") or "circle")
+        if symbol=="ring":symbol="target"
+        if symbol not in SYMBOL_NAMES:symbol="circle"
+        symbols[ident]=symbol
     return {
-        "selected_color":_color(value.get("selected_color"),DEFAULT_SELECTED),
-        "other_color":_color(value.get("other_color"),DEFAULT_OTHER),
-        "size":max(3,min(12,size)),
-        "symbol":symbol,
+        "size":max(4,min(18,size)),
         "label_size":max(8,min(24,label_size)),
-        "halo":halo,
-        "role_colors":role_colors,
-        "design_version":DISPLAY_DESIGN_VERSION,
+        "colors":colors,
+        "symbols":symbols,
     }
 
 
@@ -66,39 +61,73 @@ def save_xray_structure_display(project,value,structures=()):
     return settings
 
 
-def marker_style(settings,structure,index=0,selected=False):
+def marker_style(settings,structure,index=0):
+    ident=str(structure.get("id") or "")
     return {
-        "color":settings.get("selected_color",DEFAULT_SELECTED) if selected else settings.get("other_color",DEFAULT_OTHER),
-        "symbol":settings.get("symbol",DEFAULT_SYMBOL),
+        "color":settings.get("colors",{}).get(ident,DEFAULT_PALETTE[int(index)%len(DEFAULT_PALETTE)]),
+        "symbol":settings.get("symbols",{}).get(ident,"circle"),
         "size":int(settings.get("size",DEFAULT_SIZE)),
         "label_size":int(settings.get("label_size",DEFAULT_LABEL_SIZE)),
-        "halo":settings.get("halo",DEFAULT_HALO),
     }
 
 
 def role_color(settings,structure,index=0):
-    ident=str(structure.get("id") or "")
-    return settings.get("role_colors",{}).get(ident,ROLE_PALETTE[int(index)%len(ROLE_PALETTE)])
+    return marker_style(settings,structure,index)["color"]
+
+
+def _oval(canvas,x,y,r,**kwargs):
+    return canvas.create_oval(x-r,y-r,x+r,y+r,**kwargs)
+
+
+def _polygon_points(symbol,x,y,r):
+    if symbol=="diamond":return (x,y-r,x-r,y,x,y+r,x+r,y)
+    if symbol=="triangle":return (x,y-r,x-r,y+r,x+r,y+r)
+    return (x-r,y-r,x+r,y-r,x+r,y+r,x-r,y+r)
+
+
+def draw_xray_marker(canvas,x,y,*,color,size,symbol,label="",label_size=11,selected=False,tags=()):
+    """High-contrast marker visible on black, white and gray radiographs."""
+    tags=tuple(tags) if isinstance(tags,(tuple,list)) else (tags,)
+    r=max(4,int(size))
+    common=tags+("structure_overlay",)
+    if symbol=="cross":
+        for width,stroke in ((5,"#000000"),(3,"#ffffff"),(2,color)):
+            canvas.create_line(x-r,y-r,x+r,y+r,fill=stroke,width=width,tags=common)
+            canvas.create_line(x-r,y+r,x+r,y-r,fill=stroke,width=width,tags=common)
+    elif symbol in {"diamond","square","triangle"}:
+        pts=_polygon_points(symbol,x,y,r)
+        canvas.create_polygon(*pts,fill="",outline="#000000",width=5,tags=common)
+        canvas.create_polygon(*pts,fill="",outline="#ffffff",width=3,tags=common)
+        canvas.create_polygon(*pts,fill=color,outline=color,width=2,tags=common)
+    elif symbol=="filled_circle":
+        _oval(canvas,x,y,r+2,fill="#000000",outline="#000000",tags=common)
+        _oval(canvas,x,y,r+1,fill="#ffffff",outline="#ffffff",tags=common)
+        _oval(canvas,x,y,r,fill=color,outline=color,tags=common)
+    else:
+        _oval(canvas,x,y,r+2,fill="",outline="#000000",width=5,tags=common)
+        _oval(canvas,x,y,r+1,fill="",outline="#ffffff",width=3,tags=common)
+        _oval(canvas,x,y,r,fill="",outline=color,width=2,tags=common)
+        if symbol=="target":_oval(canvas,x,y,max(2,r//3),fill=color,outline=color,tags=common)
+    if selected:
+        _oval(canvas,x,y,r+5,fill="",outline="#000000",width=4,tags=common)
+        _oval(canvas,x,y,r+5,fill="",outline="#fff200",width=2,tags=common)
+    if label:
+        lx=x+r+5;ly=y-r-4;font=("Segoe UI",int(label_size),"bold")
+        for dx,dy in ((-2,0),(2,0),(0,-2),(0,2)):
+            canvas.create_text(lx+dx,ly+dy,text=str(label),anchor="sw",fill="#000000",font=font,tags=common)
+        for dx,dy in ((-1,0),(1,0),(0,-1),(0,1)):
+            canvas.create_text(lx+dx,ly+dy,text=str(label),anchor="sw",fill="#ffffff",font=font,tags=common)
+        canvas.create_text(lx,ly,text=str(label),anchor="sw",fill=color,font=font,tags=common)
 
 
 def draw_xray_role_badges(canvas,x,y,*,colors,size,tags=()):
-    """Draw compact semantic-role arcs around one physical marker."""
+    """Show extra start/stop roles as small outer arcs without duplicating the base point."""
     colors=[str(color) for color in (colors or ()) if color]
     if not colors:return
     tags=tuple(tags) if isinstance(tags,(tuple,list)) else (tags,)
-    common=tags+("structure_overlay",);r=max(4,int(size))+6
-    canvas.create_oval(x-r,y-r,x+r,y+r,fill="",outline="#101418",width=4,tags=common)
+    common=tags+("structure_overlay",);r=max(4,int(size))+7
+    canvas.create_oval(x-r,y-r,x+r,y+r,fill="",outline="#000000",width=4,tags=common)
     count=len(colors);gap=8.0;usable=360.0-gap*count;span=max(18.0,usable/count)
     for index,color in enumerate(colors):
         start=90.0+index*(span+gap)
         canvas.create_arc(x-r,y-r,x+r,y+r,start=start,extent=span,style="arc",outline=color,width=3,tags=common)
-
-
-def draw_xray_marker(canvas,x,y,*,color,size,symbol,label="",label_size=10,halo="none",tags=()):
-    """Draw exactly the same base marker language used by Landmarks."""
-    common=tuple(tags) if isinstance(tags,(tuple,list)) else (tags,)
-    common=common+("structure_overlay",)
-    draw_marker(canvas,x,y,color=color,size=size,symbol=symbol,halo=halo,tags=common)
-    if label:
-        offset=int(size)+4
-        draw_label(canvas,x+offset,y-offset,text=str(label),color=color,font_size=label_size,halo=halo,tags=common)
