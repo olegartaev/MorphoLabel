@@ -14,6 +14,7 @@ from app.ui.icons import CONTROL_ICON_SIZE, tk_icon
 from app.ui.photo_list_panel import filtered_photo_indices
 from app.ui.tooltips import Tooltip
 from .xray_crop import oriented_crop
+from .xray_icons import tk_xray_icon
 from .xray_schema import compatible_reference_roles
 from .xray_structure_display import (
     DEFAULT_LABEL_SIZE, DEFAULT_SIZE, SYMBOL_LABELS, SYMBOL_NAMES,
@@ -144,16 +145,48 @@ class XRayStructureWorkspace:
         self.active_structure_id=None;self.selected_annotation_id=None
         self.crop_image=None;self.photo=None;self.zoom=1.0;self.pan=None;self.pan_drag=None;self._raster_key=None;self._image_item=None
         self.annotations=[];self.roles=[];self._drag_annotation=None;self._drag_last_screen=None;self._marker_buttons={};self._icons={}
-        self._right_gesture=None;self._menu_icons=[]
+        self._right_gesture=None;self._menu_icons=[];self._clear_menu_icons=[]
         self.display_settings=load_xray_structure_display(self.project,self.project.scheme.get("structures",()))
         self._source_cache_id="";self._source_cache=None
         self._key_bind_id=None
         self._build();self._bind_keys();self.refresh()
 
     def _icon(self,master,name):
-        key=(name,CONTROL_ICON_SIZE)
+        key=("core",name,CONTROL_ICON_SIZE)
         if key not in self._icons:self._icons[key]=tk_icon(master,name,CONTROL_ICON_SIZE)
         return self._icons[key]
+
+    def _xray_icon(self,master,name):
+        key=("xray",name,CONTROL_ICON_SIZE)
+        if key not in self._icons:self._icons[key]=tk_xray_icon(master,name,CONTROL_ICON_SIZE)
+        return self._icons[key]
+
+    def _marker_button_icon(self,master,structure,style,size=24):
+        key=("marker",structure["id"],style["color"],style["symbol"],int(size))
+        if key in self._icons:return self._icons[key]
+        aa=3;side=int(size)*aa;image=Image.new("RGBA",(side,side),(0,0,0,0));draw=ImageDraw.Draw(image)
+        cx=cy=side/2;r=side*.27;color=style["color"];outline="#263746";width=max(2,int(side*.07))
+        symbol=style["symbol"]
+        if symbol=="triangle":
+            draw.polygon([(cx,cy-r),(cx-r,cy+r),(cx+r,cy+r)],fill="#ffffff",outline=outline)
+            draw.line([(cx,cy-r),(cx-r,cy+r),(cx+r,cy+r),(cx,cy-r)],fill=color,width=width,joint="curve")
+        elif symbol=="diamond":
+            draw.polygon([(cx,cy-r),(cx-r,cy),(cx,cy+r),(cx+r,cy)],fill="#ffffff",outline=outline)
+            draw.line([(cx,cy-r),(cx-r,cy),(cx,cy+r),(cx+r,cy),(cx,cy-r)],fill=color,width=width,joint="curve")
+        elif symbol=="square":
+            draw.rectangle((cx-r,cy-r,cx+r,cy+r),fill="#ffffff",outline=outline,width=width)
+            draw.rectangle((cx-r+width,cy-r+width,cx+r-width,cy+r-width),outline=color,width=width)
+        elif symbol=="cross":
+            draw.line((cx-r,cy-r,cx+r,cy+r),fill=outline,width=width+3)
+            draw.line((cx-r,cy+r,cx+r,cy-r),fill=outline,width=width+3)
+            draw.line((cx-r,cy-r,cx+r,cy+r),fill=color,width=width)
+            draw.line((cx-r,cy+r,cx+r,cy-r),fill=color,width=width)
+        else:
+            draw.ellipse((cx-r,cy-r,cx+r,cy+r),fill="#ffffff" if symbol!="filled_circle" else color,outline=outline,width=width)
+            draw.ellipse((cx-r+width,cy-r+width,cx+r-width,cy+r-width),outline=color,width=width)
+            if symbol=="target":draw.ellipse((cx-r*.32,cy-r*.32,cx+r*.32,cy+r*.32),fill=color)
+        icon=ImageTk.PhotoImage(image.resize((int(size),int(size)),Image.Resampling.LANCZOS),master=master)
+        self._icons[key]=icon;return icon
 
     def _build(self):
         outer=ttk.Frame(self.parent,padding=(0,0));outer.pack(fill="both",expand=True);self.outer=outer
@@ -165,17 +198,21 @@ class XRayStructureWorkspace:
         self.specimen_list=XRaySpecimenListPanel(left,self.project,self._list_selected,self.tip);self.specimen_list.pack(fill="both",expand=True)
         self.root.after_idle(self._set_initial_sash)
 
-        header=ttk.Frame(main,style="Toolbar.TFrame");header.grid(row=0,column=0,sticky="ew",pady=(0,4));header.columnconfigure(1,weight=1)
-        pass_host=ttk.Frame(header,style="Toolbar.TFrame");pass_host.grid(row=0,column=0,sticky="w")
-        ttk.Label(pass_host,text="Manual pass").pack(side="left")
-        self.pass_box=ttk.Combobox(pass_host,state="readonly",width=17,values=("1 · primary","2 · repeatability"))
-        self.pass_box.current(0);self.pass_box.pack(side="left",padx=(5,8));self.pass_box.bind("<<ComboboxSelected>>",self._pass_changed)
-        self.context_label=ttk.Label(header,text="",style="SectionTitle.TLabel",anchor="center");self.context_label.grid(row=0,column=1,sticky="ew",padx=10)
-        nav=ttk.Frame(header,style="Toolbar.TFrame");nav.grid(row=0,column=2,sticky="e")
-        self.previous_button=ttk.Button(nav,text="‹ Previous",style="Nav.TButton",command=lambda:self._navigate(-1));self.previous_button.pack(side="left")
-        self.summary_label=ttk.Label(nav,text="",style="Muted.TLabel");self.summary_label.pack(side="left",padx=8)
-        self.verify_button=ttk.Button(nav,text="Verify & Next ›",style="NavPrimary.TButton",image=self._icon(nav,"verify"),compound="left",command=self.verify_next)
-        self.verify_button.pack(side="left")
+        header=ttk.Frame(main,style="Toolbar.TFrame");header.grid(row=0,column=0,sticky="ew",pady=(0,4));header.columnconfigure(0,weight=1)
+        self.context_label=ttk.Label(header,text="",style="SectionTitle.TLabel",anchor="center");self.context_label.grid(row=0,column=0,sticky="ew",padx=10)
+        nav=ttk.Frame(header,style="Toolbar.TFrame");nav.grid(row=0,column=1,sticky="e")
+        self.batch_nav=ttk.Frame(nav,style="Toolbar.TFrame");self.batch_nav.grid(row=0,column=0,sticky="e")
+        self.previous_button=ttk.Button(self.batch_nav,text="",image=self._xray_icon(self.batch_nav,"structure_previous"),style="Icon.TButton",command=lambda:self._navigate(-1),width=3)
+        self.previous_button.pack(side="left")
+        self.batch_position_label=ttk.Label(self.batch_nav,text="",style="Muted.TLabel",width=7,anchor="center");self.batch_position_label.pack(side="left",padx=4)
+        self.next_button=ttk.Button(self.batch_nav,text="",image=self._xray_icon(self.batch_nav,"structure_next"),style="Icon.TButton",command=self.verify_next,width=3)
+        self.next_button.pack(side="left")
+        self.tip.bind(self.previous_button,"Previous specimen in the current batch.")
+        self.tip.bind(self.next_button,"Verify this specimen and continue to the next item in the batch.")
+        self.batch_separator=ttk.Separator(nav,orient="vertical");self.batch_separator.grid(row=0,column=1,sticky="ns",padx=7,pady=2)
+        self.apply_button=ttk.Button(nav,text="Apply",image=self._xray_icon(nav,"structure_apply"),compound="left",style="NavPrimary.TButton",command=self.verify_current)
+        self.apply_button.grid(row=0,column=2,sticky="e")
+        self.tip.bind(self.apply_button,"Verify this specimen without moving to another image.")
 
         canvas_host=ttk.Frame(main);canvas_host.grid(row=1,column=0,sticky="nsew");canvas_host.pack_propagate(False)
         self.canvas=tk.Canvas(canvas_host,background="#202020",highlightthickness=0,takefocus=True,cursor="crosshair");self.canvas.pack(fill="both",expand=True)
@@ -188,14 +225,20 @@ class XRayStructureWorkspace:
         ):self.canvas.bind(event,handler)
         self.canvas.bind("<Delete>",self.delete_selected);self.canvas.bind("<BackSpace>",self.delete_selected)
 
-        marker_dock=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(6,5));marker_dock.grid(row=2,column=0,sticky="ew",pady=(4,0));marker_dock.columnconfigure(1,weight=1)
-        ttk.Label(marker_dock,text="Marker actions:",style="SectionTitle.TLabel").grid(row=0,column=0,sticky="w",padx=(0,6))
-        self.marker_host=ttk.Frame(marker_dock,style="WorkflowDock.TFrame");self.marker_host.grid(row=0,column=1,sticky="ew")
+        marker_dock=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(6,4));marker_dock.grid(row=2,column=0,sticky="ew",pady=(4,0));marker_dock.columnconfigure(0,weight=1)
+        self.marker_host=ttk.Frame(marker_dock,style="WorkflowDock.TFrame");self.marker_host.grid(row=0,column=0,sticky="w")
+        ttk.Separator(marker_dock,orient="vertical").grid(row=0,column=1,sticky="ns",padx=7,pady=2)
         actions=ttk.Frame(marker_dock,style="WorkflowDock.TFrame");actions.grid(row=0,column=2,sticky="e")
-        self.display_button=ttk.Button(actions,text="Display…",image=self._icon(actions,"display"),compound="left",style="Icon.TButton",command=self.open_display_settings)
-        self.display_button.pack(side="left",padx=2);self.tip.bind(self.display_button,"Marker size, icons and colors. Mouse wheel zooms; right-drag pans; number keys switch markers; Delete removes the selected marker.")
-        self.counts_label=ttk.Label(marker_dock,text="",style="Muted.TLabel");self.counts_label.grid(row=1,column=0,columnspan=3,sticky="w",pady=(4,0))
-        self.save_label=ttk.Label(marker_dock,text="",style="Muted.TLabel");self.save_label.grid(row=1,column=2,sticky="e",pady=(4,0))
+        self.clear_type_button=ttk.Menubutton(actions,text="",image=self._xray_icon(actions,"clear_marker_set"),style="Icon.TButton",width=3)
+        self.clear_type_button.pack(side="left",padx=(0,2));self.tip.bind(self.clear_type_button,"Clear one marker category on this specimen.")
+        self.clear_all_button=ttk.Button(actions,text="",image=self._xray_icon(actions,"clear_all_markers"),style="Icon.TButton",command=self.clear_all_markers,width=3)
+        self.clear_all_button.pack(side="left",padx=2);self.tip.bind(self.clear_all_button,"Clear every marker and start / stop role on this specimen.")
+        self.display_button=ttk.Button(actions,text="",image=self._icon(actions,"display"),style="Icon.TButton",command=self.open_display_settings,width=3)
+        self.display_button.pack(side="left",padx=(2,0));self.tip.bind(self.display_button,"Marker size, symbols and colors.")
+        status=ttk.Frame(marker_dock,style="WorkflowDock.TFrame");status.grid(row=1,column=0,columnspan=3,sticky="ew",pady=(3,0));status.columnconfigure(1,weight=1)
+        self.counts_label=ttk.Label(status,text="",style="Muted.TLabel");self.counts_label.grid(row=0,column=0,sticky="w")
+        self.summary_label=ttk.Label(status,text="",style="Muted.TLabel",anchor="center");self.summary_label.grid(row=0,column=1,sticky="ew",padx=8)
+        self.save_label=ttk.Label(status,text="",style="Muted.TLabel");self.save_label.grid(row=0,column=2,sticky="e")
 
         workflow=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(0,4,0,0));workflow.grid(row=3,column=0,sticky="ew")
         workflow.columnconfigure(0,weight=1);workflow.columnconfigure(1,weight=1);workflow.columnconfigure(2,weight=1);workflow.columnconfigure(3,weight=1)
@@ -245,11 +288,14 @@ class XRayStructureWorkspace:
     def _key_pressed(self,event):
         cls=event.widget.winfo_class()
         if cls in {"Entry","TEntry","TCombobox","Spinbox","TSpinbox","Text"}:return
-        key=str(event.keysym or "")
-        if key in {"Left","KP_Left"}:
+        key=str(event.keysym or "");batch=self.project.structure_batch(self.pass_no.get())
+        in_batch=bool(batch and self.selected_specimen_id in batch.get("ids",()))
+        if key in {"Left","KP_Left"} and in_batch:
             self._navigate(-1);return "break"
-        if key in {"Right","KP_Right","space"}:
+        if key in {"Right","KP_Right"} and in_batch:
             self.verify_next();return "break"
+        if key=="space":
+            self.verify_current();return "break"
         if key.isdigit():
             structure=next((item for item in self.project.scheme.get("structures",()) if str(item.get("hotkey") or "")==key),None)
             if structure:
@@ -285,13 +331,31 @@ class XRayStructureWorkspace:
                 counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
         self._marker_buttons={}
         for structure in _structure_button_order(structures):
-            index=structures.index(structure);style=marker_style(settings,structure,index);group=ttk.Frame(self.marker_host,style="WorkflowDock.TFrame");group.pack(side="left",padx=2)
-            swatch=tk.Label(group,text=_shape_symbol(style["symbol"]),foreground=style["color"],background="#f5f5f5",font=("Segoe UI Symbol",12,"bold"),width=2)
-            swatch.pack(side="left")
-            hotkey=str(structure.get("hotkey") or "");count=counts.get(structure["id"],0)
-            button=ttk.Button(group,text=f"{hotkey+'. ' if hotkey else ''}{structure['name']} ({count})",style="Primary.TButton" if structure["id"]==self.active_structure_id else "P.TButton",command=lambda sid=structure["id"]:self._choose_structure(sid))
-            button.pack(side="left");self._marker_buttons[structure["id"]]=button;self.tip.bind(button,structure.get("description") or structure["name"])
+            index=structures.index(structure);style=marker_style(settings,structure,index)
+            hotkey=str(structure.get("hotkey") or "");count=counts.get(structure["id"],0);icon=self._marker_button_icon(self.marker_host,structure,style)
+            text=f"{hotkey} · {structure['name']}  {count}" if hotkey else f"{structure['name']}  {count}"
+            button=ttk.Button(
+                self.marker_host,text=text,image=icon,compound="left",
+                style="Primary.TButton" if structure["id"]==self.active_structure_id else "P.TButton",
+                command=lambda sid=structure["id"]:self._choose_structure(sid),
+            )
+            button.pack(side="left",padx=(0,4));self._marker_buttons[structure["id"]]=button
+            self.tip.bind(button,(structure.get("description") or structure["name"])+f" · shortcut {hotkey}" if hotkey else structure.get("description") or structure["name"])
         if not structures:ttk.Label(self.marker_host,text="No structures configured",style="Muted.TLabel").pack(side="left")
+        self._refresh_clear_menu(structures,settings,counts)
+
+    def _refresh_clear_menu(self,structures,settings,counts):
+        menu=tk.Menu(self.clear_type_button,tearoff=False);self._clear_menu_icons=[]
+        for structure in _structure_button_order(structures):
+            index=structures.index(structure);style=marker_style(settings,structure,index);count=int(counts.get(structure["id"],0) or 0)
+            icon=self._marker_button_icon(self.clear_type_button,structure,style,18);self._clear_menu_icons.append(icon)
+            menu.add_command(
+                label=f"{structure['name']}  ({count})",image=icon,compound="left",
+                state="normal" if count else "disabled",
+                command=lambda sid=structure["id"],name=structure["name"]:self.clear_marker_category(sid,name),
+            )
+        self.clear_type_button.configure(menu=menu,state="normal" if any(counts.values()) else "disabled")
+        self.clear_all_button.configure(state="normal" if (self.annotations or self.roles) else "disabled")
 
     def _choose_structure(self,structure_id):
         self.active_structure_id=structure_id;self.selected_annotation_id=None;self._build_marker_buttons();self._draw_overlays();self.canvas.focus_set()
@@ -333,18 +397,23 @@ class XRayStructureWorkspace:
 
     def _refresh_summary(self):
         summary=self.project.annotation_summary(self.pass_no.get());batch=self.project.structure_batch(self.pass_no.get())
-        batch_text=""
-        if batch and self.selected_specimen_id in batch.get("ids",()):
-            pos=batch["ids"].index(self.selected_specimen_id);batch_text=f"Batch {pos+1}/{len(batch['ids'])} · "
-        self.summary_label.configure(text=batch_text+f"{summary['verified']} verified · {summary['draft']} draft · {summary['unstarted']} not started")
-        state="normal" if self.selected_specimen_id else "disabled";self.verify_button.configure(state=state);self.previous_button.configure(state=state)
+        self.summary_label.configure(text=f"{summary['verified']} verified · {summary['draft']} draft · {summary['unstarted']} not started")
+        state="normal" if self.selected_specimen_id else "disabled";self.apply_button.configure(state=state)
+        active=bool(batch and self.selected_specimen_id in batch.get("ids",()))
+        if active:
+            pos=batch["ids"].index(self.selected_specimen_id);self.batch_position_label.configure(text=f"{pos+1}/{len(batch['ids'])}")
+            self.previous_button.configure(state="normal" if pos>0 else "disabled");self.next_button.configure(state=state)
+            self.batch_nav.grid();self.batch_separator.grid()
+        else:
+            self.batch_nav.grid_remove();self.batch_separator.grid_remove()
 
     def _refresh_workflow(self):
         p1=self.project.annotation_summary(1);p2=self.project.annotation_summary(2);batch=self.project.structure_batch(self.pass_no.get())
         self.batch_summary.configure(text=f"{p1['verified']} verified · {p1['draft']} draft · {p1['unstarted']} not started" if self.pass_no.get()==1 else f"{p2['verified']} verified · {p2['draft']} draft · {p2['unstarted']} not started")
         self.batch_button.configure(text="Continue batch" if batch else "Start batch")
         self.repeat_summary.configure(text=f"P1 {p1['verified']}/{p1['eligible']} · P2 {p2['verified']}/{p2['eligible']}")
-        self.pass2_button.configure(state="normal" if p2["eligible"] else "disabled")
+        self.pass1_button.configure(style="Primary.TButton" if self.pass_no.get()==1 else "P.TButton")
+        self.pass2_button.configure(style="Primary.TButton" if self.pass_no.get()==2 else "P.TButton",state="normal" if p2["eligible"] else "disabled")
         self.training_summary.configure(text=f"{p1['verified']} human-verified specimens")
         self.results_summary.configure(text=f"{len(self.project.scheme.get('traits') or ())} live traits · updates on every edit")
 
@@ -543,6 +612,31 @@ class XRayStructureWorkspace:
             self.project.delete_annotation(self.selected_annotation_id);self.selected_annotation_id=None;self._after_edit()
         return "break"
 
+    def clear_marker_category(self,structure_id,name):
+        if not self.selected_specimen_id:return
+        count=sum(1 for row in self.project.effective_annotations(self.selected_specimen_id,self.pass_no.get()) if row["structure_id"]==structure_id)
+        if not count:return
+        structure=self._structure(structure_id);extra="
+
+Any start / stop roles attached to those points are removed with them." if structure and structure.get("repeated") else ""
+        if not messagebox.askyesno(
+            "Clear marker category",
+            f"Remove all ‘{name}’ markers from this specimen?\n\nOther marker categories are kept.{extra}",
+            parent=self.root,default="no",
+        ):return
+        self.project.clear_annotations(self.selected_specimen_id,self.pass_no.get(),structure_id=structure_id)
+        self.selected_annotation_id=None;self._after_edit(f"Cleared {name}")
+
+    def clear_all_markers(self):
+        if not self.selected_specimen_id or not (self.annotations or self.roles):return
+        if not messagebox.askyesno(
+            "Clear all markers",
+            "Remove every marker and start / stop role from this specimen?\n\nThe crop and source X-ray are not changed.",
+            parent=self.root,default="no",
+        ):return
+        self.project.clear_annotations(self.selected_specimen_id,self.pass_no.get())
+        self.selected_annotation_id=None;self._after_edit("All markers cleared")
+
     def open_display_settings(self):
         structures=list(self.project.scheme.get("structures") or ());current=load_xray_structure_display(self.project,structures)
         dialog=tk.Toplevel(self.root);dialog.title("X-ray marker display");dialog.transient(self.root);dialog.resizable(False,False)
@@ -605,36 +699,27 @@ class XRayStructureWorkspace:
         number=int(number)
         if number==2 and not self.project.annotation_summary(2)["eligible"]:
             messagebox.showinfo("Repeatability","Verify pass 1 specimens before starting pass 2.",parent=self.root);return
-        self.pass_no.set(number);self.pass_box.current(1 if number==2 else 0);self.specimen_list.pass_no=number;self.selected_specimen_id="";self.refresh()
-
-    def _pass_changed(self,_event=None):self._switch_pass(2 if self.pass_box.current()==1 else 1)
+        self.pass_no.set(number);self.specimen_list.pass_no=number;self.selected_specimen_id="";self.refresh()
 
     def _navigate(self,step):
         batch=self.project.structure_batch(self.pass_no.get())
-        if batch and self.selected_specimen_id in batch.get("ids",()):
-            result=self.project.move_structure_batch(self.selected_specimen_id,step,self.pass_no.get())
-            if result.get("specimen_id"):self._load_specimen(result["specimen_id"])
-            return
-        ids=self.specimen_list.visible_ids()
-        if not ids:return
-        try:index=ids.index(self.selected_specimen_id)
-        except ValueError:index=0
-        target=ids[max(0,min(len(ids)-1,index+int(step)))];self._load_specimen(target)
+        if not batch or self.selected_specimen_id not in batch.get("ids",()):return
+        result=self.project.move_structure_batch(self.selected_specimen_id,step,self.pass_no.get())
+        if result.get("specimen_id"):self._load_specimen(result["specimen_id"])
+
+    def verify_current(self):
+        if not self.selected_specimen_id:return False
+        try:self.project.verify_annotations(self.selected_specimen_id,self.pass_no.get())
+        except ValueError as exc:messagebox.showwarning("Structures incomplete",str(exc),parent=self.root);return False
+        except Exception as exc:messagebox.showerror("Verify structures",str(exc),parent=self.root);return False
+        self._after_edit("Verified");return True
 
     def verify_next(self):
         if not self.selected_specimen_id:return
-        current=self.selected_specimen_id
-        try:self.project.verify_annotations(current,self.pass_no.get())
-        except ValueError as exc:messagebox.showwarning("Structures incomplete",str(exc),parent=self.root);return
-        except Exception as exc:messagebox.showerror("Verify structures",str(exc),parent=self.root);return
-        self._after_edit("Verified")
-        batch=self.project.structure_batch(self.pass_no.get())
-        if batch and current in batch.get("ids",()):
-            result=self.project.move_structure_batch(current,1,self.pass_no.get())
-            if result.get("finished"):
-                messagebox.showinfo("Structure annotation batch","Batch complete.",parent=self.root);self._refresh_workflow();return
-            if result.get("specimen_id"):self._load_specimen(result["specimen_id"]);return
-        rows=self.specimen_list.rows();ids=[row["specimen_id"] for row in rows];status={row["specimen_id"]:row.get("annotation_status") for row in rows}
-        if current in ids:
-            pos=ids.index(current);ordered=ids[pos+1:]+ids[:pos];next_id=next((sid for sid in ordered if status.get(sid)!="verified"),None)
-            if next_id:self._load_specimen(next_id)
+        current=self.selected_specimen_id;batch=self.project.structure_batch(self.pass_no.get())
+        if not batch or current not in batch.get("ids",()):return
+        if not self.verify_current():return
+        result=self.project.move_structure_batch(current,1,self.pass_no.get())
+        if result.get("finished"):
+            messagebox.showinfo("Structure annotation batch","Batch complete.",parent=self.root);self._refresh_workflow();self._refresh_summary();return
+        if result.get("specimen_id"):self._load_specimen(result["specimen_id"])
