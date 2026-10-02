@@ -220,17 +220,9 @@ class XRayStructureWorkspace:
             tools,text="Display…",image=self._icon(tools,"display"),compound="left",style="P.TButton",command=self.open_display_settings,
         )
         self.display_button.pack(side="left",padx=(2,6));self.tip.bind(self.display_button,"Marker display.")
-        self.batch_nav=ttk.Frame(nav,style="Toolbar.TFrame");self.batch_nav.grid(row=0,column=1,sticky="e")
-        self.previous_button=ttk.Button(self.batch_nav,text="",image=self._xray_icon(self.batch_nav,"structure_previous"),style="Icon.TButton",command=lambda:self._navigate(-1),width=3)
-        self.previous_button.pack(side="left")
-        self.batch_position_label=ttk.Label(self.batch_nav,text="",style="Muted.TLabel",width=7,anchor="center");self.batch_position_label.pack(side="left",padx=4)
-        self.next_button=ttk.Button(self.batch_nav,text="",image=self._xray_icon(self.batch_nav,"structure_next"),style="Icon.TButton",command=self.verify_next,width=3)
-        self.next_button.pack(side="left")
-        self.tip.bind(self.previous_button,"Previous specimen.")
-        self.tip.bind(self.next_button,"Verify and continue.")
-        self.apply_separator=ttk.Separator(nav,orient="vertical");self.apply_separator.grid(row=0,column=2,sticky="ns",padx=7,pady=2)
+        self.apply_separator=ttk.Separator(nav,orient="vertical");self.apply_separator.grid(row=0,column=1,sticky="ns",padx=7,pady=2)
         self.apply_button=ttk.Button(nav,text="Apply",image=self._xray_icon(nav,"structure_apply"),compound="left",style="NavPrimary.TButton",command=self.verify_current)
-        self.apply_button.grid(row=0,column=3,sticky="e")
+        self.apply_button.grid(row=0,column=2,sticky="e")
         self.tip.bind(self.apply_button,"Verify without moving.")
 
         canvas_host=ttk.Frame(main);canvas_host.grid(row=1,column=0,sticky="nsew");canvas_host.pack_propagate(False)
@@ -410,15 +402,9 @@ class XRayStructureWorkspace:
         self._image_item=None;self._raster_key=None;self.pan=None;self.canvas.delete("all");self._build_marker_buttons();self._update_counts()
 
     def _refresh_summary(self):
-        summary=self.project.annotation_summary(self.pass_no.get());batch=self.project.structure_batch(self.pass_no.get())
+        summary=self.project.annotation_summary(self.pass_no.get())
         self.summary_label.configure(text=f"{summary['verified']} verified · {summary['draft']} draft · {summary['unstarted']} not started")
         state="normal" if self.selected_specimen_id else "disabled";self.apply_button.configure(state=state)
-        active=bool(batch and self.selected_specimen_id in batch.get("ids",()))
-        if active:
-            pos=batch["ids"].index(self.selected_specimen_id);self.batch_position_label.configure(text=f"{pos+1}/{len(batch['ids'])}")
-            self.previous_button.configure(state="normal" if pos>0 else "disabled");self.next_button.configure(state=state)
-            self.batch_nav.grid()
-        else:self.batch_nav.grid_remove()
 
     def _refresh_workflow(self):
         p1=self.project.annotation_summary(1);p2=self.project.annotation_summary(2);batch=self.project.structure_batch(self.pass_no.get())
