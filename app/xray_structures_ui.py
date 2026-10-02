@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+import queue
+import threading
 import tkinter as tk
-from tkinter import colorchooser, messagebox, ttk
+from tkinter import colorchooser, filedialog, messagebox, ttk
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageTk
@@ -15,6 +17,10 @@ from app.ui.photo_list_panel import filtered_photo_indices
 from app.ui.tooltips import Tooltip
 from .xray_crop import oriented_crop
 from .xray_icons import tk_xray_icon
+from .xray_structure_ai import (
+    export_structure_model_package, import_structure_model_package,
+    predict_structures, train_structure_model,
+)
 from .xray_schema import compatible_reference_roles
 from .xray_structure_display import (
     DEFAULT_LABEL_SIZE, DEFAULT_SIZE, SYMBOL_LABELS, SYMBOL_NAMES,
@@ -146,6 +152,7 @@ class XRayStructureWorkspace:
         self.parent=parent;self.root=parent.winfo_toplevel();self.project=project;self.on_changed=on_changed or (lambda:None)
         self.on_selection=on_selection or (lambda _image_id,_specimen_id:None);self.on_open_results=on_open_results or (lambda:None)
         self.tip=Tooltip(self.root);self.pass_no=tk.IntVar(value=1);self.batch_size=tk.IntVar(value=24)
+        self.prediction_batch_size=tk.IntVar(value=24);self._busy=False
         self.selected_specimen_id=str(initial_specimen_id or "");self.preferred_image_id=str(initial_image_id or "")
         self.active_structure_id=None;self.selected_annotation_id=None
         self.crop_image=None;self.photo=None;self.zoom=1.0;self.pan=None;self.pan_drag=None;self._raster_key=None;self._image_item=None
@@ -257,9 +264,24 @@ class XRayStructureWorkspace:
         self.pass1_button=ttk.Button(two,text="Pass 1",command=lambda:self._switch_pass(1));self.pass1_button.grid(row=1,column=0,sticky="w",pady=(5,0))
         self.pass2_button=ttk.Button(two,text="Pass 2",command=lambda:self._switch_pass(2));self.pass2_button.grid(row=1,column=1,sticky="w",padx=(5,0),pady=(5,0))
 
-        three=self._workflow_card(workflow,2,"3. Training data","Human-verified marker sets are the authoritative future AI training truth.")
-        self.training_summary=ttk.Label(three,text="",style="Muted.TLabel");self.training_summary.grid(row=0,column=0,sticky="w")
-        ttk.Button(three,text="Next unfinished",command=self.next_unfinished).grid(row=1,column=0,sticky="w",pady=(5,0))
+        three=self._workflow_card(workflow,2,"3. Training data","Train only from human-verified pass 1 markers. AI output always returns as a draft for human review.")
+        self.training_summary=ttk.Label(three,text="",style="Muted.TLabel");self.training_summary.grid(row=0,column=0,columnspan=4,sticky="w")
+        self.structure_model_label=ttk.Label(three,text="Active AI: none",style="Muted.TLabel");self.structure_model_label.grid(row=1,column=0,columnspan=4,sticky="w",pady=(1,0))
+        train_actions=ttk.Frame(three);train_actions.grid(row=2,column=0,columnspan=4,sticky="ew",pady=(5,0))
+        self.structure_train_button=ttk.Button(train_actions,text="Train Structure AI",command=self.train_structure_ai)
+        self.structure_train_button.pack(side="left")
+        ttk.Button(train_actions,text="Models…",command=self.manage_structure_models).pack(side="left",padx=(5,0))
+        predict_actions=ttk.Frame(three);predict_actions.grid(row=3,column=0,columnspan=4,sticky="ew",pady=(5,0))
+        ttk.Label(predict_actions,text="Next").pack(side="left")
+        ttk.Spinbox(predict_actions,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(3,5))
+        self.structure_predict_next_button=ttk.Button(predict_actions,text="Predict next",command=lambda:self.predict_structure_batch(self.prediction_batch_size.get()))
+        self.structure_predict_next_button.pack(side="left")
+        self.structure_predict_all_button=ttk.Button(predict_actions,text="Predict all",command=lambda:self.predict_structure_batch(None))
+        self.structure_predict_all_button.pack(side="left",padx=(4,0))
+        review_actions=ttk.Frame(three);review_actions.grid(row=4,column=0,columnspan=4,sticky="ew",pady=(5,0))
+        self.structure_review_button=ttk.Button(review_actions,text="Review AI",command=self.review_structure_ai)
+        self.structure_review_button.pack(side="left")
+        ttk.Button(review_actions,text="Next unfinished",command=self.next_unfinished).pack(side="left",padx=(5,0))
 
         four=self._workflow_card(workflow,3,"4. Results","Trait values are recalculated from the current saved markers.")
         self.results_summary=ttk.Label(four,text="",style="Muted.TLabel");self.results_summary.grid(row=0,column=0,sticky="w")
@@ -413,7 +435,12 @@ class XRayStructureWorkspace:
         self.repeat_summary.configure(text=f"P1 {p1['verified']}/{p1['eligible']} · P2 {p2['verified']}/{p2['eligible']}")
         self.pass1_button.configure(style="Primary.TButton" if self.pass_no.get()==1 else "P.TButton")
         self.pass2_button.configure(style="Primary.TButton" if self.pass_no.get()==2 else "P.TButton",state="normal" if p2["eligible"] else "disabled")
-        self.training_summary.configure(text=f"{p1['verified']} human-verified specimens")
+        model=self.project.active_structure_model();candidates=len(self.project.structure_prediction_candidate_ids());review=len(self.project.structure_ai_review_ids())
+        self.training_summary.configure(text=f"{p1['verified']} human-verified · {candidates} ready for AI · {review} to review")
+        self.structure_model_label.configure(text=f"Active AI: {(model or {}).get('model_id') or 'none'}")
+        state="normal" if model else "disabled"
+        self.structure_predict_next_button.configure(state=state);self.structure_predict_all_button.configure(state=state)
+        self.structure_review_button.configure(state="normal" if review else "disabled")
         self.results_summary.configure(text=f"{len(self.project.scheme.get('traits') or ())} live traits · updates on every edit")
 
     def _update_counts(self):
@@ -676,6 +703,193 @@ class XRayStructureWorkspace:
         ttk.Button(actions,text="Reset",command=reset).pack(side="left")
         ttk.Button(actions,text="Close",command=dialog.destroy).pack(side="left",padx=(6,0))
         ttk.Button(actions,text="Apply",command=apply,style="Primary.TButton").pack(side="left",padx=(6,0))
+
+    def _structure_ai_dialog(self,title,text,maximum=100):
+        dialog=tk.Toplevel(self.root);dialog.title(title);dialog.transient(self.root);dialog.resizable(False,False)
+        frame=ttk.Frame(dialog,padding=14);frame.pack(fill="both",expand=True)
+        label=ttk.Label(frame,text=text,justify="left",wraplength=520);label.pack(anchor="w")
+        bar=ttk.Progressbar(frame,mode="indeterminate" if maximum is None else "determinate",maximum=maximum or 100)
+        bar.pack(fill="x",pady=(8,0))
+        if maximum is None:bar.start(12)
+        return dialog,label,bar
+
+    def train_structure_ai(self):
+        if self._busy:return
+        p1=self.project.annotation_summary(1)
+        if p1["verified"]<8:
+            messagebox.showinfo(
+                "Train Structure AI",
+                "Verify at least 8 specimens from at least 3 source X-rays first. More diverse verified specimens usually give a more useful model.",
+                parent=self.root,
+            );return
+        self._busy=True;events=queue.Queue()
+        dialog,label,bar=self._structure_ai_dialog("Train Structure AI","Preparing verified X-ray structures…",None)
+        def progress(stage,detail):
+            events.put(("progress",str(stage),str(detail)))
+        def worker():
+            try:events.put(("done",train_structure_model(self.project,progress=progress)))
+            except Exception as exc:events.put(("error",exc))
+        threading.Thread(target=worker,daemon=True,name="xray-structure-training").start()
+        def poll():
+            try:
+                while True:
+                    event=events.get_nowait()
+                    if event[0]=="progress":
+                        label.configure(text=f"{event[1]}\n{event[2]}")
+                    elif event[0]=="error":
+                        self._busy=False
+                        try:bar.stop();dialog.destroy()
+                        except tk.TclError:pass
+                        messagebox.showerror("Structure training",str(event[1]),parent=self.root);return
+                    elif event[0]=="done":
+                        self._busy=False
+                        try:bar.stop();dialog.destroy()
+                        except tk.TclError:pass
+                        result=event[1];metrics=result.get("metrics") or {}
+                        quality=metrics.get("structure/macro_f1")
+                        detail=(
+                            f"Model ready: {result['model_id']}\n"
+                            f"Training: {result['training_specimens']} specimens on {result['training_plates']} plates\n"
+                            f"Validation: {result['validation_specimens']} specimens on {result['validation_plates']} plates"
+                        )
+                        if isinstance(quality,(int,float)):detail+=f"\nValidation macro F1: {quality:.3f}"
+                        self._refresh_workflow()
+                        messagebox.showinfo("Structure training",detail,parent=self.root);return
+            except queue.Empty:pass
+            if dialog.winfo_exists():dialog.after(120,poll)
+        dialog.after(120,poll)
+
+    def manage_structure_models(self):
+        dialog=tk.Toplevel(self.root);dialog.title("X-ray structure models");dialog.transient(self.root);dialog.geometry("1020x420")
+        frame=ttk.Frame(dialog,padding=12);frame.pack(fill="both",expand=True);frame.columnconfigure(0,weight=1);frame.rowconfigure(1,weight=1)
+        ttk.Label(
+            frame,text="Portable Structure AI models · import/export contains weights and model metadata, never source X-rays.",
+            style="PageSubtitle.TLabel",
+        ).grid(row=0,column=0,sticky="w",pady=(0,8))
+        columns=("model","date","source","training","quality","active")
+        tree=ttk.Treeview(frame,columns=columns,show="headings",selectmode="browse")
+        for key,title,width in (
+            ("model","Model",205),("date","Created",135),("source","Started from",180),
+            ("training","Train / validation",150),("quality","Validation",170),("active","Status",90),
+        ):
+            tree.heading(key,text=title);tree.column(key,width=width,anchor="w",stretch=key in {"model","source","quality"})
+        tree.grid(row=1,column=0,sticky="nsew")
+        scroll=ttk.Scrollbar(frame,orient="vertical",command=tree.yview);tree.configure(yscrollcommand=scroll.set);scroll.grid(row=1,column=1,sticky="ns")
+        def reload(select=None):
+            for item in tree.get_children():tree.delete(item)
+            for model in self.project.structure_models():
+                metrics=model.get("metrics") or {};quality=metrics.get("structure/macro_f1")
+                quality_text=f"macro F1 {quality:.3f}" if isinstance(quality,(int,float)) else "Not recorded"
+                source=str(model.get("parent_model_id") or metrics.get("initialization") or metrics.get("original_model_id") or "ImageNet")
+                tree.insert(
+                    "","end",iid=model["model_id"],values=(
+                        model["model_id"],str(model.get("created_at") or "").replace("T"," ")[:16],source,
+                        f"{int(model.get('training_specimen_count') or 0)} / {int(model.get('validation_specimen_count') or 0)}",
+                        quality_text,"Active" if model.get("active") else "Available",
+                    ),
+                )
+            if select and tree.exists(select):tree.selection_set(select);tree.see(select)
+        def selected():
+            values=tree.selection();return str(values[0]) if values else ""
+        def activate():
+            model_id=selected()
+            if not model_id:return
+            try:self.project.activate_structure_model(model_id)
+            except Exception as exc:messagebox.showerror("X-ray structure models",str(exc),parent=dialog);return
+            reload(model_id);self._refresh_workflow()
+        def export_model():
+            model_id=selected()
+            if not model_id:
+                messagebox.showinfo("Export Structure AI","Select a model first.",parent=dialog);return
+            target=filedialog.asksaveasfilename(
+                parent=dialog,title="Export Structure AI",defaultextension=".zip",
+                initialfile=f"{model_id}.zip",filetypes=(("MorphoLabel Structure AI","*.zip"),("ZIP files","*.zip")),
+            )
+            if not target:return
+            try:export_structure_model_package(self.project,target,model_id)
+            except Exception as exc:messagebox.showerror("Export Structure AI",str(exc),parent=dialog);return
+            messagebox.showinfo("Export Structure AI","Portable model package saved. It can be imported on another computer with the same X-ray structure scheme.",parent=dialog)
+        def import_model():
+            source=filedialog.askopenfilename(
+                parent=dialog,title="Import Structure AI",filetypes=(("MorphoLabel Structure AI","*.zip"),("ZIP files","*.zip")),
+            )
+            if not source:return
+            try:model_id=import_structure_model_package(self.project,source)
+            except Exception as exc:messagebox.showerror("Import Structure AI",str(exc),parent=dialog);return
+            reload(model_id);self._refresh_workflow()
+            messagebox.showinfo("Import Structure AI",f"Imported {model_id}. Select it and choose Make active before prediction or continued training.",parent=dialog)
+        def delete():
+            model_id=selected()
+            if not model_id:return
+            if not messagebox.askyesno(
+                "Delete Structure AI",f"Delete {model_id} and its managed model files?\n\nModels used as a parent by later training are protected.",
+                parent=dialog,default="no",
+            ):return
+            try:self.project.delete_structure_model(model_id)
+            except Exception as exc:messagebox.showerror("Delete Structure AI",str(exc),parent=dialog);return
+            reload();self._refresh_workflow()
+        actions=ttk.Frame(frame);actions.grid(row=2,column=0,columnspan=2,sticky="ew",pady=(9,0))
+        ttk.Button(actions,text="Make active",command=activate).pack(side="left")
+        ttk.Button(actions,text="Export…",command=export_model).pack(side="left",padx=(5,0))
+        ttk.Button(actions,text="Import…",command=import_model).pack(side="left",padx=(5,0))
+        ttk.Button(actions,text="Delete…",command=delete).pack(side="left",padx=(5,0))
+        ttk.Button(actions,text="Close",command=dialog.destroy).pack(side="right")
+        reload((self.project.active_structure_model() or {}).get("model_id"))
+
+    def _open_structure_review_batch(self,ids):
+        ids=[str(value) for value in ids if str(value)]
+        if not ids:return False
+        self.pass_no.set(1);self.specimen_list.pass_no=1
+        state={"pass_no":1,"ids":ids,"position":0}
+        self.project.set_ui_state("xray_structure_active_batch",state)
+        self._load_specimen(ids[0]);self._refresh_workflow()
+        return True
+
+    def predict_structure_batch(self,count):
+        if self._busy:return
+        model=self.project.active_structure_model()
+        if not model:
+            messagebox.showinfo("Predict structures","Train or import a Structure AI model first.",parent=self.root);return
+        candidates=self.project.structure_prediction_candidate_ids()
+        ids=self.project.select_structure_prediction_ids(len(candidates) if count is None else max(1,int(count)))
+        if not ids:
+            messagebox.showinfo("Predict structures","No eligible unreviewed specimens remain.",parent=self.root);return
+        self._busy=True;events=queue.Queue();cancel=threading.Event()
+        dialog,label,bar=self._structure_ai_dialog("Predict structures",f"Preparing {len(ids)} specimen(s)…",len(ids))
+        ttk.Button(dialog.winfo_children()[0],text="Cancel",command=cancel.set).pack(anchor="e",pady=(8,0))
+        def progress(done,total,detail):
+            events.put(("progress",int(done),int(total),str(detail)))
+        def worker():
+            try:events.put(("done",predict_structures(self.project,ids,cancel=cancel,progress=progress,model=model)))
+            except Exception as exc:events.put(("error",exc))
+        threading.Thread(target=worker,daemon=True,name="xray-structure-predict").start()
+        def poll():
+            try:
+                while True:
+                    event=events.get_nowait()
+                    if event[0]=="progress":
+                        bar.configure(value=event[1],maximum=max(1,event[2]));label.configure(text=f"Predicting structures: {event[1]} / {event[2]}")
+                    elif event[0]=="error":
+                        self._busy=False;dialog.destroy();messagebox.showerror("Predict structures",str(event[1]),parent=self.root);return
+                    elif event[0]=="done":
+                        self._busy=False;dialog.destroy();result=event[1]
+                        success=[row["specimen_id"] for row in result.get("success") or ()]
+                        failures=list(result.get("failures") or ())
+                        self._refresh_workflow()
+                        summary=f"Predicted {len(success)} specimen(s)."
+                        if failures:summary+=f"\nFailed: {len(failures)}."
+                        if success and messagebox.askyesno("Predict structures",summary+"\n\nReview this batch now?",parent=self.root,default="yes"):
+                            self._open_structure_review_batch(success);return
+                        messagebox.showinfo("Predict structures",summary,parent=self.root);return
+            except queue.Empty:pass
+            if dialog.winfo_exists():dialog.after(100,poll)
+        dialog.after(100,poll)
+
+    def review_structure_ai(self):
+        ids=self.project.structure_ai_review_ids()
+        if not ids:
+            messagebox.showinfo("Review Structure AI","No AI marker drafts are waiting for review.",parent=self.root);return
+        self._open_structure_review_batch(ids)
 
     def start_batch(self):
         active=self.project.structure_batch(self.pass_no.get())
