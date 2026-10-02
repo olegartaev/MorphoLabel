@@ -335,7 +335,7 @@ class XRayStructureWorkspace:
                 counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
         self._marker_buttons={}
         for structure in _structure_button_order(structures):
-            index=structures.index(structure);style=marker_style(settings,structure,index,selected=structure["id"]==self.active_structure_id)
+            index=structures.index(structure);style=marker_style(settings,structure,index)
             hotkey=str(structure.get("hotkey") or "");count=counts.get(structure["id"],0);icon=self._marker_button_icon(self.marker_host,structure,style)
             text=f"{hotkey} · {structure['name']}  {count}" if hotkey else f"{structure['name']}  {count}"
             button=ttk.Button(
