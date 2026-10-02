@@ -957,9 +957,13 @@ class XRayProject:
                 "SELECT annotation_id,structure_id,x,y,sort_order FROM annotations WHERE run_id=? ORDER BY structure_id,sort_order,annotation_id",
                 (run_id,),
             ).fetchall()
+            role_rows=c.execute("SELECT annotation_id,structure_id FROM annotation_roles WHERE run_id=? ORDER BY role_id",(run_id,)).fetchall()
+            role_map={}
+            for base_id,role_sid in role_rows:role_map.setdefault(int(base_id),[]).append(str(role_sid))
             if rows:
                 payload=[
-                    {"annotation_id":int(row[0]),"structure_id":row[1],"x":float(row[2]),"y":float(row[3]),"sort_order":int(row[4])}
+                    {"annotation_id":int(row[0]),"structure_id":row[1],"x":float(row[2]),"y":float(row[3]),"sort_order":int(row[4]),
+                     "role_structure_ids":role_map.get(int(row[0]),[])}
                     for row in rows
                 ]
                 cur=c.execute(
@@ -968,7 +972,7 @@ class XRayProject:
                        ) VALUES(?,?,?,?,?,?,?,?,?,?)""",
                     (run_id,specimen_id,now,str(reason),_json(previous_crop or {}),_json(payload),schema_version_id,int(pass_no),source,status),
                 )
-                archived+=len(payload);c.execute("DELETE FROM annotations WHERE run_id=?",(run_id,))
+                archived+=len(payload);c.execute("DELETE FROM annotation_roles WHERE run_id=?",(run_id,));c.execute("DELETE FROM annotations WHERE run_id=?",(run_id,))
                 self._annotation_event(c,run_id,"invalidate",payload={"reason":str(reason),"archive_id":int(cur.lastrowid),"archived_annotations":len(payload)})
             else:self._annotation_event(c,run_id,"invalidate",payload={"reason":str(reason),"archived_annotations":0})
         if runs:c.execute("UPDATE annotation_runs SET status='stale_crop',updated_at=?,verified_at='' WHERE specimen_id=?",(now,specimen_id))
@@ -998,7 +1002,7 @@ class XRayProject:
     def recalculate_trait_results(self,specimen_id):
         record=self.active_scheme_record();scheme=record["scheme"];schema_id=record["version_id"]
         run=self.annotation_run(specimen_id,1,"human",False);status=str((run or {}).get("status") or "not_started")
-        annotations=self.annotations(specimen_id,1,"human") if run and not status.startswith("stale") else []
+        annotations=self.effective_annotations(specimen_id,1,"human") if run and not status.startswith("stale") else []
         values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations))
         qc="" if status=="verified" else status
         now=_now()
@@ -1018,7 +1022,7 @@ class XRayProject:
         scheme=self.scheme;rows=[]
         for item in self.structure_specimens(1):
             run=self.annotation_run(item["specimen_id"],1,"human",False);status=str((run or {}).get("status") or "not_started")
-            annotations=self.annotations(item["specimen_id"],1,"human") if run and not status.startswith("stale") else []
+            annotations=self.effective_annotations(item["specimen_id"],1,"human") if run and not status.startswith("stale") else []
             values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations))
             rows.append({**item,"trait_values":values,"result_status":status})
         return rows
@@ -1031,6 +1035,13 @@ class XRayProject:
         run_id=self.ensure_annotation_run(specimen_id,pass_no,source);now=_now()
         with sqlite3.connect(self.db_path) as c:
             if replace_single:
+                role=c.execute(
+                    "SELECT role_id,annotation_id FROM annotation_roles WHERE run_id=? AND structure_id=?",
+                    (run_id,structure_id),
+                ).fetchone()
+                if role:
+                    c.execute("DELETE FROM annotation_roles WHERE role_id=?",(int(role[0]),))
+                    self._annotation_event(c,run_id,"remove_role",structure_id,int(role[1]),{"reason":"standalone_reference_added"})
                 existing=c.execute(
                     "SELECT annotation_id,x,y FROM annotations WHERE run_id=? AND structure_id=? ORDER BY annotation_id LIMIT 1",
                     (run_id,structure_id),
@@ -1069,19 +1080,27 @@ class XRayProject:
                              FROM annotations a JOIN annotation_runs r ON r.run_id=a.run_id
                              WHERE a.annotation_id=?""",(int(annotation_id),)).fetchone()
             if row is None:return False
-            specimen_id=row[5];self._annotation_event(c,row[0],"delete",row[1],int(annotation_id),{"at":[row[2],row[3]],"sort_order":row[4]})
+            specimen_id=row[5]
+            roles=[role[0] for role in c.execute("SELECT structure_id FROM annotation_roles WHERE annotation_id=?",(int(annotation_id),))]
+            self._annotation_event(c,row[0],"delete",row[1],int(annotation_id),{"at":[row[2],row[3]],"sort_order":row[4],"removed_roles":roles})
+            c.execute("DELETE FROM annotation_roles WHERE annotation_id=?",(int(annotation_id),))
             c.execute("DELETE FROM annotations WHERE annotation_id=?",(int(annotation_id),))
             c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,row[0]))
         self.recalculate_trait_results(specimen_id);return True
 
+    def missing_required_structures(self,specimen_id,pass_no=1,source="human"):
+        counts={}
+        for row in self.effective_annotations(specimen_id,pass_no,source):
+            counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
+        return [s for s in self.scheme.get("structures",()) if s.get("required",True) and counts.get(s["id"],0)<1]
+
     def verify_annotations(self,specimen_id,pass_no=1,source="human"):
-        scheme=self.scheme;run=self.annotation_run(specimen_id,pass_no,source,True);rows=self.annotations(specimen_id,pass_no,source)
+        scheme=self.scheme;run=self.annotation_run(specimen_id,pass_no,source,True);rows=self.effective_annotations(specimen_id,pass_no,source)
         counts={}
         for row in rows:counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
-        missing=[s["id"] for s in scheme.get("structures",()) if s.get("required",True) and counts.get(s["id"],0)<1]
+        missing=self.missing_required_structures(specimen_id,pass_no,source)
         if missing:
-            names={s["id"]:s["name"] for s in scheme.get("structures",())}
-            raise ValueError("Missing required structures: "+", ".join(names.get(item,item) for item in missing))
+            raise ValueError("Before continuing, mark every required category. Missing: "+", ".join(item["name"] for item in missing))
         now=_now()
         with sqlite3.connect(self.db_path) as c:
             c.execute("UPDATE annotation_runs SET status='verified',updated_at=?,verified_at=? WHERE run_id=?",(now,now,run["run_id"]))
@@ -1111,5 +1130,8 @@ class XRayProject:
         }
 
     def annotation_counts_by_structure(self):
+        counts={}
         with sqlite3.connect(self.db_path) as c:
-            return {row[0]:int(row[1]) for row in c.execute("SELECT structure_id,COUNT(*) FROM annotations GROUP BY structure_id")}
+            for sid,count in c.execute("SELECT structure_id,COUNT(*) FROM annotations GROUP BY structure_id"):counts[sid]=counts.get(sid,0)+int(count)
+            for sid,count in c.execute("SELECT structure_id,COUNT(*) FROM annotation_roles GROUP BY structure_id"):counts[sid]=counts.get(sid,0)+int(count)
+        return counts
