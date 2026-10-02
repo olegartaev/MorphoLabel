@@ -1,0 +1,192 @@
+import json
+import shutil
+import tempfile
+import unittest
+import zipfile
+from pathlib import Path
+
+import numpy as np
+from PIL import Image
+
+from app.xray_crop import crop_from_geometry
+from app.xray_project import XRayProject
+from app.xray_schema import bundled_scheme
+from app.xray_structure_ai import (
+    MODEL_PACKAGE_FORMAT,
+    export_structure_model_package,
+    import_structure_model_package,
+    prepare_structure_training_dataset,
+    structure_schema_digest,
+)
+
+
+class XRayStructureAIWorkflowTests(unittest.TestCase):
+    def setUp(self):
+        self.root=Path(tempfile.mkdtemp())
+        self.source=self.root/"source";self.source.mkdir()
+        for index in range(4):
+            image=np.full((360,900),25,np.uint8)
+            image[120:240,120:780]=150+index*5
+            Image.fromarray(image).save(self.source/f"plate_{index}.png")
+        destination=self.root/"projects";destination.mkdir()
+        self.project=XRayProject.create(
+            "xray",self.source,destination,bundled_scheme("phoxinus_vertebral_counts")
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.root,ignore_errors=True)
+
+    def _add_specimen(self,image_id,cx):
+        crop=crop_from_geometry(cx,180,320,110,0,(900,360),algorithm="manual")
+        return self.project.add_manual_specimen(image_id,crop)
+
+    def _verify_structure_truth(self,specimen_id,offset=0.0):
+        v1=self.project.add_annotation(specimen_id,"vertebra",0.22+offset,0.50,1)
+        v2=self.project.add_annotation(specimen_id,"vertebra",0.43+offset,0.50,1)
+        self.project.assign_annotation_role(v2,"first_caudal")
+        self.project.assign_annotation_role(v1,"last_predorsal")
+        self.project.add_annotation(specimen_id,"preanal_pterygiophore",0.58+offset,0.67,1)
+        self.project.verify_annotations(specimen_id,1)
+
+    def _eight_verified(self):
+        specimens=[]
+        for plate_index,row in enumerate(self.project.source_images()):
+            first=self._add_specimen(row["image_id"],300)
+            second=self._add_specimen(row["image_id"],620)
+            self.project.confirm_plate(row["image_id"])
+            self._verify_structure_truth(first,0.00)
+            self._verify_structure_truth(second,0.01)
+            specimens.extend((first,second))
+        return specimens
+
+    def test_training_dataset_uses_only_verified_truth_and_splits_by_source_plate(self):
+        specimens=self._eight_verified()
+        dataset=prepare_structure_training_dataset(self.project,self.root/"scratch",seed=7)
+        self.assertEqual(8,len(dataset["membership"]))
+        self.assertEqual(set(specimens),{row["specimen_id"] for row in dataset["membership"]})
+        train_images={row["image_id"] for row in dataset["membership"] if row["split"]=="train"}
+        val_images={row["image_id"] for row in dataset["membership"] if row["split"]=="val"}
+        self.assertTrue(train_images);self.assertTrue(val_images);self.assertFalse(train_images & val_images)
+        manifest=json.loads(dataset["manifest"].read_text(encoding="utf-8"))
+        self.assertEqual([768,256],manifest["input_size"])
+        self.assertEqual(structure_schema_digest(self.project.scheme),manifest["schema_digest"])
+        self.assertEqual(
+            dataset["dataset_hash"],
+            prepare_structure_training_dataset(self.project,self.root/"scratch2",seed=7)["dataset_hash"],
+        )
+
+    def test_ai_seed_is_draft_review_not_training_truth_and_reuses_shared_roles(self):
+        image_id=self.project.source_images()[0]["image_id"]
+        specimen_id=self._add_specimen(image_id,450);self.project.confirm_plate(image_id)
+        result=self.project.seed_structure_predictions(specimen_id,[
+            {"structure_id":"vertebra","x":0.25,"y":0.50,"score":0.92},
+            {"structure_id":"vertebra","x":0.50,"y":0.50,"score":0.95},
+            {"structure_id":"first_caudal","x":0.505,"y":0.501,"score":0.88},
+            {"structure_id":"last_predorsal","x":0.252,"y":0.499,"score":0.86},
+            {"structure_id":"preanal_pterygiophore","x":0.63,"y":0.66,"score":0.90},
+        ],"xray_structure_model_v001")
+        self.assertFalse(result["protected"])
+        self.assertEqual("draft",self.project.annotation_run(specimen_id,1)["status"])
+        self.assertEqual(2,len(self.project.annotation_roles(specimen_id,1)))
+        self.assertIn(specimen_id,self.project.structure_ai_review_ids())
+        self.assertNotIn(specimen_id,self.project.structure_prediction_candidate_ids())
+        protected=self.project.seed_structure_predictions(specimen_id,[],"xray_structure_model_v002")
+        self.assertTrue(protected["protected"])
+        self.project.verify_annotations(specimen_id,1)
+        self.assertEqual("verified",self.project.annotation_run(specimen_id,1)["status"])
+        self.assertNotIn(specimen_id,self.project.structure_ai_review_ids())
+
+    def test_structure_model_registry_preserves_lineage_activation_and_membership(self):
+        digest=structure_schema_digest(self.project.scheme)
+        image_id=self.project.source_images()[0]["image_id"]
+        specimen=self._add_specimen(image_id,450);self.project.confirm_plate(image_id)
+        for model_id,parent,active in (
+            ("xray_structure_model_v001",None,True),
+            ("xray_structure_model_v002","xray_structure_model_v001",True),
+        ):
+            directory=self.project.models_root/model_id;directory.mkdir(parents=True)
+            (directory/"model.pth").write_bytes(b"weights")
+            (directory/"model.json").write_text("{}",encoding="utf-8")
+            self.project.register_structure_model(
+                model_id,
+                str((directory/"model.pth").relative_to(self.project.root)),
+                str((directory/"model.json").relative_to(self.project.root)),
+                parent,digest,"resnet18_heatmap_v1",{"structure/macro_f1":0.7},
+                ({"specimen_id":specimen,"split":"train"},),
+                activate=active,
+            )
+        self.assertEqual("xray_structure_model_v002",self.project.active_structure_model()["model_id"])
+        self.assertEqual("train",self.project.structure_model_membership("xray_structure_model_v001")[0]["split"])
+        with self.assertRaisesRegex(ValueError,"training parent"):
+            self.project.delete_structure_model("xray_structure_model_v001")
+        self.project.activate_structure_model("xray_structure_model_v001")
+        self.project.delete_structure_model("xray_structure_model_v002")
+        self.assertEqual("xray_structure_model_v001",self.project.active_structure_model()["model_id"])
+
+    def test_portable_structure_package_round_trip_has_no_training_membership_or_paths(self):
+        digest=structure_schema_digest(self.project.scheme);model_id="xray_structure_model_v001"
+        directory=self.project.models_root/model_id;directory.mkdir(parents=True)
+        (directory/"model.pth").write_bytes(b"portable-weights")
+        metadata={
+            "format_version":1,"backend":"resnet18_heatmap_v1","input_size":[768,256],"output_stride":2,
+            "structures":[{"id":item["id"],"name":item["name"],"repeated":bool(item.get("repeated"))} for item in self.project.scheme["structures"]],
+            "thresholds":{item["id"]:0.3 for item in self.project.scheme["structures"]},
+            "schema_digest":digest,"model_id":model_id,"dataset_hash":"abc123",
+            "training_specimens":12,"validation_specimens":3,
+        }
+        (directory/"model.json").write_text(json.dumps(metadata),encoding="utf-8")
+        self.project.register_structure_model(
+            model_id,str((directory/"model.pth").relative_to(self.project.root)),
+            str((directory/"model.json").relative_to(self.project.root)),None,digest,"resnet18_heatmap_v1",
+            {"structure/macro_f1":0.75,"private_path":"D:/secret/project"},
+            (),training_specimen_count=12,validation_specimen_count=3,activate=True,
+        )
+        package=self.root/"structure-ai.zip";export_structure_model_package(self.project,package,model_id)
+        with zipfile.ZipFile(package) as archive:
+            names=set(archive.namelist())
+            manifest=json.loads(archive.read("manifest.json"))
+            text=b"\n".join(archive.read(name) for name in names if not name.endswith(".pth"))
+        self.assertEqual({"manifest.json","artifacts/model.pth","artifacts/model.json"},names)
+        self.assertEqual(MODEL_PACKAGE_FORMAT,manifest["package_format"])
+        self.assertNotIn(b"D:/secret/project",text)
+        self.assertNotIn(b"specimen_id",text)
+        other_source=self.root/"other_source";other_source.mkdir()
+        Image.fromarray(np.full((200,400),80,np.uint8)).save(other_source/"one.png")
+        other_root=self.root/"other_projects";other_root.mkdir()
+        other=XRayProject.create("other",other_source,other_root,bundled_scheme("phoxinus_vertebral_counts"))
+        imported=import_structure_model_package(other,package)
+        self.assertEqual(model_id,imported)
+        row=next(item for item in other.structure_models() if item["model_id"]==imported)
+        self.assertFalse(row["active"])
+        self.assertTrue((other.root/row["path"]).is_file())
+        other.activate_structure_model(imported)
+        self.assertEqual(imported,other.active_structure_model()["model_id"])
+
+
+class XRayStructureAIContractTests(unittest.TestCase):
+    def test_runner_is_variable_count_heatmap_model_without_anatomy_changing_flips(self):
+        root=Path(__file__).resolve().parents[1]
+        runner=(root/"ai_runtime/xray_structure_runner.py").read_text(encoding="utf-8")
+        self.assertIn("resnet18",runner)
+        self.assertIn("max_pool2d",runner)
+        self.assertIn("structure.get(\"repeated\")",runner)
+        self.assertIn('"intensity_inversion"',runner)
+        self.assertNotIn("RandomHorizontalFlip",runner)
+        self.assertNotIn("RandomVerticalFlip",runner)
+
+    def test_structures_ui_exposes_training_prediction_review_and_portable_models(self):
+        root=Path(__file__).resolve().parents[1]
+        ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
+        for text in (
+            "Train Structure AI","Models…","Predict next","Predict all","Review AI",
+            "Export…","Import…","human-verified pass 1",
+        ):
+            self.assertIn(text,ui)
+        self.assertIn("train_structure_model",ui)
+        self.assertIn("predict_structures",ui)
+        self.assertIn("export_structure_model_package",ui)
+        self.assertIn("import_structure_model_package",ui)
+
+
+if __name__=="__main__":
+    unittest.main()
