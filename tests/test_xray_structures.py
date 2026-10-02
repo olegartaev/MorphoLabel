@@ -236,6 +236,7 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         structures=self.project.scheme["structures"]
         settings=load_xray_structure_display(self.project,structures)
         self.assertEqual(DEFAULT_SIZE,settings["size"])
+        self.assertEqual(("#56b4e9","#e69f00","#009e73","#cc79a7"),DEFAULT_PALETTE[:4])
         self.assertEqual(len(structures),len(set(settings["colors"].values())))
         self.assertEqual(tuple(settings["colors"][item["id"]] for item in structures),DEFAULT_PALETTE[:len(structures)])
         settings["size"]=12;settings["colors"][structures[0]["id"]]="#12ff34"
@@ -310,14 +311,16 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertNotIn("Structures to mark",ui)
         self.assertIn("trait_rows()",module)
 
-    def test_structure_navigation_is_batch_only_and_apply_is_always_separate(self):
+    def test_structure_toolbar_has_no_previous_next_buttons_and_apply_stays_separate(self):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
-        self.assertIn("self.batch_nav.grid_remove()",ui)
+        self.assertNotIn("self.previous_button=ttk.Button",ui)
+        self.assertNotIn("self.next_button=ttk.Button",ui)
+        self.assertNotIn("self.batch_nav=ttk.Frame",ui)
         self.assertIn("self.apply_separator=ttk.Separator",ui)
-        self.assertNotIn("self.batch_separator",ui)
         self.assertIn("command=self.verify_current",ui)
-        self.assertIn("command=self.verify_next",ui)
+        self.assertIn("def _navigate(self,step):",ui)
+        self.assertIn("def verify_next(self):",ui)
         self.assertIn("if not batch or self.selected_specimen_id not in batch.get(\"ids\",()):return",ui)
         self.assertNotIn("self.pass_box",ui)
 
@@ -330,7 +333,8 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn("self.apply_separator=ttk.Separator",ui)
         self.assertIn('self.active_structure_id=_first_structure_id(self.project.scheme.get("structures",()))',ui)
         self.assertIn("DEFAULT_PALETTE",display)
-        self.assertIn("High-contrast marker visible on black, white and gray radiographs.",display)
+        self.assertIn("Compact high-contrast marker for grayscale radiographs.",display)
+        self.assertIn("DISPLAY_DESIGN_VERSION=2",display)
         self.assertIn("Marker icons and colors",ui)
         self.assertNotIn("Same marker language as Landmarks.",ui)
 
