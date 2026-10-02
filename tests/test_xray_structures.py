@@ -321,7 +321,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn("if not batch or self.selected_specimen_id not in batch.get(\"ids\",()):return",ui)
         self.assertNotIn("self.pass_box",ui)
 
-    def test_structure_toolbar_matches_landmarks_layout_and_resets_first_marker_on_load(self):
+    def test_structure_toolbar_keeps_current_layout_and_restores_original_marker_display(self):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         display=(root/"app/xray_structure_display.py").read_text(encoding="utf-8")
@@ -329,9 +329,10 @@ class XRayStructureUIContractTests(unittest.TestCase):
             self.assertIn(text,ui)
         self.assertIn("self.apply_separator=ttk.Separator",ui)
         self.assertIn('self.active_structure_id=_first_structure_id(self.project.scheme.get("structures",()))',ui)
-        self.assertIn("DEFAULT_SELECTED",display);self.assertIn("DEFAULT_OTHER",display)
-        self.assertIn("draw_marker",display);self.assertIn("draw_label",display)
-        self.assertNotIn("Marker icons and colors",ui)
+        self.assertIn("DEFAULT_PALETTE",display)
+        self.assertIn("High-contrast marker visible on black, white and gray radiographs.",display)
+        self.assertIn("Marker icons and colors",ui)
+        self.assertNotIn("Same marker language as Landmarks.",ui)
 
     def test_structures_use_project_orientation_and_one_plate_source_cache(self):
         root=Path(__file__).resolve().parents[1]
