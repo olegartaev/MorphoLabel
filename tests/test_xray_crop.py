@@ -61,8 +61,9 @@ class XRayCropDetectionTests(unittest.TestCase):
 
 class XRayCropCanonicalizationTests(unittest.TestCase):
     def test_orientation_preview_whole_object_transform_and_neutral_options(self):
-        self.assertEqual({"flip_x":True,"flip_y":True,"show_head":True,"show_bottom":True,"neutral":False},orientation_preview_transform("right","up"))
+        self.assertEqual({"flip_x":True,"flip_y":True,"show_head":True,"show_tail":True,"show_bottom":True,"neutral":False},orientation_preview_transform("right","up"))
         self.assertFalse(orientation_preview_transform("none","down")["show_head"])
+        self.assertFalse(orientation_preview_transform("none","down")["show_tail"])
         self.assertFalse(orientation_preview_transform("left","none")["show_bottom"])
         self.assertTrue(orientation_preview_transform("none","none")["neutral"])
 
