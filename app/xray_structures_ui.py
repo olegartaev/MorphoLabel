@@ -7,16 +7,17 @@ import tkinter as tk
 from tkinter import colorchooser, messagebox, ttk
 
 import numpy as np
-from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageTk
 
 from app.photo_list import PhotoListCanvas
 from app.ui.icons import CONTROL_ICON_SIZE, tk_icon
 from app.ui.photo_list_panel import filtered_photo_indices
 from app.ui.tooltips import Tooltip
 from .xray_crop import oriented_crop
+from .xray_schema import compatible_reference_roles
 from .xray_structure_display import (
     DEFAULT_LABEL_SIZE, DEFAULT_SIZE, SYMBOL_LABELS, SYMBOL_NAMES,
-    draw_xray_marker, load_xray_structure_display, marker_style,
+    draw_xray_marker, draw_xray_role_badges, load_xray_structure_display, marker_style,
     normalize_xray_structure_display, save_xray_structure_display,
 )
 
@@ -142,7 +143,8 @@ class XRayStructureWorkspace:
         self.selected_specimen_id=str(initial_specimen_id or "");self.preferred_image_id=str(initial_image_id or "")
         self.active_structure_id=None;self.selected_annotation_id=None
         self.crop_image=None;self.photo=None;self.zoom=1.0;self.pan=None;self.pan_drag=None;self._raster_key=None;self._image_item=None
-        self.annotations=[];self._drag_annotation=None;self._drag_last_screen=None;self._marker_buttons={};self._icons={}
+        self.annotations=[];self.roles=[];self._drag_annotation=None;self._drag_last_screen=None;self._marker_buttons={};self._icons={}
+        self._right_gesture=None;self._menu_icons=[]
         self.display_settings=load_xray_structure_display(self.project,self.project.scheme.get("structures",()))
         self._source_cache_id="";self._source_cache=None
         self._key_bind_id=None
@@ -180,7 +182,7 @@ class XRayStructureWorkspace:
         for event,handler in (
             ("<Configure>",lambda _e:self._draw()),
             ("<Button-1>",self._canvas_down),("<B1-Motion>",self._canvas_drag),("<ButtonRelease-1>",self._canvas_up),
-            ("<Button-3>",self._pan_start),("<B3-Motion>",self._pan_motion),("<ButtonRelease-3>",self._pan_end),
+            ("<Button-3>",self._right_start),("<B3-Motion>",self._right_motion),("<ButtonRelease-3>",self._right_end),
             ("<Button-2>",self._pan_start),("<B2-Motion>",self._pan_motion),("<ButtonRelease-2>",self._pan_end),
             ("<MouseWheel>",self._wheel),
         ):self.canvas.bind(event,handler)
@@ -278,7 +280,9 @@ class XRayStructureWorkspace:
         structures,settings=self._styles();ids={item["id"] for item in structures}
         if self.active_structure_id not in ids:self.active_structure_id=structures[0]["id"] if structures else None
         counts={}
-        for row in self.annotations:counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
+        if self.selected_specimen_id:
+            for row in self.project.effective_annotations(self.selected_specimen_id,self.pass_no.get()):
+                counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
         self._marker_buttons={}
         for structure in _structure_button_order(structures):
             index=structures.index(structure);style=marker_style(settings,structure,index);group=ttk.Frame(self.marker_host,style="WorkflowDock.TFrame");group.pack(side="left",padx=2)
@@ -319,12 +323,12 @@ class XRayStructureWorkspace:
             self.crop_image=_display_ready(crop)
         except Exception as exc:
             messagebox.showerror("Structures",f"Could not open specimen crop:\n{exc}",parent=self.root);self.crop_image=None
-        self.annotations=self.project.annotations(specimen_id,self.pass_no.get())
+        self.annotations=self.project.annotations(specimen_id,self.pass_no.get());self.roles=self.project.annotation_roles(specimen_id,self.pass_no.get())
         self.zoom=1.0;self.pan=None;self.pan_drag=None;self._raster_key=None;self._image_item=None;self.photo=None;self.canvas.delete("all")
         self.specimen_list.select(specimen_id,reveal=True);self._build_marker_buttons();self._update_counts();self._draw();self._refresh_summary();self._refresh_workflow();self._notify_selection();self.canvas.focus_set()
 
     def _clear(self):
-        self.selected_specimen_id="";self.crop_image=self.photo=None;self.annotations=[];self.context_label.configure(text="No eligible specimen")
+        self.selected_specimen_id="";self.crop_image=self.photo=None;self.annotations=[];self.roles=[];self.context_label.configure(text="No eligible specimen")
         self._image_item=None;self._raster_key=None;self.pan=None;self.canvas.delete("all");self._build_marker_buttons();self._update_counts()
 
     def _refresh_summary(self):
@@ -346,7 +350,9 @@ class XRayStructureWorkspace:
 
     def _update_counts(self):
         counts={}
-        for row in self.annotations:counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
+        if self.selected_specimen_id:
+            for row in self.project.effective_annotations(self.selected_specimen_id,self.pass_no.get()):
+                counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
         structures=list(self.project.scheme.get("structures") or ())
         self.counts_label.configure(text="   ·   ".join(f"{item['name']}: {counts.get(item['id'],0)}" for item in structures))
         run=self.project.annotation_run(self.selected_specimen_id,self.pass_no.get(),create=False) if self.selected_specimen_id else None
@@ -389,8 +395,9 @@ class XRayStructureWorkspace:
         self.canvas.delete("structure_overlay");self.canvas.delete("structure_hint")
         if self.crop_image is None:return
         structures,settings=self._styles();by_id={item["id"]:(index,item) for index,item in enumerate(structures)}
-        grouped={}
+        grouped={};roles_by_annotation={}
         for row in self.annotations:grouped.setdefault(row["structure_id"],[]).append(row)
+        for role in self.roles:roles_by_annotation.setdefault(int(role["annotation_id"]),[]).append(role)
         for sid,rows in grouped.items():
             pair=by_id.get(sid)
             if pair is None:continue
@@ -401,7 +408,18 @@ class XRayStructureWorkspace:
                     self.canvas,sx,sy,color=style["color"],size=style["size"],symbol=style["symbol"],label=label,label_size=style["label_size"],
                     selected=row["annotation_id"]==self.selected_annotation_id,tags=(f"annotation:{row['annotation_id']}",),
                 )
-        hint="Selected marker · drag to move · Delete to remove" if self.selected_annotation_id else "Choose a marker below, then click the anatomy"
+                role_colors=[]
+                for role in roles_by_annotation.get(int(row["annotation_id"]),()):
+                    role_pair=by_id.get(role["structure_id"])
+                    if role_pair is None:continue
+                    role_index,role_structure=role_pair;role_colors.append(marker_style(settings,role_structure,role_index)["color"])
+                draw_xray_role_badges(self.canvas,sx,sy,colors=role_colors,size=style["size"],tags=(f"annotation:{row['annotation_id']}",))
+        if self.selected_annotation_id:
+            attached=roles_by_annotation.get(int(self.selected_annotation_id),())
+            role_names=[by_id[role["structure_id"]][1]["name"] for role in attached if role["structure_id"] in by_id]
+            hint="Selected marker · drag to move · Delete to remove"
+            if role_names:hint+=" · also: "+", ".join(role_names)
+        else:hint="Choose a marker below, then click the anatomy · right-click a point for start / stop roles"
         self.canvas.create_text(12,12,anchor="nw",text=hint,fill="white",font=("Segoe UI",9,"bold"),tags=("structure_hint",))
 
     def _nearest(self,event):
@@ -412,16 +430,21 @@ class XRayStructureWorkspace:
         return best[1] if best else None
 
     def _after_edit(self,text="Saved · draft"):
-        self.annotations=self.project.annotations(self.selected_specimen_id,self.pass_no.get())
+        self.annotations=self.project.annotations(self.selected_specimen_id,self.pass_no.get());self.roles=self.project.annotation_roles(self.selected_specimen_id,self.pass_no.get())
         self.save_label.configure(text=text);self.specimen_list.refresh(preserve_scroll=True);self._build_marker_buttons();self._update_counts();self._refresh_summary();self._refresh_workflow();self._draw_overlays();self.on_changed()
 
     def _canvas_down(self,event):
         if self.crop_image is None or not self.selected_specimen_id:return
-        self.canvas.focus_set();near=self._nearest(event)
+        self.canvas.focus_set();near=self._nearest(event);structure=self._structure()
         if near is not None:
+            if structure is not None and not bool(structure.get("repeated")):
+                compatible={item["id"] for item in compatible_reference_roles(self.project.scheme,near["structure_id"])}
+                if structure["id"] in compatible:
+                    try:self.project.assign_annotation_role(near["annotation_id"],structure["id"])
+                    except Exception as exc:messagebox.showerror("Structures",str(exc),parent=self.root);return
+                    self.selected_annotation_id=near["annotation_id"];self._after_edit();return
             self.selected_annotation_id=near["annotation_id"];self.active_structure_id=near["structure_id"];self._drag_annotation=near["annotation_id"]
             self._drag_last_screen=self._screen(near["x"],near["y"]);self._build_marker_buttons();self._draw_overlays();return
-        structure=self._structure()
         if structure is None:return
         nx,ny=self._normal(event.x,event.y)
         self.selected_annotation_id=self.project.add_annotation(
@@ -442,6 +465,58 @@ class XRayStructureWorkspace:
         try:self.project.move_annotation(annotation_id,nx,ny)
         except Exception as exc:messagebox.showerror("Structures",str(exc),parent=self.root);return
         self._after_edit()
+
+    def _role_menu_icon(self,color):
+        image=Image.new("RGBA",(16,16),(0,0,0,0));draw=ImageDraw.Draw(image)
+        draw.ellipse((1,1,14,14),fill="#101418");draw.ellipse((3,3,12,12),fill=str(color))
+        icon=ImageTk.PhotoImage(image,master=self.canvas);self._menu_icons.append(icon);return icon
+
+    def _show_role_menu(self,event,row):
+        structures,settings=self._styles();by_id={item["id"]:(index,item) for index,item in enumerate(structures)}
+        compatible=compatible_reference_roles(self.project.scheme,row["structure_id"])
+        assigned={role["structure_id"] for role in self.roles if int(role["annotation_id"])==int(row["annotation_id"])}
+        menu=tk.Menu(self.canvas,tearoff=False);self._menu_icons=[]
+        menu.add_command(label="Use this point as…",state="disabled")
+        if compatible:
+            for role in compatible:
+                pair=by_id.get(role["id"]);index=pair[0] if pair else 0;style=marker_style(settings,role,index)
+                icon=self._role_menu_icon(style["color"]);is_assigned=role["id"] in assigned
+                def toggle(role_id=role["id"],attached=is_assigned,annotation_id=row["annotation_id"]):
+                    try:
+                        if attached:self.project.remove_annotation_role(annotation_id,role_id)
+                        else:self.project.assign_annotation_role(annotation_id,role_id)
+                    except Exception as exc:messagebox.showerror("Structures",str(exc),parent=self.root);return
+                    self.selected_annotation_id=annotation_id;self._after_edit()
+                menu.add_command(label=("✓  " if is_assigned else "    ")+role["name"],image=icon,compound="left",command=toggle)
+        else:menu.add_command(label="No compatible start / stop roles",state="disabled")
+        menu.add_separator();menu.add_command(label="Delete marker",command=self.delete_selected)
+        self.selected_annotation_id=row["annotation_id"];self.active_structure_id=row["structure_id"];self._build_marker_buttons();self._draw_overlays()
+        try:menu.tk_popup(event.x_root,event.y_root)
+        finally:menu.grab_release()
+
+    def _right_start(self,event):
+        if self.crop_image is None:return "break"
+        self._right_gesture={"x":event.x,"y":event.y,"pan":self.pan or (0.0,0.0),"near":self._nearest(event),"panning":False}
+        return "break"
+
+    def _right_motion(self,event):
+        gesture=self._right_gesture
+        if not gesture:return "break"
+        dx=event.x-gesture["x"];dy=event.y-gesture["y"]
+        if not gesture["panning"] and math.hypot(dx,dy)>=5:
+            gesture["panning"]=True;self.canvas.configure(cursor="fleur")
+        if gesture["panning"]:
+            new=(gesture["pan"][0]+dx,gesture["pan"][1]+dy);old=self.pan or new;mx=new[0]-old[0];my=new[1]-old[1];self.pan=new
+            if self._image_item is not None:self.canvas.coords(self._image_item,*new)
+            self.canvas.move("structure_overlay",mx,my)
+        return "break"
+
+    def _right_end(self,event):
+        gesture=self._right_gesture;self._right_gesture=None;self.canvas.configure(cursor="crosshair")
+        if not gesture:return "break"
+        if gesture["panning"]:return "break"
+        if gesture["near"] is not None:self._show_role_menu(event,gesture["near"])
+        return "break"
 
     def _pan_start(self,event):
         if self.crop_image is None:return
