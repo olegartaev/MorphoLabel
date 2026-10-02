@@ -8,7 +8,7 @@ from PIL import Image
 
 from app.xray_crop import crop_from_geometry
 from app.xray_project import XRayProject
-from app.xray_schema import blank_scheme, bundled_scheme, calculate_trait_values
+from app.xray_schema import blank_scheme, bundled_scheme, calculate_trait_values, compatible_reference_roles
 from app.xray_structure_display import DEFAULT_PALETTE, DEFAULT_SIZE, load_xray_structure_display, save_xray_structure_display
 from app.xray_structures_ui import _structure_button_order
 
@@ -56,6 +56,43 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         self.assertTrue(self.project.delete_annotation(annotation_id))
         self.assertEqual([],self.project.annotations(self.specimen_id,1))
         self.assertEqual(["add","move","delete"],[event["action"] for event in self.project.annotation_events(self.specimen_id,1)])
+
+    def test_reference_roles_reuse_existing_series_point_without_duplicate_marker(self):
+        one=self.project.add_annotation(self.specimen_id,"vertebra",0.2,0.5,1)
+        two=self.project.add_annotation(self.specimen_id,"vertebra",0.4,0.5,1)
+        compatible=[item["id"] for item in compatible_reference_roles(self.project.scheme,"vertebra")]
+        self.assertEqual(["first_caudal","last_predorsal"],compatible)
+        self.assertTrue(self.project.assign_annotation_role(two,"first_caudal"))
+        self.assertEqual(2,len(self.project.annotations(self.specimen_id,1)))
+        roles=self.project.annotation_roles(self.specimen_id,1)
+        self.assertEqual(1,len(roles));self.assertEqual(two,roles[0]["annotation_id"])
+        ref=next(row for row in self.project.effective_annotations(self.specimen_id,1) if row["structure_id"]=="first_caudal")
+        self.assertAlmostEqual(0.4,ref["x"])
+        self.project.move_annotation(two,0.47,0.52)
+        ref=next(row for row in self.project.effective_annotations(self.specimen_id,1) if row["structure_id"]=="first_caudal")
+        self.assertAlmostEqual(0.47,ref["x"]);self.assertAlmostEqual(0.52,ref["y"])
+        self.project.delete_annotation(two)
+        self.assertEqual([],self.project.annotation_roles(self.specimen_id,1))
+
+    def test_assigning_shared_reference_replaces_old_standalone_reference(self):
+        standalone=self.project.add_annotation(self.specimen_id,"first_caudal",0.55,0.5,1,replace_single=True)
+        vertebra=self.project.add_annotation(self.specimen_id,"vertebra",0.4,0.5,1)
+        self.project.assign_annotation_role(vertebra,"first_caudal")
+        ids=[row["annotation_id"] for row in self.project.annotations(self.specimen_id,1)]
+        self.assertNotIn(standalone,ids)
+        refs=[row for row in self.project.effective_annotations(self.specimen_id,1) if row["structure_id"]=="first_caudal"]
+        self.assertEqual(1,len(refs));self.assertEqual(vertebra,refs[0]["annotation_id"])
+
+    def test_verify_warns_with_missing_category_names_and_accepts_shared_roles(self):
+        v1=self.project.add_annotation(self.specimen_id,"vertebra",0.2,0.5,1)
+        v2=self.project.add_annotation(self.specimen_id,"vertebra",0.4,0.5,1)
+        self.project.assign_annotation_role(v2,"first_caudal")
+        self.project.assign_annotation_role(v1,"last_predorsal")
+        with self.assertRaisesRegex(ValueError,"Pre-anal pterygiophores"):
+            self.project.verify_annotations(self.specimen_id,1)
+        self.project.add_annotation(self.specimen_id,"preanal_pterygiophore",0.5,0.7,1)
+        result=self.project.verify_annotations(self.specimen_id,1)
+        self.assertEqual(1,result["counts"]["first_caudal"]);self.assertEqual(1,result["counts"]["last_predorsal"])
 
     def test_single_reference_is_replaced_instead_of_duplicated(self):
         first=self.project.add_annotation(self.specimen_id,"first_caudal",0.4,0.5,1,replace_single=True)
