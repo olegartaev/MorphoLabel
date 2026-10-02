@@ -331,7 +331,7 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn('"#d93025"',ui)
         self.assertIn('"#e6a700"',ui)
         self.assertIn('"#188038"',ui)
-        self.assertIn("self.apply_group.pack_forget()",ui)
+        self.assertIn("self.apply_group.grid_forget()",ui)
         self.assertIn('"CropApply.TButton"',ui)
         self.assertIn('style="CropApply.TButton",icon="verify"',ui)
         self.assertIn('"Delete crop",self.delete_selected',ui)
@@ -341,7 +341,14 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn("flip_selected_horizontal",ui)
         self.assertIn("flip_selected_vertical",ui)
         self.assertNotIn("rotate_selected_180",ui)
-        self.assertIn('"Clear crops…"',ui)
+        self.assertIn('"clear_crops",self.clear_plate_crops',ui)
+        self.assertIn('"delete_crop",self.delete_selected',ui)
+        toolbar=ui[ui.index("self.orientation_actions="):ui.index("self.instruction=ttk.Label")]
+        self.assertLess(toolbar.index("self.flip_h_button"),toolbar.index("self.selection_separator"))
+        self.assertLess(toolbar.index("self.selection_separator"),toolbar.index("self.delete_crop_button"))
+        self.assertLess(toolbar.index("self.delete_crop_button"),toolbar.index("self.clear_plate_button"))
+        self.assertIn("self.apply_group=ttk.Frame(actions",ui)
+        self.assertIn("self.apply_group.grid(row=0,column=2,sticky=\"e\")",ui)
         self.assertIn("excluded rows stay inspectable/selectable",ui)
 
     def test_runtime_runner_uses_one_class_rtmdet_tiny_and_coco(self):

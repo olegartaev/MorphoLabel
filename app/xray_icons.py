@@ -14,7 +14,7 @@ TRAIT_ICON_SIZE=20
 XRAY_ICON_NAMES=frozenset({
     "xray","xray_project","xray_crops","xray_structures","xray_results","xray_export",
     "count","count_to","count_between","position","presence","distance","angle","derived","counted_element","reference_mark","annotation_setup","trait_setup",
-    "flip_horizontal","flip_vertical",
+    "flip_horizontal","flip_vertical","delete_crop","clear_crops",
 })
 
 XRAY_DARK="#31485b"
@@ -260,6 +260,17 @@ def render_xray_icon(name,size=XRAY_ICON_SIZE):
         d.polygon([(p(16),p(4)),(p(11),p(10)),(p(21),p(10))],fill=ACCENT_ORANGE)
         d.polygon([(p(16),p(28)),(p(11),p(22)),(p(21),p(22))],fill=ACCENT_ORANGE)
         _line(d,p,[(7,16),(25,16)],XRAY_DARK,1.2)
+
+    elif name=="delete_crop":
+        d.rounded_rectangle((p(5),p(7),p(24),p(25)),radius=p(1.8),fill="#f8fbfd",outline=BLUE,width=w(1.5))
+        _crop_brackets(d,p,BLUE)
+        _line(d,p,[(20,9),(28,17)],RED,2.5);_line(d,p,[(28,9),(20,17)],RED,2.5)
+    elif name=="clear_crops":
+        d.rounded_rectangle((p(4),p(6),p(19),p(18)),radius=p(1.4),fill="#f8fbfd",outline=MUTED,width=w(1.1))
+        d.rounded_rectangle((p(9),p(11),p(24),p(23)),radius=p(1.4),fill="#f8fbfd",outline=BLUE,width=w(1.3))
+        d.rounded_rectangle((p(14),p(16),p(29),p(28)),radius=p(1.4),fill="#f8fbfd",outline=XRAY_DARK,width=w(1.1))
+        _line(d,p,[(5,27),(27,5)],RED,2.6)
+        d.polygon([(p(5),p(24)),(p(8),p(27)),(p(12),p(23)),(p(9),p(20))],fill=ACCENT_ORANGE,outline="#ffffff")
 
     elif name=="trait_setup":
         # Step 2: anatomical annotations are combined into an output trait.

@@ -313,7 +313,7 @@ class XRayCropWorkspace:
         if key not in self._icons:self._icons[key]=tk_xray_icon(master,name,size)
         return self._icons[key]
 
-    def _orientation_button(self,parent,name,command,help_text):
+    def _tool_icon_button(self,parent,name,command,help_text):
         button=ttk.Button(parent,text="",image=self._xray_icon(parent,name),style="Icon.TButton",command=command,width=3)
         self._tip.bind(button,help_text);return button
 
@@ -331,39 +331,39 @@ class XRayCropWorkspace:
         header=ttk.Frame(main);header.grid(row=0,column=0,sticky="ew",pady=(0,4));header.columnconfigure(0,weight=1)
         actions=ttk.Frame(header,style="Toolbar.TFrame");actions.grid(row=0,column=0,sticky="ew");actions.columnconfigure(1,weight=1)
         self.left_actions=ttk.Frame(actions,style="Toolbar.TFrame");self.left_actions.grid(row=0,column=0,sticky="w")
-        self.apply_group=ttk.Frame(self.left_actions,style="Toolbar.TFrame");self.apply_group.pack(side="left")
-        ttk.Style(self.root).configure("CropApply.TButton",padding=(14,9),font=("Segoe UI",10,"bold"))
-        self.apply_host=ttk.Frame(self.apply_group,style="Toolbar.TFrame");self.apply_host.pack(side="left")
-        self.apply_button=self._button(
-            self.apply_host,"Apply crop",self.apply_current,
-            "Accept the current specimen crops as human-reviewed and keep this plate open.",style="CropApply.TButton",icon="verify",
-        );self.apply_button.pack(side="left")
-        self.save_status=ttk.Label(self.apply_host,text="",style="Muted.TLabel");self.save_status.pack(side="left",padx=(8,0))
-        ttk.Separator(self.apply_group,orient="vertical").pack(side="left",fill="y",padx=7,pady=2)
-        self.crop_actions=ttk.Frame(self.left_actions,style="Toolbar.TFrame");self.crop_actions.pack(side="left")
-        self.delete_crop_button=self._button(
-            self.crop_actions,"Delete crop",self.delete_selected,
-            "Remove only the selected crop; changes save when you Apply crop.",style="P.TButton",icon="delete",
-        );self.delete_crop_button.pack(side="left")
-        self.orientation_actions=ttk.Frame(self.crop_actions,style="Toolbar.TFrame");self.orientation_actions.pack(side="left",padx=(5,0))
-        self.flip_h_button=self._orientation_button(
+        self.orientation_actions=ttk.Frame(self.left_actions,style="Toolbar.TFrame");self.orientation_actions.pack(side="left")
+        self.flip_h_button=self._tool_icon_button(
             self.orientation_actions,"flip_horizontal",self.flip_selected_horizontal,
-            "Flip left ↔ right (head).",
+            "Flip left ↔ right. Use when the head is on the wrong side.",
         );self.flip_h_button.pack(side="left")
-        self.flip_v_button=self._orientation_button(
+        self.flip_v_button=self._tool_icon_button(
             self.orientation_actions,"flip_vertical",self.flip_selected_vertical,
-            "Flip top ↕ bottom (ventral).",
+            "Flip top ↕ bottom. Use when the ventral side is on the wrong side.",
         );self.flip_v_button.pack(side="left",padx=(2,0))
-        ttk.Separator(self.left_actions,orient="vertical").pack(side="left",fill="y",padx=7,pady=2)
-        self.clear_plate_button=self._button(
-            self.left_actions,"Clear crops…",self.clear_plate_crops,
-            "Retire all crops on this plate and start crop placement again. Existing coordinate annotations are archived.",style="P.TButton",
-        )
-        self.clear_plate_button.pack(side="left",padx=(8,0))
+        self.selection_separator=ttk.Separator(self.left_actions,orient="vertical")
+        self.selection_separator.pack(side="left",fill="y",padx=7,pady=2)
+        self.crop_actions=ttk.Frame(self.left_actions,style="Toolbar.TFrame");self.crop_actions.pack(side="left")
+        self.delete_crop_button=self._tool_icon_button(
+            self.crop_actions,"delete_crop",self.delete_selected,
+            "Delete the selected crop only.",
+        );self.delete_crop_button.pack(side="left")
+        self.clear_plate_button=self._tool_icon_button(
+            self.crop_actions,"clear_crops",self.clear_plate_crops,
+            "Clear all crops on this plate.",
+        );self.clear_plate_button.pack(side="left",padx=(2,0))
         self.instruction=ttk.Label(
             actions,text="Wheel = zoom · right-drag = pan · blue = head · orange = ventral side",
             style="Muted.TLabel",anchor="center",
         );self.instruction.grid(row=0,column=1,sticky="ew",padx=10)
+
+        self.apply_group=ttk.Frame(actions,style="Toolbar.TFrame");self.apply_group.grid(row=0,column=2,sticky="e")
+        ttk.Style(self.root).configure("CropApply.TButton",padding=(14,9),font=("Segoe UI",10,"bold"))
+        self.apply_host=ttk.Frame(self.apply_group,style="Toolbar.TFrame");self.apply_host.pack(side="right")
+        self.save_status=ttk.Label(self.apply_host,text="",style="Muted.TLabel");self.save_status.pack(side="left",padx=(0,8))
+        self.apply_button=self._button(
+            self.apply_host,"Apply crop",self.apply_current,
+            "Accept the current specimen crops as human-reviewed and keep this plate open.",style="CropApply.TButton",icon="verify",
+        );self.apply_button.pack(side="left")
 
         self.batch_actions=ttk.Frame(actions,style="Toolbar.TFrame")
         self.status_previous=self._button(self.batch_actions,"‹ Previous",lambda:self._move_batch(-1),"Show the previous plate in this finite batch.",style="Nav.TButton")
@@ -518,10 +518,10 @@ class XRayCropWorkspace:
         active=self._active_batch()
         if active is None:
             self.batch_actions.grid_forget()
-            if not self.apply_group.winfo_manager():self.apply_group.pack(side="left",before=self.crop_actions)
+            if not self.apply_group.winfo_manager():self.apply_group.grid(row=0,column=2,sticky="e")
             self.instruction.grid()
             return
-        self.apply_group.pack_forget();self.instruction.grid()
+        self.apply_group.grid_forget();self.instruction.grid()
         self.batch_actions.grid(row=0,column=2,sticky="e")
         ids=list(active.get("ids") or []);pos=ids.index(self.selected_image_id)
         self.status_previous.configure(state="normal" if pos>0 else "disabled")
@@ -540,7 +540,7 @@ class XRayCropWorkspace:
 
     def _clear_canvas(self):
         self.canvas.delete("all");self.preview=self.photo=None;self._photo_key=None;self.selected_image_id=None;self.session.load(())
-        self.zoom=1.0;self.pan=None;self.pan_drag=None;self._turn_hit=None
+        self.zoom=1.0;self.pan=None;self.pan_drag=None
         self._set_save_status();self._update_batch_controls()
 
     def _set_save_status(self,text=None):
