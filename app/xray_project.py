@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import random
 import sqlite3
 import shutil
 from datetime import datetime, timezone
@@ -568,28 +569,17 @@ class XRayProject:
         return result
 
     @staticmethod
-    def _round_robin_series(images,count):
-        groups={}
-        for image in images:
-            parent=Path(image["relative_path"]).parent.as_posix()
-            groups.setdefault(parent,[]).append(image["image_id"])
-        ordered=[];keys=sorted(groups)
-        while keys and len(ordered)<int(count):
-            next_keys=[]
-            for key in keys:
-                values=groups[key]
-                if values:ordered.append(values.pop(0))
-                if values:next_keys.append(key)
-                if len(ordered)>=int(count):break
-            keys=next_keys
-        return ordered
+    def _sample_crop_plate_ids(image_ids,count,seed=42):
+        """Seeded random sample from the whole eligible plate pool."""
+        candidates=list(dict.fromkeys(str(value) for value in image_ids))
+        return random.Random(int(seed)).sample(candidates,min(max(0,int(count)),len(candidates)))
 
     def training_candidate_ids(self):
         return [image["image_id"] for image in self.source_images() if not image["excluded"] and not image["crop_reviewed"]]
 
     def select_training_plate_ids(self,count):
         candidates=[image for image in self.source_images() if not image["excluded"] and not image["crop_reviewed"]]
-        return self._round_robin_series(candidates,max(1,int(count)))
+        return self._sample_crop_plate_ids((image["image_id"] for image in candidates),max(1,int(count)))
 
     def prediction_candidate_ids(self):
         ids=[]
@@ -606,7 +596,7 @@ class XRayProject:
     def select_prediction_plate_ids(self,count):
         allowed=set(self.prediction_candidate_ids())
         candidates=[image for image in self.source_images() if image["image_id"] in allowed]
-        return self._round_robin_series(candidates,max(1,int(count)))
+        return self._sample_crop_plate_ids((image["image_id"] for image in candidates),max(1,int(count)))
 
     def ai_review_plate_ids(self):
         ids=[]
@@ -615,6 +605,10 @@ class XRayProject:
             if any(item["crop_source"]=="model" and item["crop_status"]=="proposed" and not item["excluded"] for item in self.specimens(image["image_id"])):
                 ids.append(image["image_id"])
         return ids
+
+    def select_ai_review_plate_ids(self,count=None):
+        candidates=self.ai_review_plate_ids()
+        return self._sample_crop_plate_ids(candidates,len(candidates) if count is None else max(1,int(count)))
 
     def next_crop_model_id(self):
         with sqlite3.connect(self.db_path) as c:

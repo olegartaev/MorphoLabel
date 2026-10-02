@@ -230,15 +230,32 @@ class XRayDetectorWorkflowTests(unittest.TestCase):
         self.assertEqual(1,len(active));self.assertEqual("confirmed",active[0]["crop_status"])
         self.assertEqual(1,len(self.project.training_plates()))
 
-    def test_batch_selection_round_robins_source_series(self):
-        images=[
-            {"image_id":"a1","relative_path":"A/1.tif"},
-            {"image_id":"a2","relative_path":"A/2.tif"},
-            {"image_id":"b1","relative_path":"B/1.tif"},
-            {"image_id":"b2","relative_path":"B/2.tif"},
-            {"image_id":"c1","relative_path":"C/1.tif"},
-        ]
-        self.assertEqual(["a1","b1","c1","a2"],XRayProject._round_robin_series(images,4))
+    def test_batch_selection_samples_the_global_pool_reproducibly(self):
+        pool=[f"plate_{index:02d}" for index in range(12)]
+        selected=XRayProject._sample_crop_plate_ids(pool,5,seed=42)
+        self.assertEqual(selected,XRayProject._sample_crop_plate_ids(pool,5,seed=42))
+        self.assertEqual(5,len(set(selected)))
+        self.assertTrue(set(selected).issubset(pool))
+        self.assertNotEqual(pool[:5],selected)
+
+    def test_training_and_prediction_batches_sample_all_eligible_plates(self):
+        all_ids=[row["image_id"] for row in self.project.source_images()]
+        expected=XRayProject._sample_crop_plate_ids(all_ids,3)
+        self.assertEqual(expected,self.project.select_training_plate_ids(3))
+        crop=crop_from_geometry(450,240,620,190,0,(900,480),algorithm="test")
+        self.project.replace_model_proposals(all_ids[0],[crop],"xray_crop_model_v001")
+        prediction_pool=self.project.prediction_candidate_ids()
+        expected_prediction=XRayProject._sample_crop_plate_ids(prediction_pool,3)
+        self.assertEqual(expected_prediction,self.project.select_prediction_plate_ids(3))
+
+    def test_ai_review_queue_uses_seeded_randomized_plate_order(self):
+        ids=[row["image_id"] for row in self.project.source_images()]
+        crop=crop_from_geometry(450,240,620,190,0,(900,480),algorithm="test")
+        for image_id in ids:self.project.replace_model_proposals(image_id,[crop],"xray_crop_model_v001")
+        selected=self.project.select_ai_review_plate_ids()
+        self.assertEqual(selected,self.project.select_ai_review_plate_ids())
+        self.assertEqual(set(ids),set(selected))
+        self.assertNotEqual(ids,selected)
 
 
 class XRayHybridGeometryTests(unittest.TestCase):
@@ -314,7 +331,11 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn('"#d93025"',ui)
         self.assertIn('"#e6a700"',ui)
         self.assertIn('"#188038"',ui)
-        self.assertIn("self.apply_host.pack_forget()",ui)
+        self.assertIn("self.apply_group.pack_forget()",ui)
+        self.assertIn('"CropApply.TButton"',ui)
+        self.assertIn('style="CropApply.TButton",icon="verify"',ui)
+        self.assertIn('"Delete crop",self.delete_selected',ui)
+        self.assertIn('"Clear crops…",self.clear_plate_crops',ui)
         self.assertIn("self.batch_actions.grid",ui)
         self.assertIn('"<MouseWheel>"',ui)
         self.assertIn("flip_selected_horizontal",ui)

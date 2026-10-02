@@ -331,18 +331,21 @@ class XRayCropWorkspace:
         header=ttk.Frame(main);header.grid(row=0,column=0,sticky="ew",pady=(0,4));header.columnconfigure(0,weight=1)
         actions=ttk.Frame(header,style="Toolbar.TFrame");actions.grid(row=0,column=0,sticky="ew");actions.columnconfigure(1,weight=1)
         self.left_actions=ttk.Frame(actions,style="Toolbar.TFrame");self.left_actions.grid(row=0,column=0,sticky="w")
-        self.apply_host=ttk.Frame(self.left_actions,style="Toolbar.TFrame");self.apply_host.pack(side="left")
+        self.apply_group=ttk.Frame(self.left_actions,style="Toolbar.TFrame");self.apply_group.pack(side="left")
+        ttk.Style(self.root).configure("CropApply.TButton",padding=(14,9),font=("Segoe UI",10,"bold"))
+        self.apply_host=ttk.Frame(self.apply_group,style="Toolbar.TFrame");self.apply_host.pack(side="left")
         self.apply_button=self._button(
             self.apply_host,"Apply crop",self.apply_current,
-            "Accept the current specimen crops as human-reviewed and keep this plate open.",style="Primary.TButton",
+            "Accept the current specimen crops as human-reviewed and keep this plate open.",style="CropApply.TButton",icon="verify",
         );self.apply_button.pack(side="left")
         self.save_status=ttk.Label(self.apply_host,text="",style="Muted.TLabel");self.save_status.pack(side="left",padx=(8,0))
-        self.clear_plate_button=self._button(
-            self.left_actions,"Clear crops…",self.clear_plate_crops,
-            "Retire all crops on this plate and start crop placement again. Existing coordinate annotations are archived.",icon="delete",
-        )
-        self.clear_plate_button.pack(side="left",padx=(8,0))
-        self.orientation_actions=ttk.Frame(self.left_actions,style="Toolbar.TFrame");self.orientation_actions.pack(side="left",padx=(8,0))
+        ttk.Separator(self.apply_group,orient="vertical").pack(side="left",fill="y",padx=7,pady=2)
+        self.crop_actions=ttk.Frame(self.left_actions,style="Toolbar.TFrame");self.crop_actions.pack(side="left")
+        self.delete_crop_button=self._button(
+            self.crop_actions,"Delete crop",self.delete_selected,
+            "Remove only the selected crop; changes save when you Apply crop.",style="P.TButton",icon="delete",
+        );self.delete_crop_button.pack(side="left")
+        self.orientation_actions=ttk.Frame(self.crop_actions,style="Toolbar.TFrame");self.orientation_actions.pack(side="left",padx=(5,0))
         self.flip_h_button=self._orientation_button(
             self.orientation_actions,"flip_horizontal",self.flip_selected_horizontal,
             "Flip left ↔ right (head).",
@@ -351,6 +354,12 @@ class XRayCropWorkspace:
             self.orientation_actions,"flip_vertical",self.flip_selected_vertical,
             "Flip top ↕ bottom (ventral).",
         );self.flip_v_button.pack(side="left",padx=(2,0))
+        ttk.Separator(self.left_actions,orient="vertical").pack(side="left",fill="y",padx=7,pady=2)
+        self.clear_plate_button=self._button(
+            self.left_actions,"Clear crops…",self.clear_plate_crops,
+            "Retire all crops on this plate and start crop placement again. Existing coordinate annotations are archived.",style="P.TButton",
+        )
+        self.clear_plate_button.pack(side="left",padx=(8,0))
         self.instruction=ttk.Label(
             actions,text="Wheel = zoom · right-drag = pan · blue = head · orange = ventral side",
             style="Muted.TLabel",anchor="center",
@@ -491,6 +500,7 @@ class XRayCropWorkspace:
 
     def _refresh_flip_controls(self):
         state=crop_flip_button_state(bool(self.session.selected_id))
+        self.delete_crop_button.configure(state=state)
         self.flip_h_button.configure(state=state);self.flip_v_button.configure(state=state)
 
     def refresh(self,preserve_plate=True):
@@ -508,10 +518,10 @@ class XRayCropWorkspace:
         active=self._active_batch()
         if active is None:
             self.batch_actions.grid_forget()
-            if not self.apply_host.winfo_manager():self.apply_host.pack(side="left",before=self.clear_plate_button)
+            if not self.apply_group.winfo_manager():self.apply_group.pack(side="left",before=self.crop_actions)
             self.instruction.grid()
             return
-        self.apply_host.pack_forget();self.instruction.grid()
+        self.apply_group.pack_forget();self.instruction.grid()
         self.batch_actions.grid(row=0,column=2,sticky="e")
         ids=list(active.get("ids") or []);pos=ids.index(self.selected_image_id)
         self.status_previous.configure(state="normal" if pos>0 else "disabled")
@@ -882,7 +892,7 @@ class XRayCropWorkspace:
         if self._busy:return
         model=self.project.active_crop_model()
         if not model:messagebox.showinfo("Predict Crop","Train an X-ray crop model first.",parent=self.root);return
-        candidates=self.project.prediction_candidate_ids();ids=candidates if count is None else self.project.select_prediction_plate_ids(max(1,int(count)))
+        candidates=self.project.prediction_candidate_ids();ids=self.project.select_prediction_plate_ids(len(candidates) if count is None else max(1,int(count)))
         if not ids:messagebox.showinfo("Predict Crop","No remaining eligible plates need prediction.",parent=self.root);return
         self._busy=True;events=queue.Queue();cancel=threading.Event();dialog=tk.Toplevel(self.root);dialog.title("Predict Crop");dialog.transient(self.root);dialog.resizable(False,False)
         frame=ttk.Frame(dialog,padding=14);frame.pack();label=ttk.Label(frame,text=f"Preparing crop predictions for {len(ids)} plate(s)…");label.pack(anchor="w")
@@ -910,6 +920,6 @@ class XRayCropWorkspace:
         poll()
 
     def review_ai(self):
-        ids=self.project.ai_review_plate_ids()
+        ids=self.project.select_ai_review_plate_ids()
         if not ids:messagebox.showinfo("Review AI crops","No AI crop proposals require review.",parent=self.root);return
         self._set_batch(ids,"prediction_review",(self.project.active_crop_model() or {}).get("model_id",""))
