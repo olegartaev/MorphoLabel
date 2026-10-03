@@ -18,6 +18,7 @@ from app.xray_structure_ai import (
     prepare_structure_training_dataset,
     structure_schema_digest,
 )
+from app.xray_structures_ui import _current_prediction_allowed
 
 
 class XRayStructureAIWorkflowTests(unittest.TestCase):
@@ -121,6 +122,7 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         protected=self.project.seed_structure_predictions(specimen_id,[],"xray_structure_model_v003")
         self.assertTrue(protected["protected"])
         self.assertEqual("verified",self.project.annotation_run(specimen_id,1)["status"])
+        self.assertNotIn(specimen_id,self.project.structure_prediction_candidate_ids())
         verified_before=[dict(row) for row in self.project.effective_annotations(specimen_id,1,"human")]
         replaced=self.project.seed_structure_predictions(specimen_id,[
             {"structure_id":"vertebra","x":0.34,"y":0.50,"score":0.93},
@@ -153,6 +155,33 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         self.assertEqual("draft",self.project.annotation_run(specimen_id,3,"human")["status"])
         self.assertEqual(main_before,self.project.effective_annotations(specimen_id,1,"human"))
         self.assertIn(specimen_id,self.project.structure_prediction_candidate_ids(3))
+
+    def test_predict_current_tracks_both_repeatability_passes_without_overwriting_either(self):
+        image_id=self.project.source_images()[0]["image_id"]
+        specimen_id=self._add_specimen(image_id,450);self.project.confirm_plate(image_id)
+        self._verify_structure_truth(specimen_id)
+        run=self.project.start_structure_repeatability(1,seed=7)
+        model={"model_id":"test-model"};p1=int(run["annotation1_pass_no"]);p2=int(run["annotation2_pass_no"])
+        self.assertTrue(_current_prediction_allowed(self.project,specimen_id,model,p1))
+        self.assertFalse(_current_prediction_allowed(self.project,specimen_id,model,p2))
+        predictions=[
+            {"structure_id":"vertebra","x":0.22,"y":0.50,"score":0.9},
+            {"structure_id":"vertebra","x":0.43,"y":0.50,"score":0.9},
+            {"structure_id":"first_caudal","x":0.43,"y":0.50,"score":0.9},
+            {"structure_id":"last_predorsal","x":0.22,"y":0.50,"score":0.9},
+            {"structure_id":"preanal_pterygiophore","x":0.58,"y":0.67,"score":0.9},
+        ]
+        self.project.seed_structure_predictions(specimen_id,predictions,"test-model",pass_no=p1)
+        self.assertEqual("draft",self.project.annotation_run(specimen_id,p1)["status"])
+        self.project.verify_annotations(specimen_id,p1)
+        run=self.project.structure_repeatability(run["run_id"])
+        self.assertTrue(_current_prediction_allowed(self.project,specimen_id,model,p2))
+        p1_before=self.project.effective_annotations(specimen_id,p1)
+        self.project.seed_structure_predictions(specimen_id,predictions,"test-model",pass_no=p2)
+        self.assertEqual("draft",self.project.annotation_run(specimen_id,p2)["status"])
+        self.assertEqual(p1_before,self.project.effective_annotations(specimen_id,p1))
+        self.project.verify_annotations(specimen_id,p2)
+        self.assertEqual("completed",self.project.structure_repeatability(run["run_id"])["status"])
 
     def test_structure_model_registry_preserves_lineage_activation_and_membership(self):
         digest=structure_schema_digest(self.project.scheme)
@@ -318,7 +347,9 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertIn("_marker_visibility_vars",ui)
         self.assertIn("add_radiobutton",ui)
         self.assertIn("_VISIBILITY_SYMBOLS",ui)
-        self.assertIn("can_predict=bool(self.selected_specimen_id and model)",ui)
+        self.assertIn("can_predict=_current_prediction_allowed(self.project,self.selected_specimen_id,model,self.pass_no.get())",ui)
+        load=ui[ui.index("    def _load_specimen(self,specimen_id):"):ui.index("    def _clear(self):")]
+        self.assertIn("self._refresh_summary()",load)
         self.assertIn("allow_verified=True",ui)
         self.assertIn("current verified annotation will be archived first",ui)
         self.assertNotIn('text="Visibility:"',ui)

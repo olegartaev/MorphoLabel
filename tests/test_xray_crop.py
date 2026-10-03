@@ -116,18 +116,21 @@ class XRayCropViewportContractTests(unittest.TestCase):
         self.assertIn("state=crop_flip_button_state(bool(self.session.selected_id))",source)
         self.assertIn("self._refresh_flip_controls()",source)
 
-    def test_all_crops_show_compact_orientation_without_full_unselected_boxes(self):
+    def test_all_crops_show_clear_boundary_and_compact_orientation(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
         self.assertIn("def _draw_crop_brackets",source)
-        self.assertIn("blue ▲ = head · amber ● = ventral",source)
+        self.assertIn("blue triangle = head · amber stripe = ventral side",source)
         self.assertIn("def _draw_orientation_markers(self,crop,selected):",source)
         marker=source[source.index("    def _draw_orientation_markers(self,crop,selected):"):source.index("    def _draw_handles(self,crop):")]
         self.assertNotIn("if not selected:return",marker)
-        self.assertNotIn("head_edge",marker)
-        self.assertNotIn("bottom_edge",marker)
+        self.assertIn('geometry["bottom_edge"]',marker)
+        self.assertIn('fill=ventral,width=4 if selected else 3',marker)
+        self.assertIn("head_size=13 if selected else 10",marker)
+        self.assertNotIn("create_oval",marker)
         draw=source[source.index("    def _draw(self):"):source.index("    @staticmethod\n    def _orientation_geometry",source.index("    def _draw(self):"))]
         self.assertIn("self._draw_crop_brackets(corners,color)",draw)
         self.assertIn("if selected:",draw)
+        self.assertIn('outline="#101b24",fill="",width=3',source)
 
     def test_crop_workspace_has_landmarks_style_zoom_pan_and_two_icon_flips(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")

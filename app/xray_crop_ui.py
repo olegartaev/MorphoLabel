@@ -692,22 +692,16 @@ class XRayCropWorkspace:
             pts=[]
             for x,y in self._drawing_crop.get("corners") or ():pts.extend(self._screen(x,y))
             if len(pts)==8:self.canvas.create_polygon(*pts,outline="#35d07f",fill="",width=2,dash=(5,3),tags="crop")
-        hint="Selected crop · Delete removes it · blue ▲ = head · amber ● = ventral" if self.session.selected_id else "Drag empty space to draw a new crop · blue ▲ = head · amber ● = ventral · click a crop to edit"
+        hint="Selected crop · Delete removes it · blue triangle = head · amber stripe = ventral side" if self.session.selected_id else "Drag empty space to draw a new crop · blue triangle = head · amber stripe = ventral side · click a crop to edit"
         self.canvas.create_text(12,12,anchor="nw",fill="#071521",text=hint,tags="crop_hint_shadow")
         self.canvas.create_text(11,11,anchor="nw",fill="white",text=hint,tags="crop_hint")
 
     def _draw_crop_brackets(self,corners,color):
-        """Show an unselected crop without boxing the whole specimen in four long lines."""
+        """Draw a light, complete crop boundary so unselected frames stay legible."""
         screen=[self._screen(*point) for point in corners]
-        for index,corner in enumerate(screen):
-            previous=screen[(index-1)%4];following=screen[(index+1)%4]
-            segments=[]
-            for neighbor in (previous,following):
-                dx=neighbor[0]-corner[0];dy=neighbor[1]-corner[1];length=max(1.0,math.hypot(dx,dy))
-                reach=min(15.0,max(7.0,length*.18));segments.append((corner[0]+dx/length*reach,corner[1]+dy/length*reach))
-            for target in segments:
-                self.canvas.create_line(corner[0],corner[1],target[0],target[1],fill="#101b24",width=4,tags="crop")
-                self.canvas.create_line(corner[0],corner[1],target[0],target[1],fill=color,width=1.7,tags="crop")
+        points=[coordinate for point in screen for coordinate in point]
+        self.canvas.create_polygon(*points,outline="#101b24",fill="",width=3,tags="crop")
+        self.canvas.create_polygon(*points,outline=color,fill="",width=1.5,tags="crop")
 
     @staticmethod
     def _orientation_geometry(crop):
@@ -724,11 +718,7 @@ class XRayCropWorkspace:
         }
 
     def _draw_orientation_markers(self,crop,selected):
-        """Compact orientation glyphs remain visible on every crop.
-
-        A blue outward triangle marks the primary/head end. An amber circular
-        tab marks the ventral/bottom side. Selection changes emphasis, not meaning.
-        """
+        """Show head and ventral orientation on selected and unselected frames."""
         geometry=self._orientation_geometry(crop)
         if geometry is None:return
         cx,cy=self._screen(*geometry["center"]);hx,hy=self._screen(*geometry["head"]);bx,by=self._screen(*geometry["bottom"])
@@ -739,17 +729,16 @@ class XRayCropWorkspace:
             tip=(mx+ux*size,my+uy*size);base=(mx-ux*size*.45,my-uy*size*.45)
             return (tip[0],tip[1],base[0]+px*size*.62,base[1]+py*size*.62,base[0]-px*size*.62,base[1]-py*size*.62)
 
-        head_size=8 if selected else 6
+        head_size=13 if selected else 10
         head="#168ff0";ventral="#ffad1f"
         self.canvas.create_polygon(*triangle(hx,hy,head_size+2),fill="#071521",outline="white" if selected else "#071521",width=1,tags=("crop","orientation"))
         self.canvas.create_polygon(*triangle(hx,hy,head_size),fill=head,outline="white",width=1,tags=("crop","orientation"))
-
-        ux,uy=outward_unit(bx,by);distance=7 if selected else 5
-        ox=bx+ux*distance;oy=by+uy*distance;radius=5 if selected else 4
-        self.canvas.create_line(bx,by,ox,oy,fill="#071521",width=4,tags=("crop","orientation"))
-        self.canvas.create_line(bx,by,ox,oy,fill=ventral,width=2,tags=("crop","orientation"))
-        self.canvas.create_oval(ox-radius-1,oy-radius-1,ox+radius+1,oy+radius+1,fill="#071521",outline="white" if selected else "#071521",width=1,tags=("crop","orientation"))
-        self.canvas.create_oval(ox-radius+1,oy-radius+1,ox+radius-1,oy+radius-1,fill=ventral,outline="",tags=("crop","orientation"))
+        edge=geometry["bottom_edge"];start=self._screen(*edge[0]);end=self._screen(*edge[1])
+        dx=end[0]-start[0];dy=end[1]-start[1];length=max(1.0,math.hypot(dx,dy));ux,uy=dx/length,dy/length
+        half=min(13.0,max(6.0,length*.22));cx,cy=bx,by
+        stripe=(cx-ux*half,cy-uy*half,cx+ux*half,cy+uy*half)
+        self.canvas.create_line(*stripe,fill="#071521",width=6 if selected else 5,capstyle="round",tags=("crop","orientation"))
+        self.canvas.create_line(*stripe,fill=ventral,width=4 if selected else 3,capstyle="round",tags=("crop","orientation"))
 
     def _draw_handles(self,crop):
         corners=crop.get("corners") or []

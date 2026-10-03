@@ -27,6 +27,10 @@ from .xray_structure_display import (
     draw_xray_marker, draw_xray_role_badges, load_xray_structure_display, marker_style, role_color,
     normalize_xray_structure_display, save_xray_structure_display,
 )
+from .xray_result_qc import (
+    clear_result_review_queue, complete_result_review_item,
+    move_result_review_queue, result_review_queue,
+)
 
 
 def _display_ready(image):
@@ -56,6 +60,18 @@ def _structure_button_order(structures):
 def _first_structure_id(structures):
     ordered=_structure_button_order(structures)
     return ordered[0]["id"] if ordered else None
+
+
+def _current_prediction_allowed(project,specimen_id,model,pass_no):
+    """Current prediction follows the selected manual control pass, not batch-pass-1 policy."""
+    if not specimen_id or not model:return False
+    pass_no=int(pass_no)
+    if pass_no==1:return str(specimen_id) in {str(row["specimen_id"]) for row in project.structure_specimens(1)}
+    run=project.structure_repeatability()
+    if not run or not run.get("schema_current") or str(specimen_id) not in {str(value) for value in run.get("ids") or ()}:return False
+    first=int(run.get("annotation1_pass_no") or 0);second=int(run.get("annotation2_pass_no") or 0)
+    if pass_no==first:return True
+    return pass_no==second and int(run.get("annotation1_verified") or 0)>=int(run.get("total") or 0)
 
 
 _VISIBILITY_LABELS={
@@ -256,12 +272,19 @@ class XRayStructureWorkspace:
         outer.bind("<Destroy>",self._destroy,add="+")
         panes=ttk.Panedwindow(outer,orient="horizontal");panes.pack(fill="both",expand=True)
         left=ttk.Frame(panes);main=ttk.Frame(panes);panes.add(left,weight=0);panes.add(main,weight=1);self.panes=panes
-        main.columnconfigure(0,weight=1);main.rowconfigure(1,weight=1)
+        main.columnconfigure(0,weight=1);main.rowconfigure(2,weight=1)
 
         self.specimen_list=XRaySpecimenListPanel(left,self.project,self._list_selected,self.tip);self.specimen_list.pack(fill="both",expand=True)
         self.root.after_idle(self._set_initial_sash)
 
-        header=ttk.Frame(main,style="Toolbar.TFrame");header.grid(row=0,column=0,sticky="ew",pady=(0,4));header.columnconfigure(0,weight=1)
+        self.review_queue_banner=ttk.Frame(main,style="Attention.TFrame",padding=(9,5))
+        self.review_queue_banner.grid(row=0,column=0,sticky="ew",pady=(0,3))
+        self.review_queue_label=ttk.Label(self.review_queue_banner,text="",style="AttentionTitle.TLabel",justify="left",wraplength=760)
+        self.review_queue_label.pack(side="left",fill="x",expand=True)
+        ttk.Button(self.review_queue_banner,text="‹ Previous",command=lambda:self._move_result_review(-1)).pack(side="left",padx=(6,2))
+        ttk.Button(self.review_queue_banner,text="Next ›",command=lambda:self._move_result_review(1),style="Primary.TButton").pack(side="left",padx=2)
+        ttk.Button(self.review_queue_banner,text="×",command=self._close_result_review,width=3).pack(side="left",padx=(2,0))
+        header=ttk.Frame(main,style="Toolbar.TFrame");header.grid(row=1,column=0,sticky="ew",pady=(0,4));header.columnconfigure(0,weight=1)
         meta=ttk.Frame(header,style="Toolbar.TFrame");meta.grid(row=0,column=0,sticky="w",padx=(2,8))
         self._context_values={}
         for column,(key,title) in enumerate((("locality","Locality:"),("plate","Plate:"),("specimen","Specimen:"))):
@@ -295,7 +318,7 @@ class XRayStructureWorkspace:
             tools,text="Check results…",style="P.TButton",command=self.on_check_results,
         )
         self.check_results_button.pack(side="left",padx=(2,4))
-        self.tip.bind(self.check_results_button,"Quickly scan saved results for values or marker patterns worth manual review.")
+        self.tip.bind(self.check_results_button,"Rank suspicious calculated results worst first and start a navigable manual review queue.")
         self.predict_current_button=ttk.Button(
             tools,text="Predict current",image=self._xray_icon(tools,"xray_structures"),compound="left",
             style="P.TButton",command=self.predict_current_structure,
@@ -307,7 +330,7 @@ class XRayStructureWorkspace:
         self.apply_button.grid(row=0,column=2,sticky="e")
         self.tip.bind(self.apply_button,"Verify without moving.")
 
-        canvas_host=ttk.Frame(main);canvas_host.grid(row=1,column=0,sticky="nsew");canvas_host.pack_propagate(False)
+        canvas_host=ttk.Frame(main);canvas_host.grid(row=2,column=0,sticky="nsew");canvas_host.pack_propagate(False)
         self.canvas=tk.Canvas(canvas_host,background="#202020",highlightthickness=0,takefocus=True,cursor="crosshair");self.canvas.pack(fill="both",expand=True)
         for event,handler in (
             ("<Configure>",lambda _e:self._draw()),
@@ -318,11 +341,11 @@ class XRayStructureWorkspace:
         ):self.canvas.bind(event,handler)
         self.canvas.bind("<Delete>",self.delete_selected);self.canvas.bind("<BackSpace>",self.delete_selected)
 
-        marker_dock=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(6,4));marker_dock.grid(row=2,column=0,sticky="ew",pady=(4,0));marker_dock.columnconfigure(1,weight=1)
+        marker_dock=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(6,4));marker_dock.grid(row=3,column=0,sticky="ew",pady=(4,0));marker_dock.columnconfigure(1,weight=1)
         ttk.Label(marker_dock,text="Markers:",style="SectionTitle.TLabel").grid(row=0,column=0,sticky="w",padx=(0,6))
         self.marker_host=ttk.Frame(marker_dock,style="WorkflowDock.TFrame");self.marker_host.grid(row=0,column=1,sticky="ew")
 
-        workflow=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(0,4,0,0));workflow.grid(row=3,column=0,sticky="ew")
+        workflow=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(0,4,0,0));workflow.grid(row=4,column=0,sticky="ew")
         workflow.columnconfigure(0,weight=1);workflow.columnconfigure(1,weight=1);workflow.columnconfigure(2,weight=1);workflow.columnconfigure(3,weight=1)
         one=self._workflow_card(workflow,0,"1. Annotation batch","Work through a finite saved set with batch-only previous / next controls.")
         self.batch_summary=ttk.Label(one,text="",style="Muted.TLabel");self.batch_summary.grid(row=0,column=0,columnspan=3,sticky="w")
@@ -360,9 +383,9 @@ class XRayStructureWorkspace:
         self.structure_review_button.pack(side="left")
         ttk.Button(review_actions,text="Next unfinished",command=self.next_unfinished).pack(side="left",padx=(5,0))
 
-        four=self._workflow_card(workflow,3,"4. Results","Trait values are recalculated from the current saved markers.")
+        four=self._workflow_card(workflow,3,"4. Export","Preview recalculated trait values and export all specimens or verified results.")
         self.results_summary=ttk.Label(four,text="",style="Muted.TLabel");self.results_summary.grid(row=0,column=0,columnspan=2,sticky="w")
-        ttk.Button(four,text="Open Results",command=self.on_open_results).grid(row=1,column=0,sticky="w",pady=(5,0))
+        ttk.Button(four,text="Open Export",command=self.on_open_results).grid(row=1,column=0,sticky="w",pady=(5,0))
         ttk.Button(four,text="Check results…",command=self.on_check_results).grid(row=1,column=1,sticky="w",padx=(5,0),pady=(5,0))
 
     def _workflow_card(self,parent,column,title,help_text):
@@ -565,7 +588,7 @@ class XRayStructureWorkspace:
             messagebox.showerror("Structures",f"Could not open specimen crop:\n{exc}",parent=self.root);self.crop_image=None
         self.annotations=self.project.annotations(specimen_id,self.pass_no.get());self.roles=self.project.annotation_roles(specimen_id,self.pass_no.get())
         self.zoom=1.0;self.pan=None;self.pan_drag=None;self._raster_key=None;self._image_item=None;self.photo=None;self.canvas.delete("all")
-        self.specimen_list.select(specimen_id,reveal=False);self._build_marker_buttons();self._update_counts();self._draw();self._notify_selection();self.canvas.focus_set()
+        self.specimen_list.select(specimen_id,reveal=False);self._build_marker_buttons();self._update_counts();self._refresh_summary();self._draw();self._notify_selection();self.canvas.focus_set()
 
     def _clear(self):
         self.selected_specimen_id="";self.crop_image=self.photo=None;self.annotations=[];self.roles=[]
@@ -590,10 +613,33 @@ class XRayStructureWorkspace:
         for key,label in self.summary_labels.items():label.configure(text=f"{labels[key]}: {summary[key]}")
         state="normal" if self.selected_specimen_id else "disabled";self.apply_button.configure(state=state)
         model=self.project.active_structure_model()
-        can_predict=bool(self.selected_specimen_id and model)
+        can_predict=_current_prediction_allowed(self.project,self.selected_specimen_id,model,self.pass_no.get())
         self.predict_current_button.configure(state="normal" if can_predict else "disabled")
 
+    def _refresh_result_review_banner(self):
+        value=result_review_queue(self.project)
+        if value is None:
+            self.review_queue_banner.grid_remove();return
+        items=value["items"];position=int(value["position"]);item=items[position]
+        self.review_queue_label.configure(
+            text=f"Result review · {position+1} / {len(items)} · {item['severity'].upper()} · score {item['score']:.1f} · {item['sample']} · {item['plate']} · specimen {item['ordinal']} · {item['issue_count']} check(s)\n{item.get('top_reason') or 'Inspect this specimen and verify when the markers are correct.'}"
+        )
+        self.review_queue_banner.grid()
+
+    def _move_result_review(self,step):
+        value,_finished=move_result_review_queue(self.project,step)
+        if value is None:return
+        current=result_review_queue(self.project)
+        if current:
+            item=current["items"][int(current["position"])]
+            self.pass_no.set(1);self.specimen_list.pass_no=1;self._load_specimen(item["specimen_id"])
+        self._refresh_result_review_banner()
+
+    def _close_result_review(self):
+        clear_result_review_queue(self.project);self._refresh_result_review_banner()
+
     def _refresh_workflow(self):
+        self._refresh_result_review_banner()
         p1=self.project.annotation_summary(1);current_summary=self.project.annotation_summary(self.pass_no.get());batch=self.project.structure_batch(self.pass_no.get())
         self.batch_summary.configure(text=f"{current_summary['verified']} verified · {current_summary['draft']} draft · {current_summary['unstarted']} not started")
         self.batch_button.configure(text="Continue batch" if batch else "Start batch")
@@ -1057,6 +1103,7 @@ class XRayStructureWorkspace:
             messagebox.showinfo("Predict current","Train or import a Structure AI model first.",parent=self.root);return
         specimen_id=str(self.selected_specimen_id)
         pass_no=int(self.pass_no.get())
+        if not _current_prediction_allowed(self.project,specimen_id,model,pass_no):return
         run=self.project.annotation_run(specimen_id,pass_no,"human",False)
         replacing_verified=bool(run and str(run.get("status") or "")=="verified")
         if replacing_verified and not messagebox.askyesno(
@@ -1330,7 +1377,15 @@ class XRayStructureWorkspace:
         try:self.project.verify_annotations(self.selected_specimen_id,self.pass_no.get())
         except ValueError as exc:messagebox.showwarning("Structures incomplete",str(exc),parent=self.root);return False
         except Exception as exc:messagebox.showerror("Verify structures",str(exc),parent=self.root);return False
-        self._after_edit("Verified");return True
+        self._after_edit("Verified")
+        current=result_review_queue(self.project)
+        if self.pass_no.get()==1 and current and str(current["items"][int(current["position"])].get("specimen_id"))==str(self.selected_specimen_id):
+            value,_finished=complete_result_review_item(self.project)
+            next_queue=result_review_queue(self.project)
+            if next_queue:
+                next_item=next_queue["items"][int(next_queue["position"])];self._refresh_result_review_banner();self._load_specimen(next_item["specimen_id"])
+            else:self._refresh_result_review_banner()
+        return True
 
     def verify_next(self):
         if not self.selected_specimen_id:return

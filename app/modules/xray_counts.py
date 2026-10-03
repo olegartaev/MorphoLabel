@@ -13,6 +13,8 @@ from app.ui.icons import TOPBAR_ICON_SIZE,tk_icon
 from app.xray_icons import XRAY_ICON_SIZE,TRAIT_ICON_SIZE,tk_xray_icon,tk_rule_preview
 from app.xray_project import XRayProject
 from app.xray_result_qc import build_result_qc
+from app.xray_result_qc import start_result_review_queue
+from app.xray_trait_export import export_trait_rows
 from app.xray_crop_ui import XRayCropWorkspace
 from app.xray_structures_ui import XRayStructureWorkspace
 from app.xray_structure_ai import export_structure_model_package,import_structure_model_package
@@ -23,8 +25,7 @@ from app.xray_schema import (
 
 STAGES=(
     ("project","Project","xray_project"),("crops","Crops","xray_crops"),
-    ("structures","Structures","xray_structures"),("results","Results","xray_results"),
-    ("export","Export","xray_export"),
+    ("structures","Structures","xray_structures"),("export","Export","xray_export"),
 )
 
 def _safe_id(text,prefix="item"):
@@ -343,6 +344,7 @@ class XRayCountsRuntime:
         self.host.show_module_hub()
 
     def _select(self,key):
+        if key=="results":key="export"
         if self.project is None and key!="project":return
         if key==self.stage:return
         flush=getattr(self._workspace,"flush_pending_edits",None)
@@ -447,7 +449,7 @@ class XRayCountsRuntime:
         self._workspace=XRayStructureWorkspace(
             parent,self.project,
             initial_image_id=selection.get("image_id"),initial_specimen_id=selection.get("specimen_id"),
-            on_selection=self._set_selection,on_open_results=lambda:self._select("results"),
+            on_selection=self._set_selection,on_open_results=lambda:self._select("export"),
             on_check_results=self._show_result_checks,
         )
 
@@ -457,15 +459,17 @@ class XRayCountsRuntime:
     def _render_results(self,parent):
         self._ensure_working_scheme()
         title_row=ttk.Frame(parent);title_row.pack(fill="x")
-        ttk.Label(title_row,text="Results",style="PageTitle.TLabel").pack(side="left")
+        ttk.Label(title_row,text="Export",style="PageTitle.TLabel").pack(side="left")
+        actions=ttk.Frame(title_row);actions.pack(side="right")
+        self._button(actions,"Export all",lambda:self._export_traits(False),"Export calculated trait rows for every confirmed specimen, including draft and unfinished rows.",True).pack(side="left",padx=(0,4))
+        self._button(actions,"Export verified only",lambda:self._export_traits(True),"Export only rows whose manual annotation is verified.").pack(side="left",padx=(0,4))
         self._button(
-            title_row,"Check results…",self._show_result_checks,
-            "Find results worth manual review: unusual values within a sample, irregular spacing in serial markers, detached reference marks, and repeatability disagreements.",
-            True,
-        ).pack(side="right")
+            actions,"Check results…",self._show_result_checks,
+            "Rank suspicious results worst first and open a navigable review queue. Flags are prompts for inspection, never automatic exclusions.",
+        ).pack(side="left")
         context=self._selection_context()
         if context:ttk.Label(parent,text=context,style="SectionTitle.TLabel").pack(anchor="w",pady=(2,3))
-        ttk.Label(parent,text="Calculated directly from the current saved structure markers; no separate results cache is used for display.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(0,8))
+        ttk.Label(parent,text="Preview calculated trait values and export a complete table or verified specimens only.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(0,8))
         scheme=self.project.scheme
         if not scheme.get("traits"):
             self._empty_scheme_state(parent,"No traits to calculate","Open a trait set or create traits in Project first.");return
@@ -497,70 +501,30 @@ class XRayCountsRuntime:
 
     def _show_result_checks(self):
         report=build_result_qc(self.project)
-        summary=report["summary"];issues=list(report.get("issues") or ());biases=list(report.get("biases") or ())
-        root=self.host.container.winfo_toplevel()
-        dialog=tk.Toplevel(root);dialog.title("Result checks");dialog.transient(root);dialog.geometry("1120x560");dialog.minsize(900,430)
-        outer=ttk.Frame(dialog,padding=12);outer.pack(fill="both",expand=True);outer.columnconfigure(0,weight=1);outer.rowconfigure(3,weight=1)
-        ttk.Label(outer,text="Result checks",style="PageTitle.TLabel").grid(row=0,column=0,sticky="w")
-        ttk.Label(
-            outer,
-            text=(
-                f"{summary['verified_specimens']} verified specimens · {summary['flagged_specimens']} specimens flagged · "
-                f"{summary['issue_count']} review item(s). Flags are prompts for inspection, never automatic exclusions."
-            ),
-            style="PageSubtitle.TLabel",wraplength=1040,
-        ).grid(row=1,column=0,sticky="w",pady=(2,5))
-        note=(
-            "Sample outliers use median/MAD only within the same Sample folder (minimum 5 measurable verified specimens). "
-            "Spacing checks run only when repeated points form a clear serial pattern. Manual repeatability is checked separately."
+        queue=start_result_review_queue(self.project,report.get("issues") or ())
+        items=list(queue.get("items") or ())
+        if not items:
+            messagebox.showinfo("Check results","No suspicious results need review.",parent=self.host.container.winfo_toplevel());return False
+        first=items[0];specimen=self.project.specimen(first["specimen_id"])
+        self._set_selection(specimen["image_id"],first["specimen_id"])
+        self.stage="structures";self._rerender();return True
+
+    def _export_traits(self,verified_only=False):
+        if self.project is None:return
+        target=filedialog.asksaveasfilename(
+            parent=self.host.container.winfo_toplevel(),title="Export X-ray traits",
+            defaultextension=".csv",initialfile="xray_traits_verified.csv" if verified_only else "xray_traits_all.csv",
+            filetypes=(("CSV table","*.csv"),("All files","*.*")),
         )
-        ttk.Label(outer,text=note,style="Muted.TLabel",wraplength=1040).grid(row=2,column=0,sticky="w",pady=(0,8))
-        columns=("priority","sample","plate","specimen","target","reason")
-        tree=ttk.Treeview(outer,columns=columns,show="headings",selectmode="browse")
-        for key,title,width,stretch in (
-            ("priority","Priority",78,False),("sample","Sample",150,False),("plate","Plate",190,False),
-            ("specimen","Specimen",70,False),("target","Trait / structure",160,False),("reason","Why review",430,True),
-        ):
-            tree.heading(key,text=title);tree.column(key,width=width,anchor="w",stretch=stretch)
-        tree.grid(row=3,column=0,sticky="nsew")
-        scroll=ttk.Scrollbar(outer,orient="vertical",command=tree.yview);tree.configure(yscrollcommand=scroll.set);scroll.grid(row=3,column=1,sticky="ns")
-        issue_by_iid={}
-        for index,item in enumerate(issues):
-            iid=f"issue-{index}";issue_by_iid[iid]=item
-            tree.insert("", "end", iid=iid, values=(
-                "CHECK" if item["severity"]=="high" else "Review",item.get("sample",""),item.get("plate",""),
-                item.get("ordinal",""),item.get("target",""),item.get("reason",""),
-            ),tags=(item["severity"],))
-        tree.tag_configure("high",background="#fff0ee");tree.tag_configure("review",background="#fff9e8")
-        if not issues:
-            tree.insert("","end",values=("","","","","","No suspicious results found by the current checks."))
-        if biases:
-            bias_text="  ".join("• "+item["reason"] for item in biases)
-            ttk.Label(outer,text="Repeatability pattern: "+bias_text,style="Muted.TLabel",wraplength=1040).grid(row=4,column=0,sticky="w",pady=(8,0))
-        actions=ttk.Frame(outer);actions.grid(row=5,column=0,columnspan=2,sticky="ew",pady=(10,0))
-        def open_selected(_event=None):
-            selected=tree.selection()
-            if not selected:return
-            issue=issue_by_iid.get(str(selected[0]))
-            if not issue or not issue.get("specimen_id"):return
-            specimen=self.project.specimen(issue["specimen_id"])
-            self._set_selection(specimen["image_id"],issue["specimen_id"])
-            dialog.destroy();self.stage="structures";self._rerender()
-        open_button=ttk.Button(actions,text="Open in Structures",command=open_selected,style="Primary.TButton")
-        open_button.pack(side="left");ttk.Button(actions,text="Close",command=dialog.destroy).pack(side="right")
-        tree.bind("<Double-1>",open_selected)
+        if not target:return
+        try:result=export_trait_rows(self.project,target,verified_only=verified_only)
+        except Exception as exc:
+            messagebox.showerror("Export X-ray traits",str(exc),parent=self.host.container.winfo_toplevel());return False
+        messagebox.showinfo("Export X-ray traits",f"Exported {result['rows']} specimen row(s) to:\n{result['path']}",parent=self.host.container.winfo_toplevel())
+        return True
 
     def _render_export(self,parent):
-        ttk.Label(parent,text="Export",style="PageTitle.TLabel").pack(anchor="w")
-        context=self._selection_context()
-        if context:ttk.Label(parent,text=context,style="SectionTitle.TLabel").pack(anchor="w",pady=(2,3))
-        ttk.Label(parent,text="Export verified traits together with scheme version, QC and provenance.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,10))
-        if not self.project.scheme.get("traits"):
-            self._empty_scheme_state(parent,"Nothing to export","Open a trait set or create traits in Project first.")
-            return
-        card=ttk.LabelFrame(parent,text="Scientific table",padding=14);card.pack(fill="x")
-        ttk.Label(card,text="Trait values + specimen IDs + QC + scheme provenance",style="ModuleTitle.TLabel").pack(anchor="w")
-        ttk.Label(card,text="Export stays disabled until the calculation and verification layer is connected; no placeholder data will be written.",style="Muted.TLabel").pack(anchor="w",pady=(4,0))
+        self._render_results(parent)
 
     def _empty_scheme_state(self,parent,title,text):
         card=ttk.LabelFrame(parent,text="Traits needed",padding=12);card.pack(fill="x",anchor="n")

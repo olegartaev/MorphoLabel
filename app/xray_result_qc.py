@@ -8,10 +8,88 @@ from __future__ import annotations
 import math
 from pathlib import Path
 from statistics import median
+from datetime import datetime, timezone
+import uuid
 
 
 _COUNT_METHODS={"count","count_to","count_between","position"}
 _NUMERIC_METHODS=_COUNT_METHODS|{"distance","angle"}
+_RESULT_REVIEW_STATE_KEY="xray_result_review_queue"
+
+
+def _issue_review_score(issue):
+    """A reproducible priority score: severity first, then measured anomaly size."""
+    score={"high":1000.0,"review":500.0,"info":100.0}.get(str(issue.get("severity") or ""),0.0)
+    metric=issue.get("metric") or {};code=str(issue.get("code") or "")
+    if code=="sample_outlier":
+        z=metric.get("modified_z")
+        if z is not None:score+=min(99.0,abs(float(z))*10.0)
+        elif metric.get("mad",0)==0:
+            value=float(metric.get("value") or 0);centre=float(metric.get("median") or 0)
+            score+=min(99.0,abs(value-centre)/max(1.0,abs(centre))*10.0)
+    elif code=="series_spacing":
+        score+=min(99.0,abs(math.log(max(1e-9,float(metric.get("ratio") or 1.0))))*40.0)
+    elif code=="repeat_count":score+=min(99.0,abs(float(metric.get("difference") or 0))*20.0)
+    elif code=="repeat_position":score+=min(99.0,abs(float(metric.get("ratio") or 0))*20.0)
+    return round(score,6)
+
+
+def build_result_review_queue(issues):
+    """Collapse checks to one review stop per specimen and rank worst first."""
+    by_specimen={}
+    for issue in issues or ():
+        specimen_id=str(issue.get("specimen_id") or "")
+        if not specimen_id:continue
+        score=_issue_review_score(issue);entry=by_specimen.get(specimen_id)
+        if entry is None:
+            entry={"specimen_id":specimen_id,"image_id":str(issue.get("image_id") or ""),
+                   "sample":str(issue.get("sample") or ""),"plate":str(issue.get("plate") or ""),
+                   "ordinal":int(issue.get("ordinal") or 0),"score":score,"severity":str(issue.get("severity") or "review"),
+                   "issue_count":0,"top_reason":str(issue.get("reason") or "")}
+            by_specimen[specimen_id]=entry
+        entry["issue_count"]+=1
+        if score>entry["score"]:
+            entry.update(score=score,severity=str(issue.get("severity") or "review"),top_reason=str(issue.get("reason") or ""))
+    return sorted(by_specimen.values(),key=lambda row:(-row["score"],row["sample"],row["plate"],row["ordinal"],row["specimen_id"]))
+
+
+def start_result_review_queue(project,issues):
+    items=build_result_review_queue(issues)
+    state={"format_version":1,"generation_id":uuid.uuid4().hex,"created_at":datetime.now(timezone.utc).isoformat(),
+           "active":bool(items),"items":items,"position":0,"completed":[]}
+    project.set_ui_state(_RESULT_REVIEW_STATE_KEY,state)
+    return state
+
+
+def result_review_queue(project):
+    value=project.get_ui_state(_RESULT_REVIEW_STATE_KEY,{}) or {}
+    if not isinstance(value,dict) or int(value.get("format_version") or 0)!=1:return None
+    items=list(value.get("items") or ());position=int(value.get("position") or 0)
+    if not value.get("active") or not items or not 0<=position<len(items):return None
+    return value
+
+
+def move_result_review_queue(project,step):
+    value=result_review_queue(project)
+    if value is None:return None,False
+    position=int(value["position"])+int(step);items=value["items"]
+    if position<0:position=0
+    if position>=len(items):
+        value["active"]=False;value["position"]=len(items)-1;project.set_ui_state(_RESULT_REVIEW_STATE_KEY,value)
+        return value,True
+    value["position"]=position;project.set_ui_state(_RESULT_REVIEW_STATE_KEY,value);return value,False
+
+
+def complete_result_review_item(project):
+    value=result_review_queue(project)
+    if value is None:return None,False
+    completed={int(index) for index in value.get("completed") or ()};completed.add(int(value["position"]))
+    value["completed"]=sorted(completed);project.set_ui_state(_RESULT_REVIEW_STATE_KEY,value)
+    return move_result_review_queue(project,1)
+
+
+def clear_result_review_queue(project):
+    project.set_ui_state(_RESULT_REVIEW_STATE_KEY,{"format_version":1,"active":False,"items":[],"position":0,"completed":[]})
 
 
 def _sample(relative_path):

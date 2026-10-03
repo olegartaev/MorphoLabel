@@ -10,7 +10,11 @@ from PIL import Image
 from app.xray_crop import crop_from_geometry
 from app.xray_project import XRayProject
 from app.xray_schema import blank_scheme, bundled_scheme, calculate_trait_values, compatible_reference_roles
-from app.xray_result_qc import build_result_qc
+from app.xray_result_qc import (
+    build_result_qc, clear_result_review_queue, complete_result_review_item,
+    move_result_review_queue, result_review_queue, start_result_review_queue,
+)
+from app.xray_trait_export import export_trait_rows
 from app.xray_structure_display import DEFAULT_PALETTE, DEFAULT_SIZE, load_xray_structure_display, save_xray_structure_display
 from app.xray_structures_ui import _first_structure_id, _structure_button_order
 
@@ -110,6 +114,34 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         codes={item["code"] for item in report["issues"]}
         self.assertIn("detached_reference",codes)
         self.assertIn("series_spacing",codes)
+
+    def test_result_review_queue_is_worst_first_stable_and_navigable(self):
+        issues=[
+            {"specimen_id":"mild","image_id":"i1","severity":"review","code":"series_spacing","metric":{"ratio":1.9},"sample":"S","plate":"p","ordinal":1},
+            {"specimen_id":"worst","image_id":"i2","severity":"high","code":"sample_outlier","metric":{"modified_z":8.0},"sample":"S","plate":"p","ordinal":2},
+            {"specimen_id":"worst","image_id":"i2","severity":"review","code":"repeat_position","metric":{"ratio":1.0},"sample":"S","plate":"p","ordinal":2},
+        ]
+        started=start_result_review_queue(self.project,issues)
+        self.assertEqual(["worst","mild"],[item["specimen_id"] for item in started["items"]])
+        self.assertEqual(2,started["items"][0]["issue_count"])
+        current=result_review_queue(self.project);self.assertEqual("worst",current["items"][current["position"]]["specimen_id"])
+        moved,finished=move_result_review_queue(self.project,1)
+        self.assertFalse(finished);self.assertEqual(1,moved["position"])
+        moved,finished=complete_result_review_item(self.project)
+        self.assertTrue(finished);self.assertIsNone(result_review_queue(self.project))
+        clear_result_review_queue(self.project);self.assertIsNone(result_review_queue(self.project))
+
+    def test_export_all_and_verified_only_keep_live_trait_calculation(self):
+        self._complete_pass_one()
+        pending=self.project.add_manual_specimen(self.image_ids[1],crop_from_geometry(450,240,620,230,0,(900,480),algorithm="manual"))
+        self.project.confirm_plate(self.image_ids[1])
+        all_path=self.root/"all.csv";verified_path=self.root/"verified.csv"
+        all_result=export_trait_rows(self.project,all_path)
+        verified_result=export_trait_rows(self.project,verified_path,verified_only=True)
+        self.assertEqual(2,all_result["rows"]);self.assertEqual(1,verified_result["rows"])
+        all_text=all_path.read_text(encoding="utf-8-sig");verified_text=verified_path.read_text(encoding="utf-8-sig")
+        self.assertIn("trait:tv",all_text);self.assertIn(self.specimen_id,verified_text)
+        self.assertNotIn(pending,verified_text)
 
     def test_result_qc_uses_robust_within_sample_count_check_without_global_pooling(self):
         crop=crop_from_geometry(450,240,620,230,0,(900,480),algorithm="manual")
@@ -439,7 +471,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         for text in (
             "Apply","Sample","Specimen","Locality:","Plate:","Specimen:",
-            "PhotoListCanvas","status_shape=\"square\"","Annotation batch","Repeatability","Training data","Open Results",
+            "PhotoListCanvas","status_shape=\"square\"","Annotation batch","Repeatability","Training data","Open Export",
             "delete_selected","clear_marker_category","clear_all_markers","clear_type_button",
             "move_annotation","replace_single","_wheel","_pan_motion","_key_pressed","_structure_button_order",
         ):
@@ -451,7 +483,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn("XRayStructureWorkspace(",module)
         self.assertIn("initial_specimen_id=selection.get(\"specimen_id\")",module)
         self.assertIn("on_selection=self._set_selection",module)
-        self.assertIn('on_open_results=lambda:self._select("results")',module)
+        self.assertIn('on_open_results=lambda:self._select("export")',module)
         self.assertNotIn("Specimen image / annotation canvas",module)
         self.assertNotIn("Structures to mark",ui)
         self.assertIn("trait_rows()",module)
@@ -466,7 +498,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]
         module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         qc=(root/"app/xray_result_qc.py").read_text(encoding="utf-8")
-        for text in ("Check results…","Result checks","Open in Structures","never automatic exclusions"):
+        for text in ("Check results…","Rank suspicious results worst first","review queue","never automatic exclusions"):
             self.assertIn(text,module)
         for text in ("modified_z","series_spacing","sample_outlier","detached_reference","repeat_count","repeat_position"):
             self.assertIn(text,qc)

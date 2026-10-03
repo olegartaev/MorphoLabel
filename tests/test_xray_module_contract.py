@@ -30,7 +30,7 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertNotIn("fish",spec.description.lower())
 
     def test_workflow_matches_landmarks_shape(self):
-        self.assertEqual(("project","crops","structures","results","export"),tuple(item[0] for item in STAGES))
+        self.assertEqual(("project","crops","structures","export"),tuple(item[0] for item in STAGES))
 
     def test_top_navigation_uses_landmarks_sizes_and_styles(self):
         source=(Path(__file__).resolve().parents[1]/"app/modules/xray_counts.py").read_text(encoding="utf-8")
@@ -213,6 +213,27 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertIn("Import X-ray Structure AI…",module)
         self.assertIn("Export active X-ray Structure AI…",module)
         self.assertIn("on_check_results=self._show_result_checks",module)
+
+    def test_xray_export_is_single_results_preview_stage_with_two_real_export_actions(self):
+        root=Path(__file__).resolve().parents[1]
+        module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
+        exporter=(root/"app/xray_trait_export.py").read_text(encoding="utf-8")
+        self.assertEqual(1,sum(key=="export" for key,_,_ in STAGES))
+        self.assertNotIn('("results","Results","xray_results")',module)
+        for text in ('text="Export"','actions,"Export all"','actions,"Export verified only"','self._render_results(parent)','self._select("export")'):
+            self.assertIn(text,module)
+        self.assertIn("export_trait_rows(self.project,target,verified_only=verified_only)",module)
+        self.assertIn('if verified_only:rows=[row for row in rows if str(row.get("result_status") or "")=="verified"]',exporter)
+
+    def test_result_checks_start_a_ranked_navigable_review_queue(self):
+        root=Path(__file__).resolve().parents[1]
+        module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
+        ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
+        qc=(root/"app/xray_result_qc.py").read_text(encoding="utf-8")
+        self.assertIn("start_result_review_queue(self.project",module)
+        self.assertIn('self.review_queue_banner=ttk.Frame(main,style="Attention.TFrame"',ui)
+        self.assertIn('text="‹ Previous"',ui);self.assertIn('text="Next ›"',ui);self.assertIn("_close_result_review",ui)
+        self.assertIn("return sorted(by_specimen.values(),key=lambda row:(-row[\"score\"]",qc)
 
 if __name__=="__main__":
     unittest.main()
