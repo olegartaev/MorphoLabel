@@ -645,9 +645,9 @@ class ProductionShell(tk.Tk):
             elif attention_retry:self.tip.bind(self.status_next,'Retry AI landmark prediction for this queued image.')
             elif crop_confirm:self.tip.bind(self.status_next,'Confirm this Crop and continue this attention queue.')
             else:self.tip.bind(self.status_next,'Show the next image. Press Enter when not typing.')
-        display_labels={"Incomplete":"Unresolved"}
+        display_labels={"Incomplete":"Unresolved"};counts=self._section_counts()
         for key,label in getattr(self,"status_counts",{}).items():
-            label.configure(text=f"{display_labels.get(key,key)}: {self._section_counts().get(key,0)}")
+            label.configure(text=f"{display_labels.get(key,key)}: {counts.get(key,0)}")
 
     def _sync_photo_panel_current(self, *, align_top=False, refresh_rows=True):
         panel=getattr(self,"photo_panel",None)
@@ -732,7 +732,7 @@ class ProductionShell(tk.Tk):
         return None
     def _section_counts(self):
         if not self.context.project: return {"Total":0}
-        if self.context.section == "crop": return getattr(self.context.project,"crop_section_counts",self.context.project.crop_counts)()
+        if self.context.section == "crop": return self.context.crop_counts()
         if self.context.section == "landmarks": return self.context.landmark_counts()
         if self.context.section == "measurements": return {"Total":len(self.context.rows)}
         return self.context.counts()
