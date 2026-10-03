@@ -11,6 +11,10 @@ import sys
 BACKEND = "resnet18_heatmap_v1"
 FORMAT_VERSION = 1
 TRAINING_OBJECTIVE = "per_structure_balanced_focal_v1"
+TARGET_ENCODING = "adaptive_point_heatmap_v1"
+DEFAULT_POINT_SIGMA = 2.0
+MIN_POINT_SIGMA = 0.75
+POINT_SPACING_FACTOR = 0.35
 
 
 def _input():
@@ -143,6 +147,29 @@ def _gaussian(target, channel, cx, cy, sigma=2.0, supervision=None):
         supervision[channel, top:bottom, left:right] = 1.0
 
 
+def _adaptive_point_sigma(points, repeated=True):
+    """Choose target width from within-series spacing, in output-map pixels.
+
+    Closely spaced repeated elements need narrower targets so neighbouring
+    instances do not merge into one broad heatmap ridge. Sparse series and
+    single landmarks keep the established wider target.
+    """
+    points=[(float(x),float(y)) for x,y in points]
+    if not repeated or len(points)<2:
+        return DEFAULT_POINT_SIGMA
+    nearest=[]
+    for index,(x,y) in enumerate(points):
+        distance=min(
+            math.hypot(x-other_x,y-other_y)
+            for other_index,(other_x,other_y) in enumerate(points)
+            if other_index!=index
+        )
+        nearest.append(distance)
+    ordered=sorted(nearest);middle=len(ordered)//2
+    spacing=ordered[middle] if len(ordered)%2 else (ordered[middle-1]+ordered[middle])/2.0
+    return max(MIN_POINT_SIGMA,min(DEFAULT_POINT_SIGMA,float(spacing)*POINT_SPACING_FACTOR))
+
+
 class _Dataset:
     def __init__(self, rows, structures, input_size, stride=2, training=False):
         self.rows = list(rows)
@@ -179,6 +206,7 @@ class _Dataset:
             states[structure_id] = state
             if state in {"complete", "absent"}:
                 supervision[channel, :, :] = 1.0
+        transformed={}
         for point in row.get("points") or ():
             structure_id = str(point.get("structure_id") or "")
             channel = self.channel.get(structure_id)
@@ -186,10 +214,16 @@ class _Dataset:
                 continue
             px = (float(point["x"]) * geometry["source_w"] * geometry["scale"] + geometry["offset_x"]) / self.stride
             py = (float(point["y"]) * geometry["source_h"] * geometry["scale"] + geometry["offset_y"]) / self.stride
-            _gaussian(
-                heatmap, channel, px, py,
-                supervision=supervision if states.get(structure_id) == "partial" else None,
-            )
+            transformed.setdefault(channel,[]).append((px,py))
+        for channel,points in transformed.items():
+            structure=self.structures[channel]
+            sigma=_adaptive_point_sigma(points,bool(structure.get("repeated")))
+            structure_id=str(structure["id"])
+            for px,py in points:
+                _gaussian(
+                    heatmap, channel, px, py, sigma=sigma,
+                    supervision=supervision if states.get(structure_id) == "partial" else None,
+                )
         return _tensor(image), torch.from_numpy(heatmap), torch.from_numpy(supervision)
 
 
@@ -456,6 +490,12 @@ def train(payload):
         "format_version": FORMAT_VERSION,
         "backend": BACKEND,
         "training_objective": TRAINING_OBJECTIVE,
+        "target_encoding": {
+            "name": TARGET_ENCODING,
+            "default_sigma": DEFAULT_POINT_SIGMA,
+            "min_sigma": MIN_POINT_SIGMA,
+            "spacing_factor": POINT_SPACING_FACTOR,
+        },
         "input_size": list(input_size),
         "output_stride": stride,
         "structures": structures,

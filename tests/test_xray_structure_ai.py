@@ -193,6 +193,22 @@ class XRayStructureAIContractTests(unittest.TestCase):
         _gaussian(border,0,16.2,-0.4)
         self.assertEqual(1.0,float(border.max()))
 
+    def test_dense_repeated_points_use_narrower_targets_without_changing_sparse_or_single_points(self):
+        from ai_runtime.xray_structure_runner import _adaptive_point_sigma
+        self.assertAlmostEqual(1.12,_adaptive_point_sigma([(0,0),(3.2,0),(6.4,0)],True),places=6)
+        self.assertEqual(0.75,_adaptive_point_sigma([(0,0),(1.6,0),(3.2,0)],True))
+        self.assertEqual(2.0,_adaptive_point_sigma([(0,0),(8,0),(16,0)],True))
+        self.assertEqual(2.0,_adaptive_point_sigma([(0,0)],True))
+        self.assertEqual(2.0,_adaptive_point_sigma([(0,0),(2,0)],False))
+
+    def test_structure_model_metadata_records_adaptive_point_target_encoding(self):
+        root=Path(__file__).resolve().parents[1]
+        runner=(root/"ai_runtime/xray_structure_runner.py").read_text(encoding="utf-8")
+        host=(root/"app/xray_structure_ai.py").read_text(encoding="utf-8")
+        self.assertIn('TARGET_ENCODING = "adaptive_point_heatmap_v1"',runner)
+        self.assertIn('"target_encoding": {',runner)
+        self.assertIn('"target_encoding"',host)
+
     def test_structure_heatmap_loss_balances_each_schema_structure_channel(self):
         root=Path(__file__).resolve().parents[1]
         runner=(root/"ai_runtime/xray_structure_runner.py").read_text(encoding="utf-8")
