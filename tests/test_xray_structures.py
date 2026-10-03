@@ -702,7 +702,8 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertNotIn(".save(",ui)
         self.assertIn("draw_xray_marker",ui)
         self.assertIn('self.canvas.move(f"annotation:{self._drag_annotation}"',ui)
-        self.assertIn("| №{int(row.get('ordinal') or 0)}",ui)
+        self.assertIn("| plate №{int(row.get('ordinal') or 0)}",ui)
+        self.assertIn('"number":str(int(row.get("workflow_no") or index+1))',ui)
         self.assertNotIn('text="Delete"',ui)
         self.assertNotIn("Wheel = zoom · right-drag = pan",ui)
 
