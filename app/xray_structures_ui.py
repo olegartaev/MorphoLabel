@@ -109,7 +109,12 @@ class XRaySpecimenListPanel(ttk.Frame):
 
     def _catalog(self):
         rows=[]
+        allowed=None
+        if int(self.pass_no)==2:
+            repeat=self.project.structure_repeatability()
+            allowed=set(repeat.get("ids") or ()) if repeat and repeat.get("schema_current") else set()
         for row in self.project.structure_specimens(self.pass_no):
+            if allowed is not None and row["specimen_id"] not in allowed:continue
             status=str(row.get("annotation_status") or "")
             rows.append({
                 **row,"sample_id":self._sample(row["relative_path"]),"source_relpath":row["relative_path"],
@@ -259,6 +264,12 @@ class XRayStructureWorkspace:
             tools,text="Display…",image=self._icon(tools,"display"),compound="left",style="P.TButton",command=self.open_display_settings,
         )
         self.display_button.pack(side="left",padx=(2,6));self.tip.bind(self.display_button,"Marker display.")
+        self.predict_current_button=ttk.Button(
+            tools,text="Predict current",image=self._xray_icon(tools,"xray_structures"),compound="left",
+            style="P.TButton",command=self.predict_current_structure,
+        )
+        self.predict_current_button.pack(side="left",padx=(2,2))
+        self.tip.bind(self.predict_current_button,"Place AI marker suggestions on this specimen only. Existing human markers are never overwritten.")
         self.apply_separator=ttk.Separator(nav,orient="vertical");self.apply_separator.grid(row=0,column=1,sticky="ns",padx=7,pady=2)
         self.apply_button=ttk.Button(nav,text="Apply",image=self._xray_icon(nav,"structure_apply"),compound="left",style="NavPrimary.TButton",command=self.verify_current)
         self.apply_button.grid(row=0,column=2,sticky="e")
@@ -295,10 +306,14 @@ class XRayStructureWorkspace:
         ttk.Spinbox(one,from_=1,to=500,textvariable=self.batch_size,width=5).grid(row=1,column=1,sticky="w",padx=4,pady=(4,0))
         self.batch_button=ttk.Button(one,text="Start batch",command=self.start_batch);self.batch_button.grid(row=2,column=0,columnspan=3,sticky="w",pady=(5,0))
 
-        two=self._workflow_card(workflow,1,"2. Repeatability","Annotate the same verified specimens independently in pass 2.")
-        self.repeat_summary=ttk.Label(two,text="",style="Muted.TLabel");self.repeat_summary.grid(row=0,column=0,columnspan=2,sticky="w")
-        self.pass1_button=ttk.Button(two,text="Pass 1",command=lambda:self._switch_pass(1));self.pass1_button.grid(row=1,column=0,sticky="w",pady=(5,0))
-        self.pass2_button=ttk.Button(two,text="Pass 2",command=lambda:self._switch_pass(2));self.pass2_button.grid(row=1,column=1,sticky="w",padx=(5,0),pady=(5,0))
+        two=self._workflow_card(
+            workflow,1,"2. Manual repeatability",
+            "A random sample of verified Annotation 1 specimens is frozen, then annotated again independently. Annotation 1 markers stay hidden during Annotation 2.",
+        )
+        self.repeat_summary=ttk.Label(two,text="",style="Muted.TLabel");self.repeat_summary.grid(row=0,column=0,columnspan=3,sticky="w")
+        self.pass1_button=ttk.Button(two,text="Annotation 1",command=lambda:self._switch_pass(1));self.pass1_button.grid(row=1,column=0,sticky="w",pady=(5,0))
+        self.pass2_button=ttk.Button(two,text="Start Annotation 2…",command=self.open_repeatability);self.pass2_button.grid(row=1,column=1,sticky="w",padx=(5,0),pady=(5,0))
+        self.repeat_results_button=ttk.Button(two,text="Results…",command=self.show_repeatability_results);self.repeat_results_button.grid(row=1,column=2,sticky="w",padx=(5,0),pady=(5,0))
 
         three=self._workflow_card(workflow,2,"3. Training data","Train only from human-verified pass 1 markers. AI output always returns as a draft for human review.")
         self.training_summary=ttk.Label(three,text="",style="Muted.TLabel");self.training_summary.grid(row=0,column=0,columnspan=4,sticky="w")
@@ -307,6 +322,8 @@ class XRayStructureWorkspace:
         self.structure_train_button=ttk.Button(train_actions,text="Train Structure AI",command=self.train_structure_ai)
         self.structure_train_button.pack(side="left")
         ttk.Button(train_actions,text="Models…",command=self.manage_structure_models).pack(side="left",padx=(5,0))
+        ttk.Button(train_actions,text="Export trained AI…",command=self.export_active_structure_ai).pack(side="left",padx=(5,0))
+        ttk.Button(train_actions,text="Import trained AI…",command=self.import_structure_ai_file).pack(side="left",padx=(5,0))
         predict_actions=ttk.Frame(three);predict_actions.grid(row=3,column=0,columnspan=4,sticky="ew",pady=(5,0))
         ttk.Label(predict_actions,text="Next").pack(side="left")
         ttk.Spinbox(predict_actions,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(3,5))
@@ -528,14 +545,28 @@ class XRayStructureWorkspace:
         labels={"verified":"Verified","draft":"Draft","unstarted":"Not started"}
         for key,label in self.summary_labels.items():label.configure(text=f"{labels[key]}: {summary[key]}")
         state="normal" if self.selected_specimen_id else "disabled";self.apply_button.configure(state=state)
+        model=self.project.active_structure_model()
+        can_predict=bool(self.selected_specimen_id and model and self.pass_no.get()==1)
+        self.predict_current_button.configure(state="normal" if can_predict else "disabled")
 
     def _refresh_workflow(self):
         p1=self.project.annotation_summary(1);p2=self.project.annotation_summary(2);batch=self.project.structure_batch(self.pass_no.get())
         self.batch_summary.configure(text=f"{p1['verified']} verified · {p1['draft']} draft · {p1['unstarted']} not started" if self.pass_no.get()==1 else f"{p2['verified']} verified · {p2['draft']} draft · {p2['unstarted']} not started")
         self.batch_button.configure(text="Continue batch" if batch else "Start batch")
-        self.repeat_summary.configure(text=f"P1 {p1['verified']}/{p1['eligible']} · P2 {p2['verified']}/{p2['eligible']}")
+        repeat=self.project.structure_repeatability()
+        if repeat:
+            repeat_text=f"Annotation 2 {repeat['verified']}/{repeat['total']} · frozen random sample"
+            pass2_text="Continue Annotation 2" if repeat.get("status")=="in_progress" else "Review Annotation 2"
+        else:
+            repeat_text=f"{p1['verified']} verified specimens available"
+            pass2_text="Start Annotation 2…"
+        self.repeat_summary.configure(text=repeat_text)
         self.pass1_button.configure(style="Primary.TButton" if self.pass_no.get()==1 else "P.TButton")
-        self.pass2_button.configure(style="Primary.TButton" if self.pass_no.get()==2 else "P.TButton",state="normal" if p2["eligible"] else "disabled")
+        self.pass2_button.configure(
+            text=pass2_text,style="Primary.TButton" if self.pass_no.get()==2 else "P.TButton",
+            state="normal" if p1["verified"] else "disabled",
+        )
+        self.repeat_results_button.configure(state="normal" if repeat and repeat.get("verified") else "disabled")
         model=self.project.active_structure_model();candidates=len(self.project.structure_prediction_candidate_ids());review=len(self.project.structure_ai_review_ids())
         self.training_summary.configure(text=f"{p1['verified']} human-verified · {candidates} ready for AI · {review} to review")
         self.structure_model_label.configure(text=f"Active AI: {(model or {}).get('model_id') or 'none'}")
@@ -862,6 +893,41 @@ class XRayStructureWorkspace:
             if dialog.winfo_exists():dialog.after(120,poll)
         dialog.after(120,poll)
 
+    def export_active_structure_ai(self):
+        model=self.project.active_structure_model()
+        if not model:
+            messagebox.showinfo("Export trained AI","Train or import a Structure AI model first.",parent=self.root);return
+        target=filedialog.asksaveasfilename(
+            parent=self.root,title="Export trained Structure AI",defaultextension=".zip",
+            initialfile=f"{model['model_id']}.zip",
+            filetypes=(("MorphoLabel trained AI","*.zip"),("ZIP files","*.zip")),
+        )
+        if not target:return
+        try:export_structure_model_package(self.project,target,model["model_id"])
+        except Exception as exc:messagebox.showerror("Export trained AI",str(exc),parent=self.root);return
+        messagebox.showinfo(
+            "Export trained AI",
+            "Saved as one portable file containing the trained weights and model metadata. Source X-rays are not included.",
+            parent=self.root,
+        )
+
+    def import_structure_ai_file(self):
+        source=filedialog.askopenfilename(
+            parent=self.root,title="Import trained Structure AI",
+            filetypes=(("MorphoLabel trained AI","*.zip"),("ZIP files","*.zip")),
+        )
+        if not source:return
+        try:
+            model_id=import_structure_model_package(self.project,source)
+            self.project.activate_structure_model(model_id)
+        except Exception as exc:messagebox.showerror("Import trained AI",str(exc),parent=self.root);return
+        self._refresh_workflow();self._refresh_summary()
+        messagebox.showinfo(
+            "Import trained AI",
+            f"Imported and activated {model_id}. The file contained the trained model only; project X-rays were not changed.",
+            parent=self.root,
+        )
+
     def manage_structure_models(self):
         dialog=tk.Toplevel(self.root);dialog.title("X-ray structure models");dialog.transient(self.root);dialog.geometry("1020x420")
         frame=ttk.Frame(dialog,padding=12);frame.pack(fill="both",expand=True);frame.columnconfigure(0,weight=1);frame.rowconfigure(1,weight=1)
@@ -948,6 +1014,45 @@ class XRayStructureWorkspace:
         self._load_specimen(ids[0]);self._refresh_workflow()
         return True
 
+    def predict_current_structure(self):
+        if self._busy or not self.selected_specimen_id:return
+        if self.pass_no.get()!=1:
+            messagebox.showinfo("Predict current","AI suggestions are disabled during blind Annotation 2.",parent=self.root);return
+        model=self.project.active_structure_model()
+        if not model:
+            messagebox.showinfo("Predict current","Train or import a Structure AI model first.",parent=self.root);return
+        specimen_id=str(self.selected_specimen_id)
+        if specimen_id not in set(self.project.structure_prediction_candidate_ids()):
+            messagebox.showinfo(
+                "Predict current",
+                "This specimen already has human markers or has already been reviewed. Existing human work is never overwritten.",
+                parent=self.root,
+            );return
+        self._busy=True;events=queue.Queue()
+        dialog,label,bar=self._structure_ai_dialog("Predict current","Placing AI marker suggestions on this specimen…",1)
+        def worker():
+            try:events.put(("done",predict_structures(self.project,[specimen_id],model=model)))
+            except Exception as exc:events.put(("error",exc))
+        threading.Thread(target=worker,daemon=True,name="xray-structure-predict-current").start()
+        def poll():
+            try:
+                event=events.get_nowait()
+            except queue.Empty:
+                if dialog.winfo_exists():dialog.after(100,poll)
+                return
+            self._busy=False
+            try:dialog.destroy()
+            except tk.TclError:pass
+            if event[0]=="error":
+                messagebox.showerror("Predict current",str(event[1]),parent=self.root);return
+            result=event[1];success=list(result.get("success") or ())
+            if not success:
+                failures=list(result.get("failures") or ())
+                detail=str(failures[0].get("reason")) if failures else "No prediction was produced."
+                messagebox.showwarning("Predict current",detail,parent=self.root);return
+            self._load_specimen(specimen_id);self._refresh_workflow()
+        dialog.after(100,poll)
+
     def predict_structure_batch(self,count):
         if self._busy:return
         model=self.project.active_structure_model()
@@ -995,6 +1100,8 @@ class XRayStructureWorkspace:
         self._open_structure_review_batch(ids)
 
     def start_batch(self):
+        if self.pass_no.get()==2:
+            self.open_repeatability();return
         active=self.project.structure_batch(self.pass_no.get())
         if active:
             target=active["ids"][int(active.get("position",0) or 0)];self._load_specimen(target);return
@@ -1013,9 +1120,74 @@ class XRayStructureWorkspace:
 
     def _switch_pass(self,number):
         number=int(number)
-        if number==2 and not self.project.annotation_summary(2)["eligible"]:
-            messagebox.showinfo("Repeatability","Verify pass 1 specimens before starting pass 2.",parent=self.root);return
+        if number==2:
+            self.open_repeatability();return
         self.pass_no.set(number);self.specimen_list.pass_no=number;self.selected_specimen_id="";self.refresh()
+
+    def open_repeatability(self):
+        repeat=self.project.structure_repeatability()
+        if repeat and not repeat.get("schema_current"):
+            messagebox.showwarning(
+                "Manual repeatability",
+                "The trait scheme changed after this repeatability sample was created. Finish or review it with the matching scheme, or start a new sample after resolving the scheme change.",
+                parent=self.root,
+            );return
+        if repeat is None:
+            verified=self.project.annotation_summary(1)["verified"]
+            if not verified:
+                messagebox.showinfo("Manual repeatability","Verify Annotation 1 specimens first.",parent=self.root);return
+            default=min(60,int(verified))
+            count=simpledialog.askinteger(
+                "Manual repeatability",
+                "How many verified specimens should be measured again?\n\n"
+                "MorphoLabel will freeze their Annotation 1 measurements and present a random sample for a blind Annotation 2.",
+                parent=self.root,initialvalue=default,minvalue=1,maxvalue=int(verified),
+            )
+            if not count:return
+            try:repeat=self.project.start_structure_repeatability(count,seed=42)
+            except Exception as exc:messagebox.showerror("Manual repeatability",str(exc),parent=self.root);return
+        ids=list(repeat.get("ids") or ())
+        if not ids:return
+        remaining=[]
+        for specimen_id in ids:
+            run=self.project.annotation_run(specimen_id,2,"human",False)
+            if not run or str(run.get("status") or "")!="verified":remaining.append(specimen_id)
+        browse=remaining or ids
+        self.pass_no.set(2);self.specimen_list.pass_no=2
+        self.project.set_ui_state("xray_structure_active_batch",{"pass_no":2,"ids":browse,"position":0})
+        self.selected_specimen_id="";self.refresh()
+        if browse:self._load_specimen(browse[0])
+
+    def show_repeatability_results(self):
+        metrics=self.project.structure_repeatability_metrics()
+        run=metrics.get("run")
+        if not run:
+            messagebox.showinfo("Manual repeatability","No repeatability sample has been started.",parent=self.root);return
+        dialog=tk.Toplevel(self.root);dialog.title("Manual repeatability");dialog.transient(self.root);dialog.geometry("820x430")
+        frame=ttk.Frame(dialog,padding=12);frame.pack(fill="both",expand=True);frame.columnconfigure(0,weight=1);frame.rowconfigure(2,weight=1)
+        ttk.Label(frame,text="Manual repeatability",style="PageTitle.TLabel").grid(row=0,column=0,sticky="w")
+        ttk.Label(
+            frame,text=f"Annotation 2 completed for {metrics['completed']} / {metrics['total']} frozen specimens. "
+                       "Counts compare independent manual annotations; reference-role agreement compares the selected element number within its series.",
+            style="PageSubtitle.TLabel",wraplength=780,
+        ).grid(row=1,column=0,sticky="w",pady=(2,9))
+        columns=("structure","n","exact","mae","role")
+        tree=ttk.Treeview(frame,columns=columns,show="headings")
+        for key,title,width in (
+            ("structure","Structure",260),("n","Compared",90),("exact","Exact count",120),
+            ("mae","Count MAE",110),("role","Same role position",150),
+        ):
+            tree.heading(key,text=title);tree.column(key,width=width,anchor="w",stretch=key=="structure")
+        tree.grid(row=2,column=0,sticky="nsew")
+        for row in metrics.get("structures") or ():
+            exact=row.get("exact_count_accuracy");mae=row.get("count_mae");role=row.get("role_same_ordinal_accuracy")
+            tree.insert("","end",values=(
+                row["name"],row["specimens"],
+                "—" if exact is None else f"{100*exact:.1f}%",
+                "—" if mae is None else f"{mae:.3f}",
+                "—" if role is None else f"{100*role:.1f}%",
+            ))
+        ttk.Button(frame,text="Close",command=dialog.destroy).grid(row=3,column=0,sticky="e",pady=(9,0))
 
     def _navigate(self,step):
         batch=self.project.structure_batch(self.pass_no.get())

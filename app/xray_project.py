@@ -122,6 +122,20 @@ class XRayProject:
           FOREIGN KEY(model_id) REFERENCES xray_structure_models(model_id),
           FOREIGN KEY(specimen_id) REFERENCES specimens(specimen_id)
         );
+        CREATE TABLE IF NOT EXISTS xray_structure_repeatability_runs(
+          run_id TEXT PRIMARY KEY, schema_version_id TEXT NOT NULL,
+          created_at TEXT NOT NULL, completed_at TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'in_progress',
+          requested_count INTEGER NOT NULL DEFAULT 0, seed INTEGER NOT NULL DEFAULT 42
+        );
+        CREATE TABLE IF NOT EXISTS xray_structure_repeatability_membership(
+          run_id TEXT NOT NULL, specimen_id TEXT NOT NULL, position INTEGER NOT NULL,
+          baseline_json TEXT NOT NULL DEFAULT '[]',
+          baseline_visibility_json TEXT NOT NULL DEFAULT '{}',
+          PRIMARY KEY(run_id,specimen_id),
+          FOREIGN KEY(run_id) REFERENCES xray_structure_repeatability_runs(run_id) ON DELETE CASCADE,
+          FOREIGN KEY(specimen_id) REFERENCES specimens(specimen_id)
+        );
         CREATE TABLE IF NOT EXISTS ui_state(
           key TEXT PRIMARY KEY, payload_json TEXT NOT NULL DEFAULT '{}'
         );
@@ -1514,6 +1528,8 @@ class XRayProject:
             c.execute("UPDATE annotation_runs SET status='verified',updated_at=?,verified_at=? WHERE run_id=?",(now,now,run["run_id"]))
             self._annotation_event(c,run["run_id"],"verify",payload={"counts":counts,"structure_visibility":states})
         self.recalculate_trait_results(specimen_id)
+        if int(pass_no)==2 and str(source)=="human":
+            self._update_structure_repeatability_completion(specimen_id)
         return {"run_id":run["run_id"],"counts":counts}
 
     def annotation_events(self,specimen_id,pass_no=1,source="human"):
@@ -1527,6 +1543,156 @@ class XRayProject:
             try:row["payload"]=json.loads(row.pop("payload_json") or "{}")
             except Exception:row["payload"]={}
         return rows
+
+    def structure_repeatability(self,run_id=None):
+        """Latest persisted manual repeatability sample and its Annotation 2 progress."""
+        schema_id=self.active_scheme_record()["version_id"]
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row
+            if run_id:
+                row=c.execute("SELECT * FROM xray_structure_repeatability_runs WHERE run_id=?",(str(run_id),)).fetchone()
+            else:
+                row=c.execute(
+                    """SELECT * FROM xray_structure_repeatability_runs
+                       ORDER BY CASE status WHEN 'in_progress' THEN 0 ELSE 1 END, created_at DESC LIMIT 1"""
+                ).fetchone()
+            if row is None:return None
+            members=[dict(item) for item in c.execute(
+                """SELECT specimen_id,position,baseline_json,baseline_visibility_json
+                   FROM xray_structure_repeatability_membership
+                   WHERE run_id=? ORDER BY position""",(row["run_id"],)
+            )]
+            verified={item[0] for item in c.execute(
+                """SELECT specimen_id FROM annotation_runs
+                   WHERE pass_no=2 AND source='human' AND schema_version_id=? AND status='verified'""",
+                (row["schema_version_id"],),
+            )}
+        decoded=[]
+        for item in members:
+            try:baseline=json.loads(item.pop("baseline_json") or "[]")
+            except Exception:baseline=[]
+            try:visibility=json.loads(item.pop("baseline_visibility_json") or "{}")
+            except Exception:visibility={}
+            decoded.append({**item,"baseline":baseline,"baseline_visibility":visibility})
+        ids=[item["specimen_id"] for item in decoded]
+        completed=sum(specimen_id in verified for specimen_id in ids)
+        return {
+            **dict(row),"members":decoded,"ids":ids,"total":len(ids),"verified":completed,
+            "remaining":max(0,len(ids)-completed),"schema_current":str(row["schema_version_id"])==str(schema_id),
+        }
+
+    def start_structure_repeatability(self,count,seed=42):
+        """Freeze Annotation 1 truth for a random sample and start blind Annotation 2."""
+        count=max(1,int(count));seed=int(seed);schema_id=self.active_scheme_record()["version_id"]
+        active=self.structure_repeatability()
+        if active and active.get("status")=="in_progress":
+            return active
+        candidates=[row for row in self.structure_specimens(1) if str(row.get("annotation_status") or "")=="verified"]
+        available=[]
+        for row in candidates:
+            if self.annotation_run(row["specimen_id"],2,"human",False) is None:
+                available.append(row)
+        if not available:
+            raise ValueError("No verified Annotation 1 specimens are available for a new repeatability sample.")
+        count=min(count,len(available))
+        selected=random.Random(seed).sample(available,count)
+        run_id=str(uuid.uuid4());now=_now()
+        payload=[]
+        for position,row in enumerate(selected):
+            specimen_id=str(row["specimen_id"])
+            baseline=[
+                {
+                    "structure_id":str(point["structure_id"]),"x":float(point["x"]),"y":float(point["y"]),
+                    "sort_order":int(point.get("sort_order",0) or 0),
+                }
+                for point in self.effective_annotations(specimen_id,1,"human")
+            ]
+            visibility=self.structure_visibility_states(specimen_id,1,"human")
+            payload.append((run_id,specimen_id,position,_json(baseline),_json(visibility)))
+        with sqlite3.connect(self.db_path) as c:
+            c.execute(
+                """INSERT INTO xray_structure_repeatability_runs(
+                     run_id,schema_version_id,created_at,status,requested_count,seed
+                   ) VALUES(?,?,?,'in_progress',?,?)""",
+                (run_id,schema_id,now,count,seed),
+            )
+            c.executemany(
+                """INSERT INTO xray_structure_repeatability_membership(
+                     run_id,specimen_id,position,baseline_json,baseline_visibility_json
+                   ) VALUES(?,?,?,?,?)""",payload,
+            )
+        return self.structure_repeatability(run_id)
+
+    def _update_structure_repeatability_completion(self,specimen_id):
+        with sqlite3.connect(self.db_path) as c:
+            rows=c.execute(
+                """SELECT r.run_id,r.schema_version_id
+                   FROM xray_structure_repeatability_runs r
+                   JOIN xray_structure_repeatability_membership m ON m.run_id=r.run_id
+                   WHERE r.status='in_progress' AND m.specimen_id=?""",(str(specimen_id),)
+            ).fetchall()
+            for run_id,schema_id in rows:
+                total=int(c.execute(
+                    "SELECT COUNT(*) FROM xray_structure_repeatability_membership WHERE run_id=?",(run_id,)
+                ).fetchone()[0])
+                verified=int(c.execute(
+                    """SELECT COUNT(*) FROM xray_structure_repeatability_membership m
+                       JOIN annotation_runs a ON a.specimen_id=m.specimen_id
+                       WHERE m.run_id=? AND a.pass_no=2 AND a.source='human'
+                         AND a.schema_version_id=? AND a.status='verified'""",
+                    (run_id,schema_id),
+                ).fetchone()[0])
+                if total and verified>=total:
+                    c.execute(
+                        "UPDATE xray_structure_repeatability_runs SET status='completed',completed_at=? WHERE run_id=?",
+                        (_now(),run_id),
+                    )
+
+    @staticmethod
+    def _repeatability_match_distances(first,second):
+        remaining=[dict(point) for point in second];distances=[]
+        for point in first:
+            if not remaining:break
+            index=min(
+                range(len(remaining)),
+                key=lambda i:(float(point["x"])-float(remaining[i]["x"]))**2+(float(point["y"])-float(remaining[i]["y"]))**2,
+            )
+            other=remaining.pop(index)
+            distances.append(((float(point["x"])-float(other["x"]))**2+(float(point["y"])-float(other["y"]))**2)**0.5)
+        return distances
+
+    def structure_repeatability_metrics(self,run_id=None):
+        run=self.structure_repeatability(run_id)
+        if not run:return {"run":None,"structures":[],"completed":0,"total":0}
+        scheme=self.scheme;structures=list(scheme.get("structures") or ())
+        role_ids={str(item["id"]) for item in structures if str(item.get("learning_relation") or "")=="role_on_structure"}
+        accum={
+            str(item["id"]):{"name":str(item.get("name") or item["id"]),"specimens":0,"exact":0,"abs_error":0.0,
+                             "distances":[],"role_checks":0,"role_same":0}
+            for item in structures
+        }
+        for member in run["members"]:
+            specimen_id=member["specimen_id"]
+            pass2=self.annotation_run(specimen_id,2,"human",False)
+            if not pass2 or str(pass2.get("status") or "")!="verified":continue
+            repeated=self.effective_annotations(specimen_id,2,"human")
+            for structure in structures:
+                sid=str(structure["id"]);a=[p for p in member["baseline"] if p["structure_id"]==sid];b=[p for p in repeated if p["structure_id"]==sid]
+                bucket=accum[sid];bucket["specimens"]+=1;bucket["exact"]+=int(len(a)==len(b));bucket["abs_error"]+=abs(len(a)-len(b))
+                bucket["distances"].extend(self._repeatability_match_distances(a,b))
+                if sid in role_ids and len(a)==1 and len(b)==1:
+                    bucket["role_checks"]+=1;bucket["role_same"]+=int(int(a[0].get("sort_order",0))==int(b[0].get("sort_order",0)))
+        result=[]
+        for structure in structures:
+            sid=str(structure["id"]);bucket=accum[sid];n=int(bucket["specimens"]);dist=bucket.pop("distances")
+            result.append({
+                "structure_id":sid,"name":bucket["name"],"specimens":n,
+                "exact_count_accuracy":(bucket["exact"]/n if n else None),
+                "count_mae":(bucket["abs_error"]/n if n else None),
+                "mean_marker_difference":(sum(dist)/len(dist) if dist else None),
+                "role_same_ordinal_accuracy":(bucket["role_same"]/bucket["role_checks"] if bucket["role_checks"] else None),
+            })
+        return {"run":run,"structures":result,"completed":run["verified"],"total":run["total"]}
 
     def annotation_summary(self,pass_no=1):
         rows=self.structure_specimens(pass_no)
