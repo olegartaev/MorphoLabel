@@ -116,6 +116,19 @@ class XRayCropViewportContractTests(unittest.TestCase):
         self.assertIn("state=crop_flip_button_state(bool(self.session.selected_id))",source)
         self.assertIn("self._refresh_flip_controls()",source)
 
+    def test_all_crops_show_compact_orientation_without_full_unselected_boxes(self):
+        source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
+        self.assertIn("def _draw_crop_brackets",source)
+        self.assertIn("blue ▲ = head · amber ● = ventral",source)
+        self.assertIn("def _draw_orientation_markers(self,crop,selected):",source)
+        marker=source[source.index("    def _draw_orientation_markers(self,crop,selected):"):source.index("    def _draw_handles(self,crop):")]
+        self.assertNotIn("if not selected:return",marker)
+        self.assertNotIn("head_edge",marker)
+        self.assertNotIn("bottom_edge",marker)
+        draw=source[source.index("    def _draw(self):"):source.index("    @staticmethod\n    def _orientation_geometry",source.index("    def _draw(self):"))]
+        self.assertIn("self._draw_crop_brackets(corners,color)",draw)
+        self.assertIn("if selected:",draw)
+
     def test_crop_workspace_has_landmarks_style_zoom_pan_and_two_icon_flips(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
         for text in ('"<MouseWheel>"',"def _wheel(","def _pan_start(","def _pan_motion(","flip_horizontal","flip_vertical","Flip left ↔ right. Use when the head is on the wrong side.","Flip top ↕ bottom. Use when the ventral side is on the wrong side.","#54f0aa","#168ff0","#ffad1f"):
