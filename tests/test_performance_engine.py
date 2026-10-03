@@ -21,6 +21,8 @@ class PerformanceEngineTests(unittest.TestCase):
     def test_cpu_candidates_are_bounded(self):
         self.assertEqual(cpu_worker_candidates(profile(4)), (1, 2, 4))
         self.assertEqual(cpu_worker_candidates(profile(32)), (1, 2, 4, 8, 16, 32))
+        mixed = HardwareProfile("cpu", 20, 28, 16 * 1024**3, None, None, None, False, None, "CPU")
+        self.assertEqual(cpu_worker_candidates(mixed), (1, 2, 4, 8, 16, 20, 28))
 
     def test_hardware_discovery_is_cached_until_explicit_refresh(self):
         from unittest.mock import patch
