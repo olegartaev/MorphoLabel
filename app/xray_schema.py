@@ -123,9 +123,9 @@ def compatible_reference_roles(scheme,base_structure_id):
             if item is not None and not item.get("repeated"):allowed.add(ident)
     return [item for item in scheme.get("structures",()) if item["id"] in allowed and not item.get("repeated")]
 
-def calculate_trait_values(scheme,annotations):
-    """Calculate current trait values directly from current structure annotations."""
-    scheme=normalize_scheme(scheme);grouped={}
+def calculate_trait_values(scheme,annotations,unknown_structures=None):
+    """Calculate trait values; partial/not-visible structures can be declared unknown."""
+    scheme=normalize_scheme(scheme);grouped={};unknown={str(value) for value in (unknown_structures or ())}
     for row in annotations or ():
         grouped.setdefault(str(row["structure_id"]),[]).append(dict(row))
     for rows in grouped.values():rows.sort(key=lambda row:(int(row.get("sort_order",0)),int(row.get("annotation_id",0))))
@@ -137,6 +137,9 @@ def calculate_trait_values(scheme,annotations):
         return min(range(len(series)),key=lambda i:(float(series[i]["x"])-rx)**2+(float(series[i]["y"])-ry)**2)
     for trait in scheme["traits"]:
         ident=trait["id"];method=trait["method"];ids=list(trait.get("structures") or ());rule=trait.get("rule") or {};value=None
+        if any(str(structure_id) in unknown for structure_id in ids):
+            values[ident]=None
+            continue
         primary=points(ids[0]) if ids else []
         if method=="count":
             value=len(primary)+int(rule.get("offset",0) or 0)
