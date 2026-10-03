@@ -12,11 +12,22 @@ from app.xray_project import XRayProject
 from app.xray_schema import blank_scheme, bundled_scheme, calculate_trait_values, compatible_reference_roles
 from app.xray_result_qc import (
     build_result_qc, clear_result_review_queue, complete_result_review_item,
-    move_result_review_queue, result_review_queue, start_result_review_queue,
+    move_result_review_queue, remove_result_review_image, result_review_queue, start_result_review_queue,
 )
 from app.xray_trait_export import export_trait_rows
 from app.xray_structure_display import DEFAULT_PALETTE, DEFAULT_SIZE, load_xray_structure_display, save_xray_structure_display
 from app.xray_structures_ui import _first_structure_id, _structure_button_order
+
+
+class XRayStructuresExcludeControlContractTests(unittest.TestCase):
+    def test_structures_has_bad_xray_exclusion_control_with_preserving_copy(self):
+        source=(Path(__file__).resolve().parents[1]/"app/xray_structures_ui.py").read_text(encoding="utf-8")
+        self.assertIn('text="Exclude X-ray"',source)
+        self.assertIn("command=self.exclude_current_xray",source)
+        self.assertIn("self.project.set_source_excluded(image_id,True)",source)
+        self.assertIn("remove_result_review_image(self.project,image_id)",source)
+        self.assertIn("Existing crops, annotations and history are kept",source)
+        self.assertIn("retire_structure_repeatability",source)
 
 
 class XRayStructurePersistenceTests(unittest.TestCase):
@@ -50,6 +61,19 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         ids=[row["specimen_id"] for row in self.project.structure_specimens(1)]
         self.assertIn(self.specimen_id,ids)
         self.assertNotIn(unconfirmed,ids)
+
+    def test_excluding_bad_xray_removes_it_from_active_structures_and_export_but_keeps_annotations(self):
+        self._complete_pass_one()
+        before=[dict(row) for row in self.project.effective_annotations(self.specimen_id,1,"human")]
+        self.assertTrue(any(row["specimen_id"]==self.specimen_id for row in self.project.structure_specimens(1)))
+        self.assertTrue(any(row["specimen_id"]==self.specimen_id for row in self.project.trait_rows()))
+        self.project.set_source_excluded(self.image_ids[0],True)
+        self.assertFalse(any(row["specimen_id"]==self.specimen_id for row in self.project.structure_specimens(1)))
+        self.assertFalse(any(row["specimen_id"]==self.specimen_id for row in self.project.trait_rows()))
+        self.assertEqual(before,self.project.effective_annotations(self.specimen_id,1,"human"))
+        self.project.set_source_excluded(self.image_ids[0],False)
+        self.assertTrue(any(row["specimen_id"]==self.specimen_id for row in self.project.structure_specimens(1)))
+        self.assertEqual(before,self.project.effective_annotations(self.specimen_id,1,"human"))
 
     def test_point_edits_are_normalized_persisted_and_logged(self):
         annotation_id=self.project.add_annotation(self.specimen_id,"vertebra",-2,4,1)
@@ -114,6 +138,18 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         codes={item["code"] for item in report["issues"]}
         self.assertIn("detached_reference",codes)
         self.assertIn("series_spacing",codes)
+
+    def test_result_review_queue_drops_every_specimen_from_an_excluded_xray(self):
+        issues=[
+            {"specimen_id":"a","image_id":"plate_bad","severity":"high","code":"repeat_count","metric":{"difference":2},"sample":"S","plate":"bad","ordinal":1,"reason":"a"},
+            {"specimen_id":"b","image_id":"plate_bad","severity":"review","code":"series_spacing","metric":{"ratio":2.0},"sample":"S","plate":"bad","ordinal":2,"reason":"b"},
+            {"specimen_id":"c","image_id":"plate_good","severity":"review","code":"series_spacing","metric":{"ratio":1.9},"sample":"S","plate":"good","ordinal":1,"reason":"c"},
+        ]
+        start_result_review_queue(self.project,issues)
+        value=remove_result_review_image(self.project,"plate_bad")
+        self.assertIsNotNone(value)
+        self.assertEqual(["c"],[row["specimen_id"] for row in value["items"]])
+        self.assertEqual(0,value["position"])
 
     def test_result_review_queue_is_worst_first_stable_and_navigable(self):
         issues=[
