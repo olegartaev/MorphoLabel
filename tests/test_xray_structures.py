@@ -12,7 +12,7 @@ from app.xray_project import XRayProject
 from app.xray_schema import blank_scheme, bundled_scheme, calculate_trait_values, compatible_reference_roles
 from app.xray_result_qc import (
     build_result_qc, clear_result_review_queue, complete_result_review_item,
-    move_result_review_queue, remove_result_review_image, result_review_queue, start_result_review_queue,
+    move_result_review_queue, remove_result_review_image, remove_result_review_specimen, result_review_queue, start_result_review_queue,
 )
 from app.xray_trait_export import export_trait_rows
 from app.xray_structure_display import DEFAULT_PALETTE, DEFAULT_SIZE, load_xray_structure_display, save_xray_structure_display
@@ -20,18 +20,19 @@ from app.xray_structures_ui import _first_structure_id, _structure_button_order,
 
 
 class XRayStructuresExcludeControlContractTests(unittest.TestCase):
-    def test_structures_exclusion_matches_landmarks_list_action_and_is_reversible(self):
+    def test_structures_exclusion_matches_landmarks_but_targets_one_specimen(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         self.assertIn('text="Show excluded"',source)
-        self.assertIn('text="Exclude"',source)
         self.assertIn('text="Restore" if excluded else "Exclude"',source)
         self.assertIn('self._action_icon("restore" if excluded else "exclude")',source)
         self.assertIn('style="Icon.TButton"',source)
         self.assertIn("def exclude_or_restore",source)
-        self.assertIn("self.project.set_source_excluded(image_id,False)",source)
-        self.assertIn("self.project.set_source_excluded(image_id,True)",source)
-        self.assertIn("remove_result_review_image(self.project,image_id)",source)
-        self.assertNotIn('text="Exclude X-ray"',source)
+        self.assertIn("self.project.set_specimen_excluded(specimen_id,False)",source)
+        self.assertIn("self.project.set_specimen_excluded(specimen_id,True)",source)
+        self.assertIn("remove_result_review_specimen(self.project,specimen_id)",source)
+        panel=source[source.index("class XRaySpecimenListPanel"):source.index("class XRayStructureWorkspace")]
+        self.assertNotIn("set_source_excluded(",panel)
+        self.assertIn('row.get("workflow_no")',panel)
 
 
 class XRayStructurePersistenceTests(unittest.TestCase):
@@ -66,21 +67,60 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         self.assertIn(self.specimen_id,ids)
         self.assertNotIn(unconfirmed,ids)
 
-    def test_excluding_bad_xray_removes_it_from_active_structures_and_export_but_keeps_annotations(self):
+    def test_excluding_one_specimen_keeps_plate_mates_and_stable_workflow_numbers(self):
         self._complete_pass_one()
+        crop=crop_from_geometry(250,170,220,110,0,(900,480),algorithm="manual")
+        other=self.project.add_manual_specimen(self.image_ids[0],crop)
+        self.project.confirm_specimen(other)
         before=[dict(row) for row in self.project.effective_annotations(self.specimen_id,1,"human")]
-        self.assertTrue(any(row["specimen_id"]==self.specimen_id for row in self.project.structure_specimens(1)))
-        self.assertTrue(any(row["specimen_id"]==self.specimen_id for row in self.project.trait_rows()))
-        self.project.set_source_excluded(self.image_ids[0],True)
-        self.assertFalse(any(row["specimen_id"]==self.specimen_id for row in self.project.structure_specimens(1)))
-        restore_rows=self.project.structure_specimens(1,include_excluded=True)
-        restore_row=next(row for row in restore_rows if row["specimen_id"]==self.specimen_id)
-        self.assertEqual(1,int(restore_row["image_excluded"]))
-        self.assertFalse(any(row["specimen_id"]==self.specimen_id for row in self.project.trait_rows()))
+        catalog={row["specimen_id"]:int(row["workflow_no"]) for row in self.project.structure_specimens(1,include_excluded=True)}
+        self.assertIn(self.specimen_id,catalog);self.assertIn(other,catalog)
+        self.project.set_specimen_excluded(self.specimen_id,True)
+        active={row["specimen_id"]:row for row in self.project.structure_specimens(1)}
+        self.assertNotIn(self.specimen_id,active);self.assertIn(other,active)
+        self.assertEqual(catalog[other],int(active[other]["workflow_no"]))
+        restore_rows={row["specimen_id"]:row for row in self.project.structure_specimens(1,include_excluded=True)}
+        self.assertEqual(1,int(restore_rows[self.specimen_id]["excluded"]))
+        self.assertEqual(catalog[self.specimen_id],int(restore_rows[self.specimen_id]["workflow_no"]))
+        export_ids={row["specimen_id"]:int(row["workflow_no"]) for row in self.project.trait_rows()}
+        self.assertNotIn(self.specimen_id,export_ids);self.assertEqual(catalog[other],export_ids[other])
         self.assertEqual(before,self.project.effective_annotations(self.specimen_id,1,"human"))
-        self.project.set_source_excluded(self.image_ids[0],False)
-        self.assertTrue(any(row["specimen_id"]==self.specimen_id for row in self.project.structure_specimens(1)))
+        self.project.set_specimen_excluded(self.specimen_id,False)
+        active={row["specimen_id"]:row for row in self.project.structure_specimens(1)}
+        self.assertEqual(catalog[self.specimen_id],int(active[self.specimen_id]["workflow_no"]))
         self.assertEqual(before,self.project.effective_annotations(self.specimen_id,1,"human"))
+
+    def test_legacy_phoxinus_offsets_are_corrected_without_losing_annotations(self):
+        root=Path(tempfile.mkdtemp())
+        try:
+            source=root/"source";source.mkdir()
+            Image.fromarray(np.full((300,600),80,np.uint8)).save(source/"plate.png")
+            destination=root/"projects";destination.mkdir()
+            legacy=bundled_scheme("phoxinus_vertebral_counts")
+            by_id={item["id"]:item for item in legacy["traits"]}
+            for trait_id in ("tv","abdv","predv"):by_id[trait_id].setdefault("rule",{})["offset"]=4
+            project=XRayProject.create("legacy",source,destination,legacy)
+            image_id=project.source_images()[0]["image_id"]
+            sid=project.add_manual_specimen(image_id,crop_from_geometry(300,150,440,120,0,(600,300),algorithm="manual"))
+            project.confirm_plate(image_id)
+            a=project.add_annotation(sid,"vertebra",0.10,0.50,1)
+            b=project.add_annotation(sid,"vertebra",0.30,0.50,1)
+            c=project.add_annotation(sid,"vertebra",0.50,0.50,1)
+            project.assign_annotation_role(b,"first_caudal");project.assign_annotation_role(c,"last_predorsal")
+            project.add_annotation(sid,"preanal_pterygiophore",0.40,0.70,1)
+            project.verify_annotations(sid,1)
+            old_version=project.active_scheme_record()["version_id"]
+            old_annotations=[dict(row) for row in project.effective_annotations(sid,1,"human")]
+            self.assertTrue(project.ensure_phoxinus_count_semantics())
+            self.assertNotEqual(old_version,project.active_scheme_record()["version_id"])
+            self.assertEqual("verified",project.annotation_run(sid,1,"human",False)["status"])
+            self.assertEqual(old_annotations,project.effective_annotations(sid,1,"human"))
+            values=project.trait_rows()[0]["trait_values"]
+            self.assertEqual(3,values["tv"]);self.assertEqual(1,values["abdv"]);self.assertEqual(2,values["caudv"])
+            self.assertEqual(3,values["predv"]);self.assertEqual("1+2",values["formv"])
+            self.assertFalse(project.ensure_phoxinus_count_semantics())
+        finally:shutil.rmtree(root,ignore_errors=True)
+
 
     def test_point_edits_are_normalized_persisted_and_logged(self):
         annotation_id=self.project.add_annotation(self.specimen_id,"vertebra",-2,4,1)
