@@ -90,6 +90,29 @@ class CropFeatureCacheAndProposalTests(unittest.TestCase):
             rerun=train_project(self.project)
         self.assertEqual(5, rerun["timings"]["feature_cache_hits"])
 
+    def test_learned_bulk_proposal_skips_full_resolution_developed_png_until_review(self):
+        from app.crop_editor_async_v2 import load_project_developed
+        row = self.project.catalog_rows()[0]; ident = row["image_id"]
+        developed_path=self.project.cache_root / "developed" / f"{ident}.png"
+        developed_path.unlink()
+        metadata_path=self.project.cache_root / "metadata" / f"{ident}.developed.json"
+        if metadata_path.exists():metadata_path.unlink()
+        model_dir = self.project.data_root / "ai" / "models" / "crop_model_v001"; model_dir.mkdir(parents=True)
+        weights=np.zeros((769,4),dtype=np.float32);weights[0]=[.1,.1,.9,.9]
+        np.savez_compressed(model_dir / "model.npz", weights=weights)
+        self.project.register_model("crop_model_v001", "crop", path="ai/models/crop_model_v001", metrics={}, active=True)
+        result = prepare_crop_result(self.project.image_path(ident), project=self.project, force=True, image_id_value=ident)
+        self.assertTrue(result["proposal_only"])
+        self.assertFalse(result["developed_cache_materialized"])
+        self.assertEqual((96,64),(result["original_width"],result["original_height"]))
+        self.assertFalse(developed_path.exists())
+        commit_crop_result(self.project,result,provenance="automatic")
+        saved=self.project.record_ai_crop_prediction(ident,result,"crop_model_v001")
+        self.assertIn(saved["qc_result"],{"OK","REVIEW","BAD"})
+        full,_proxy=load_project_developed(self.project,ident)
+        self.assertEqual((96,64),full.size)
+        self.assertTrue(developed_path.is_file())
+
     def test_learned_proposal_writes_neither_mask_nor_standard_until_review(self):
         row = self.project.catalog_rows()[0]; ident = row["image_id"]
         model_dir = self.project.data_root / "ai" / "models" / "crop_model_v001"; model_dir.mkdir(parents=True)
