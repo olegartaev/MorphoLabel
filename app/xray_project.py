@@ -927,20 +927,75 @@ class XRayProject:
         self.recalculate_trait_results(specimen_id)
         return {"protected":False,"annotations":len(inserted),"roles":role_count,"model_id":str(model_id)}
 
-    def crop_summary(self):
-        images=self.source_images();rows=self.specimens()
-        verified_plates=sum(bool(x["crop_reviewed"]) and not x["excluded"] for x in images)
-        ai_pending=len(self.ai_review_plate_ids())
-        return {
-            "plates":sum(not x["excluded"] for x in images),
-            "verified_plates":verified_plates,
-            "training_specimens":self.training_specimen_count(),
-            "ai_pending_plates":ai_pending,
-            "uncropped_plates":len(self.untouched_plate_ids()),
-            "specimens":sum(not row["excluded"] for row in rows),
-            "confirmed":sum(row["crop_status"]=="confirmed" and not row["excluded"] for row in rows),
-            "review":sum(row["crop_status"]=="proposed" and not row["excluded"] for row in rows),
+    def crop_workspace_status(self):
+        """Fast aggregate state for the interactive Crop workspace.
+
+        Navigation must not walk the whole project through specimens(image_id)
+        hundreds of times.  Keep these counters DB-authoritative, but calculate
+        them with set-based queries in one connection.
+        """
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row
+            plate=c.execute("""
+                SELECT
+                  SUM(CASE WHEN excluded=0 THEN 1 ELSE 0 END) AS plates,
+                  SUM(CASE WHEN excluded=0 AND crop_reviewed=1 THEN 1 ELSE 0 END) AS verified_plates,
+                  SUM(CASE WHEN excluded=0 AND crop_reviewed=0 AND NOT EXISTS(
+                    SELECT 1 FROM specimens s
+                    WHERE s.image_id=source_images.image_id AND s.excluded=0
+                      AND s.crop_status NOT IN ('rejected','superseded')
+                  ) THEN 1 ELSE 0 END) AS uncropped_plates,
+                  SUM(CASE WHEN excluded=0 AND crop_reviewed=0 AND NOT EXISTS(
+                    SELECT 1 FROM specimens s
+                    WHERE s.image_id=source_images.image_id AND s.excluded=0
+                      AND s.crop_status='proposed' AND s.crop_source IN ('model','manual')
+                  ) THEN 1 ELSE 0 END) AS prediction_candidates
+                FROM source_images
+            """).fetchone()
+            specimen=c.execute("""
+                SELECT
+                  SUM(CASE WHEN s.excluded=0 AND s.crop_status NOT IN ('rejected','superseded') THEN 1 ELSE 0 END) AS specimens,
+                  SUM(CASE WHEN s.excluded=0 AND s.crop_status='confirmed' THEN 1 ELSE 0 END) AS confirmed,
+                  SUM(CASE WHEN s.excluded=0 AND s.crop_status='proposed' THEN 1 ELSE 0 END) AS review,
+                  COUNT(DISTINCT CASE WHEN s.excluded=0 AND s.crop_status='confirmed'
+                    AND i.excluded=0 AND i.crop_reviewed=1 THEN s.image_id END) AS training_plates,
+                  SUM(CASE WHEN s.excluded=0 AND s.crop_status='confirmed'
+                    AND i.excluded=0 AND i.crop_reviewed=1 THEN 1 ELSE 0 END) AS training_specimens,
+                  COUNT(DISTINCT CASE WHEN s.excluded=0 AND s.crop_status='proposed'
+                    AND s.crop_source='model' AND i.excluded=0 AND i.crop_reviewed=0 THEN s.image_id END) AS ai_pending_plates
+                FROM specimens s JOIN source_images i ON i.image_id=s.image_id
+            """).fetchone()
+            orientation_rows=c.execute("""
+                SELECT s.crop_json
+                FROM specimens s JOIN source_images i ON i.image_id=s.image_id
+                WHERE s.excluded=0 AND s.crop_status='confirmed'
+                  AND i.excluded=0 AND i.crop_reviewed=1
+            """).fetchall()
+        orientation_training=0
+        for row in orientation_rows:
+            try:orientation_training+=int(bool(json.loads(row["crop_json"] or "{}").get("orientation_verified")))
+            except (TypeError,ValueError,json.JSONDecodeError):pass
+        out={
+            "plates":int(plate["plates"] or 0),
+            "verified_plates":int(plate["verified_plates"] or 0),
+            "uncropped_plates":int(plate["uncropped_plates"] or 0),
+            "prediction_candidates":int(plate["prediction_candidates"] or 0),
+            "specimens":int(specimen["specimens"] or 0),
+            "confirmed":int(specimen["confirmed"] or 0),
+            "review":int(specimen["review"] or 0),
+            "training_plates":int(specimen["training_plates"] or 0),
+            "training_specimens":int(specimen["training_specimens"] or 0),
+            "ai_pending_plates":int(specimen["ai_pending_plates"] or 0),
+            "orientation_training":int(orientation_training),
         }
+        return out
+
+    def crop_summary(self):
+        status=self.crop_workspace_status()
+        return {key:status[key] for key in (
+            "plates","verified_plates","training_specimens","ai_pending_plates",
+            "uncropped_plates","specimens","confirmed","review",
+        )}
 
     def save_scheme(self,scheme,note="Scheme update"):
         normalized=normalize_scheme(scheme);digest=scheme_hash(normalized)
