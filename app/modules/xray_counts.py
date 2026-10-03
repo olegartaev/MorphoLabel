@@ -195,7 +195,12 @@ class OrientationSetupDialog(tk.Toplevel):
 
 class XRayCountsRuntime:
     def __init__(self):self.host=None;self.project=None;self.stage="project";self._images={};self._tip=None;self._workspace=None
-    def close(self):self.host=None;self._workspace=None;self._images.clear();self._tip=None
+    def close(self):
+        flush=getattr(self._workspace,"flush_pending_edits",None)
+        if callable(flush):
+            try:flush()
+            except Exception:pass
+        self.host=None;self._workspace=None;self._images.clear();self._tip=None
     def _selection(self):
         return self.project.current_selection() if self.project is not None else {"image_id":"","specimen_id":""}
 
@@ -248,7 +253,7 @@ class XRayCountsRuntime:
         return self._images[key]
     def _header(self,parent):
         nav=ttk.Frame(parent,style="Topbar.TFrame");nav.pack(fill="x",pady=(0,4))
-        home=ttk.Button(nav,text="Modules",image=self._core_icon(nav,"modules"),compound="left",command=self.host.show_module_hub,style="Stage.TButton")
+        home=ttk.Button(nav,text="Modules",image=self._core_icon(nav,"modules"),compound="left",command=self._show_module_hub,style="Stage.TButton")
         home.pack(side="left",padx=(0,8));self._tip.bind(home,"Return to the MorphoLabel module hub.")
         for key,label,icon in STAGES:
             active=self.stage==key
@@ -257,6 +262,15 @@ class XRayCountsRuntime:
             b.pack(side="left",padx=(0,3));self._tip.bind(b,f"Open the {label} section.")
         standard_menu=getattr(self.host,"build_standard_menu",None)
         if callable(standard_menu):standard_menu(nav)
+
+    def _show_module_hub(self):
+        flush=getattr(self._workspace,"flush_pending_edits",None)
+        if callable(flush):
+            try:flush()
+            except Exception as exc:
+                messagebox.showerror("X-ray Crops",f"Could not save the current Crop edits before leaving the module:\n{exc}",parent=self.host.container.winfo_toplevel())
+                return
+        self.host.show_module_hub()
 
     def _select(self,key):
         if self.project is None and key!="project":return
