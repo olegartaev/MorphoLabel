@@ -152,6 +152,14 @@ class XRayCropViewportContractTests(unittest.TestCase):
         self.assertNotIn("rotate_180",source);self.assertNotIn("turn180",source)
 
 
+    def test_crop_ai_can_predict_only_the_current_selected_plate(self):
+        source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
+        self.assertIn('"Predict current",self.predict_current_plate',source)
+        self.assertIn("def predict_current_plate(self):",source)
+        self.assertIn("predict_plates(self.project,[image_id],model=model)",source)
+        self.assertIn('if image.get("crop_reviewed"):',source)
+        self.assertIn("Human-reviewed plates are protected",source)
+
 class XRayCropPersistenceTests(unittest.TestCase):
     def setUp(self):
         self.root=Path(tempfile.mkdtemp());self.source=self.root/"source";self.source.mkdir()
