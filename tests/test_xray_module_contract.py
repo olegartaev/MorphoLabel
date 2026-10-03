@@ -211,7 +211,7 @@ class XRayModuleContractTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]
         source=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         self.assertIn("structure_workflow_number",source)
-        self.assertIn('tree.heading("fish",text="Specimen")',source)
+        self.assertIn('tree.heading("fish",text="Plate №")',source)
         self.assertIn('workflow_no=int(row.get("workflow_no") or index)',source)
         self.assertNotIn("Fish №",source)
 
