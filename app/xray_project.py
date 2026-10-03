@@ -14,6 +14,7 @@ from .xray_crop import apply_orientation_defaults, normalize_orientation_policy
 from .xray_schema import bundled_scheme, calculate_trait_values, compatible_reference_roles, normalize_scheme, scheme_hash
 
 IMAGE_EXTENSIONS={".png",".jpg",".jpeg",".tif",".tiff",".bmp"}
+STRUCTURE_VISIBILITY_STATES=("complete","partial","not_visible","absent")
 
 def _now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -131,6 +132,12 @@ class XRayProject:
           created_at TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT '', verified_at TEXT NOT NULL DEFAULT '',
           UNIQUE(specimen_id,pass_no,source,schema_version_id)
         );
+        CREATE TABLE IF NOT EXISTS annotation_structure_states(
+          run_id TEXT NOT NULL, structure_id TEXT NOT NULL,
+          visibility TEXT NOT NULL DEFAULT 'complete', updated_at TEXT NOT NULL DEFAULT '',
+          PRIMARY KEY(run_id,structure_id),
+          FOREIGN KEY(run_id) REFERENCES annotation_runs(run_id) ON DELETE CASCADE
+        );
         CREATE TABLE IF NOT EXISTS annotations(
           annotation_id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL,
           structure_id TEXT NOT NULL, x REAL NOT NULL, y REAL NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0,
@@ -154,6 +161,7 @@ class XRayProject:
           archive_id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL,
           specimen_id TEXT NOT NULL, created_at TEXT NOT NULL, reason TEXT NOT NULL,
           crop_json TEXT NOT NULL DEFAULT '{}', annotations_json TEXT NOT NULL DEFAULT '[]',
+          structure_states_json TEXT NOT NULL DEFAULT '{}',
           schema_version_id TEXT NOT NULL, pass_no INTEGER NOT NULL, source TEXT NOT NULL,
           status TEXT NOT NULL DEFAULT ''
         );
@@ -189,6 +197,9 @@ class XRayProject:
                 "coordinate_space":"TEXT NOT NULL DEFAULT 'crop_normalized_v1'",
                 "updated_at":"TEXT NOT NULL DEFAULT ''",
                 "verified_at":"TEXT NOT NULL DEFAULT ''",
+            })
+            self._ensure_columns(c,"annotation_archives",{
+                "structure_states_json":"TEXT NOT NULL DEFAULT '{}'",
             })
 
     def meta(self,key,default=""):
@@ -1090,6 +1101,49 @@ class XRayProject:
             })
         return rows
 
+    def structure_visibility_states(self,specimen_id,pass_no=1,source="human"):
+        known=[str(item["id"]) for item in self.scheme.get("structures",())]
+        states={structure_id:"complete" for structure_id in known}
+        run=self.annotation_run(specimen_id,pass_no,source,False)
+        if run is None:return states
+        with sqlite3.connect(self.db_path) as c:
+            rows=c.execute(
+                "SELECT structure_id,visibility FROM annotation_structure_states WHERE run_id=?",
+                (run["run_id"],),
+            ).fetchall()
+        for structure_id,visibility in rows:
+            structure_id=str(structure_id);visibility=str(visibility or "complete")
+            if structure_id in states and visibility in STRUCTURE_VISIBILITY_STATES:states[structure_id]=visibility
+        return states
+
+    def structure_visibility(self,specimen_id,structure_id,pass_no=1,source="human"):
+        structure_id=str(structure_id)
+        if structure_id not in {str(item["id"]) for item in self.scheme.get("structures",())}:
+            raise KeyError(f"Unknown structure in active scheme: {structure_id}")
+        return self.structure_visibility_states(specimen_id,pass_no,source).get(structure_id,"complete")
+
+    def set_structure_visibility(self,specimen_id,structure_id,visibility="complete",pass_no=1,source="human"):
+        structure_id=str(structure_id);visibility=str(visibility or "complete")
+        known={str(item["id"]) for item in self.scheme.get("structures",())}
+        if structure_id not in known:raise KeyError(f"Unknown structure in active scheme: {structure_id}")
+        if visibility not in STRUCTURE_VISIBILITY_STATES:raise ValueError(f"Unsupported structure visibility: {visibility}")
+        run_id=self.ensure_annotation_run(specimen_id,pass_no,source);now=_now()
+        with sqlite3.connect(self.db_path) as c:
+            if visibility=="complete":
+                c.execute("DELETE FROM annotation_structure_states WHERE run_id=? AND structure_id=?",(run_id,structure_id))
+            else:
+                c.execute(
+                    """INSERT INTO annotation_structure_states(run_id,structure_id,visibility,updated_at)
+                       VALUES(?,?,?,?)
+                       ON CONFLICT(run_id,structure_id) DO UPDATE SET
+                         visibility=excluded.visibility,updated_at=excluded.updated_at""",
+                    (run_id,structure_id,visibility,now),
+                )
+            self._annotation_event(c,run_id,"structure_visibility",structure_id,payload={"visibility":visibility})
+            c.execute("UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",(now,run_id))
+        self.recalculate_trait_results(specimen_id)
+        return visibility
+
     def assign_annotation_role(self,annotation_id,role_structure_id):
         annotation_id=int(annotation_id);role_structure_id=str(role_structure_id);now=_now()
         with sqlite3.connect(self.db_path) as c:
@@ -1190,6 +1244,8 @@ class XRayProject:
                 (run_id,),
             ).fetchall()
             role_rows=c.execute("SELECT annotation_id,structure_id FROM annotation_roles WHERE run_id=? ORDER BY role_id",(run_id,)).fetchall()
+            state_rows=c.execute("SELECT structure_id,visibility FROM annotation_structure_states WHERE run_id=? ORDER BY structure_id",(run_id,)).fetchall()
+            states={str(structure_id):str(visibility) for structure_id,visibility in state_rows if str(visibility) in STRUCTURE_VISIBILITY_STATES}
             role_map={}
             for base_id,role_sid in role_rows:role_map.setdefault(int(base_id),[]).append(str(role_sid))
             if rows:
@@ -1200,13 +1256,18 @@ class XRayProject:
                 ]
                 cur=c.execute(
                     """INSERT INTO annotation_archives(
-                         run_id,specimen_id,created_at,reason,crop_json,annotations_json,schema_version_id,pass_no,source,status
-                       ) VALUES(?,?,?,?,?,?,?,?,?,?)""",
-                    (run_id,specimen_id,now,str(reason),_json(previous_crop or {}),_json(payload),schema_version_id,int(pass_no),source,status),
+                         run_id,specimen_id,created_at,reason,crop_json,annotations_json,structure_states_json,
+                         schema_version_id,pass_no,source,status
+                       ) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                    (run_id,specimen_id,now,str(reason),_json(previous_crop or {}),_json(payload),_json(states),
+                     schema_version_id,int(pass_no),source,status),
                 )
                 archived+=len(payload);c.execute("DELETE FROM annotation_roles WHERE run_id=?",(run_id,));c.execute("DELETE FROM annotations WHERE run_id=?",(run_id,))
+                c.execute("DELETE FROM annotation_structure_states WHERE run_id=?",(run_id,))
                 self._annotation_event(c,run_id,"invalidate",payload={"reason":str(reason),"archive_id":int(cur.lastrowid),"archived_annotations":len(payload)})
-            else:self._annotation_event(c,run_id,"invalidate",payload={"reason":str(reason),"archived_annotations":0})
+            else:
+                c.execute("DELETE FROM annotation_structure_states WHERE run_id=?",(run_id,))
+                self._annotation_event(c,run_id,"invalidate",payload={"reason":str(reason),"archived_annotations":0})
         if runs:c.execute("UPDATE annotation_runs SET status='stale_crop',updated_at=?,verified_at='' WHERE specimen_id=?",(now,specimen_id))
         c.execute("UPDATE trait_results SET value_text=NULL,qc_note=?,updated_at=? WHERE specimen_id=?",(str(reason),now,specimen_id))
         return archived
@@ -1221,6 +1282,8 @@ class XRayProject:
             except Exception:row["crop"]={}
             try:row["annotations"]=json.loads(row.pop("annotations_json") or "[]")
             except Exception:row["annotations"]=[]
+            try:row["structure_states"]=json.loads(row.pop("structure_states_json") or "{}")
+            except Exception:row["structure_states"]={}
         return rows
 
     @staticmethod
@@ -1235,7 +1298,9 @@ class XRayProject:
         record=self.active_scheme_record();scheme=record["scheme"];schema_id=record["version_id"]
         run=self.annotation_run(specimen_id,1,"human",False);status=str((run or {}).get("status") or "not_started")
         annotations=self.effective_annotations(specimen_id,1,"human") if run and not status.startswith("stale") else []
-        values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations))
+        visibility=self.structure_visibility_states(specimen_id,1,"human") if run and not status.startswith("stale") else {}
+        unknown={sid for sid,value in visibility.items() if value in {"partial","not_visible"}}
+        values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations,unknown_structures=unknown))
         qc="" if status=="verified" else status
         now=_now()
         with sqlite3.connect(self.db_path) as c:
@@ -1255,7 +1320,9 @@ class XRayProject:
         for item in self.structure_specimens(1):
             run=self.annotation_run(item["specimen_id"],1,"human",False);status=str((run or {}).get("status") or "not_started")
             annotations=self.effective_annotations(item["specimen_id"],1,"human") if run and not status.startswith("stale") else []
-            values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations))
+            visibility=self.structure_visibility_states(item["specimen_id"],1,"human") if run and not status.startswith("stale") else {}
+            unknown={sid for sid,value in visibility.items() if value in {"partial","not_visible"}}
+            values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations,unknown_structures=unknown))
             rows.append({**item,"trait_values":values,"result_status":status})
         return rows
 
@@ -1324,7 +1391,13 @@ class XRayProject:
         counts={}
         for row in self.effective_annotations(specimen_id,pass_no,source):
             counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
-        return [s for s in self.scheme.get("structures",()) if s.get("required",True) and counts.get(s["id"],0)<1]
+        states=self.structure_visibility_states(specimen_id,pass_no,source)
+        return [
+            s for s in self.scheme.get("structures",())
+            if s.get("required",True)
+            and counts.get(s["id"],0)<1
+            and states.get(str(s["id"]),"complete") not in {"not_visible","absent"}
+        ]
 
     def clear_annotations(self,specimen_id,pass_no=1,source="human",structure_id=None):
         run=self.annotation_run(specimen_id,pass_no,source,False)
@@ -1377,9 +1450,10 @@ class XRayProject:
         if missing:
             raise ValueError("Before continuing, mark every required category. Missing: "+", ".join(item["name"] for item in missing))
         now=_now()
+        states=self.structure_visibility_states(specimen_id,pass_no,source)
         with sqlite3.connect(self.db_path) as c:
             c.execute("UPDATE annotation_runs SET status='verified',updated_at=?,verified_at=? WHERE run_id=?",(now,now,run["run_id"]))
-            self._annotation_event(c,run["run_id"],"verify",payload={"counts":counts})
+            self._annotation_event(c,run["run_id"],"verify",payload={"counts":counts,"structure_visibility":states})
         self.recalculate_trait_results(specimen_id)
         return {"run_id":run["run_id"],"counts":counts}
 
