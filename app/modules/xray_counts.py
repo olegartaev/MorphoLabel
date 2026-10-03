@@ -229,7 +229,7 @@ class XRayCountsRuntime:
     def render(self,host):
         self.host=host;parent=host.container
         for child in parent.winfo_children():child.destroy()
-        self._images={};self._tip=Tooltip(parent.winfo_toplevel())
+        self._workspace=None;self._images={};self._tip=Tooltip(parent.winfo_toplevel())
         outer=ttk.Frame(parent,padding=(8,6));outer.pack(fill="both",expand=True)
         self._header(outer);body=ttk.Frame(outer);body.pack(fill="both",expand=True,pady=(7,0));getattr(self,f"_render_{self.stage}")(body)
     def _icon(self,master,name,size=XRAY_ICON_SIZE):
