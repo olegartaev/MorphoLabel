@@ -29,7 +29,7 @@ from .xray_structure_display import (
 )
 from .xray_result_qc import (
     clear_result_review_queue, complete_result_review_item,
-    move_result_review_queue, remove_result_review_image, result_review_queue,
+    move_result_review_queue, remove_result_review_image, remove_result_review_specimen, result_review_queue,
 )
 
 
@@ -147,7 +147,7 @@ class XRaySpecimenListPanel(ttk.Frame):
         ttk.Label(legend,text="×",style="Muted.TLabel").pack(side="left")
         ttk.Label(legend,text=" excluded",style="Muted.TLabel").pack(side="left",padx=(0,7))
         show=ttk.Checkbutton(legend,text="Show excluded",variable=self.show_excluded);show.pack(side="right")
-        tooltip.bind(show,"Show excluded X-rays so they can be inspected or restored.")
+        tooltip.bind(show,"Show excluded specimens so they can be inspected or restored.")
 
         host=ttk.Frame(self);host.pack(fill="both",expand=True)
         self.canvas=PhotoListCanvas(host,height=24,bg="white",status_shape="square")
@@ -162,7 +162,7 @@ class XRaySpecimenListPanel(ttk.Frame):
         self.exclude_button.pack(side="left")
         tooltip.bind(
             self.exclude_button,
-            "Exclude this whole X-ray from active workflows without deleting its crops, annotations or history. Select an excluded row and use Restore to bring it back.",
+            "Exclude only this specimen from active Structure, AI and export workflows without deleting its crop, annotations or history. Select an excluded row and use Restore to bring it back.",
         )
         for variable in (self.sample_query,self.specimen_query,self.show_excluded):variable.trace_add("write",lambda *_:self.refresh(preserve_scroll=True))
 
@@ -196,11 +196,11 @@ class XRaySpecimenListPanel(ttk.Frame):
         return rows
 
     def _row_data(self,index,row):
-        path=Path(str(row["relative_path"]));status=str(row.get("annotation_status") or "");excluded=bool(row.get("image_excluded"))
-        tip="Excluded X-ray — scientific data kept; use Restore below." if excluded else ("Verified structures" if status=="verified" else "Crop changed — annotate this specimen again" if status.startswith("stale") else "Saved draft — review required" if status else "Not started")
+        path=Path(str(row["relative_path"]));status=str(row.get("annotation_status") or "");excluded=bool(row.get("excluded"))
+        tip="Excluded specimen — scientific data kept; use Restore below." if excluded else ("Verified structures" if status=="verified" else "Crop changed — annotate this specimen again" if status.startswith("stale") else "Saved draft — review required" if status else "Not started")
         return {
-            "number":str(index+1),"cal":"","has_crop":True,"excluded":excluded,
-            "text":f"{row['sample_id']} | {path.name} | №{int(row.get('ordinal') or 0)}",
+            "number":str(int(row.get("workflow_no") or index+1)),"cal":"","has_crop":True,"excluded":excluded,
+            "text":f"{row['sample_id']} | {path.name} | plate №{int(row.get('ordinal') or 0)}",
             "status":row["status_color"],"tooltip":tip,"review_warning":False,
         }
 
@@ -221,7 +221,7 @@ class XRaySpecimenListPanel(ttk.Frame):
             if reveal:self.canvas.see(visible,align_top=True)
         if yview is not None and not reveal:self.canvas.yview_moveto(yview)
         selected_row=self._rows[selected_index] if selected_index is not None and 0<=selected_index<len(self._rows) else None
-        excluded=bool((selected_row or {}).get("image_excluded"))
+        excluded=bool((selected_row or {}).get("excluded"))
         self.exclude_button.configure(
             text="Restore" if excluded else "Exclude",
             image=self._action_icon("restore" if excluded else "exclude"),
@@ -250,20 +250,20 @@ class XRaySpecimenListPanel(ttk.Frame):
     def exclude_or_restore(self):
         row=next((item for item in self._rows if item["specimen_id"]==self.selected_specimen_id),None)
         if not row:return False
-        image_id=str(row["image_id"]);excluded=bool(row.get("image_excluded"))
+        specimen_id=str(row["specimen_id"]);excluded=bool(row.get("excluded"))
         if excluded:
             if not messagebox.askyesno(
-                "Restore X-ray","Restore this X-ray to active X-ray workflows? Existing crops, annotations and history are unchanged.",
+                "Restore specimen","Restore this specimen to active X-ray workflows? Existing crop, annotations and history are unchanged.",
                 parent=self,
             ):return False
-            self.project.set_source_excluded(image_id,False)
+            self.project.set_specimen_excluded(specimen_id,False)
         else:
             if not messagebox.askyesno(
-                "Exclude X-ray","Exclude this whole X-ray from active X-ray workflows? Existing crops, annotations and history will be kept.",
+                "Exclude specimen","Exclude only this specimen from Structure, AI and export workflows? Its crop, annotations and history will be kept.",
                 parent=self,default="no",
             ):return False
-            self.project.set_source_excluded(image_id,True)
-        if self.on_exclusion:self.on_exclusion(image_id)
+            self.project.set_specimen_excluded(specimen_id,True)
+        if self.on_exclusion:self.on_exclusion(specimen_id)
         else:self.refresh(preserve_scroll=True)
         return True
 
@@ -282,7 +282,7 @@ class XRayStructureWorkspace:
         self.prediction_batch_size=tk.IntVar(value=24);self._busy=False
         self.selected_specimen_id=str(initial_specimen_id or "");self.preferred_image_id=str(initial_image_id or "")
         self.active_structure_id=None;self.selected_annotation_id=None
-        self.crop_image=None;self.photo=None;self.zoom=1.0;self.pan=None;self.pan_drag=None;self._raster_key=None;self._image_item=None;self.current_image_excluded=False
+        self.crop_image=None;self.photo=None;self.zoom=1.0;self.pan=None;self.pan_drag=None;self._raster_key=None;self._image_item=None;self.current_specimen_excluded=False
         self.annotations=[];self.roles=[];self._drag_annotation=None;self._drag_last_screen=None;self._marker_buttons={};self._icons={}
         self._right_gesture=None;self._menu_icons=[];self._clear_menu_icons=[];self._updating_visibility=False
         self.display_settings=load_xray_structure_display(self.project,self.project.scheme.get("structures",()))
@@ -334,7 +334,7 @@ class XRayStructureWorkspace:
         left=ttk.Frame(panes);main=ttk.Frame(panes);panes.add(left,weight=0);panes.add(main,weight=1);self.panes=panes
         main.columnconfigure(0,weight=1);main.rowconfigure(2,weight=1)
 
-        self.specimen_list=XRaySpecimenListPanel(left,self.project,self._list_selected,self.tip,self._source_exclusion_changed);self.specimen_list.pack(fill="both",expand=True)
+        self.specimen_list=XRaySpecimenListPanel(left,self.project,self._list_selected,self.tip,self._specimen_exclusion_changed);self.specimen_list.pack(fill="both",expand=True)
         self.root.after_idle(self._set_initial_sash)
 
         self.review_queue_banner=ttk.Frame(main,style="Attention.TFrame",padding=(9,5))
@@ -498,10 +498,11 @@ class XRayStructureWorkspace:
         values={"locality":"—","plate":"—","specimen":"—"}
         if item is not None:
             image=self.project.source_image(item["image_id"]);path=Path(image["relative_path"])
+            workflow_no=self.project.structure_workflow_number(item["specimen_id"])
             values={
                 "locality":self._sample(image["relative_path"]),
                 "plate":path.name,
-                "specimen":f"№{int(item.get('ordinal') or 0)}",
+                "specimen":f"#{workflow_no}" if workflow_no else f"plate №{int(item.get('ordinal') or 0)}",
             }
         for key,label in self._context_values.items():label.configure(text=values[key])
 
@@ -532,7 +533,7 @@ class XRayStructureWorkspace:
             button=ttk.Button(
                 group,text=text,image=icon,compound="left",
                 style="Primary.TButton" if sid==self.active_structure_id else "P.TButton",
-                state="normal" if self.selected_specimen_id and not self.current_image_excluded else "disabled",
+                state="normal" if self.selected_specimen_id and not self.current_specimen_excluded else "disabled",
                 command=lambda value=sid:self._choose_structure(value),
             )
             button.pack(side="left");self._marker_buttons[sid]=button
@@ -541,7 +542,7 @@ class XRayStructureWorkspace:
             current=str(states.get(sid) or "complete")
             visibility=ttk.Menubutton(
                 group,text=_VISIBILITY_SYMBOLS.get(current,"✓"),width=2,style="P.TButton",
-                state="normal" if self.selected_specimen_id and not self.current_image_excluded else "disabled",
+                state="normal" if self.selected_specimen_id and not self.current_specimen_excluded else "disabled",
             )
             visibility.pack(side="left",padx=(1,0));self._marker_visibility_buttons[sid]=visibility
             menu=tk.Menu(visibility,tearoff=False)
@@ -574,7 +575,7 @@ class XRayStructureWorkspace:
                 state="normal" if count else "disabled",
                 command=lambda sid=structure["id"],name=structure["name"]:self.clear_marker_category(sid,name),
             )
-        editable=bool(self.selected_specimen_id and not self.current_image_excluded)
+        editable=bool(self.selected_specimen_id and not self.current_specimen_excluded)
         self.clear_type_button.configure(menu=menu,state="normal" if editable and any(counts.values()) else "disabled")
         self.clear_all_button.configure(state="normal" if editable and (self.annotations or self.roles) else "disabled")
 
@@ -582,7 +583,7 @@ class XRayStructureWorkspace:
         self.active_structure_id=structure_id;self.selected_annotation_id=None;self._build_marker_buttons();self._draw_overlays();self.canvas.focus_set()
 
     def _set_structure_visibility(self,structure_id,visibility):
-        if not self.selected_specimen_id or self.current_image_excluded:return
+        if not self.selected_specimen_id or self.current_specimen_excluded:return
         structure_id=str(structure_id);visibility=str(visibility)
         if visibility not in _VISIBILITY_LABELS:return
         current=self.project.structure_visibility(
@@ -639,7 +640,7 @@ class XRayStructureWorkspace:
     def _load_specimen(self,specimen_id):
         self.selected_specimen_id=specimen_id;self.selected_annotation_id=None
         self.active_structure_id=_first_structure_id(self.project.scheme.get("structures",()))
-        item=self.project.specimen(specimen_id);self.current_image_excluded=bool(self.project.source_image(item["image_id"]).get("excluded"))
+        item=self.project.specimen(specimen_id);self.current_specimen_excluded=bool(item.get("excluded"))
         self.preferred_image_id=item["image_id"];self._set_context(item)
         try:
             source=self._source_for(item["image_id"])
@@ -652,7 +653,7 @@ class XRayStructureWorkspace:
         self.specimen_list.select(specimen_id,reveal=False);self._build_marker_buttons();self._update_counts();self._refresh_summary();self._draw();self._notify_selection();self.canvas.focus_set()
 
     def _clear(self):
-        self.selected_specimen_id="";self.crop_image=self.photo=None;self.annotations=[];self.roles=[];self.current_image_excluded=False
+        self.selected_specimen_id="";self.crop_image=self.photo=None;self.annotations=[];self.roles=[];self.current_specimen_excluded=False
         self._image_item=None;self._raster_key=None;self.pan=None;self.canvas.delete("all")
         if self.preferred_image_id:
             try:
@@ -672,9 +673,9 @@ class XRayStructureWorkspace:
         summary=self.project.annotation_summary(self.pass_no.get())
         labels={"verified":"Verified","draft":"Draft","unstarted":"Not started"}
         for key,label in self.summary_labels.items():label.configure(text=f"{labels[key]}: {summary[key]}")
-        state="normal" if self.selected_specimen_id and not self.current_image_excluded else "disabled";self.apply_button.configure(state=state)
+        state="normal" if self.selected_specimen_id and not self.current_specimen_excluded else "disabled";self.apply_button.configure(state=state)
         model=self.project.active_structure_model()
-        can_predict=(not self.current_image_excluded) and _current_prediction_allowed(self.project,self.selected_specimen_id,model,self.pass_no.get())
+        can_predict=(not self.current_specimen_excluded) and _current_prediction_allowed(self.project,self.selected_specimen_id,model,self.pass_no.get())
         self.predict_current_button.configure(state="normal" if can_predict else "disabled")
 
     def _refresh_result_review_banner(self):
@@ -684,8 +685,9 @@ class XRayStructureWorkspace:
         items=value["items"];position=int(value["position"]);item=items[position]
         priority="High priority" if item.get("severity")=="high" else "Review"
         checks=int(item.get("issue_count") or 0)
+        workflow_no=self.project.structure_workflow_number(item["specimen_id"])
         self.review_queue_label.configure(
-            text=f"Result review · {position+1} / {len(items)} · {priority} · {checks} check{'s' if checks!=1 else ''} · {item['sample']} · {item['plate']} · specimen {item['ordinal']}\n{item.get('top_reason') or 'Inspect this specimen and verify when the markers are correct.'}"
+            text=f"Result review · {position+1} / {len(items)} · {priority} · {checks} check{'s' if checks!=1 else ''} · specimen #{workflow_no or '?'} · {item['sample']} · {item['plate']}\n{item.get('top_reason') or 'Inspect this specimen and verify when the markers are correct.'}"
         )
         self.review_queue_banner.grid()
 
@@ -809,7 +811,7 @@ class XRayStructureWorkspace:
         self.save_label.configure(text=text);self.specimen_list.refresh(preserve_scroll=True);self._build_marker_buttons();self._update_counts();self._refresh_summary();self._refresh_workflow();self._draw_overlays();self.on_changed()
 
     def _canvas_down(self,event):
-        if self.crop_image is None or not self.selected_specimen_id or self.current_image_excluded:return
+        if self.crop_image is None or not self.selected_specimen_id or self.current_specimen_excluded:return
         self.canvas.focus_set();near=self._nearest(event);structure=self._structure()
         if near is not None:
             if structure is not None and not bool(structure.get("repeated")):
@@ -893,7 +895,7 @@ class XRayStructureWorkspace:
         gesture=self._right_gesture;self._right_gesture=None;self.canvas.configure(cursor="crosshair")
         if not gesture:return "break"
         if gesture["panning"]:return "break"
-        if not self.current_image_excluded and gesture["near"] is not None:self._show_role_menu(event,gesture["near"])
+        if not self.current_specimen_excluded and gesture["near"] is not None:self._show_role_menu(event,gesture["near"])
         return "break"
 
     def _pan_start(self,event):
@@ -917,13 +919,13 @@ class XRayStructureWorkspace:
         new_scale=self._fit_scale();self.pan=(event.x-before[0]*new_scale,event.y-before[1]*new_scale);self._ensure_raster();self._draw_overlays()
 
     def delete_selected(self,_event=None):
-        if self.current_image_excluded:return "break"
+        if self.current_specimen_excluded:return "break"
         if self.selected_annotation_id:
             self.project.delete_annotation(self.selected_annotation_id);self.selected_annotation_id=None;self._after_edit()
         return "break"
 
     def clear_marker_category(self,structure_id,name):
-        if not self.selected_specimen_id or self.current_image_excluded:return
+        if not self.selected_specimen_id or self.current_specimen_excluded:return
         count=sum(1 for row in self.project.effective_annotations(self.selected_specimen_id,self.pass_no.get()) if row["structure_id"]==structure_id)
         if not count:return
         structure=self._structure(structure_id);extra="\n\nAny start / stop roles attached to those points are removed with them." if structure and structure.get("repeated") else ""
@@ -936,7 +938,7 @@ class XRayStructureWorkspace:
         self.selected_annotation_id=None;self._after_edit(f"Cleared {name}")
 
     def clear_all_markers(self):
-        if not self.selected_specimen_id or self.current_image_excluded or not (self.annotations or self.roles):return
+        if not self.selected_specimen_id or self.current_specimen_excluded or not (self.annotations or self.roles):return
         if not messagebox.askyesno(
             "Clear all markers",
             "Remove every marker and start / stop role from this specimen?\n\nThe crop and source X-ray are not changed.",
@@ -1267,29 +1269,26 @@ class XRayStructureWorkspace:
         self._load_specimen(ids[0]);self._refresh_workflow()
         return True
 
-    def _source_exclusion_changed(self,image_id):
-        """Mirror Landmarks exclusion: reversible membership change, scientific data kept."""
-        image_id=str(image_id);excluded=bool(self.project.source_image(image_id).get("excluded"))
+    def _specimen_exclusion_changed(self,specimen_id):
+        """Reversible specimen-level exclusion; crop, annotations and provenance stay intact."""
+        specimen_id=str(specimen_id);item=self.project.specimen(specimen_id);excluded=bool(item.get("excluded"))
         if excluded:
-            remove_result_review_image(self.project,image_id)
+            remove_result_review_specimen(self.project,specimen_id)
             repeat=self.project.structure_repeatability()
-            if repeat and str(repeat.get("status") or "")=="in_progress":
-                member_ids={str(value) for value in repeat.get("ids") or ()}
-                affected={row["specimen_id"] for row in self.project.specimens(image_id) if not row.get("excluded")}
-                if member_ids & affected:
-                    self.project.retire_structure_repeatability(repeat["run_id"])
-                    self.pass_no.set(1);self.specimen_list.pass_no=1
+            if repeat and str(repeat.get("status") or "")=="in_progress" and specimen_id in {str(value) for value in repeat.get("ids") or ()}:
+                self.project.retire_structure_repeatability(repeat["run_id"])
+                self.pass_no.set(1);self.specimen_list.pass_no=1
         self.specimen_list.pass_no=self.pass_no.get()
-        self.specimen_list.selected_specimen_id=self.selected_specimen_id
-        self.specimen_list.refresh(preserve_scroll=True,reveal=False)
+        self.specimen_list.selected_specimen_id=specimen_id
+        self.specimen_list.refresh(preserve_scroll=True,reveal=True)
         available={row["specimen_id"] for row in self.project.structure_specimens(self.pass_no.get(),include_excluded=True)}
-        if self.selected_specimen_id in available:self._load_specimen(self.selected_specimen_id)
+        if specimen_id in available:self._load_specimen(specimen_id)
         else:self.refresh()
         self._refresh_workflow()
         return True
 
     def predict_current_structure(self):
-        if self._busy or not self.selected_specimen_id or self.current_image_excluded:return
+        if self._busy or not self.selected_specimen_id or self.current_specimen_excluded:return
         model=self.project.active_structure_model()
         if not model:
             messagebox.showinfo("Predict current","Train or import a Structure AI model first.",parent=self.root);return
@@ -1564,7 +1563,7 @@ class XRayStructureWorkspace:
         if result.get("specimen_id"):self._load_specimen(result["specimen_id"])
 
     def verify_current(self):
-        if not self.selected_specimen_id or self.current_image_excluded:return False
+        if not self.selected_specimen_id or self.current_specimen_excluded:return False
         try:self.project.verify_annotations(self.selected_specimen_id,self.pass_no.get())
         except ValueError as exc:messagebox.showwarning("Structures incomplete",str(exc),parent=self.root);return False
         except Exception as exc:messagebox.showerror("Verify structures",str(exc),parent=self.root);return False
