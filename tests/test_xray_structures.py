@@ -10,6 +10,7 @@ from PIL import Image
 from app.xray_crop import crop_from_geometry
 from app.xray_project import XRayProject
 from app.xray_schema import blank_scheme, bundled_scheme, calculate_trait_values, compatible_reference_roles
+from app.xray_result_qc import build_result_qc
 from app.xray_structure_display import DEFAULT_PALETTE, DEFAULT_SIZE, load_xray_structure_display, save_xray_structure_display
 from app.xray_structures_ui import _first_structure_id, _structure_button_order
 
@@ -97,6 +98,41 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         metrics=self.project.structure_repeatability_metrics(run["run_id"])
         vertebra=next(row for row in metrics["structures"] if row["structure_id"]=="vertebra")
         self.assertEqual(1.0,vertebra["exact_count_accuracy"])
+
+    def test_result_qc_flags_detached_reference_and_conspicuous_serial_gap(self):
+        for x in (0.10,0.20,0.30,0.40,0.80,0.90):
+            self.project.add_annotation(self.specimen_id,"vertebra",x,0.50,1)
+        self.project.add_annotation(self.specimen_id,"first_caudal",0.80,0.50,1,replace_single=True)
+        self.project.add_annotation(self.specimen_id,"last_predorsal",0.30,0.50,1,replace_single=True)
+        for x in (0.25,0.35,0.45,0.55,0.65):
+            self.project.add_annotation(self.specimen_id,"preanal_pterygiophore",x,0.70,1)
+        self.project.verify_annotations(self.specimen_id,1)
+        report=build_result_qc(self.project)
+        codes={item["code"] for item in report["issues"]}
+        self.assertIn("detached_reference",codes)
+        self.assertIn("series_spacing",codes)
+
+    def test_result_qc_uses_robust_within_sample_count_check_without_global_pooling(self):
+        crop=crop_from_geometry(450,240,620,230,0,(900,480),algorithm="manual")
+        specimen_ids=[self.specimen_id]
+        for index in range(5):
+            sid=self.project.add_manual_specimen(self.image_ids[index%2],crop,label=f"extra-{index}")
+            specimen_ids.append(sid)
+        for image_id in self.image_ids:self.project.confirm_plate(image_id)
+        for index,sid in enumerate(specimen_ids):
+            vertebra_count=10 if index==len(specimen_ids)-1 else 6
+            vertebra_ids=[]
+            for point_index in range(vertebra_count):
+                vertebra_ids.append(self.project.add_annotation(sid,"vertebra",0.08+0.07*point_index,0.45,1))
+            self.project.assign_annotation_role(vertebra_ids[min(3,len(vertebra_ids)-1)],"first_caudal")
+            self.project.assign_annotation_role(vertebra_ids[min(2,len(vertebra_ids)-1)],"last_predorsal")
+            for x in (0.30,0.40,0.50,0.60,0.70):
+                self.project.add_annotation(sid,"preanal_pterygiophore",x,0.70,1)
+            self.project.verify_annotations(sid,1)
+        report=build_result_qc(self.project)
+        outliers=[item for item in report["issues"] if item["code"]=="sample_outlier" and item["target"]=="tv"]
+        self.assertEqual(1,len(outliers))
+        self.assertEqual(specimen_ids[-1],outliers[0]["specimen_id"])
 
     def test_reference_roles_reuse_existing_series_point_without_duplicate_marker(self):
         one=self.project.add_annotation(self.specimen_id,"vertebra",0.2,0.5,1)
@@ -403,6 +439,15 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn("elif self.preferred_image_id:target=preferred_plate if preferred_plate in ids else None",ui)
         self.assertIn("else:target=preferred_batch if preferred_batch in ids else (ids[0] if ids else None)",ui)
         self.assertIn("No confirmed specimen crop is available on this plate.",ui)
+
+    def test_results_exposes_non_destructive_scientific_qc_review(self):
+        root=Path(__file__).resolve().parents[1]
+        module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
+        qc=(root/"app/xray_result_qc.py").read_text(encoding="utf-8")
+        for text in ("Check results…","Result checks","Open in Structures","never automatic exclusions"):
+            self.assertIn(text,module)
+        for text in ("modified_z","series_spacing","sample_outlier","detached_reference","repeat_count","repeat_position"):
+            self.assertIn(text,qc)
 
     def test_structure_toolbar_has_no_previous_next_buttons_and_apply_stays_separate(self):
         root=Path(__file__).resolve().parents[1]
