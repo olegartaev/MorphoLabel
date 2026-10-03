@@ -692,7 +692,7 @@ class XRayCropWorkspace:
             pts=[]
             for x,y in self._drawing_crop.get("corners") or ():pts.extend(self._screen(x,y))
             if len(pts)==8:self.canvas.create_polygon(*pts,outline="#35d07f",fill="",width=2,dash=(5,3),tags="crop")
-        hint="Selected crop · Delete removes it · blue ▲ = head · amber ● = ventral" if self.session.selected_id else "Blue ▲ = head · amber ● = ventral · click a crop to edit"
+        hint="Selected crop · Delete removes it · blue ▲ = head · amber ● = ventral" if self.session.selected_id else "Drag empty space to draw a new crop · blue ▲ = head · amber ● = ventral · click a crop to edit"
         self.canvas.create_text(12,12,anchor="nw",fill="#071521",text=hint,tags="crop_hint_shadow")
         self.canvas.create_text(11,11,anchor="nw",fill="white",text=hint,tags="crop_hint")
 
