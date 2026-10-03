@@ -34,6 +34,7 @@ class UIContext:
  rows: list = field(default_factory=list)
  _catalog_valid: bool = False
  _counts_cache: dict | None = None
+ _crop_counts_cache: dict | None = None
  _image_classification: dict = field(default_factory=dict)
  _landmark_counts_cache: dict | None = None
  _landmark_classification: dict = field(default_factory=dict)
@@ -44,7 +45,7 @@ class UIContext:
  def refresh(self, force=False):
   current_id=(self.current() or {}).get("image_id")
   if self.project and (force or not self._catalog_valid):
-   self.rows=list(self.project.catalog_rows());self._catalog_valid=True;self._counts_cache=None;self._image_classification.clear()
+   self.rows=list(self.project.catalog_rows());self._catalog_valid=True;self._counts_cache=None;self._crop_counts_cache=None;self._image_classification.clear()
    self._landmark_counts_cache=None;self._landmark_classification.clear();self._permanent_ids=self.project.permanent_test_image_ids()
   if not self.project:self.rows=[]
   if current_id:
@@ -57,9 +58,9 @@ class UIContext:
   if index is None:return False
   self.selected=index;return True
  def invalidate_catalog(self):
-  self._catalog_valid=False;self._counts_cache=None;self._image_classification.clear();self._landmark_counts_cache=None;self._landmark_classification.clear()
+  self._catalog_valid=False;self._counts_cache=None;self._crop_counts_cache=None;self._image_classification.clear();self._landmark_counts_cache=None;self._landmark_classification.clear()
  def invalidate_counts(self):
-  self._counts_cache=None;self._image_classification.clear();self._landmark_counts_cache=None;self._landmark_classification.clear();self._landmark_seen_ids=frozenset();self._landmark_model_fingerprints={};self._landmark_eligible_ids=set()
+  self._counts_cache=None;self._crop_counts_cache=None;self._image_classification.clear();self._landmark_counts_cache=None;self._landmark_classification.clear();self._landmark_seen_ids=frozenset();self._landmark_model_fingerprints={};self._landmark_eligible_ids=set()
  def refresh_landmark_state(self,image_id):
   """Replace one cached landmark row from Project authority after a persisted edit."""
   if not self.project:return False
@@ -80,6 +81,12 @@ class UIContext:
   return self.current()
  def search(self,text):
   q=str(text or '').casefold();return [r for r in self.rows if q in str(r.get('original_name','')).casefold() or q in str(r.get('locality',r.get('sample_id',''))).casefold()]
+ def crop_counts(self):
+  """Cache project-wide Crop counters; a selection change never invalidates them."""
+  if not self.project:return {"Total":0,"Reviewed":0,"AI pending":0,"Train ready":0,"Uncropped":0}
+  if self._crop_counts_cache is None:
+   self._crop_counts_cache=dict(getattr(self.project,"crop_section_counts",self.project.crop_counts)())
+  return self._crop_counts_cache
  def crop_enabled(self):return bool(self.project and self.project.get_ui_state('crop_enabled',True))
  def set_crop_enabled(self,enabled):
   if self.project:self.project.set_ui_state('crop_enabled',bool(enabled))
