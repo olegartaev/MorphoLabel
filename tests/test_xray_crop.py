@@ -124,11 +124,12 @@ class XRayCropViewportContractTests(unittest.TestCase):
         marker=source[source.index("    def _draw_orientation_markers(self,crop,selected):"):source.index("    def _draw_handles(self,crop):")]
         self.assertNotIn("if not selected:return",marker)
         self.assertIn('geometry["bottom_edge"]',marker)
-        self.assertIn('fill=ventral,width=4 if selected else 3',marker)
-        self.assertIn("head_size=16 if selected else 13",marker)
+        self.assertIn("width=7 if selected else 6",marker)
+        self.assertIn("head_size=18 if selected else 15",marker)
         self.assertNotIn("create_oval",marker)
         draw=source[source.index("    def _draw(self):"):source.index("    @staticmethod\n    def _orientation_geometry",source.index("    def _draw(self):"))]
-        self.assertIn("self._draw_crop_brackets(corners,color)",draw)
+        self.assertIn('self._draw_crop_frame(corners,"#26e6b3",selected=True)',draw)
+        self.assertIn("self._draw_crop_frame(corners,color,selected=False)",draw)
         self.assertIn("if selected:",draw)
         self.assertIn("def _draw_crop_frame",source)
         self.assertIn('joinstyle="round"',source)
@@ -145,7 +146,7 @@ class XRayCropViewportContractTests(unittest.TestCase):
 
     def test_crop_workspace_has_landmarks_style_zoom_pan_and_two_icon_flips(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
-        for text in ('"<MouseWheel>"',"def _wheel(","def _pan_start(","def _pan_motion(","flip_horizontal","flip_vertical","Flip left ↔ right. Use when the head is on the wrong side.","Flip top ↕ bottom. Use when the ventral side is on the wrong side.","#54f0aa","#168ff0","#ffad1f"):
+        for text in ('"<MouseWheel>"',"def _wheel(","def _pan_start(","def _pan_motion(","flip_horizontal","flip_vertical","Flip left ↔ right. Use when the head is on the wrong side.","Flip top ↕ bottom. Use when the ventral side is on the wrong side.","#26e6b3","#159cff","#ffb000"):
             self.assertIn(text,source)
         self.assertIn('"clear_crops",self.clear_plate_crops',source)
         self.assertNotIn("rotate_180",source);self.assertNotIn("turn180",source)
