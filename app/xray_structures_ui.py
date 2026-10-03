@@ -58,6 +58,20 @@ def _first_structure_id(structures):
     return ordered[0]["id"] if ordered else None
 
 
+_VISIBILITY_LABELS={
+    "complete":"Complete",
+    "partial":"Partial",
+    "not_visible":"Not visible",
+    "absent":"Absent",
+}
+_VISIBILITY_VALUES={label:value for value,label in _VISIBILITY_LABELS.items()}
+_VISIBILITY_HELP=(
+    "Visibility for the selected marker type. Complete = every visible instance is marked; "
+    "Partial = only some visible instances can be marked; Not visible = this structure cannot "
+    "be judged on this X-ray; Absent = the structure is truly absent."
+)
+
+
 class XRaySpecimenListPanel(ttk.Frame):
     """Compact searchable specimen list matching Crop/Landmarks visual language."""
 
@@ -157,7 +171,7 @@ class XRayStructureWorkspace:
         self.active_structure_id=None;self.selected_annotation_id=None
         self.crop_image=None;self.photo=None;self.zoom=1.0;self.pan=None;self.pan_drag=None;self._raster_key=None;self._image_item=None
         self.annotations=[];self.roles=[];self._drag_annotation=None;self._drag_last_screen=None;self._marker_buttons={};self._icons={}
-        self._right_gesture=None;self._menu_icons=[];self._clear_menu_icons=[]
+        self._right_gesture=None;self._menu_icons=[];self._clear_menu_icons=[];self._updating_visibility=False
         self.display_settings=load_xray_structure_display(self.project,self.project.scheme.get("structures",()))
         self._source_cache_id="";self._source_cache=None
         self._key_bind_id=None
@@ -211,8 +225,21 @@ class XRayStructureWorkspace:
         self.root.after_idle(self._set_initial_sash)
 
         header=ttk.Frame(main,style="Toolbar.TFrame");header.grid(row=0,column=0,sticky="ew",pady=(0,4));header.columnconfigure(0,weight=1)
-        self.context_label=ttk.Label(header,text="",style="SectionTitle.TLabel",anchor="center");self.context_label.grid(row=0,column=0,sticky="ew",padx=10)
-        nav=ttk.Frame(header,style="Toolbar.TFrame");nav.grid(row=0,column=1,sticky="e")
+        meta=ttk.Frame(header,style="Toolbar.TFrame");meta.grid(row=0,column=0,sticky="w",padx=(2,8))
+        self._context_values={}
+        for column,(key,title) in enumerate((("locality","Locality:"),("plate","Plate:"),("specimen","Specimen:"))):
+            offset=column*3
+            ttk.Label(meta,text=title,style="SectionTitle.TLabel").grid(row=0,column=offset,sticky="w")
+            value=ttk.Label(meta,text="—",anchor="w");value.grid(row=0,column=offset+1,sticky="w",padx=(4,8))
+            self._context_values[key]=value
+            if column<2:ttk.Label(meta,text="·",style="Muted.TLabel").grid(row=0,column=offset+2,sticky="w",padx=(0,8))
+        status_host=ttk.Frame(header,style="Toolbar.TFrame");status_host.grid(row=0,column=1,sticky="e",padx=(6,4))
+        self.summary_labels={}
+        for key,title in (("verified","Verified"),("draft","Draft"),("unstarted","Not started")):
+            label=ttk.Label(status_host,text=f"{title}: 0",style="StatusChip.TLabel")
+            label.pack(side="left",padx=(0,2));self.summary_labels[key]=label
+        self.save_label=ttk.Label(status_host,text="Current: Not started",style="StatusChip.TLabel");self.save_label.pack(side="left",padx=(3,0))
+        nav=ttk.Frame(header,style="Toolbar.TFrame");nav.grid(row=0,column=2,sticky="e")
         tools=ttk.Frame(nav,style="Toolbar.TFrame");tools.grid(row=0,column=0,sticky="e")
         self.clear_type_button=ttk.Menubutton(
             tools,text="Clear type…",image=self._xray_icon(tools,"clear_marker_set"),compound="left",style="P.TButton",
@@ -246,10 +273,14 @@ class XRayStructureWorkspace:
         marker_dock=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(6,4));marker_dock.grid(row=2,column=0,sticky="ew",pady=(4,0));marker_dock.columnconfigure(1,weight=1)
         ttk.Label(marker_dock,text="Markers:",style="SectionTitle.TLabel").grid(row=0,column=0,sticky="w",padx=(0,6))
         self.marker_host=ttk.Frame(marker_dock,style="WorkflowDock.TFrame");self.marker_host.grid(row=0,column=1,sticky="w")
-        status=ttk.Frame(marker_dock,style="WorkflowDock.TFrame");status.grid(row=1,column=0,columnspan=2,sticky="ew",pady=(3,0));status.columnconfigure(1,weight=1)
-        self.counts_label=ttk.Label(status,text="",style="Muted.TLabel");self.counts_label.grid(row=0,column=0,sticky="w")
-        self.summary_label=ttk.Label(status,text="",style="Muted.TLabel",anchor="center");self.summary_label.grid(row=0,column=1,sticky="ew",padx=8)
-        self.save_label=ttk.Label(status,text="",style="Muted.TLabel");self.save_label.grid(row=0,column=2,sticky="e")
+        visibility=ttk.Frame(marker_dock,style="WorkflowDock.TFrame");visibility.grid(row=0,column=2,sticky="e",padx=(10,0))
+        ttk.Label(visibility,text="Visibility:",style="Muted.TLabel").pack(side="left",padx=(0,4))
+        self.visibility_var=tk.StringVar(master=self.root,value="Complete")
+        self.visibility_box=ttk.Combobox(
+            visibility,textvariable=self.visibility_var,values=tuple(_VISIBILITY_VALUES),state="readonly",width=11,
+        )
+        self.visibility_box.pack(side="left");self.visibility_box.bind("<<ComboboxSelected>>",self._visibility_changed)
+        self.tip.bind(visibility,_VISIBILITY_HELP);self.tip.bind(self.visibility_box,_VISIBILITY_HELP)
 
         workflow=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(0,4,0,0));workflow.grid(row=3,column=0,sticky="ew")
         workflow.columnconfigure(0,weight=1);workflow.columnconfigure(1,weight=1);workflow.columnconfigure(2,weight=1);workflow.columnconfigure(3,weight=1)
@@ -334,9 +365,16 @@ class XRayStructureWorkspace:
 
     def _sample(self,relative_path):return XRaySpecimenListPanel._sample(relative_path)
 
-    def _context(self,item):
-        image=self.project.source_image(item["image_id"]);path=Path(image["relative_path"])
-        return f"Locality: {self._sample(image['relative_path'])}  ·  Plate: {path.name}  ·  Fish №{int(item.get('ordinal') or 0)}"
+    def _set_context(self,item=None):
+        values={"locality":"—","plate":"—","specimen":"—"}
+        if item is not None:
+            image=self.project.source_image(item["image_id"]);path=Path(image["relative_path"])
+            values={
+                "locality":self._sample(image["relative_path"]),
+                "plate":path.name,
+                "specimen":f"№{int(item.get('ordinal') or 0)}",
+            }
+        for key,label in self._context_values.items():label.configure(text=values[key])
 
     def _notify_selection(self):
         if not self.selected_specimen_id:return
@@ -368,7 +406,7 @@ class XRayStructureWorkspace:
             button.pack(side="left",padx=(0,4));self._marker_buttons[structure["id"]]=button
             self.tip.bind(button,(structure.get("description") or structure["name"])+f" · shortcut {hotkey}" if hotkey else structure.get("description") or structure["name"])
         if not structures:ttk.Label(self.marker_host,text="No structures configured",style="Muted.TLabel").pack(side="left")
-        self._refresh_clear_menu(structures,settings,counts)
+        self._refresh_clear_menu(structures,settings,counts);self._refresh_visibility_control()
 
     def _refresh_clear_menu(self,structures,settings,counts):
         menu=tk.Menu(self.clear_type_button,tearoff=False);self._clear_menu_icons=[]
@@ -385,6 +423,47 @@ class XRayStructureWorkspace:
 
     def _choose_structure(self,structure_id):
         self.active_structure_id=structure_id;self.selected_annotation_id=None;self._build_marker_buttons();self._draw_overlays();self.canvas.focus_set()
+
+    def _refresh_visibility_control(self):
+        if not hasattr(self,"visibility_box"):return
+        self._updating_visibility=True
+        try:
+            if not self.selected_specimen_id or not self.active_structure_id:
+                self.visibility_var.set("Complete");self.visibility_box.configure(state="disabled");return
+            value=self.project.structure_visibility(
+                self.selected_specimen_id,self.active_structure_id,self.pass_no.get(),"human",
+            )
+            self.visibility_var.set(_VISIBILITY_LABELS.get(value,"Complete"));self.visibility_box.configure(state="readonly")
+        finally:self._updating_visibility=False
+
+    def _visibility_changed(self,_event=None):
+        if self._updating_visibility or not self.selected_specimen_id or not self.active_structure_id:return
+        visibility=_VISIBILITY_VALUES.get(self.visibility_var.get(),"complete")
+        current=self.project.structure_visibility(self.selected_specimen_id,self.active_structure_id,self.pass_no.get(),"human")
+        if visibility==current:return
+        structure=self._structure(self.active_structure_id);name=(structure or {}).get("name") or self.active_structure_id
+        if visibility in {"not_visible","absent"}:
+            count=sum(
+                1 for row in self.project.effective_annotations(self.selected_specimen_id,self.pass_no.get())
+                if row["structure_id"]==self.active_structure_id
+            )
+            if count and not messagebox.askyesno(
+                "Structure visibility",
+                f"‘{name}’ already has {count} marker(s).\n\n"
+                f"Set it to {_VISIBILITY_LABELS[visibility]} and clear those markers?",
+                parent=self.root,default="no",
+            ):
+                self._refresh_visibility_control();return
+            if count:self.project.clear_annotations(self.selected_specimen_id,self.pass_no.get(),structure_id=self.active_structure_id)
+        self.project.set_structure_visibility(
+            self.selected_specimen_id,self.active_structure_id,visibility,self.pass_no.get(),"human",
+        )
+        self._after_edit(f"Visibility · {_VISIBILITY_LABELS[visibility]}")
+
+    def _ensure_structure_visible_for_marker(self,structure_id):
+        state=self.project.structure_visibility(self.selected_specimen_id,structure_id,self.pass_no.get(),"human")
+        if state in {"not_visible","absent"}:
+            self.project.set_structure_visibility(self.selected_specimen_id,structure_id,"complete",self.pass_no.get(),"human")
 
     def _structure(self,structure_id=None):
         structure_id=structure_id or self.active_structure_id
@@ -408,7 +487,7 @@ class XRayStructureWorkspace:
         self.selected_specimen_id=specimen_id;self.selected_annotation_id=None
         self.active_structure_id=_first_structure_id(self.project.scheme.get("structures",()))
         item=self.project.specimen(specimen_id)
-        self.preferred_image_id=item["image_id"];self.context_label.configure(text=self._context(item))
+        self.preferred_image_id=item["image_id"];self._set_context(item)
         try:
             source=self._source_for(item["image_id"])
             crop=oriented_crop(source,item["crop"],self.project.orientation_policy)
@@ -420,12 +499,13 @@ class XRayStructureWorkspace:
         self.specimen_list.select(specimen_id,reveal=True);self._build_marker_buttons();self._update_counts();self._draw();self._refresh_summary();self._refresh_workflow();self._notify_selection();self.canvas.focus_set()
 
     def _clear(self):
-        self.selected_specimen_id="";self.crop_image=self.photo=None;self.annotations=[];self.roles=[];self.context_label.configure(text="No eligible specimen")
+        self.selected_specimen_id="";self.crop_image=self.photo=None;self.annotations=[];self.roles=[];self._set_context(None)
         self._image_item=None;self._raster_key=None;self.pan=None;self.canvas.delete("all");self._build_marker_buttons();self._update_counts()
 
     def _refresh_summary(self):
         summary=self.project.annotation_summary(self.pass_no.get())
-        self.summary_label.configure(text=f"{summary['verified']} verified · {summary['draft']} draft · {summary['unstarted']} not started")
+        labels={"verified":"Verified","draft":"Draft","unstarted":"Not started"}
+        for key,label in self.summary_labels.items():label.configure(text=f"{labels[key]}: {summary[key]}")
         state="normal" if self.selected_specimen_id else "disabled";self.apply_button.configure(state=state)
 
     def _refresh_workflow(self):
@@ -448,10 +528,9 @@ class XRayStructureWorkspace:
         if self.selected_specimen_id:
             for row in self.project.effective_annotations(self.selected_specimen_id,self.pass_no.get()):
                 counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
-        structures=list(self.project.scheme.get("structures") or ())
-        self.counts_label.configure(text="   ·   ".join(f"{item['name']}: {counts.get(item['id'],0)}" for item in structures))
         run=self.project.annotation_run(self.selected_specimen_id,self.pass_no.get(),create=False) if self.selected_specimen_id else None
-        self.save_label.configure(text="Verified" if run and run.get("status")=="verified" else "Saved · draft" if run else "Not started")
+        current="Verified" if run and run.get("status")=="verified" else "Draft" if run else "Not started"
+        self.save_label.configure(text=f"Current: {current}");self._refresh_visibility_control()
 
     def _fit_scale(self):
         if self.crop_image is None:return 1.0
@@ -537,12 +616,15 @@ class XRayStructureWorkspace:
             if structure is not None and not bool(structure.get("repeated")):
                 compatible={item["id"] for item in compatible_reference_roles(self.project.scheme,near["structure_id"])}
                 if structure["id"] in compatible:
-                    try:self.project.assign_annotation_role(near["annotation_id"],structure["id"])
+                    try:
+                        self._ensure_structure_visible_for_marker(structure["id"])
+                        self.project.assign_annotation_role(near["annotation_id"],structure["id"])
                     except Exception as exc:messagebox.showerror("Structures",str(exc),parent=self.root);return
                     self.selected_annotation_id=near["annotation_id"];self._after_edit();return
             self.selected_annotation_id=near["annotation_id"];self.active_structure_id=near["structure_id"];self._drag_annotation=near["annotation_id"]
             self._drag_last_screen=self._screen(near["x"],near["y"]);self._build_marker_buttons();self._draw_overlays();return
         if structure is None:return
+        self._ensure_structure_visible_for_marker(structure["id"])
         nx,ny=self._normal(event.x,event.y)
         self.selected_annotation_id=self.project.add_annotation(
             self.selected_specimen_id,structure["id"],nx,ny,self.pass_no.get(),replace_single=not bool(structure.get("repeated")),
