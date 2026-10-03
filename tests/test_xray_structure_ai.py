@@ -110,6 +110,9 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         self.assertIn(specimen_id,self.project.structure_prediction_candidate_ids())
         refreshed=self.project.seed_structure_predictions(specimen_id,[
             {"structure_id":"vertebra","x":0.30,"y":0.50,"score":0.90},
+            {"structure_id":"vertebra","x":0.52,"y":0.50,"score":0.92},
+            {"structure_id":"first_caudal","x":0.521,"y":0.501,"score":0.87},
+            {"structure_id":"last_predorsal","x":0.301,"y":0.499,"score":0.86},
             {"structure_id":"preanal_pterygiophore","x":0.62,"y":0.66,"score":0.88},
         ],"xray_structure_model_v002")
         self.assertFalse(refreshed["protected"])

@@ -497,14 +497,16 @@ class XRayStructureUIContractTests(unittest.TestCase):
             self.assertEqual(3,len(call.args))
             self.assertEqual([],[(keyword.arg or "**") for keyword in call.keywords])
 
-    def test_visibility_selector_and_top_status_are_compact_and_landmarks_consistent(self):
+    def test_visibility_controls_are_compact_per_marker_and_top_status_is_preserved(self):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
-        for text in ('"Complete"','"Partial"','"Not visible"','"Absent"','text="Visibility:"',"StatusChip.TLabel"):
+        for text in ('"Complete"','"Partial"','"Not visible"','"Absent"',"_VISIBILITY_SYMBOLS","_marker_visibility_buttons","StatusChip.TLabel"):
             self.assertIn(text,ui)
         self.assertIn('(("locality","Locality:"),("plate","Plate:"),("specimen","Specimen:"))',ui)
         self.assertIn('style="SectionTitle.TLabel"',ui)
-        self.assertIn('state="readonly",width=11',ui)
+        self.assertIn('width=2,style="P.TButton"',ui)
+        self.assertNotIn('text="Visibility:"',ui)
+        self.assertNotIn("self.visibility_box",ui)
         self.assertNotIn("self.counts_label",ui)
         self.assertNotIn("self.summary_label=ttk.Label",ui)
 
