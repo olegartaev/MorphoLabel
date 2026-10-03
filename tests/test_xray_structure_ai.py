@@ -284,6 +284,29 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
 
 
 class XRayStructureAIContractTests(unittest.TestCase):
+    def test_human_comparison_scores_reference_roles_for_legacy_scheme_without_relation_field(self):
+        from app.xray_schema import bundled_scheme
+        from app.xray_structure_ai import summarize_structure_ai_human_comparison
+        scheme=bundled_scheme("phoxinus_vertebral_counts")
+        for structure in scheme["structures"]:
+            if structure["id"] in {"first_caudal","last_predorsal"}:
+                structure.pop("learning_relation",None);structure.pop("reuse_from",None)
+        human=[
+            {"structure_id":"vertebra","x":0.10,"y":0.50,"sort_order":0},
+            {"structure_id":"vertebra","x":0.20,"y":0.50,"sort_order":1},
+            {"structure_id":"vertebra","x":0.30,"y":0.50,"sort_order":2},
+            {"structure_id":"first_caudal","x":0.30,"y":0.50,"sort_order":0},
+            {"structure_id":"last_predorsal","x":0.20,"y":0.50,"sort_order":0},
+            {"structure_id":"preanal_pterygiophore","x":0.40,"y":0.70,"sort_order":0},
+        ]
+        predicted=[dict(row,score=0.9) for row in human]
+        report=summarize_structure_ai_human_comparison(
+            scheme,[{"specimen_id":"s1","human":human,"predicted":predicted,"visibility":{}}],
+        )
+        self.assertEqual(2,report["summary"]["reference_role_total"])
+        self.assertEqual(2,report["summary"]["reference_role_exact"])
+        self.assertEqual(1.0,report["summary"]["reference_role_accuracy"])
+
     def test_human_comparison_reports_exact_traits_count_bias_roles_and_localization(self):
         from app.xray_schema import bundled_scheme
         from app.xray_structure_ai import summarize_structure_ai_human_comparison
