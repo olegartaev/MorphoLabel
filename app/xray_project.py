@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 import uuid
 
 from .xray_crop import apply_orientation_defaults, normalize_orientation_policy
-from .xray_schema import bundled_scheme, calculate_trait_values, compatible_reference_roles, normalize_scheme, scheme_hash
+from .xray_schema import bundled_scheme, calculate_trait_values, compatible_reference_roles, normalize_scheme, scheme_hash, spatial_series_order
 
 IMAGE_EXTENSIONS={".png",".jpg",".jpeg",".tif",".tiff",".bmp"}
 STRUCTURE_VISIBILITY_STATES=("complete","partial","not_visible","absent")
@@ -1135,17 +1135,18 @@ class XRayProject:
             c.row_factory=sqlite3.Row
             return [dict(row) for row in c.execute("SELECT version_id,created_at,scheme_hash,note,active FROM schema_versions ORDER BY created_at DESC")]
 
-    def structure_specimens(self,pass_no=1):
-        """Confirmed specimen crops eligible for structure annotation."""
+    def structure_specimens(self,pass_no=1,include_excluded=False):
+        """Confirmed specimen crops; excluded source X-rays are optional for restore UI only."""
         schema_id=self.active_scheme_record()["version_id"];pass_no=int(pass_no)
-        sql="""
+        source_filter="" if bool(include_excluded) else " AND i.excluded=0"
+        sql=f"""
             SELECT s.*,i.relative_path,i.crop_reviewed,i.excluded AS image_excluded,
                    r.run_id,r.status AS annotation_status,r.updated_at AS annotation_updated_at
             FROM specimens s
             JOIN source_images i ON i.image_id=s.image_id
             LEFT JOIN annotation_runs r
               ON r.specimen_id=s.specimen_id AND r.pass_no=? AND r.source='human' AND r.schema_version_id=?
-            WHERE s.crop_status='confirmed' AND s.excluded=0 AND i.excluded=0 AND i.crop_reviewed=1
+            WHERE s.crop_status='confirmed' AND s.excluded=0 AND i.crop_reviewed=1{source_filter}
             ORDER BY i.relative_path,s.ordinal,s.label
         """
         with sqlite3.connect(self.db_path) as c:
@@ -1773,6 +1774,16 @@ class XRayProject:
                              "distances":[],"role_checks":0,"role_same":0}
             for item in structures
         }
+        def role_ordinal(points,structure):
+            sid=str(structure["id"]);roles=[point for point in points if str(point["structure_id"])==sid]
+            if len(roles)!=1:return None
+            target=roles[0];best=None
+            for base_id in structure.get("reuse_from") or ():
+                base=spatial_series_order([point for point in points if str(point["structure_id"])==str(base_id)])
+                for index,point in enumerate(base,1):
+                    distance=((float(point["x"])-float(target["x"]))**2+(float(point["y"])-float(target["y"]))**2)**0.5
+                    if best is None or distance<best[0]:best=(distance,index)
+            return None if best is None else int(best[1])
         for member in run["members"]:
             first=self._repeatability_annotations(run,member,1);second=self._repeatability_annotations(run,member,2)
             if first is None or second is None:continue
@@ -1780,8 +1791,10 @@ class XRayProject:
                 sid=str(structure["id"]);a=[p for p in first if p["structure_id"]==sid];b=[p for p in second if p["structure_id"]==sid]
                 bucket=accum[sid];bucket["specimens"]+=1;bucket["exact"]+=int(len(a)==len(b));bucket["abs_error"]+=abs(len(a)-len(b))
                 bucket["distances"].extend(self._repeatability_match_distances(a,b))
-                if sid in role_ids and len(a)==1 and len(b)==1:
-                    bucket["role_checks"]+=1;bucket["role_same"]+=int(int(a[0].get("sort_order",0))==int(b[0].get("sort_order",0)))
+                if sid in role_ids:
+                    one=role_ordinal(first,structure);two=role_ordinal(second,structure)
+                    if one is not None and two is not None:
+                        bucket["role_checks"]+=1;bucket["role_same"]+=int(one==two)
         result=[]
         for structure in structures:
             sid=str(structure["id"]);bucket=accum[sid];n=int(bucket["specimens"]);dist=bucket.pop("distances")
