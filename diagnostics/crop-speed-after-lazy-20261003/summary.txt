@@ -1,0 +1,93 @@
+READ-ONLY performance diagnostic; no production code edits.
+CHECKOUT_HEAD=14a2835174e3c40b361f779f55183189fea52a05
+RUNTIME_CODE_MATCH=UNCONFIRMED (no active Python/pythonw process found)
+LAZY_PATH_CONFIRMED=UNCONFIRMED (no complete attributable current bulk run with start/end log evidence)
+SQLITE_UNCHANGED=True
+PROJECT_DATA_FILE_STATS_UNCHANGED=True
+BLOCKED_WRITE_ATTEMPTS=0
+FEATURE_CACHE_V1=696
+FEATURE_CACHE_V2=0
+FEATURE_CACHE_REUSABLE=0
+FEATURE_CACHE_MISS=1250
+FAST_PATH_BEST_WORKERS=20
+FAST_PATH_IMAGES_PER_SECOND=6.713601454513847
+Switch benchmark: ten persisted prepared images with existing developed PNG, warm pass then ten sequential revisits per route. Wall time ends after actual Tk canvas redraw. All timing categories use nested exclusive intervals; category medians do not necessarily sum to median total.
+SWITCH_MEDIAN_MS=743.654
+SWITCH_P90_MS=787.945
+SQLITE_MS=30.475
+IMAGE_OPEN_DECODE_MS=464.559
+PROXY_OR_RESIZE_MS=177.419
+CONTEXT_COUNTS_MS=3.254
+SECTION_RENDER_MS=10.464
+CANVAS_REDRAW_MS=2.884
+OTHER_MS=53.950
+SWITCH_PRIMARY_BOTTLENECK=full developed PNG decode/conversion plus repeated image copy/proxy/downsize; selection clears in-memory image cache
+SWITCH_AVOIDABLE_FULL_REFRESH=yes (PhotoListPanel._selected calls refresh rebuilding full list; _update_status calls _section_counts once per status label, each calling database-wide crop_counts/training eligibility)
+SWITCH_AVOIDABLE_IMAGE_DECODE=yes (load_current clears base/photo/display cache; load_project_developed opens and decodes full PNG on every switch)
+SWITCH_EXPECTED_FAST_PATH=existing prepared image identity + retained decoded/display image -> crop record/local status delta -> local canvas update; no whole-list/count recomputation or full PNG re-decode
+Shared call path: PhotoListCanvas._select -> ListboxSelect -> PhotoListPanel._selected -> _notify -> ProductionShell._selected_image -> _update_status -> after_idle -> CropSection.on_image_selected -> CropCanvasController.load_current -> background loader -> 80ms poll -> render/PhotoImage.
+Already-prepared branch skips prepare_crop_training_images. Non-prepared branch can force proposal preparation, source hash/developed validation/model load/cache writes; it was not executed against real project.
+Thumbnail/proxy: load_project_developed returns full and a 1800px thumbnail; main canvas discards returned proxy and resizes full independently.
+No complete current real bulk-run timing attribution was found in the collected logs. Historical/test log entries cannot establish whether current lazy bulk prediction ran.
+All switch measurements use the stored prepared_ids and pre-existing developed cache. Nonprepared/cold preparation is deliberately excluded because production preparation can write project caches.
+Not observed in measured switches: scan_originals, source SHA256, rebuild developed PNG, reload active model, auto-tune, hardware detection, full Crop section teardown/render. Repeated proxy generation and database-wide crop status/training eligibility recounts ARE observed.
+Eight-source benchmark has at most eight simultaneously active tasks, one pass per setting, and warmer OS cache after the first pass. It cannot rank higher worker settings for the full project or establish equivalence to the previous eight-source sample.
+fish_shared_selection: median_ms=768.859; p90_ms=773.693; selection_to_load_start_median_ms=34.241; selection_to_image_loader_median_ms=37.417; category_median_ms={"canvas_redraw": 3.0273000011220574, "context_counts": 3.2229499920504168, "crop_record_and_state": 0.41655002860352397, "image_open_decode": 466.4109500008635, "loader": 2.3010999721009284, "proxy_or_resize": 177.18254998908378, "selection_dispatch": 2.8024999919580296, "sqlite": 30.27174992894288, "validation_stat": 0.35480000951793045}
+list_selection_event: median_ms=743.654; p90_ms=787.945; selection_to_load_start_median_ms=47.882; selection_to_image_loader_median_ms=51.221; category_median_ms={"canvas_redraw": 2.8836500277975574, "context_counts": 3.254450115491636, "crop_record_and_state": 0.4226499586366117, "image_open_decode": 464.5591499720467, "loader": 2.2797999990871176, "proxy_or_resize": 177.41935000231024, "section_render": 10.463600003276952, "selection_dispatch": 2.7831000043079257, "sqlite": 30.47509989119135, "validation_stat": 0.3577999887056649}
+workers=1: wall_seconds=5.140; images_per_second=1.557; stages_mean_ms={"hash_s": 15.328700003010454, "decode_s": 611.3531125010923, "feature_s": 13.937062503828201, "prediction_s": 0.0675249975756742}
+workers=2: wall_seconds=2.847; images_per_second=2.810; stages_mean_ms={"hash_s": 17.393250007444294, "decode_s": 661.8411000017659, "feature_s": 16.80466250036261, "prediction_s": 0.07037500108708628}
+workers=4: wall_seconds=2.010; images_per_second=3.981; stages_mean_ms={"hash_s": 18.497150002076523, "decode_s": 759.452024998609, "feature_s": 19.279487500170944, "prediction_s": 0.09141250484390184}
+workers=8: wall_seconds=1.231; images_per_second=6.496; stages_mean_ms={"hash_s": 20.820324993110262, "decode_s": 850.1702874964394, "feature_s": 17.37012500234414, "prediction_s": 0.0901749954209663}
+workers=16: wall_seconds=1.227; images_per_second=6.520; stages_mean_ms={"hash_s": 20.084899995708838, "decode_s": 846.0019000012835, "feature_s": 18.655287498404505, "prediction_s": 0.33256250026170164}
+workers=20: wall_seconds=1.192; images_per_second=6.714; stages_mean_ms={"hash_s": 20.010837499285117, "decode_s": 839.6942375038634, "feature_s": 18.51787500345381, "prediction_s": 0.08499999239575118}
+workers=28: wall_seconds=1.230; images_per_second=6.503; stages_mean_ms={"hash_s": 20.6736624968471, "decode_s": 879.8322375041607, "feature_s": 20.728874998894753, "prediction_s": 0.09993750063586049}
+Legacy saved hardware profile (may be stale): {"cpu_model": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel", "physical_cores": 20, "logical_cores": 28, "ram_bytes": 68542550016, "gpu_model": "NVIDIA GeForce RTX 3060", "gpu_vram_mib": 12288, "gpu_driver": "616.56", "cuda_available": false, "cuda_runtime": null, "acceleration": "CPU", "gpu_free_mib": 8313}
+Current resolver setup-qualified hardware profile (read only, not reprobed): {"cpu_model": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel", "physical_cores": 20, "logical_cores": 28, "ram_bytes": 68542550016, "gpu_model": "NVIDIA GeForce RTX 3060", "gpu_vram_mib": 12288, "gpu_driver": "616.56", "cuda_available": true, "cuda_runtime": "12.1", "acceleration": "CUDA", "gpu_free_mib": 7491}
+
+ACTUAL_OPERATION=UNCONFIRMED_CURRENT_BULK_RUN; historical crop_batch_proposal events exist
+IMAGES_PROCESSED=UNKNOWN
+WALL_SECONDS=UNKNOWN
+ACTUAL_IMAGES_PER_SECOND=UNKNOWN
+WORKERS_USED=UNKNOWN
+TUNING_CACHE_HIT=UNKNOWN
+NEW_DEVELOPED_PNG_DURING_RUN=UNKNOWN
+MEAN_COMMIT_S=UNKNOWN
+PERFORMANCE_CACHE_MATCHING_ENTRIES=0 (no crop_learned_proposal or crop_feature_extract entries in current machine cache)
+PRIMARY_BOTTLENECK=repeat-switch image decode and redundant proxy/resize; current bulk-run bottleneck cannot be attributed without complete current run log. Feature cache is entirely obsolete for current signature, so next training feature preparation cannot reuse it.
+
+SWITCH_ROUTE=fish_shared_selection
+ReadProject.crop_section_counts: median_calls=5.0; median_inclusive_ms=28.610
+ReadProject.crop_training_eligible_ids: median_calls=5.0; median_inclusive_ms=17.844
+PhotoListPanel.refresh: median_calls=0.0; median_inclusive_ms=0.000
+PhotoListCanvas.set_rows: median_calls=0.0; median_inclusive_ms=0.000
+CropSection.render: median_calls=0.0; median_inclusive_ms=0.000
+PIL.Image.open: median_calls=1.0; median_inclusive_ms=0.109
+Image.resize: median_calls=2.0; median_inclusive_ms=174.857
+Image.thumbnail: median_calls=1.0; median_inclusive_ms=101.544
+PhotoImage.__init__: median_calls=1.0; median_inclusive_ms=0.931
+ReadProject.crop_record: median_calls=1.0; median_inclusive_ms=0.608
+sqlite.connect: median_calls=15.0; median_inclusive_ms=2.832
+sqlite.execute: median_calls=36.0; median_inclusive_ms=3.921
+sqlite.fetchall: median_calls=11.0; median_inclusive_ms=23.839
+Path.stat: median_calls=18.0; median_inclusive_ms=0.355
+Inclusive function timings overlap child functions; use exclusive category table for additive attribution. SQLite times include execute and fetch. Selection delay includes status database work and Tk idle dispatch. OTHER includes poll delay (80ms schedule), thread scheduling, crop/state handling, and Tk event pump.
+
+SWITCH_ROUTE=list_selection_event
+ReadProject.crop_section_counts: median_calls=5.0; median_inclusive_ms=28.751
+ReadProject.crop_training_eligible_ids: median_calls=5.0; median_inclusive_ms=17.999
+PhotoListPanel.refresh: median_calls=1.0; median_inclusive_ms=8.922
+PhotoListCanvas.set_rows: median_calls=1.0; median_inclusive_ms=1.332
+CropSection.render: median_calls=0.0; median_inclusive_ms=0.000
+PIL.Image.open: median_calls=1.0; median_inclusive_ms=0.107
+Image.resize: median_calls=2.0; median_inclusive_ms=175.164
+Image.thumbnail: median_calls=1.0; median_inclusive_ms=101.913
+PhotoImage.__init__: median_calls=1.0; median_inclusive_ms=0.900
+ReadProject.crop_record: median_calls=1.0; median_inclusive_ms=0.614
+sqlite.connect: median_calls=15.0; median_inclusive_ms=2.834
+sqlite.execute: median_calls=36.0; median_inclusive_ms=3.933
+sqlite.fetchall: median_calls=11.0; median_inclusive_ms=23.920
+Path.stat: median_calls=18.0; median_inclusive_ms=0.358
+Inclusive function timings overlap child functions; use exclusive category table for additive attribution. SQLite times include execute and fetch. Selection delay includes status database work and Tk idle dispatch. OTHER includes poll delay (80ms schedule), thread scheduling, crop/state handling, and Tk event pump.
+
+Earlier exploratory repeated-switch passes on the same prepared images ranged about 1.00-1.15 seconds before the final warmer pass; exact numeric records in microbenchmark.json refer only to the final completed pass. CPU/OS caching and diagnostic wrapper overhead can change absolute times, not the observed repeated decode and list/count refresh call path.
+Previous reference versus single-worker eight-source fast path: decode 1169 -> 611ms/image, feature 30 -> 14ms/image, prediction .15 -> .07ms/image. Different sample and repeated OS warming preclude a controlled before/after claim. Developed write/reopen stages are deliberately absent from this compute benchmark.

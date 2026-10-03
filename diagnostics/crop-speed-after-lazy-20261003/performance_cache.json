@@ -1,0 +1,49 @@
+{
+  "entries": {},
+  "saved_hardware_profile": {
+    "hardware": {
+      "cpu_model": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+      "physical_cores": 20,
+      "logical_cores": 28,
+      "ram_bytes": 68542550016,
+      "gpu_model": "NVIDIA GeForce RTX 3060",
+      "gpu_vram_mib": 12288,
+      "gpu_driver": "616.56",
+      "cuda_available": false,
+      "cuda_runtime": null,
+      "acceleration": "CPU",
+      "gpu_free_mib": 8313
+    },
+    "training_default": {
+      "device": "cpu",
+      "batch_size": 1,
+      "workers": 4,
+      "mixed_precision": false,
+      "pin_memory": false,
+      "persistent_workers": true,
+      "profile": "auto"
+    },
+    "inference_default": {
+      "device": "cpu",
+      "batch_size": 1,
+      "workers": 4,
+      "mixed_precision": false,
+      "pin_memory": false,
+      "persistent_workers": true,
+      "profile": "auto"
+    },
+    "resolver_hardware_profile": {
+      "cpu_model": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+      "physical_cores": 20,
+      "logical_cores": 28,
+      "ram_bytes": 68542550016,
+      "gpu_model": "NVIDIA GeForce RTX 3060",
+      "gpu_vram_mib": 12288,
+      "gpu_driver": "616.56",
+      "cuda_available": true,
+      "cuda_runtime": "12.1",
+      "acceleration": "CUDA",
+      "gpu_free_mib": 7491
+    }
+  }
+}

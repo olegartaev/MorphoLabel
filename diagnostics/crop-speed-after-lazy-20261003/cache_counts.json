@@ -1,0 +1,26 @@
+{
+  "database": {
+    "total_images": 1303,
+    "ai_unreviewed": 0,
+    "human_verified_crops": 1303,
+    "crop_counts": {
+      "Total": 1300,
+      "Reviewed": 1300,
+      "AI pending": 0,
+      "Train ready": 1250,
+      "Uncropped": 0
+    },
+    "training_eligible_count": 1250,
+    "active_crop_model": "crop_model_v006"
+  },
+  "feature_cache": {
+    "total_files": 696,
+    "v1": 696,
+    "v2_source_identity": 0,
+    "other": 0,
+    "reusable": 0,
+    "miss": 1250
+  },
+  "developed_png_files": 137,
+  "new_developed_png_during_run": null
+}

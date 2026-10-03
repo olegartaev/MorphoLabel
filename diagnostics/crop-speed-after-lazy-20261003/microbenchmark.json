@@ -1,0 +1,2978 @@
+{
+  "source_sample_policy": "first eight existing training sources sorted by canonical image ID; no previous sample metadata found",
+  "source_types": {
+    ".nef": 8
+  },
+  "microbenchmark_limitations": "Single pass per worker count, serial order 1,2,4,8,16,20,28. OS file cache not flushed. Only eight input tasks, therefore at most eight concurrent workers; cannot rank 16/20/28 for a larger workload. Production SHA/decode/feature/model math used, diagnostics wrappers add overhead. Prior sample unavailable, so timing is not same-sample proof.",
+  "source_image_count": 8,
+  "active_model_prediction_included": true,
+  "fast_path": [
+    {
+      "workers": 1,
+      "images": 8,
+      "wall_seconds": 5.139548700011801,
+      "images_per_second": 1.5565569015780765,
+      "stages_mean_ms": {
+        "hash_s": 15.328700003010454,
+        "decode_s": 611.3531125010923,
+        "feature_s": 13.937062503828201,
+        "prediction_s": 0.0675249975756742
+      }
+    },
+    {
+      "workers": 2,
+      "images": 8,
+      "wall_seconds": 2.846603599988157,
+      "images_per_second": 2.810366712117305,
+      "stages_mean_ms": {
+        "hash_s": 17.393250007444294,
+        "decode_s": 661.8411000017659,
+        "feature_s": 16.80466250036261,
+        "prediction_s": 0.07037500108708628
+      }
+    },
+    {
+      "workers": 4,
+      "images": 8,
+      "wall_seconds": 2.0096912999870256,
+      "images_per_second": 3.9807108684063306,
+      "stages_mean_ms": {
+        "hash_s": 18.497150002076523,
+        "decode_s": 759.452024998609,
+        "feature_s": 19.279487500170944,
+        "prediction_s": 0.09141250484390184
+      }
+    },
+    {
+      "workers": 8,
+      "images": 8,
+      "wall_seconds": 1.2314785000053234,
+      "images_per_second": 6.496256329254159,
+      "stages_mean_ms": {
+        "hash_s": 20.820324993110262,
+        "decode_s": 850.1702874964394,
+        "feature_s": 17.37012500234414,
+        "prediction_s": 0.0901749954209663
+      }
+    },
+    {
+      "workers": 16,
+      "images": 8,
+      "wall_seconds": 1.226985200017225,
+      "images_per_second": 6.520046044473635,
+      "stages_mean_ms": {
+        "hash_s": 20.084899995708838,
+        "decode_s": 846.0019000012835,
+        "feature_s": 18.655287498404505,
+        "prediction_s": 0.33256250026170164
+      }
+    },
+    {
+      "workers": 20,
+      "images": 8,
+      "wall_seconds": 1.1916107999859378,
+      "images_per_second": 6.713601454513847,
+      "stages_mean_ms": {
+        "hash_s": 20.010837499285117,
+        "decode_s": 839.6942375038634,
+        "feature_s": 18.51787500345381,
+        "prediction_s": 0.08499999239575118
+      }
+    },
+    {
+      "workers": 28,
+      "images": 8,
+      "wall_seconds": 1.2302392999990843,
+      "images_per_second": 6.502799902430327,
+      "stages_mean_ms": {
+        "hash_s": 20.6736624968471,
+        "decode_s": 879.8322375041607,
+        "feature_s": 20.728874998894753,
+        "prediction_s": 0.09993750063586049
+      }
+    }
+  ],
+  "switches": {
+    "fish_shared_selection": {
+      "n": 10,
+      "median_ms": 768.8592500053346,
+      "p90_ms": 773.692950012628,
+      "selection_to_load_start_median_ms": 34.24079999967944,
+      "selection_to_image_loader_median_ms": 37.41699999955017,
+      "category_median_ms": {
+        "canvas_redraw": 3.0273000011220574,
+        "context_counts": 3.2229499920504168,
+        "crop_record_and_state": 0.41655002860352397,
+        "image_open_decode": 466.4109500008635,
+        "loader": 2.3010999721009284,
+        "proxy_or_resize": 177.18254998908378,
+        "selection_dispatch": 2.8024999919580296,
+        "sqlite": 30.27174992894288,
+        "validation_stat": 0.35480000951793045
+      },
+      "samples": [
+        {
+          "categories": {
+            "validation_stat": 0.3675999469123781,
+            "sqlite": 30.753500002902,
+            "crop_record_and_state": 0.3947000077459961,
+            "context_counts": 3.25209999573417,
+            "selection_dispatch": 2.8003999905195087,
+            "image_open_decode": 452.8684999968391,
+            "proxy_or_resize": 181.32289999630302,
+            "loader": 2.4346000282093883,
+            "canvas_redraw": 2.896799996960908
+          },
+          "calls": {
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.3675999469123781
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.917600028216839
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.8182999521959573
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.03390005440451205
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.5824000001884997
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 24.356999987503514
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.8575000178534538
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 4.05660000978969
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 18.19699996849522
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 29.029100027401
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 29.037600033916533
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 29.05599999940023
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 33.58810002100654
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.8003999905195087
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.18730000010691583
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.027499947464093566
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 418.91010000836104
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 33.750400005374104
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.550100001040846
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 179.0032999997493
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 104.58519999519922
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 559.5716999960132
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.6027999916113913
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.34539998159743845
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 1.0165999992750585
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 79.72639999934472
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.28979999478906393
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 80.04829997662455
+            }
+          },
+          "selection_to_load_start_ms": 34.572400007164106,
+          "selection_to_image_loader_ms": 37.94639999978244,
+          "total_ms": 687.0583999843802,
+          "switch_index": 1,
+          "heavy_calls": {},
+          "other_wait_ms": 9.967300022253767
+        },
+        {
+          "categories": {
+            "validation_stat": 0.3517999721225351,
+            "sqlite": 30.199799919500947,
+            "crop_record_and_state": 0.4486000689212233,
+            "context_counts": 3.432600060477853,
+            "selection_dispatch": 2.6830999995581806,
+            "image_open_decode": 463.7852000305429,
+            "proxy_or_resize": 179.76110000745393,
+            "loader": 2.281299966853112,
+            "canvas_redraw": 2.9650000215042382
+          },
+          "calls": {
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.3517999721225351
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.978100110543892
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.895999845350161
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.045400025555863976
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.5758000081405044
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 23.654299962799996
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 3.0029999907128513
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 4.166099999565631
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 17.718200018862262
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 28.439899964723736
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.451699967263266
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.470100020058453
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 33.07720000157133
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.6830999995581806
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.11500000255182385
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.02659996971487999
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 430.40250000194646
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 33.24839999550022
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.38500002445653
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 177.38490001647733
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 105.33930000383407
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 571.1682999972254
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.7605000282637775
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.2634999982547015
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.9405000018887222
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 77.39239998045377
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.2767000114545226
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 77.70380002330057
+            }
+          },
+          "selection_to_load_start_ms": 34.03099998831749,
+          "selection_to_image_loader_ms": 37.196399993263185,
+          "total_ms": 770.3532000014093,
+          "switch_index": 2,
+          "heavy_calls": {},
+          "other_wait_ms": 84.44469995447434
+        },
+        {
+          "categories": {
+            "validation_stat": 0.3492999239824712,
+            "sqlite": 30.697800015332177,
+            "crop_record_and_state": 0.38940002559684217,
+            "context_counts": 3.2181000278797,
+            "selection_dispatch": 2.865999995265156,
+            "image_open_decode": 487.78440002934076,
+            "proxy_or_resize": 180.94319995725527,
+            "loader": 2.275300008477643,
+            "canvas_redraw": 2.979700017021969
+          },
+          "calls": {
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.3492999239824712
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.8336999423336238
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.7254999440629035
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.049399968702346087
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.4796000032220036
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 24.4583000021521
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.6923999830614775
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 3.7785999884363264
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 17.732999986037612
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 29.258099966682494
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 29.266800003824756
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 29.293899977346882
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 33.50180000416003
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.865999995265156
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.10400000610388815
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.025500019546598196
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 453.25090005644597
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 34.4113000028301
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.95859999745153
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 178.69399997289293
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 101.78559998166747
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 591.643700026907
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.5830999871250242
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.23219999275170267
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.9223000088240951
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 82.15269999345765
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.24590000975877047
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 82.42019999306649
+            }
+          },
+          "selection_to_load_start_ms": 34.51240001595579,
+          "selection_to_image_loader_ms": 38.01779999048449,
+          "total_ms": 773.8076999958139,
+          "switch_index": 3,
+          "heavy_calls": {},
+          "other_wait_ms": 62.3044999956619
+        },
+        {
+          "categories": {
+            "validation_stat": 0.35470002330839634,
+            "sqlite": 30.256400030339137,
+            "crop_record_and_state": 0.41769997915253043,
+            "context_counts": 3.1556999892927706,
+            "selection_dispatch": 2.869800024200231,
+            "image_open_decode": 467.19929997925647,
+            "proxy_or_resize": 174.82890002429485,
+            "loader": 2.2353999665938318,
+            "canvas_redraw": 3.100400004768744
+          },
+          "calls": {
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.35470002330839634
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 4.025299946079031
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.9460999940056354
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.036699988413602114
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.717500010272488
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 23.61990002100356
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.835700026480481
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 4.100199992535636
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 17.802499962272123
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 28.339900018181652
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.350000007776543
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.367300023091957
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 32.90210000704974
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.869800024200231
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.11139997513964772
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.028499984182417393
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 433.5014999669511
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 33.56450001592748
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.431399999419227
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 172.52019999432378
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 100.6360000174027
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 569.8540000012144
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.6474999827332795
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.23830001009628177
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.8711999980732799
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 76.97550000739284
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.5979000125080347
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 77.59599998826161
+            }
+          },
+          "selection_to_load_start_ms": 33.867199992528185,
+          "selection_to_image_loader_ms": 37.23879999597557,
+          "total_ms": 769.103400001768,
+          "switch_index": 4,
+          "heavy_calls": {},
+          "other_wait_ms": 84.68509998056106
+        },
+        {
+          "categories": {
+            "validation_stat": 0.36370003363117576,
+            "sqlite": 36.030499963089824,
+            "crop_record_and_state": 0.42320002103224397,
+            "context_counts": 3.15579999005422,
+            "selection_dispatch": 2.754699991783127,
+            "image_open_decode": 465.6226000224706,
+            "proxy_or_resize": 174.66980003518984,
+            "loader": 2.2389999649021775,
+            "canvas_redraw": 2.6496999780647457
+          },
+          "calls": {
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.36370003363117576
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.8738999573979527
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.8447000368032604
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.03559998003765941
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.6951000143308192
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 29.645999980857596
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.6415000029373914
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 3.913199994713068
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 23.537599947303534
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 34.38649998861365
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 34.39360001357272
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 34.410999971441925
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 38.77159999683499
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.754699991783127
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.09610000415705144
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.024699984351173043
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 432.0474000123795
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 33.46070001134649
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.75820001401007
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 172.3212000215426
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 100.00180001952685
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 567.6431000174489
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.5914999928791076
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.2494000073056668
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.8605000039096922
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 77.35129998764023
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.2589999930933118
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 77.63169999816455
+            }
+          },
+          "selection_to_load_start_ms": 39.76730001159012,
+          "selection_to_image_loader_ms": 42.998299992177635,
+          "total_ms": 772.7576000033878,
+          "switch_index": 5,
+          "heavy_calls": {},
+          "other_wait_ms": 84.84860000316985
+        },
+        {
+          "categories": {
+            "validation_stat": 0.354600022546947,
+            "sqlite": 30.287099827546626,
+            "crop_record_and_state": 0.3662999370135367,
+            "context_counts": 3.1838002032600343,
+            "selection_dispatch": 2.818300010403618,
+            "image_open_decode": 454.3164999631699,
+            "proxy_or_resize": 177.34990001190454,
+            "loader": 2.477700007148087,
+            "canvas_redraw": 3.074899985222146
+          },
+          "calls": {
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.354600022546947
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.7793998781125993
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.844299975549802
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.03359993570484221
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.4332999708130956
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 23.998299962840974
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.6593999937176704
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 3.7358999834395945
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 18.154799996409565
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 28.838899976108223
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.84690003702417
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.865599946584553
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 33.02490001078695
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.818300010403618
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.11319998884573579
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.024999957531690598
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 421.11409999779426
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 33.0709999834653
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.450700000859797
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 174.9530999804847
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 101.84940000181086
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 558.3825999929104
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.6352999771479517
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.2874000056181103
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.9071999811567366
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 78.64920000429265
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.24870000197552145
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 78.91849998850375
+            }
+          },
+          "selection_to_load_start_ms": 34.11589999450371,
+          "selection_to_image_loader_ms": 37.34280000207946,
+          "total_ms": 689.5771999843419,
+          "switch_index": 6,
+          "heavy_calls": {},
+          "other_wait_ms": 15.34810001612641
+        },
+        {
+          "categories": {
+            "validation_stat": 0.35489999572746456,
+            "sqlite": 30.228400137275457,
+            "crop_record_and_state": 0.4406999214552343,
+            "context_counts": 3.330099949380383,
+            "selection_dispatch": 2.8045999933965504,
+            "image_open_decode": 453.6986999446526,
+            "proxy_or_resize": 175.13300004065968,
+            "loader": 2.255700033856556,
+            "canvas_redraw": 3.516799974022433
+          },
+          "calls": {
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.35489999572746456
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.9630000246688724
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.8202999965287745
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.03500000457279384
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.8062000162899494
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 23.788300051819533
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.8571999864652753
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 4.2449000175111
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 17.791999998735264
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 28.409300022758543
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.418999980203807
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.43500001472421
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 33.11419999226928
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.8045999933965504
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.10919998749159276
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.031800009310245514
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 419.9207000201568
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 33.64739997778088
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.451199975563213
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 172.8974000143353
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 101.14420001627877
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 556.7742999992333
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.6140000186860561
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.3510000242386013
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 1.3864999928046018
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 77.6293000089936
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.25790001382119954
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 77.90949998889118
+            }
+          },
+          "selection_to_load_start_ms": 34.48159998515621,
+          "selection_to_image_loader_ms": 37.75859999586828,
+          "total_ms": 690.1642000011634,
+          "switch_index": 7,
+          "heavy_calls": {},
+          "other_wait_ms": 18.40130001073703
+        },
+        {
+          "categories": {
+            "validation_stat": 0.36149995867162943,
+            "sqlite": 30.48130011302419,
+            "crop_record_and_state": 0.45039999531582,
+            "context_counts": 3.2664999598637223,
+            "selection_dispatch": 2.6840000064112246,
+            "image_open_decode": 472.32440003426746,
+            "proxy_or_resize": 178.10080002527684,
+            "loader": 2.320899977348745,
+            "canvas_redraw": 3.434599988395348
+          },
+          "calls": {
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.36149995867162943
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 4.05820002197288
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.879800071241334
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.03730002208612859
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.6921999922487885
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 23.888799943961203
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.8297000098973513
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 4.140899982303381
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 17.946100037079304
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 28.759999986505136
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.76809998997487
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.791299962904304
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 33.36110000964254
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.6840000064112246
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.09869999485090375
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.03190001007169485
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 439.09590001567267
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 33.10640002018772
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.21319999685511
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 175.8319000073243
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 102.83280001021922
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 577.2212000156287
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.6424000021070242
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.2800000074785203
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.905399996554479
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 78.73360000667162
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.28229999588802457
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 79.0374000207521
+            }
+          },
+          "selection_to_load_start_ms": 34.36570000485517,
+          "selection_to_image_loader_ms": 37.491199997020885,
+          "total_ms": 768.6151000089012,
+          "switch_index": 8,
+          "heavy_calls": {},
+          "other_wait_ms": 75.19069995032623
+        },
+        {
+          "categories": {
+            "validation_stat": 0.361799931852147,
+            "sqlite": 29.88240000559017,
+            "crop_record_and_state": 0.39440003456547856,
+            "context_counts": 3.2277999562211335,
+            "selection_dispatch": 2.7636000013444573,
+            "image_open_decode": 471.6385999927297,
+            "proxy_or_resize": 176.82610001065768,
+            "loader": 2.3480000090785325,
+            "canvas_redraw": 3.2333000272046775
+          },
+          "calls": {
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.361799931852147
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.7632999010384083
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.780000038910657
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.03439997090026736
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.5928999928291887
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 23.676399956457317
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.690999972401187
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 3.8776000146754086
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 17.784100025892258
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 28.285900043556467
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.295099968090653
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.313899994827807
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 32.693899993319064
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.7636000013444573
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.10900001507252455
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.031000003218650818
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 438.2325999904424
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 33.27339998213574
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.550200001802295
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 174.18619999079965
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 101.24079999513924
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 574.9979999964125
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.5800999933853745
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.25290000485256314
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 1.2480999866966158
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 78.86000000871718
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.25469998945482075
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 79.13540001027286
+            }
+          },
+          "selection_to_load_start_ms": 33.6548000050243,
+          "selection_to_image_loader_ms": 36.87979999813251,
+          "total_ms": 765.7972000015434,
+          "switch_index": 9,
+          "heavy_calls": {},
+          "other_wait_ms": 75.12120003229938
+        },
+        {
+          "categories": {
+            "validation_stat": 0.3402999718673527,
+            "sqlite": 29.98459991067648,
+            "crop_record_and_state": 0.4154000780545175,
+            "context_counts": 3.1321000133175403,
+            "selection_dispatch": 2.8722999850288033,
+            "image_open_decode": 469.28849996766075,
+            "proxy_or_resize": 177.01519996626303,
+            "loader": 2.534600062062964,
+            "canvas_redraw": 2.9673000681214035
+          },
+          "calls": {
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.3402999718673527
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.925200056983158
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.743099961662665
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.03869994543492794
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.6624000563751906
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 23.63290000357665
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.5947999965865165
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 3.8588000170420855
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 17.885000037495047
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 28.404900047462434
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.413399995770305
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.430200007278472
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 32.72129999822937
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.8722999850288033
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.10219999239780009
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.028999987989664078
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 436.32249996881
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 32.84239998902194
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.17449999321252
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 174.7600000235252
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 101.30299997399561
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 572.8930000041146
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.5737000028602779
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.2576999831944704
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.9443000017199665
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 78.70890002232045
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.2609000075608492
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 78.99410001118667
+            }
+          },
+          "selection_to_load_start_ms": 33.988700015470386,
+          "selection_to_image_loader_ms": 37.312100001145154,
+          "total_ms": 773.6802000144962,
+          "switch_index": 10,
+          "heavy_calls": {},
+          "other_wait_ms": 85.12989999144338
+        }
+      ]
+    },
+    "list_selection_event": {
+      "n": 10,
+      "median_ms": 743.6535499873571,
+      "p90_ms": 787.9449799831491,
+      "selection_to_load_start_median_ms": 47.88165001082234,
+      "selection_to_image_loader_median_ms": 51.221400004578754,
+      "category_median_ms": {
+        "canvas_redraw": 2.8836500277975574,
+        "context_counts": 3.254450115491636,
+        "crop_record_and_state": 0.4226499586366117,
+        "image_open_decode": 464.5591499720467,
+        "loader": 2.2797999990871176,
+        "proxy_or_resize": 177.41935000231024,
+        "section_render": 10.463600003276952,
+        "selection_dispatch": 2.7831000043079257,
+        "sqlite": 30.47509989119135,
+        "validation_stat": 0.3577999887056649
+      },
+      "samples": [
+        {
+          "categories": {
+            "section_render": 10.071599972434342,
+            "validation_stat": 0.4512000596150756,
+            "sqlite": 30.15700017567724,
+            "crop_record_and_state": 0.4167000006418675,
+            "context_counts": 3.1829998188186437,
+            "selection_dispatch": 2.726900012930855,
+            "image_open_decode": 456.2309999600984,
+            "proxy_or_resize": 176.53300004894845,
+            "loader": 2.274900005431846,
+            "canvas_redraw": 3.1796999683137983
+          },
+          "calls": {
+            "PhotoListCanvas._draw": {
+              "count": 5,
+              "inclusive_ms": 6.463900033850223
+            },
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.4512000596150756
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.829200053587556
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.8281000850256532
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.03409999771974981
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.511100010247901
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 23.844700073823333
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.586999995401129
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 3.594599984353408
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 17.866999987745658
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 28.699200018309057
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.707199991913512
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.72550001484342
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 32.747200020821765
+            },
+            "PhotoListCanvas.set_rows": {
+              "count": 1,
+              "inclusive_ms": 1.4597999979741871
+            },
+            "PhotoListPanel.refresh": {
+              "count": 1,
+              "inclusive_ms": 8.675199991557747
+            },
+            "PhotoListPanel._selected": {
+              "count": 1,
+              "inclusive_ms": 41.479800012893975
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.726900012930855
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.10380000458098948
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.029399991035461426
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 422.85989999072626
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 33.24260000954382
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.46339998114854
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 174.26510000950657
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 101.1997000023257
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 559.4672000152059
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.6871999939903617
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.2615000121295452
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.8611000084783882
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 78.46419999259524
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.4479999770410359
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 78.93419999163598
+            }
+          },
+          "selection_to_load_start_ms": 47.31389999506064,
+          "selection_to_image_loader_ms": 50.57799999485724,
+          "total_ms": 699.6517000079621,
+          "switch_index": 1,
+          "heavy_calls": {},
+          "other_wait_ms": 14.426699985051528
+        },
+        {
+          "categories": {
+            "section_render": 9.905700018862262,
+            "validation_stat": 0.35559991374611855,
+            "sqlite": 30.505099915899336,
+            "crop_record_and_state": 0.4335999838076532,
+            "context_counts": 3.184900153428316,
+            "selection_dispatch": 2.7486000035423785,
+            "image_open_decode": 457.28319996851496,
+            "proxy_or_resize": 175.15389996697195,
+            "loader": 2.252600039355457,
+            "canvas_redraw": 2.6244000473525375
+          },
+          "calls": {
+            "PhotoListCanvas._draw": {
+              "count": 5,
+              "inclusive_ms": 6.231400009710342
+            },
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.35559991374611855
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.9895999361760914
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.999100019223988
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.040799990529194474
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.6148000431712717
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 23.882499925093725
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.6900999946519732
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 3.7837999989278615
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 17.52299998770468
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 28.94579997519031
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.95339994574897
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.968900005565956
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 33.15539998584427
+            },
+            "PhotoListCanvas.set_rows": {
+              "count": 1,
+              "inclusive_ms": 1.277999981539324
+            },
+            "PhotoListPanel.refresh": {
+              "count": 1,
+              "inclusive_ms": 8.506899990607053
+            },
+            "PhotoListPanel._selected": {
+              "count": 1,
+              "inclusive_ms": 41.722900001332164
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.7486000035423785
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.10409997776150703
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.027600006433203816
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 424.171299993759
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 32.98600000562146
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.526999999769032
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 172.90109998430125
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 100.13979999348521
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 559.4582000048831
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.6175999878905714
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.24369999300688505
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.9179000044241548
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 77.69370000460185
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.22639997769147158
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 77.94149999972433
+            }
+          },
+          "selection_to_load_start_ms": 47.88000002736226,
+          "selection_to_image_loader_ms": 51.20400001760572,
+          "total_ms": 703.9094000065234,
+          "switch_index": 2,
+          "heavy_calls": {},
+          "other_wait_ms": 19.461799995042384
+        },
+        {
+          "categories": {
+            "section_render": 13.400099996943027,
+            "validation_stat": 0.3412999212741852,
+            "sqlite": 30.56369992555119,
+            "crop_record_and_state": 0.404000049456954,
+            "context_counts": 5.330100073479116,
+            "selection_dispatch": 2.8713000065181404,
+            "image_open_decode": 476.85459995409474,
+            "proxy_or_resize": 178.0426999903284,
+            "loader": 2.2727000468876213,
+            "canvas_redraw": 2.8711000632029027
+          },
+          "calls": {
+            "PhotoListCanvas._draw": {
+              "count": 5,
+              "inclusive_ms": 9.544999978970736
+            },
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.3412999212741852
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 4.056700097862631
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.7713999443221837
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.034099939512088895
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.6272000211756676
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 24.065899924607947
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.568000025348738
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 3.6908000183757395
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 18.49049999145791
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 29.101199994329363
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 29.10899999551475
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 29.12669998477213
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 35.36389998043887
+            },
+            "PhotoListCanvas.set_rows": {
+              "count": 1,
+              "inclusive_ms": 1.3373999972827733
+            },
+            "PhotoListPanel.refresh": {
+              "count": 1,
+              "inclusive_ms": 11.995499982731417
+            },
+            "PhotoListPanel._selected": {
+              "count": 1,
+              "inclusive_ms": 47.42950000218116
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.8713000065181404
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.16009999671950936
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.028799957362934947
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 443.545299989637
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 33.12619999633171
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.628999990643933
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 175.78869999852031
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 102.16239999863319
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 581.0509000148159
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.5936999805271626
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.26649999199435115
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.8706999942660332
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 78.80190000287257
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.2510999911464751
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 79.07590002287179
+            }
+          },
+          "selection_to_load_start_ms": 52.95240000123158,
+          "selection_to_image_loader_ms": 56.36909999884665,
+          "total_ms": 789.7097000095528,
+          "switch_index": 3,
+          "heavy_calls": {},
+          "other_wait_ms": 76.75809998181649
+        },
+        {
+          "categories": {
+            "section_render": 10.972200019750744,
+            "validation_stat": 0.3463999892119318,
+            "sqlite": 30.108499980997294,
+            "crop_record_and_state": 0.5271999980323017,
+            "context_counts": 3.2028000277932733,
+            "selection_dispatch": 2.802200004225597,
+            "image_open_decode": 464.85629997914657,
+            "proxy_or_resize": 173.71299999649636,
+            "loader": 2.329000039026141,
+            "canvas_redraw": 2.896199992392212
+          },
+          "calls": {
+            "PhotoListCanvas._draw": {
+              "count": 5,
+              "inclusive_ms": 7.08950002444908
+            },
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.3463999892119318
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.8061999657656997
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.824599971063435
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.033100019209086895
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.7728999955579638
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 23.80659998743795
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.741100004641339
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 4.079000005731359
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 17.617400037124753
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 28.419500013114884
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.428499994333833
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.444099996704608
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 32.939700002316386
+            },
+            "PhotoListCanvas.set_rows": {
+              "count": 1,
+              "inclusive_ms": 1.5319999947678298
+            },
+            "PhotoListPanel.refresh": {
+              "count": 1,
+              "inclusive_ms": 9.239500010153279
+            },
+            "PhotoListPanel._selected": {
+              "count": 1,
+              "inclusive_ms": 42.244300013408065
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.802200004225597
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.18129998352378607
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.030600029276683927
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 431.1170000000857
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 33.53350001270883
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.63259998895228
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 171.39579998911358
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 100.71170001174323
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 567.6491000049282
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.6044000037945807
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.28139998903498054
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.911899987841025
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 75.94840001547709
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.26020000223070383
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 76.23269999749027
+            }
+          },
+          "selection_to_load_start_ms": 47.93130001053214,
+          "selection_to_image_loader_ms": 51.30210000788793,
+          "total_ms": 779.770399996778,
+          "switch_index": 4,
+          "heavy_calls": {},
+          "other_wait_ms": 88.01659996970557
+        },
+        {
+          "categories": {
+            "section_render": 10.471599991433322,
+            "validation_stat": 0.3780000552069396,
+            "sqlite": 29.74729990819469,
+            "crop_record_and_state": 0.41299997246824205,
+            "context_counts": 3.2901000522542745,
+            "selection_dispatch": 3.0205000075511634,
+            "image_open_decode": 470.08280002046376,
+            "proxy_or_resize": 180.0296999863349,
+            "loader": 2.2846999927423894,
+            "canvas_redraw": 2.535899984650314
+          },
+          "calls": {
+            "PhotoListCanvas._draw": {
+              "count": 5,
+              "inclusive_ms": 6.534100015414879
+            },
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.3780000552069396
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.8953998300712556
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.7800000680144876
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.035399949410930276
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.5375999500975013
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 23.401200014632195
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.777300018351525
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 3.850000008242205
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 17.60280001326464
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 28.18320001824759
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.191200020955876
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.20839994819835
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 32.53630001563579
+            },
+            "PhotoListCanvas.set_rows": {
+              "count": 1,
+              "inclusive_ms": 1.5104000049177557
+            },
+            "PhotoListPanel.refresh": {
+              "count": 1,
+              "inclusive_ms": 8.976900018751621
+            },
+            "PhotoListPanel._selected": {
+              "count": 1,
+              "inclusive_ms": 41.57820000546053
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 3.0205000075511634
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.1126999850384891
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.028100039344280958
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 436.63690000539646
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 33.31060003256425
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.616899985820055
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 177.5356000289321
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 103.85319998022169
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 576.0208999854513
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.612599978921935
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.25010001263581216
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.8376000041607767
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 78.75489999423735
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.2482999989297241
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 79.02500001364388
+            }
+          },
+          "selection_to_load_start_ms": 47.068300016690046,
+          "selection_to_image_loader_ms": 50.61750000459142,
+          "total_ms": 783.7326000153553,
+          "switch_index": 5,
+          "heavy_calls": {},
+          "other_wait_ms": 81.47900004405528
+        },
+        {
+          "categories": {
+            "section_render": 10.45560001512058,
+            "validation_stat": 0.3567999810911715,
+            "sqlite": 30.61640012310818,
+            "crop_record_and_state": 0.4319000872783363,
+            "context_counts": 3.377199813257903,
+            "selection_dispatch": 2.7520000003278255,
+            "image_open_decode": 455.9259999659844,
+            "proxy_or_resize": 177.31419997289777,
+            "loader": 2.253700018627569,
+            "canvas_redraw": 2.758400049060583
+          },
+          "calls": {
+            "PhotoListCanvas._draw": {
+              "count": 5,
+              "inclusive_ms": 6.35170002351515
+            },
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.3567999810911715
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 4.187800106592476
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.9737000295426697
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.0357000099029392
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.7268000228796154
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 23.795599990990013
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 3.0009000038262457
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 4.087300010723993
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 17.998000024817884
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 28.7314000306651
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.739699977450073
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.758199972799048
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 33.33939998992719
+            },
+            "PhotoListCanvas.set_rows": {
+              "count": 1,
+              "inclusive_ms": 1.359799993224442
+            },
+            "PhotoListPanel.refresh": {
+              "count": 1,
+              "inclusive_ms": 9.146999975200742
+            },
+            "PhotoListPanel._selected": {
+              "count": 1,
+              "inclusive_ms": 42.54389999550767
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.7520000003278255
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.11110000195913017
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.027600006433203816
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 422.69360000500455
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 33.09879996231757
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.597500012721866
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 175.0600000086706
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 102.64969998388551
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 560.5961999972351
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.6150000263005495
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.26119998074136674
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.8971999923232943
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 77.44090000051074
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.28119998751208186
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 77.74390000849962
+            }
+          },
+          "selection_to_load_start_ms": 48.071199998958036,
+          "selection_to_image_loader_ms": 51.51659998227842,
+          "total_ms": 700.187599984929,
+          "switch_index": 6,
+          "heavy_calls": {},
+          "other_wait_ms": 13.945399958174676
+        },
+        {
+          "categories": {
+            "section_render": 12.952299992321059,
+            "validation_stat": 0.3797999816015363,
+            "sqlite": 36.062999919522554,
+            "crop_record_and_state": 0.42059991392306983,
+            "context_counts": 3.343100193887949,
+            "selection_dispatch": 2.8079999901819974,
+            "image_open_decode": 453.14030002919026,
+            "proxy_or_resize": 177.5245000317227,
+            "loader": 2.2870999528095126,
+            "canvas_redraw": 3.080799971939996
+          },
+          "calls": {
+            "PhotoListCanvas._draw": {
+              "count": 5,
+              "inclusive_ms": 9.378300048410892
+            },
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.3797999816015363
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.9702998474240303
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 3.046900004846975
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.040399987483397126
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.6169999726116657
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 29.408100002910942
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.8107999823987484
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 3.9188000082504004
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 23.530500009655952
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 34.40279999631457
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 34.41149997524917
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 34.430400031851605
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 38.885400019353256
+            },
+            "PhotoListCanvas.set_rows": {
+              "count": 1,
+              "inclusive_ms": 1.295800000661984
+            },
+            "PhotoListPanel.refresh": {
+              "count": 1,
+              "inclusive_ms": 8.436900010565296
+            },
+            "PhotoListPanel._selected": {
+              "count": 1,
+              "inclusive_ms": 47.385499987285584
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.8079999901819974
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.1008999824989587
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.024799956008791924
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 419.62400000193156
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 33.39490000507794
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.64300000993535
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 175.26730001554824
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 102.69870000774972
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 557.9164999944624
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.627699977485463
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.2367999986745417
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.8760000055190176
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 77.8932000102941
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.26790000265464187
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 78.20530000026338
+            }
+          },
+          "selection_to_load_start_ms": 56.28489999799058,
+          "selection_to_image_loader_ms": 59.64950000634417,
+          "total_ms": 707.5366999779362,
+          "switch_index": 7,
+          "heavy_calls": {},
+          "other_wait_ms": 15.537200000835583
+        },
+        {
+          "categories": {
+            "section_render": 10.164399980567396,
+            "validation_stat": 0.36029992043040693,
+            "sqlite": 30.352699861396104,
+            "crop_record_and_state": 0.42470000335015357,
+            "context_counts": 3.2188001787289977,
+            "selection_dispatch": 2.806699980283156,
+            "image_open_decode": 464.62329995119944,
+            "proxy_or_resize": 179.16320002404973,
+            "loader": 2.8377000417094678,
+            "canvas_redraw": 5.5330999894067645
+          },
+          "calls": {
+            "PhotoListCanvas._draw": {
+              "count": 5,
+              "inclusive_ms": 6.488199986051768
+            },
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.36029992043040693
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.8610998017247766
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.820199995767325
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.03439991269260645
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.56309999874793
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 24.010599998291582
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.7990000089630485
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 3.8702000165358186
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 17.999699979554862
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 28.73849996831268
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.746600000886247
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.764199989382178
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 33.096800005296245
+            },
+            "PhotoListCanvas.set_rows": {
+              "count": 1,
+              "inclusive_ms": 1.3269000046420842
+            },
+            "PhotoListPanel.refresh": {
+              "count": 1,
+              "inclusive_ms": 8.829699974739924
+            },
+            "PhotoListPanel._selected": {
+              "count": 1,
+              "inclusive_ms": 41.98710000491701
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.806699980283156
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.10939998901449144
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.025699991965666413
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 431.51160000707023
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 32.98069999436848
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.419699997641146
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 175.94549999921583
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 103.03160001058131
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 570.3037999919616
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.5834999901708215
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.22749998606741428
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 1.0167000000365078
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 79.45260000997223
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 2.4662000068929046
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 81.94269999512471
+            }
+          },
+          "selection_to_load_start_ms": 47.883299994282424,
+          "selection_to_image_loader_ms": 51.23879999155179,
+          "total_ms": 787.7488999802154,
+          "switch_index": 8,
+          "heavy_calls": {},
+          "other_wait_ms": 88.26400004909374
+        },
+        {
+          "categories": {
+            "section_render": 10.414500022307038,
+            "validation_stat": 0.3434999962337315,
+            "sqlite": 30.44509986648336,
+            "crop_record_and_state": 0.4165000864304602,
+            "context_counts": 3.3688000112306327,
+            "selection_dispatch": 2.7640000043902546,
+            "image_open_decode": 474.164400016889,
+            "proxy_or_resize": 175.1319000031799,
+            "loader": 2.821100002620369,
+            "canvas_redraw": 2.743199991527945
+          },
+          "calls": {
+            "PhotoListCanvas._draw": {
+              "count": 5,
+              "inclusive_ms": 6.671299954177812
+            },
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.3434999962337315
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.977499989559874
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.8390999359544367
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.033999967854470015
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.6022000054363161
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 23.956899996846914
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.6436999905854464
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 3.7412999954540282
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 18.43260001624003
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 29.09399996860884
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 29.102500004228204
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 29.120100021827966
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 33.3002999832388
+            },
+            "PhotoListCanvas.set_rows": {
+              "count": 1,
+              "inclusive_ms": 1.3155000051483512
+            },
+            "PhotoListPanel.refresh": {
+              "count": 1,
+              "inclusive_ms": 8.91639999463223
+            },
+            "PhotoListPanel._selected": {
+              "count": 1,
+              "inclusive_ms": 42.27610002271831
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.7640000043902546
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.10070001007989049
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.028300040867179632
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 439.24600002355874
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 34.79569999035448
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 17.018499987898394
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 171.85389998485334
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 101.35109999100678
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 578.0647000065073
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.5851000023540109
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.301799998851493
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.964700011536479
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 76.59419998526573
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.2615000121295452
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 76.87849999638274
+            }
+          },
+          "selection_to_load_start_ms": 47.77029997785576,
+          "selection_to_image_loader_ms": 51.082199992379174,
+          "total_ms": 782.8139999764971,
+          "switch_index": 9,
+          "heavy_calls": {},
+          "other_wait_ms": 80.20099997520447
+        },
+        {
+          "categories": {
+            "section_render": 10.497800016310066,
+            "validation_stat": 0.35879999632015824,
+            "sqlite": 30.524699977831915,
+            "crop_record_and_state": 0.4391998809296638,
+            "context_counts": 3.030600113561377,
+            "selection_dispatch": 2.7421999839134514,
+            "image_open_decode": 464.494999992894,
+            "proxy_or_resize": 178.45199999283068,
+            "loader": 2.2618000220973045,
+            "canvas_redraw": 3.0624000064563006
+          },
+          "calls": {
+            "PhotoListCanvas._draw": {
+              "count": 5,
+              "inclusive_ms": 6.8094999878667295
+            },
+            "Path.stat": {
+              "count": 18,
+              "inclusive_ms": 0.35879999632015824
+            },
+            "sqlite.execute": {
+              "count": 36,
+              "inclusive_ms": 3.8388000684790313
+            },
+            "sqlite.connect": {
+              "count": 15,
+              "inclusive_ms": 2.926800021668896
+            },
+            "sqlite.fetchone": {
+              "count": 9,
+              "inclusive_ms": 0.034699973184615374
+            },
+            "ReadProject.get_ui_state": {
+              "count": 3,
+              "inclusive_ms": 1.7022999527398497
+            },
+            "sqlite.fetchall": {
+              "count": 11,
+              "inclusive_ms": 24.10089995828457
+            },
+            "ReadProject.crop_batch_counts": {
+              "count": 1,
+              "inclusive_ms": 2.6557999954093248
+            },
+            "ProductionShell._active_batch_summary": {
+              "count": 1,
+              "inclusive_ms": 3.866699989885092
+            },
+            "ReadProject.crop_training_eligible_ids": {
+              "count": 5,
+              "inclusive_ms": 18.26660000369884
+            },
+            "ReadProject.crop_counts": {
+              "count": 5,
+              "inclusive_ms": 28.74719994724728
+            },
+            "ReadProject.crop_section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.755500010447577
+            },
+            "ProductionShell._section_counts": {
+              "count": 5,
+              "inclusive_ms": 28.77429997897707
+            },
+            "ProductionShell._update_status": {
+              "count": 1,
+              "inclusive_ms": 33.02519998396747
+            },
+            "PhotoListCanvas.set_rows": {
+              "count": 1,
+              "inclusive_ms": 1.3068999978713691
+            },
+            "PhotoListPanel.refresh": {
+              "count": 1,
+              "inclusive_ms": 8.92669998575002
+            },
+            "PhotoListPanel._selected": {
+              "count": 1,
+              "inclusive_ms": 42.01100001228042
+            },
+            "CropSection.on_image_selected": {
+              "count": 1,
+              "inclusive_ms": 2.7421999839134514
+            },
+            "PIL.Image.open": {
+              "count": 1,
+              "inclusive_ms": 0.0990999978967011
+            },
+            "Image.load": {
+              "count": 9,
+              "inclusive_ms": 0.026299996534362435
+            },
+            "PngImageFile.load": {
+              "count": 3,
+              "inclusive_ms": 431.91429995931685
+            },
+            "Image.copy": {
+              "count": 3,
+              "inclusive_ms": 32.459599984576926
+            },
+            "Image.convert": {
+              "count": 1,
+              "inclusive_ms": 16.01009999285452
+            },
+            "Image.resize": {
+              "count": 2,
+              "inclusive_ms": 176.18900001980364
+            },
+            "Image.thumbnail": {
+              "count": 1,
+              "inclusive_ms": 101.66439999011345
+            },
+            "app.crop_editor_async_v2.load_project_developed": {
+              "count": 1,
+              "inclusive_ms": 568.200399982743
+            },
+            "ReadProject.crop_record": {
+              "count": 1,
+              "inclusive_ms": 0.655800016829744
+            },
+            "Image.rotate": {
+              "count": 1,
+              "inclusive_ms": 0.24769999436102808
+            },
+            "PhotoImage.__init__": {
+              "count": 1,
+              "inclusive_ms": 0.902600004337728
+            },
+            "CropCanvasController._render_raster": {
+              "count": 1,
+              "inclusive_ms": 79.89309998811223
+            },
+            "CropCanvasController._draw_overlay": {
+              "count": 1,
+              "inclusive_ms": 0.24369999300688505
+            },
+            "CropCanvasController.render": {
+              "count": 1,
+              "inclusive_ms": 80.15700001851656
+            }
+          },
+          "selection_to_load_start_ms": 47.793000005185604,
+          "selection_to_image_loader_ms": 51.084800012176856,
+          "total_ms": 705.276299995603,
+          "switch_index": 10,
+          "heavy_calls": {},
+          "other_wait_ms": 9.411800012458116
+        }
+      ]
+    }
+  },
+  "switch_scope": "Production Crop (Landmarks module), not the separate X-ray module. Same real project and persisted batch. Actual Tk list selection and shared UI callback measured; no user state changed.",
+  "prior_comparison": {
+    "decode_ms": 1169,
+    "developed_png_write_ms": 3999,
+    "developed_png_reopen_ms": 635,
+    "feature_ms": 30,
+    "prediction_ms": 0.15,
+    "decode_only_best_workers": 20,
+    "decode_only_images_per_second": 2.94
+  }
+}
