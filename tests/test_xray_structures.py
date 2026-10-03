@@ -16,18 +16,22 @@ from app.xray_result_qc import (
 )
 from app.xray_trait_export import export_trait_rows
 from app.xray_structure_display import DEFAULT_PALETTE, DEFAULT_SIZE, load_xray_structure_display, save_xray_structure_display
-from app.xray_structures_ui import _first_structure_id, _structure_button_order
+from app.xray_structures_ui import _first_structure_id, _structure_button_order, _structure_shortcuts
 
 
 class XRayStructuresExcludeControlContractTests(unittest.TestCase):
-    def test_structures_has_bad_xray_exclusion_control_with_preserving_copy(self):
+    def test_structures_exclusion_matches_landmarks_list_action_and_is_reversible(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_structures_ui.py").read_text(encoding="utf-8")
-        self.assertIn('text="Exclude X-ray"',source)
-        self.assertIn("command=self.exclude_current_xray",source)
+        self.assertIn('text="Show excluded"',source)
+        self.assertIn('text="Exclude"',source)
+        self.assertIn('text="Restore" if excluded else "Exclude"',source)
+        self.assertIn('self._action_icon("restore" if excluded else "exclude")',source)
+        self.assertIn('style="Icon.TButton"',source)
+        self.assertIn("def exclude_or_restore",source)
+        self.assertIn("self.project.set_source_excluded(image_id,False)",source)
         self.assertIn("self.project.set_source_excluded(image_id,True)",source)
         self.assertIn("remove_result_review_image(self.project,image_id)",source)
-        self.assertIn("Existing crops, annotations and history are kept",source)
-        self.assertIn("retire_structure_repeatability",source)
+        self.assertNotIn('text="Exclude X-ray"',source)
 
 
 class XRayStructurePersistenceTests(unittest.TestCase):
@@ -69,6 +73,9 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         self.assertTrue(any(row["specimen_id"]==self.specimen_id for row in self.project.trait_rows()))
         self.project.set_source_excluded(self.image_ids[0],True)
         self.assertFalse(any(row["specimen_id"]==self.specimen_id for row in self.project.structure_specimens(1)))
+        restore_rows=self.project.structure_specimens(1,include_excluded=True)
+        restore_row=next(row for row in restore_rows if row["specimen_id"]==self.specimen_id)
+        self.assertEqual(1,int(restore_row["image_excluded"]))
         self.assertFalse(any(row["specimen_id"]==self.specimen_id for row in self.project.trait_rows()))
         self.assertEqual(before,self.project.effective_annotations(self.specimen_id,1,"human"))
         self.project.set_source_excluded(self.image_ids[0],False)
@@ -125,6 +132,19 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         newer=self.project.start_structure_repeatability(2,seed=8)
         self.assertNotEqual(run["run_id"],newer["run_id"])
         self.assertGreater(newer["annotation1_pass_no"],run["annotation2_pass_no"])
+
+    def test_result_gap_qc_uses_spatial_sequence_not_click_order(self):
+        for x in (0.70,0.10,0.90,0.30,0.20,0.80):
+            self.project.add_annotation(self.specimen_id,"vertebra",x,0.50,1)
+        self.project.add_annotation(self.specimen_id,"first_caudal",0.70,0.50,1,replace_single=True)
+        self.project.add_annotation(self.specimen_id,"last_predorsal",0.30,0.50,1,replace_single=True)
+        for x in (0.25,0.35,0.45,0.55,0.65):
+            self.project.add_annotation(self.specimen_id,"preanal_pterygiophore",x,0.70,1)
+        self.project.verify_annotations(self.specimen_id,1)
+        report=build_result_qc(self.project)
+        spacing=[item for item in report["issues"] if item["code"]=="series_spacing" and item["target"]=="Vertebrae"]
+        self.assertTrue(spacing)
+        self.assertTrue(any(float(item["metric"]["ratio"])>=3.0 for item in spacing))
 
     def test_result_qc_flags_detached_reference_and_conspicuous_serial_gap(self):
         for x in (0.10,0.20,0.30,0.40,0.80,0.90):
@@ -187,7 +207,7 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         verified_result=export_trait_rows(self.project,verified_path,verified_only=True)
         self.assertEqual(2,all_result["rows"]);self.assertEqual(1,verified_result["rows"])
         all_text=all_path.read_text(encoding="utf-8-sig");verified_text=verified_path.read_text(encoding="utf-8-sig")
-        self.assertIn("trait:tv",all_text);self.assertIn(self.specimen_id,verified_text)
+        self.assertNotIn("trait:",all_text);self.assertIn("tv",all_text.splitlines()[0]);self.assertIn(self.specimen_id,verified_text)
         self.assertNotIn(pending,verified_text)
 
     def test_result_qc_uses_robust_within_sample_count_check_without_global_pooling(self):
@@ -444,12 +464,16 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         moved=reopened.move_structure_batch(state["ids"][0],1,1)
         self.assertEqual(state["ids"][1],moved["specimen_id"])
 
-    def test_marker_tools_follow_numeric_hotkeys_and_new_specimen_starts_with_marker_one(self):
+    def test_marker_tools_put_counted_series_before_reference_marks_and_number_consecutively(self):
         structures=[
-            {"id":"a","hotkey":"1"},{"id":"c","hotkey":"3"},{"id":"b","hotkey":"2"},{"id":"d","hotkey":"4"},
+            {"id":"series_a","hotkey":"1","repeated":True},
+            {"id":"ref_a","hotkey":"2","repeated":False},
+            {"id":"series_b","hotkey":"3","repeated":True},
+            {"id":"ref_b","hotkey":"4","repeated":False},
         ]
-        self.assertEqual(["a","b","c","d"],[item["id"] for item in _structure_button_order(structures)])
-        self.assertEqual("a",_first_structure_id(structures))
+        self.assertEqual(["series_a","series_b","ref_a","ref_b"],[item["id"] for item in _structure_button_order(structures)])
+        self.assertEqual({"series_a":"1","series_b":"2","ref_a":"3","ref_b":"4"},_structure_shortcuts(structures))
+        self.assertEqual("series_a",_first_structure_id(structures))
 
     def test_xray_marker_display_defaults_are_bright_distinct_and_persistent(self):
         structures=self.project.scheme["structures"]
