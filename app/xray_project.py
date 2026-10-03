@@ -1106,13 +1106,55 @@ class XRayProject:
         self.save_scheme(bundled_scheme(scheme_id),"Built-in starter scheme activated for untouched blank project")
         return True
 
+    def ensure_phoxinus_count_semantics(self):
+        """Correct the legacy bundled count rules without discarding compatible annotations.
+
+        The old starter scheme added four Weberian vertebrae numerically even though
+        the annotation tool asks users to mark the complete vertebral series. The
+        literature definition counts those vertebrae directly, so an all-vertebra
+        annotation must not receive a hidden +4 correction.
+        """
+        record=self.active_scheme_record();old_scheme=normalize_scheme(record["scheme"])
+        if str(old_scheme.get("scheme_id") or "")!="phoxinus_vertebral_counts":return False
+        traits={str(item["id"]):item for item in old_scheme.get("traits") or ()}
+        legacy={"tv":4,"abdv":4,"predv":4}
+        if any(int(((traits.get(trait_id) or {}).get("rule") or {}).get("offset",0) or 0)!=offset for trait_id,offset in legacy.items()):
+            return False
+        corrected=deepcopy(old_scheme)
+        corrected_traits={str(item["id"]):item for item in corrected.get("traits") or ()}
+        for trait_id in legacy:corrected_traits[trait_id].setdefault("rule",{}).pop("offset",None)
+        old_structure_contract=[
+            (str(item["id"]),bool(item.get("repeated")),str(item.get("annotation") or "point"),
+             str(item.get("learning_relation") or ""),tuple(str(value) for value in item.get("reuse_from") or ()))
+            for item in old_scheme.get("structures") or ()
+        ]
+        new_structure_contract=[
+            (str(item["id"]),bool(item.get("repeated")),str(item.get("annotation") or "point"),
+             str(item.get("learning_relation") or ""),tuple(str(value) for value in item.get("reuse_from") or ()))
+            for item in corrected.get("structures") or ()
+        ]
+        if old_structure_contract!=new_structure_contract:raise RuntimeError("Unsafe X-ray scheme correction was refused.")
+        old_version=str(record["version_id"])
+        new_version=self.save_scheme(
+            corrected,
+            "Corrected Phoxinus vertebral count rules: every marked vertebra is counted directly; legacy hidden +4 offsets removed.",
+        )
+        if new_version==old_version:return False
+        with sqlite3.connect(self.db_path) as c:
+            c.execute("UPDATE annotation_runs SET schema_version_id=? WHERE schema_version_id=?",(new_version,old_version))
+            c.execute("UPDATE xray_structure_repeatability_runs SET schema_version_id=? WHERE schema_version_id=?",(new_version,old_version))
+            c.execute("DELETE FROM trait_results WHERE schema_version_id=?",(new_version,))
+        for row in self.structure_specimens(1,include_excluded=True):
+            self.recalculate_trait_results(row["specimen_id"])
+        return True
+
     def current_selection(self):
         state=dict(self.get_ui_state("xray_current_selection",{}) or {})
         image_id=str(state.get("image_id") or "");specimen_id=str(state.get("specimen_id") or "")
         if specimen_id:
             try:
                 specimen=self.specimen(specimen_id)
-                if specimen["excluded"] or specimen["crop_status"] in {"rejected","superseded"}:specimen_id=""
+                if specimen["crop_status"] in {"rejected","superseded"}:specimen_id=""
                 else:image_id=str(specimen["image_id"])
             except KeyError:specimen_id=""
         if image_id:
@@ -1136,21 +1178,26 @@ class XRayProject:
             return [dict(row) for row in c.execute("SELECT version_id,created_at,scheme_hash,note,active FROM schema_versions ORDER BY created_at DESC")]
 
     def structure_specimens(self,pass_no=1,include_excluded=False):
-        """Confirmed specimen crops; excluded source X-rays are optional for restore UI only."""
+        """Confirmed specimens in one stable project-wide order.
+
+        workflow_no is assigned before exclusion/filtering and is therefore the
+        same number in Structures, Export and later review screens.
+        """
         schema_id=self.active_scheme_record()["version_id"];pass_no=int(pass_no)
-        source_filter="" if bool(include_excluded) else " AND i.excluded=0"
-        sql=f"""
+        sql="""
             SELECT s.*,i.relative_path,i.crop_reviewed,i.excluded AS image_excluded,
                    r.run_id,r.status AS annotation_status,r.updated_at AS annotation_updated_at
             FROM specimens s
             JOIN source_images i ON i.image_id=s.image_id
             LEFT JOIN annotation_runs r
               ON r.specimen_id=s.specimen_id AND r.pass_no=? AND r.source='human' AND r.schema_version_id=?
-            WHERE s.crop_status='confirmed' AND s.excluded=0 AND i.crop_reviewed=1{source_filter}
-            ORDER BY i.relative_path,s.ordinal,s.label
+            WHERE s.crop_status='confirmed' AND i.crop_reviewed=1 AND i.excluded=0
+            ORDER BY i.relative_path,s.ordinal,s.label,s.specimen_id
         """
         with sqlite3.connect(self.db_path) as c:
             c.row_factory=sqlite3.Row;rows=[dict(row) for row in c.execute(sql,(pass_no,schema_id))]
+        for workflow_no,row in enumerate(rows,1):row["workflow_no"]=workflow_no
+        if not include_excluded:rows=[row for row in rows if not bool(row.get("excluded"))]
         if pass_no>1:
             verified=set()
             with sqlite3.connect(self.db_path) as c:
@@ -1160,6 +1207,11 @@ class XRayProject:
                 )}
             rows=[row for row in rows if row["specimen_id"] in verified]
         return rows
+
+    def structure_workflow_number(self,specimen_id):
+        specimen_id=str(specimen_id)
+        row=next((item for item in self.structure_specimens(1,include_excluded=True) if str(item["specimen_id"])==specimen_id),None)
+        return int((row or {}).get("workflow_no") or 0)
 
     def ensure_annotation_run(self,specimen_id,pass_no=1,source="human"):
         specimen=self.specimen(specimen_id);image=self.source_image(specimen["image_id"])
