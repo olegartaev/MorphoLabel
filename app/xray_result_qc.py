@@ -40,7 +40,7 @@ def _series_linearity(points):
     return (trace+disc)/(2.0*trace)
 
 
-def _gap_issues(specimen,row,structure,points):
+def _gap_issues(row,structure,points):
     """Flag conspicuous local gaps only when the repeated points form a series."""
     if len(points)<5:return []
     ordered=sorted(points,key=lambda p:(int(p.get("sort_order",0)),int(p.get("annotation_id",0))))
@@ -64,9 +64,9 @@ def _gap_issues(specimen,row,structure,points):
         severity="high" if ratio>=2.3 or ratio<=0.35 else "review"
         hint="possible missed marker or wrong sequence order" if long_gap else "possible duplicate / misplaced marker"
         issues.append({
-            "severity":severity,"code":"series_spacing","specimen_id":specimen["specimen_id"],
-            "image_id":specimen["image_id"],"sample":_sample(specimen["relative_path"]),
-            "plate":Path(str(specimen["relative_path"])).name,"ordinal":int(specimen.get("ordinal") or 0),
+            "severity":severity,"code":"series_spacing","specimen_id":row["specimen_id"],
+            "image_id":row["image_id"],"sample":_sample(row["relative_path"]),
+            "plate":Path(str(row["relative_path"])).name,"ordinal":int(row.get("ordinal") or 0),
             "target":str(structure.get("name") or structure["id"]),
             "reason":f"Gap {index+1}→{index+2} is {ratio:.2f}× the typical spacing; {hint}.",
             "metric":{"gap":gap,"typical_gap":typical,"ratio":ratio,"modified_z":z},
@@ -213,7 +213,7 @@ def build_result_qc(project,min_group_size=5):
         for structure in structures:
             if not bool(structure.get("repeated")):continue
             points=[point for point in annotations if str(point["structure_id"])==str(structure["id"])]
-            issues.extend(_gap_issues(project,row,structure,points))
+            issues.extend(_gap_issues(row,structure,points))
     issues.extend(_sample_outlier_issues(rows,traits,min_group_size))
     repeat_issues,biases=_repeatability_issues(project,structures);issues.extend(repeat_issues)
     severity_order={"high":0,"review":1,"info":2}
