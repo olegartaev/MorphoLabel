@@ -591,7 +591,7 @@ class XRayCropWorkspace:
 
     def _load_plate(self,image_id):
         items=self.project.specimens(image_id)
-        selected=self._preferred_specimen_id if any(item["specimen_id"]==self._preferred_specimen_id for item in items) else None
+        selected=self._preferred_specimen_id if any(item["specimen_id"]==self._preferred_specimen_id for item in items) else (items[0]["specimen_id"] if items else None)
         self.selected_image_id=image_id;self.session.load(items,selected_id=selected)
         self._drag_mode=self._drag_anchor=self._drag_initial=None;self._drawing_crop=None;self._drag_changed=False
         self.zoom=1.0;self.pan=None;self.pan_drag=None
