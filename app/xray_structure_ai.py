@@ -551,6 +551,10 @@ def _comparison_equal(a,b):
 def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_STRUCTURE_MATCH_TOLERANCE):
     """Summarize read-only AI predictions against human-verified annotations."""
     structures=list(scheme.get("structures") or ());traits=list(scheme.get("traits") or ())
+    role_ids=set()
+    for base in structures:
+        if not bool(base.get("repeated")):continue
+        role_ids.update(str(role["id"]) for role in compatible_reference_roles(scheme,str(base["id"])))
     structure_stats={
         str(item["id"]):{
             "structure_id":str(item["id"]),"name":str(item.get("name") or item["id"]),
@@ -585,7 +589,7 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
             stat["localization"].extend(distances);all_localization.extend(distances)
             if stat["repeated"]:
                 diff=len(p)-len(h);stat["exact_count"]+=int(diff==0);stat["count_abs"].append(abs(diff));stat["count_diff"].append(diff);repeated_diffs.append(diff)
-            if stat["learning_relation"]=="role_on_structure":
+            if sid in role_ids:
                 human_ordinal=_comparison_role_ordinal(structure,human_group,True)
                 if human_ordinal is not None:
                     predicted_ordinal=_comparison_role_ordinal(structure,pred_group,False)
