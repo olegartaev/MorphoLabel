@@ -259,6 +259,40 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
 
 
 class XRayStructureAIContractTests(unittest.TestCase):
+    def test_human_comparison_reports_exact_traits_count_bias_roles_and_localization(self):
+        from app.xray_schema import bundled_scheme
+        from app.xray_structure_ai import summarize_structure_ai_human_comparison
+        scheme=bundled_scheme("phoxinus_vertebral_counts")
+        human=[
+            {"structure_id":"vertebra","x":0.10,"y":0.50,"sort_order":0},
+            {"structure_id":"vertebra","x":0.20,"y":0.50,"sort_order":1},
+            {"structure_id":"vertebra","x":0.30,"y":0.50,"sort_order":2},
+            {"structure_id":"first_caudal","x":0.30,"y":0.50,"sort_order":2,"role_source_annotation_id":3},
+            {"structure_id":"last_predorsal","x":0.20,"y":0.50,"sort_order":1,"role_source_annotation_id":2},
+            {"structure_id":"preanal_pterygiophore","x":0.40,"y":0.70,"sort_order":0},
+            {"structure_id":"preanal_pterygiophore","x":0.50,"y":0.70,"sort_order":1},
+        ]
+        predicted=[
+            {"structure_id":"vertebra","x":0.10,"y":0.50,"sort_order":0,"score":0.9},
+            {"structure_id":"vertebra","x":0.20,"y":0.50,"sort_order":1,"score":0.9},
+            {"structure_id":"vertebra","x":0.30,"y":0.50,"sort_order":2,"score":0.9},
+            {"structure_id":"first_caudal","x":0.30,"y":0.50,"sort_order":0,"score":0.9},
+            {"structure_id":"last_predorsal","x":0.20,"y":0.50,"sort_order":0,"score":0.9},
+            {"structure_id":"preanal_pterygiophore","x":0.40,"y":0.70,"sort_order":0,"score":0.9},
+        ]
+        report=summarize_structure_ai_human_comparison(
+            scheme,[{"specimen_id":"s1","human":human,"predicted":predicted,"visibility":{}}],
+        )
+        summary=report["summary"]
+        self.assertEqual(7,summary["exact_traits_total"])
+        self.assertEqual(6,summary["exact_traits"])
+        self.assertEqual(1,summary["specimens_with_wrong_trait"])
+        self.assertEqual(2,summary["reference_role_total"])
+        self.assertEqual(2,summary["reference_role_exact"])
+        self.assertAlmostEqual(-0.5,summary["repeated_count_bias"])
+        self.assertAlmostEqual(0.5,summary["repeated_count_mae"])
+        self.assertAlmostEqual(0.0,summary["localization_median_diag"])
+
     def test_heatmap_target_has_exact_positive_peak_and_partial_supervision_mask(self):
         from ai_runtime.xray_structure_runner import _gaussian
         target=np.zeros((1,16,16),dtype=np.float32)
@@ -343,13 +377,17 @@ class XRayStructureAIContractTests(unittest.TestCase):
         for text in (
             "Predict current","Human repeatability","Repeat…","Sample size",
             "Annotation 1","Annotation 2","Start new sample",
-            "Models…","Check results…","one portable file",
+            "Models…","Compare with human…","Check results…","one portable file",
         ):
             self.assertIn(text,ui)
         self.assertIn("_repeatability_diagram",ui)
         self.assertIn("_open_repeatability_pass",ui)
         self.assertIn("start_structure_repeatability",ui)
         self.assertIn("structure_repeatability_metrics",ui)
+        self.assertIn("compare_structure_model_to_human",ui)
+        self.assertIn("Exact trait values:",ui)
+        self.assertIn("Count bias:",ui)
+        self.assertIn("Reference role accuracy:",ui)
         self.assertIn("pass_no=pass_no",ui)
         self.assertIn("_marker_visibility_buttons",ui)
         self.assertIn("_marker_visibility_vars",ui)

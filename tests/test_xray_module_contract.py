@@ -214,14 +214,18 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertIn("Export active X-ray Structure AI…",module)
         self.assertIn("on_check_results=self._show_result_checks",module)
 
-    def test_xray_export_is_single_results_preview_stage_with_two_real_export_actions(self):
+    def test_xray_export_has_one_action_with_all_or_verified_radio_scope(self):
         root=Path(__file__).resolve().parents[1]
         module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         exporter=(root/"app/xray_trait_export.py").read_text(encoding="utf-8")
         self.assertEqual(1,sum(key=="export" for key,_,_ in STAGES))
         self.assertNotIn('("results","Results","xray_results")',module)
-        for text in ('text="Export"','actions,"Export all"','actions,"Export verified only"','self._render_results(parent)','self._select("export")'):
-            self.assertIn(text,module)
+        self.assertIn('ttk.Radiobutton(actions,text="All"',module)
+        self.assertIn('ttk.Radiobutton(actions,text="Verified only"',module)
+        self.assertIn('self._trait_export_scope=tk.StringVar',module)
+        self.assertIn('actions,"Export",lambda:self._export_traits(self._trait_export_scope.get()=="verified")',module)
+        self.assertNotIn('actions,"Export all"',module)
+        self.assertNotIn('actions,"Export verified only"',module)
         self.assertIn("export_trait_rows(self.project,target,verified_only=verified_only)",module)
         self.assertIn('if verified_only:rows=[row for row in rows if str(row.get("result_status") or "")=="verified"]',exporter)
 

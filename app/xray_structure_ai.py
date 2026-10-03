@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -19,7 +20,7 @@ from .ai_hardware import get_hardware_profile, get_inference_config, get_trainin
 from .process_utils import hidden_window_kwargs
 from .runtime_paths import resource_path
 from .xray_crop import oriented_crop
-from .xray_schema import compatible_reference_roles
+from .xray_schema import calculate_trait_values, compatible_reference_roles
 
 STRUCTURE_BACKEND = "resnet18_heatmap_v1"
 MODEL_PACKAGE_FORMAT = "morpholabel-xray-structure-model-v1"
@@ -485,6 +486,258 @@ def predict_structures(project, specimen_ids=None, count=None, cancel=None, prog
         "success": success, "failures": failures, "model_id": model["model_id"],
         "inference_batch_size": batch_size,
     }
+
+
+_EXACT_TRAIT_METHODS={"count","count_to","count_between","position","presence","derived"}
+_CONTINUOUS_TRAIT_METHODS={"distance","angle"}
+_STRUCTURE_MATCH_TOLERANCE=0.020
+
+
+def _comparison_group(rows):
+    grouped={}
+    for row in rows or ():
+        grouped.setdefault(str(row.get("structure_id") or ""),[]).append(dict(row))
+    for values in grouped.values():
+        values.sort(key=lambda item:(int(item.get("sort_order",0) or 0),float(item.get("x",0)),float(item.get("y",0))))
+    return grouped
+
+
+def _comparison_prediction_rows(groups):
+    rows=[]
+    for group in groups or ():
+        sid=str(group.get("structure_id") or "")
+        points=sorted(group.get("points") or (),key=lambda point:(float(point.get("x",0)),float(point.get("y",0))))
+        for order,point in enumerate(points):
+            rows.append({
+                "structure_id":sid,"x":float(point["x"]),"y":float(point["y"]),
+                "score":float(point.get("score") or 0.0),"sort_order":int(order),
+            })
+    return rows
+
+
+def _comparison_match(predicted,truth,tolerance=_STRUCTURE_MATCH_TOLERANCE):
+    remaining=[dict(point) for point in truth or ()];distances=[];matched=0
+    for point in sorted(predicted or (),key=lambda item:float(item.get("score",0.0)),reverse=True):
+        if not remaining:break
+        index=min(
+            range(len(remaining)),
+            key=lambda i:(float(point["x"])-float(remaining[i]["x"]))**2+(float(point["y"])-float(remaining[i]["y"]))**2,
+        )
+        distance=math.hypot(float(point["x"])-float(remaining[index]["x"]),float(point["y"])-float(remaining[index]["y"]))
+        if distance<=float(tolerance):
+            matched+=1;distances.append(distance/math.sqrt(2.0));remaining.pop(index)
+    return matched,len(predicted or ())-matched,len(remaining),distances
+
+
+def _comparison_role_ordinal(structure,grouped,human=False):
+    sid=str(structure.get("id") or "");role=list(grouped.get(sid) or ())
+    if not role:return None
+    if human and role[0].get("sort_order") is not None:
+        return int(role[0].get("sort_order") or 0)+1
+    best=None;target=role[0]
+    for base_id in structure.get("reuse_from") or ():
+        base=sorted(
+            grouped.get(str(base_id)) or (),
+            key=lambda point:(int(point.get("sort_order",0) or 0),float(point.get("x",0)),float(point.get("y",0))),
+        )
+        for index,point in enumerate(base):
+            distance=math.hypot(float(point["x"])-float(target["x"]),float(point["y"])-float(target["y"]))
+            if best is None or distance<best[0]:best=(distance,index+1)
+    return None if best is None else int(best[1])
+
+
+def _comparison_equal(a,b):
+    if b is None:return False
+    if isinstance(a,(int,float)) and isinstance(b,(int,float)):
+        return abs(float(a)-float(b))<=1e-9
+    return a==b
+
+
+def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_STRUCTURE_MATCH_TOLERANCE):
+    """Summarize read-only AI predictions against human-verified annotations."""
+    structures=list(scheme.get("structures") or ());traits=list(scheme.get("traits") or ())
+    structure_stats={
+        str(item["id"]):{
+            "structure_id":str(item["id"]),"name":str(item.get("name") or item["id"]),
+            "repeated":bool(item.get("repeated")),"learning_relation":str(item.get("learning_relation") or ""),
+            "n":0,"tp":0,"fp":0,"fn":0,"exact_count":0,"count_abs":[],"count_diff":[],
+            "localization":[],"role_total":0,"role_exact":0,"role_abs_error":[],
+        }
+        for item in structures
+    }
+    trait_stats={
+        str(item["id"]):{
+            "trait_id":str(item["id"]),"name":str(item.get("name") or item["id"]),
+            "abbr":str(item.get("abbr") or item["id"]),"method":str(item.get("method") or ""),
+            "n":0,"exact":0,"errors":[],"missing":0,"within":0,"within_n":0,
+        }
+        for item in traits
+    }
+    exact_total=exact_ok=0;all_correct=all_evaluable=wrong_specimens=0;exact_counts_per_specimen=[]
+    repeated_diffs=[];all_localization=[];role_total=role_exact=0;role_abs=[]
+    compared=0
+    for specimen in specimens or ():
+        human=list(specimen.get("human") or ());predicted=list(specimen.get("predicted") or ())
+        visibility=dict(specimen.get("visibility") or {});human_group=_comparison_group(human);pred_group=_comparison_group(predicted)
+        compared+=1
+        for structure in structures:
+            sid=str(structure["id"]);state=str(visibility.get(sid,"complete") or "complete")
+            if state in {"partial","not_visible"}:continue
+            h=list(human_group.get(sid) or ());p=list(pred_group.get(sid) or ())
+            stat=structure_stats[sid];stat["n"]+=1
+            tp,fp,fn,distances=_comparison_match(p,h,match_tolerance)
+            stat["tp"]+=tp;stat["fp"]+=fp;stat["fn"]+=fn
+            stat["localization"].extend(distances);all_localization.extend(distances)
+            if stat["repeated"]:
+                diff=len(p)-len(h);stat["exact_count"]+=int(diff==0);stat["count_abs"].append(abs(diff));stat["count_diff"].append(diff);repeated_diffs.append(diff)
+            if stat["learning_relation"]=="role_on_structure":
+                human_ordinal=_comparison_role_ordinal(structure,human_group,True)
+                if human_ordinal is not None:
+                    predicted_ordinal=_comparison_role_ordinal(structure,pred_group,False)
+                    stat["role_total"]+=1;role_total+=1
+                    if predicted_ordinal is not None:
+                        error=abs(int(predicted_ordinal)-int(human_ordinal))
+                        stat["role_abs_error"].append(error);role_abs.append(error)
+                        if error==0:stat["role_exact"]+=1;role_exact+=1
+        unknown={sid for sid,state in visibility.items() if str(state) in {"partial","not_visible"}}
+        human_values=calculate_trait_values(scheme,human,unknown_structures=unknown)
+        predicted_values=calculate_trait_values(scheme,predicted,unknown_structures=unknown)
+        specimen_total=specimen_ok=0;specimen_all_terms=specimen_all_ok=0
+        for trait in traits:
+            tid=str(trait["id"]);method=str(trait.get("method") or "");truth=human_values.get(tid);prediction=predicted_values.get(tid)
+            if truth is None:continue
+            stat=trait_stats[tid];stat["n"]+=1
+            if method in _EXACT_TRAIT_METHODS:
+                good=_comparison_equal(truth,prediction)
+                stat["exact"]+=int(good);exact_total+=1;exact_ok+=int(good);specimen_total+=1;specimen_ok+=int(good)
+                specimen_all_terms+=1;specimen_all_ok+=int(good)
+            elif method in _CONTINUOUS_TRAIT_METHODS:
+                if isinstance(prediction,(int,float)) and isinstance(truth,(int,float)):
+                    error=abs(float(prediction)-float(truth));stat["errors"].append(error)
+                    tolerance=(trait.get("rule") or {}).get("tolerance",trait.get("tolerance"))
+                    if isinstance(tolerance,(int,float)):
+                        stat["within_n"]+=1;stat["within"]+=int(error<=float(tolerance))
+                        specimen_all_terms+=1;specimen_all_ok+=int(error<=float(tolerance))
+                else:stat["missing"]+=1
+        exact_counts_per_specimen.append(specimen_ok)
+        if specimen_all_terms:
+            all_evaluable+=1
+            good=specimen_all_ok==specimen_all_terms
+            all_correct+=int(good);wrong_specimens+=int(not good)
+    structure_rows=[];f1_values=[]
+    for structure in structures:
+        stat=structure_stats[str(structure["id"])];tp=stat["tp"];fp=stat["fp"];fn=stat["fn"]
+        precision=tp/max(1,tp+fp);recall=tp/max(1,tp+fn);f1=2*precision*recall/max(1e-12,precision+recall)
+        if stat["n"]:f1_values.append(f1)
+        localization=stat.pop("localization");count_abs=stat.pop("count_abs");count_diff=stat.pop("count_diff");role_errors=stat.pop("role_abs_error")
+        structure_rows.append({
+            **stat,"precision":precision,"recall":recall,"f1":f1,
+            "exact_count_accuracy":(stat["exact_count"]/stat["n"] if stat["repeated"] and stat["n"] else None),
+            "count_mae":(sum(count_abs)/len(count_abs) if count_abs else None),
+            "count_bias":(sum(count_diff)/len(count_diff) if count_diff else None),
+            "localization_median_diag":(float(np.median(localization)) if localization else None),
+            "localization_p95_diag":(float(np.percentile(localization,95)) if localization else None),
+            "role_accuracy":(stat["role_exact"]/stat["role_total"] if stat["role_total"] else None),
+            "role_ordinal_mae":(sum(role_errors)/len(role_errors) if role_errors else None),
+        })
+    trait_rows=[]
+    perfect_traits=0;perfect_trait_total=0
+    for trait in traits:
+        stat=trait_stats[str(trait["id"])];errors=stat.pop("errors")
+        exact_accuracy=(stat["exact"]/stat["n"] if stat["method"] in _EXACT_TRAIT_METHODS and stat["n"] else None)
+        if exact_accuracy is not None:
+            perfect_trait_total+=1;perfect_traits+=int(abs(exact_accuracy-1.0)<=1e-12)
+        trait_rows.append({
+            **stat,"exact_accuracy":exact_accuracy,
+            "mae":(sum(errors)/len(errors) if errors else None),
+            "median_abs_error":(float(np.median(errors)) if errors else None),
+            "p95_abs_error":(float(np.percentile(errors,95)) if errors else None),
+            "within_tolerance_accuracy":(stat["within"]/stat["within_n"] if stat["within_n"] else None),
+        })
+    return {
+        "summary":{
+            "specimens_compared":compared,
+            "exact_traits":exact_ok,"exact_traits_total":exact_total,
+            "exact_trait_accuracy":(exact_ok/exact_total if exact_total else None),
+            "perfect_traits":perfect_traits,"perfect_traits_total":perfect_trait_total,
+            "all_traits_correct_specimens":all_correct,"all_traits_evaluable_specimens":all_evaluable,
+            "mean_exact_traits_per_specimen":(sum(exact_counts_per_specimen)/len(exact_counts_per_specimen) if exact_counts_per_specimen else None),
+            "specimens_with_wrong_trait":wrong_specimens,
+            "repeated_count_mae":(sum(abs(value) for value in repeated_diffs)/len(repeated_diffs) if repeated_diffs else None),
+            "repeated_count_bias":(sum(repeated_diffs)/len(repeated_diffs) if repeated_diffs else None),
+            "reference_role_accuracy":(role_exact/role_total if role_total else None),
+            "reference_role_exact":role_exact,"reference_role_total":role_total,
+            "reference_role_ordinal_mae":(sum(role_abs)/len(role_abs) if role_abs else None),
+            "localization_median_diag":(float(np.median(all_localization)) if all_localization else None),
+            "localization_p95_diag":(float(np.percentile(all_localization,95)) if all_localization else None),
+            "macro_f1":(sum(f1_values)/len(f1_values) if f1_values else None),
+        },
+        "traits":trait_rows,"structures":structure_rows,
+    }
+
+
+def compare_structure_model_to_human(project,model_id=None,split="val",progress=None):
+    """Run read-only model inference on its recorded membership and compare with current human truth."""
+    model=next((item for item in project.structure_models() if item["model_id"]==str(model_id)),None) if model_id else project.active_structure_model()
+    if not model:raise XRayStructureAIError("Select an X-ray Structure AI model first.")
+    if str(model.get("schema_digest") or "")!=structure_schema_digest(project.scheme):
+        raise XRayStructureAIError("This model uses a different X-ray structure scheme.")
+    membership=[item for item in project.structure_model_membership(model["model_id"]) if str(item.get("split") or "")==str(split)]
+    if not membership:
+        raise XRayStructureAIError("This model has no recorded validation membership to compare with human annotations.")
+    ids=[str(item["specimen_id"]) for item in membership]
+    checkpoint=project.root/str(model["path"]);metadata=project.root/str(model["metadata_path"])
+    if not checkpoint.is_file() or not metadata.is_file():
+        raise XRayStructureAIError("The selected Structure AI model artifact is incomplete.")
+    verified=[];skipped=[]
+    for specimen_id in ids:
+        run=project.annotation_run(specimen_id,1,"human",False)
+        if not run or str(run.get("status") or "")!="verified":
+            skipped.append(specimen_id);continue
+        verified.append(specimen_id)
+    if not verified:
+        raise XRayStructureAIError("None of this model's recorded validation specimens currently has human-verified annotations.")
+    runtime,_=ensure_ai_runtime(project=project)
+    settings=structure_performance_settings()["inference"];predictions={};failures=[]
+    with tempfile.TemporaryDirectory(prefix="morpholabel_xray_structure_compare_") as scratch_name:
+        scratch=Path(scratch_name);prepared=[]
+        for index,specimen_id in enumerate(verified,1):
+            try:prepared.append((specimen_id,_prediction_image(project,specimen_id,scratch/f"{index:06d}.png")))
+            except Exception as exc:failures.append({"specimen_id":specimen_id,"reason":str(exc)})
+        batch_size=max(1,int(settings.get("batch_size") or 1));index=0
+        while index<len(prepared):
+            chunk=prepared[index:index+batch_size]
+            payload={"metadata":str(metadata),"checkpoint":str(checkpoint),"images":[str(path) for _sid,path in chunk],"device":settings["device"]}
+            try:result=_run(runtime,"predict_many",payload,max(900,180*len(chunk)))
+            except Exception as exc:
+                if is_cuda_oom(exc) and batch_size>1:
+                    batch_size=max(1,batch_size//2);continue
+                for specimen_id,_path in chunk:failures.append({"specimen_id":specimen_id,"reason":str(exc)})
+                index+=len(chunk);continue
+            returned=list(result.get("results") or ())
+            for offset,(specimen_id,_path) in enumerate(chunk):
+                if offset>=len(returned):
+                    failures.append({"specimen_id":specimen_id,"reason":"Incomplete prediction batch."});continue
+                predictions[specimen_id]=_comparison_prediction_rows(returned[offset].get("structures") or ())
+                if progress:progress(index+offset+1,len(prepared),specimen_id)
+            index+=len(chunk)
+    rows=[]
+    for specimen_id in verified:
+        if specimen_id not in predictions:continue
+        rows.append({
+            "specimen_id":specimen_id,
+            "human":project.effective_annotations(specimen_id,1,"human"),
+            "predicted":predictions[specimen_id],
+            "visibility":project.structure_visibility_states(specimen_id,1,"human"),
+        })
+    report=summarize_structure_ai_human_comparison(project.scheme,rows)
+    report["summary"].update({
+        "model_id":str(model["model_id"]),"split":str(split),"membership_specimens":len(ids),
+        "skipped_not_verified":len(skipped),"prediction_failures":len(failures),
+        "comparison_note":"Validation holdout only; current human-verified annotations are read without modifying project data.",
+    })
+    report["failures"]=failures
+    return report
 
 
 def _safe_model_json(path):

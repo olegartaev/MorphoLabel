@@ -130,17 +130,18 @@ class XRayCropViewportContractTests(unittest.TestCase):
         draw=source[source.index("    def _draw(self):"):source.index("    @staticmethod\n    def _orientation_geometry",source.index("    def _draw(self):"))]
         self.assertIn("self._draw_crop_brackets(corners,color)",draw)
         self.assertIn("if selected:",draw)
-        self.assertIn('outline="#071521",fill="",width=4',source)
-        self.assertIn('outline=color,fill="",width=2',source)
+        self.assertIn("def _draw_crop_frame",source)
+        self.assertIn('joinstyle="round"',source)
 
     def test_crop_overlay_keeps_full_frame_large_head_marker_and_short_ventral_stripe(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
-        self.assertIn('outline="#071521",fill="",width=4',source)
-        self.assertIn('outline=color,fill="",width=2',source)
-        self.assertIn("head_size=16 if selected else 13",source)
-        self.assertIn("half=min(16.0,max(10.0,length*.18))",source)
-        self.assertIn('fill=ventral,width=4 if selected else 3',source)
-        self.assertIn("short corner accents",source)
+        self.assertIn("def _draw_crop_frame",source)
+        self.assertIn('joinstyle="round"',source)
+        self.assertIn('capstyle="round"',source)
+        self.assertIn("head_size=18 if selected else 15",source)
+        self.assertIn("half=min(34.0,max(22.0,length*.24))",source)
+        self.assertIn("width=7 if selected else 6",source)
+        self.assertIn('#58c8c4',source);self.assertIn('#ff7f6e',source)
 
     def test_crop_workspace_has_landmarks_style_zoom_pan_and_two_icon_flips(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")

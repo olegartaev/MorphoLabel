@@ -461,11 +461,18 @@ class XRayCountsRuntime:
         title_row=ttk.Frame(parent);title_row.pack(fill="x")
         ttk.Label(title_row,text="Export",style="PageTitle.TLabel").pack(side="left")
         actions=ttk.Frame(title_row);actions.pack(side="right")
-        self._button(actions,"Export all",lambda:self._export_traits(False),"Export calculated trait rows for every confirmed specimen, including draft and unfinished rows.",True).pack(side="left",padx=(0,4))
-        self._button(actions,"Export verified only",lambda:self._export_traits(True),"Export only rows whose manual annotation is verified.").pack(side="left",padx=(0,4))
         self._button(
             actions,"Check results…",self._show_result_checks,
             "Rank suspicious results worst first and open a navigable review queue. Flags are prompts for inspection, never automatic exclusions.",
+        ).pack(side="left",padx=(0,12))
+        if not hasattr(self,"_trait_export_scope"):
+            self._trait_export_scope=tk.StringVar(master=self.host.container,value="verified")
+        ttk.Label(actions,text="Export:",style="Muted.TLabel").pack(side="left",padx=(0,4))
+        ttk.Radiobutton(actions,text="All",variable=self._trait_export_scope,value="all").pack(side="left")
+        ttk.Radiobutton(actions,text="Verified only",variable=self._trait_export_scope,value="verified").pack(side="left",padx=(2,6))
+        self._button(
+            actions,"Export",lambda:self._export_traits(self._trait_export_scope.get()=="verified"),
+            "Export trait values using the selected scope. Verified only is the safer default for scientific output.",True,
         ).pack(side="left")
         context=self._selection_context()
         if context:ttk.Label(parent,text=context,style="SectionTitle.TLabel").pack(anchor="w",pady=(2,3))
