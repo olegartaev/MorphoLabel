@@ -479,8 +479,10 @@ class XRayStructureWorkspace:
         batch=self.project.structure_batch(self.pass_no.get());batch_ids=list(batch.get("ids") or ())
         preferred_batch=batch_ids[int(batch.get("position",0) or 0)] if batch_ids else None
         preferred_plate=next((row["specimen_id"] for row in rows if row["image_id"]==self.preferred_image_id),None)
-        target=self.selected_specimen_id if self.selected_specimen_id in ids else preferred_plate if preferred_plate in ids else preferred_batch if preferred_batch in ids else None
-        self.selected_specimen_id=target or (ids[0] if ids else "")
+        if self.selected_specimen_id in ids:target=self.selected_specimen_id
+        elif self.preferred_image_id:target=preferred_plate if preferred_plate in ids else None
+        else:target=preferred_batch if preferred_batch in ids else (ids[0] if ids else None)
+        self.selected_specimen_id=target or ""
         self.specimen_list.selected_specimen_id=self.selected_specimen_id;self.specimen_list.refresh(reveal=True)
         if self.selected_specimen_id:self._load_specimen(self.selected_specimen_id)
         else:self._clear()
@@ -505,8 +507,21 @@ class XRayStructureWorkspace:
         self.specimen_list.select(specimen_id,reveal=False);self._build_marker_buttons();self._update_counts();self._draw();self._notify_selection();self.canvas.focus_set()
 
     def _clear(self):
-        self.selected_specimen_id="";self.crop_image=self.photo=None;self.annotations=[];self.roles=[];self._set_context(None)
-        self._image_item=None;self._raster_key=None;self.pan=None;self.canvas.delete("all");self._build_marker_buttons();self._update_counts()
+        self.selected_specimen_id="";self.crop_image=self.photo=None;self.annotations=[];self.roles=[]
+        self._image_item=None;self._raster_key=None;self.pan=None;self.canvas.delete("all")
+        if self.preferred_image_id:
+            try:
+                image=self.project.source_image(self.preferred_image_id);path=Path(image["relative_path"])
+                values={"locality":self._sample(image["relative_path"]),"plate":path.name,"specimen":"—"}
+                for key,label in self._context_values.items():label.configure(text=values[key])
+            except Exception:self._set_context(None)
+            self.canvas.create_text(
+                18,18,anchor="nw",fill="white",
+                text="No confirmed specimen crop is available on this plate.\nReturn to Crops and apply the crop before Structure annotation.",
+                font=("Segoe UI",10,"bold"),
+            )
+        else:self._set_context(None)
+        self._build_marker_buttons();self._update_counts()
 
     def _refresh_summary(self):
         summary=self.project.annotation_summary(self.pass_no.get())
