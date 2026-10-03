@@ -103,6 +103,22 @@ def _next_hotkey(scheme):
     used={str(item.get("hotkey","")) for item in scheme.get("structures",())}
     return next((str(number) for number in range(1,10) if str(number) not in used),"")
 
+
+def _renumber_default_structure_hotkeys(scheme):
+    """Keep automatic shortcuts consecutive: counted elements first, references second."""
+    items=list(scheme.get("structures",()) or ())
+    if len(items)>9:return scheme
+    keys=[str(item.get("hotkey") or "").strip() for item in items]
+    nonempty=[key for key in keys if key]
+    defaultish=not nonempty or (
+        all(key.isdigit() for key in nonempty)
+        and set(nonempty).issubset({str(number) for number in range(1,len(items)+1)})
+    )
+    if not defaultish:return scheme
+    ordered=[item for item in items if item.get("repeated")]+[item for item in items if not item.get("repeated")]
+    for index,item in enumerate(ordered,1):item["hotkey"]=str(index)
+    return scheme
+
 def _default_structure(scheme,name,repeated=False):
     index=len(scheme.get("structures",()))
     return {
@@ -1008,7 +1024,7 @@ class TraitSchemeDialog(tk.Toplevel):
             dialog=ReferenceRelationshipDialog(self,candidate,item);self.wait_window(dialog)
             if dialog.result is None:return
             item.update(dialog.result)
-        candidate["structures"].append(item)
+        candidate["structures"].append(item);_renumber_default_structure_hotkeys(candidate)
         try:self.scheme=normalize_scheme(candidate)
         except Exception as exc:messagebox.showerror(title,str(exc),parent=self);return
         self._refresh_annotation_lists(item["id"]);self._refresh_rule_preview();self.appearance_button.state(["!disabled"])
@@ -1052,6 +1068,7 @@ class TraitSchemeDialog(tk.Toplevel):
             messagebox.showinfo("Cannot remove",f"‘{item['name']}’ already has saved annotations. It is kept to preserve project history.",parent=self);return
         if not messagebox.askyesno("Remove X-ray annotation",f"Remove ‘{item['name']}’?",parent=self):return
         candidate=deepcopy(self.scheme);candidate["structures"]=[x for x in candidate["structures"] if x["id"]!=ident]
+        _renumber_default_structure_hotkeys(candidate)
         self.scheme=normalize_scheme(candidate);self._refresh_annotation_lists();self._refresh_rule_preview()
 
     def _refresh_all(self):
