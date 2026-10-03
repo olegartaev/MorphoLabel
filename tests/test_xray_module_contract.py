@@ -121,9 +121,9 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertEqual([("B — Second","b")],_derived_trait_choices(scheme,"a"))
         source=(Path(__file__).resolve().parents[1]/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         editor=source[source.index("    def _build_trait_editor"):source.index("    def _capture_scheme_fields")]
-        self.assertIn('text="First trait"',editor)
+        self.assertIn('text="A · First trait"',editor)
         self.assertIn('text="Combine as"',editor)
-        self.assertIn('text="Second trait"',editor)
+        self.assertIn('text="B · Second trait"',editor)
         self.assertIn('text="Preview"',editor)
         self.assertIn('state="readonly"',editor)
         self.assertNotIn('text="Formula"',editor)
@@ -156,6 +156,8 @@ class XRayModuleContractTests(unittest.TestCase):
             self.assertIn(text,marker)
         for forbidden in ("+ Add structure","Add counted element","Add reference mark","Use for project"):
             self.assertNotIn(forbidden,marker)
+        toolbar=source[source.index("class TraitSchemeDialog"):source.index('scheme=ttk.LabelFrame(outer,text="Trait set"')]
+        self.assertNotIn('"Colors & keys..."',toolbar)
 
     def test_trait_uses_explicit_lists_instead_of_implicitly_creating_structures(self):
         source=(Path(__file__).resolve().parents[1]/"app/modules/xray_counts.py").read_text(encoding="utf-8")
@@ -208,8 +210,9 @@ class XRayModuleContractTests(unittest.TestCase):
     def test_xray_user_facing_context_uses_specimen_not_fish(self):
         root=Path(__file__).resolve().parents[1]
         source=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
-        self.assertIn("Specimen: №",source)
+        self.assertIn("structure_workflow_number",source)
         self.assertIn('tree.heading("fish",text="Specimen")',source)
+        self.assertIn('workflow_no=int(row.get("workflow_no") or index)',source)
         self.assertNotIn("Fish №",source)
 
     def test_xray_icons_include_role_step_and_fish_crop_icons(self):
@@ -272,7 +275,7 @@ class XRayModuleContractTests(unittest.TestCase):
     def test_export_sort_helper_orders_numbers_and_keeps_blanks_last(self):
         class Tree:
             def __init__(self):
-                self.order=["a","b","c"];self.values={"a":{"x":"10"},"b":{"x":"2"},"c":{"x":""}}
+                self.order=["a","b","c"];self.values={"a":{"x":"10","row_no":"7"},"b":{"x":"2","row_no":"3"},"c":{"x":"","row_no":"9"}}
             def get_children(self,_parent=""):return tuple(self.order)
             def set(self,item,column,value=None):
                 if value is None:return self.values[item].get(column,"")
@@ -283,9 +286,9 @@ class XRayModuleContractTests(unittest.TestCase):
             def heading(self,column,command=None):pass
         tree=Tree()
         self.assertEqual(["b","a","c"],_sort_export_tree(tree,"x",False))
-        self.assertEqual(["1","2","3"],[tree.values[item]["row_no"] for item in tree.order])
+        self.assertEqual(["3","7","9"],[tree.values[item]["row_no"] for item in tree.order])
         self.assertEqual(["a","b","c"],_sort_export_tree(tree,"x",True))
-        self.assertEqual(["1","2","3"],[tree.values[item]["row_no"] for item in tree.order])
+        self.assertEqual(["7","3","9"],[tree.values[item]["row_no"] for item in tree.order])
 
     def test_result_checks_start_a_ranked_navigable_review_queue(self):
         root=Path(__file__).resolve().parents[1]
