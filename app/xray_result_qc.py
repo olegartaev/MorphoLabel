@@ -113,6 +113,25 @@ def clear_result_review_queue(project):
     project.set_ui_state(_RESULT_REVIEW_STATE_KEY,{"format_version":1,"active":False,"items":[],"position":0,"completed":[]})
 
 
+def remove_result_review_image(project,image_id):
+    """Remove every specimen from one excluded X-ray while preserving the rest of the queue."""
+    value=result_review_queue(project)
+    if value is None:return None
+    image_id=str(image_id);old_items=list(value.get("items") or ());old_position=int(value.get("position") or 0)
+    keep_indices=[index for index,item in enumerate(old_items) if str(item.get("image_id") or "")!=image_id]
+    if len(keep_indices)==len(old_items):return value
+    if not keep_indices:
+        clear_result_review_queue(project);return None
+    mapping={old:new for new,old in enumerate(keep_indices)}
+    removed_before=sum(1 for index in range(min(old_position,len(old_items))) if index not in mapping)
+    new_items=[old_items[index] for index in keep_indices]
+    new_position=max(0,min(len(new_items)-1,old_position-removed_before))
+    completed=[mapping[int(index)] for index in value.get("completed") or () if int(index) in mapping]
+    value={**value,"items":new_items,"position":new_position,"completed":sorted(set(completed)),"active":True}
+    project.set_ui_state(_RESULT_REVIEW_STATE_KEY,value)
+    return value
+
+
 def _sample(relative_path):
     parent=Path(str(relative_path)).parent.as_posix()
     return "Root" if parent in {"",".","/"} else parent
