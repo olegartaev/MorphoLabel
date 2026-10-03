@@ -126,6 +126,33 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         result=self.project.verify_annotations(self.specimen_id,1)
         self.assertEqual(1,result["counts"]["first_caudal"]);self.assertEqual(1,result["counts"]["last_predorsal"])
 
+    def test_visibility_state_allows_unknown_or_absent_required_structures_without_faking_points(self):
+        v1=self.project.add_annotation(self.specimen_id,"vertebra",0.2,0.5,1)
+        v2=self.project.add_annotation(self.specimen_id,"vertebra",0.4,0.5,1)
+        self.project.assign_annotation_role(v2,"first_caudal")
+        self.project.assign_annotation_role(v1,"last_predorsal")
+        self.assertEqual("complete",self.project.structure_visibility(self.specimen_id,"preanal_pterygiophore",1))
+        self.project.set_structure_visibility(self.specimen_id,"preanal_pterygiophore","not_visible",1)
+        result=self.project.verify_annotations(self.specimen_id,1)
+        self.assertEqual("verified",self.project.annotation_run(self.specimen_id,1)["status"])
+        self.assertNotIn("preanal_pterygiophore",result["counts"])
+        reopened=XRayProject(self.project.root)
+        self.assertEqual("not_visible",reopened.structure_visibility(self.specimen_id,"preanal_pterygiophore",1))
+        verify=reopened.annotation_events(self.specimen_id,1)[-1]
+        self.assertEqual("not_visible",verify["payload"]["structure_visibility"]["preanal_pterygiophore"])
+
+    def test_partial_required_structure_still_requires_at_least_one_visible_marker(self):
+        v1=self.project.add_annotation(self.specimen_id,"vertebra",0.2,0.5,1)
+        v2=self.project.add_annotation(self.specimen_id,"vertebra",0.4,0.5,1)
+        self.project.assign_annotation_role(v2,"first_caudal")
+        self.project.assign_annotation_role(v1,"last_predorsal")
+        self.project.set_structure_visibility(self.specimen_id,"preanal_pterygiophore","partial",1)
+        with self.assertRaisesRegex(ValueError,"Pre-anal pterygiophores"):
+            self.project.verify_annotations(self.specimen_id,1)
+        self.project.add_annotation(self.specimen_id,"preanal_pterygiophore",0.55,0.65,1)
+        self.project.verify_annotations(self.specimen_id,1)
+        self.assertEqual("partial",self.project.structure_visibility(self.specimen_id,"preanal_pterygiophore",1))
+
     def test_single_reference_is_replaced_instead_of_duplicated(self):
         first=self.project.add_annotation(self.specimen_id,"first_caudal",0.4,0.5,1,replace_single=True)
         second=self.project.add_annotation(self.specimen_id,"first_caudal",0.6,0.5,1,replace_single=True)
@@ -200,6 +227,12 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         self.assertEqual(2,values["preap"])
         self.assertEqual(3,values["dac"])
         self.assertEqual("6+3",values["formv"])
+        unknown=calculate_trait_values(
+            bundled_scheme("phoxinus_vertebral_counts"),rows,unknown_structures={"vertebra"}
+        )
+        for trait_id in ("tv","abdv","caudv","predv","dac","formv"):
+            self.assertIsNone(unknown[trait_id])
+        self.assertEqual(2,unknown["preap"])
 
     def test_repeated_markers_keep_click_order_when_added_or_moved(self):
         one=self.project.add_annotation(self.specimen_id,"vertebra",0.20,0.5,1)
@@ -263,6 +296,8 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         self.assertEqual(["first_caudal"],row["role_structure_ids"])
     def test_crop_change_archives_and_hides_coordinate_dependent_markers(self):
         self._complete_pass_one()
+        self.project.set_structure_visibility(self.specimen_id,"preanal_pterygiophore","partial",1)
+        self.project.verify_annotations(self.specimen_id,1)
         before=self.project.annotations(self.specimen_id,1);self.assertTrue(before)
         crop=dict(self.project.specimen(self.specimen_id)["crop"]);crop["center_x"]+=4
         from app.xray_crop import crop_corners
@@ -272,6 +307,8 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         run=self.project.annotation_run(self.specimen_id,1);self.assertEqual("stale_crop",run["status"])
         archives=self.project.annotation_archives(self.specimen_id)
         self.assertEqual(len(before),len(archives[-1]["annotations"]))
+        self.assertEqual("partial",archives[-1]["structure_states"]["preanal_pterygiophore"])
+        self.assertEqual("complete",self.project.structure_visibility(self.specimen_id,"preanal_pterygiophore",1))
         row=next(item for item in self.project.trait_rows() if item["specimen_id"]==self.specimen_id)
         self.assertTrue(all(value is None for value in row["trait_values"].values()))
 
@@ -295,12 +332,13 @@ class XRayStructureUIContractTests(unittest.TestCase):
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         for text in (
-            "Apply","Sample","Specimen","Locality:","Plate:","Fish №",
+            "Apply","Sample","Specimen","Locality:","Plate:","Specimen:",
             "PhotoListCanvas","status_shape=\"square\"","Annotation batch","Repeatability","Training data","Open Results",
             "delete_selected","clear_marker_category","clear_all_markers","clear_type_button",
             "move_annotation","replace_single","_wheel","_pan_motion","_key_pressed","_structure_button_order",
         ):
             self.assertIn(text,ui)
+        self.assertNotIn("Fish №",ui)
         self.assertNotIn("Manual pass",ui)
         self.assertNotIn("Verify & Next",ui)
         self.assertNotIn("Marker actions:",ui)
@@ -337,6 +375,17 @@ class XRayStructureUIContractTests(unittest.TestCase):
         for call in calls:
             self.assertEqual(3,len(call.args))
             self.assertEqual([],[(keyword.arg or "**") for keyword in call.keywords])
+
+    def test_visibility_selector_and_top_status_are_compact_and_landmarks_consistent(self):
+        root=Path(__file__).resolve().parents[1]
+        ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
+        for text in ('"Complete"','"Partial"','"Not visible"','"Absent"','text="Visibility:"',"StatusChip.TLabel"):
+            self.assertIn(text,ui)
+        self.assertIn('(("locality","Locality:"),("plate","Plate:"),("specimen","Specimen:"))',ui)
+        self.assertIn('style="SectionTitle.TLabel"',ui)
+        self.assertIn('state="readonly",width=11',ui)
+        self.assertNotIn("self.counts_label",ui)
+        self.assertNotIn("self.summary_label",ui)
 
     def test_structure_toolbar_keeps_current_layout_and_restores_original_marker_display(self):
         root=Path(__file__).resolve().parents[1]
