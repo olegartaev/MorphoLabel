@@ -130,7 +130,8 @@ class XRayCropViewportContractTests(unittest.TestCase):
         draw=source[source.index("    def _draw(self):"):source.index("    @staticmethod\n    def _orientation_geometry",source.index("    def _draw(self):"))]
         self.assertIn("self._draw_crop_brackets(corners,color)",draw)
         self.assertIn("if selected:",draw)
-        self.assertIn('outline="#101b24",fill="",width=3',source)
+        self.assertIn('outline="#071521",fill="",width=4',source)
+        self.assertIn('outline=color,fill="",width=2',source)
 
     def test_crop_overlay_keeps_full_frame_large_head_marker_and_short_ventral_stripe(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
