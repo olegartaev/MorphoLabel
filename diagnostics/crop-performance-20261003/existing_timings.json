@@ -1,0 +1,27 @@
+{
+  "crop_workload_record_counts": {
+    "crop_feature_extract": 0,
+    "crop_learned_proposal": 0
+  },
+  "metrics": {
+    "developed_png_write_ms": {
+      "count": 1,
+      "mean": 6.924,
+      "median": 6.924,
+      "p90": 6.924
+    },
+    "developed_processing_ms": {
+      "count": 1,
+      "mean": 0.0,
+      "median": 0.0,
+      "p90": 0.0
+    },
+    "raw_decode_ms": {
+      "count": 1,
+      "mean": 0.171,
+      "median": 0.171,
+      "p90": 0.171
+    }
+  },
+  "sources_considered": 3
+}

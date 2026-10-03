@@ -1,0 +1,25 @@
+{
+  "acceleration": "CUDA",
+  "cpu_model": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "cuda_available": true,
+  "cuda_runtime": "12.1",
+  "environment_threads": {
+    "MKL_NUM_THREADS": null,
+    "NUMEXPR_NUM_THREADS": null,
+    "OMP_NUM_THREADS": null,
+    "OPENBLAS_NUM_THREADS": null
+  },
+  "gpu_model": "NVIDIA GeForce RTX 3060",
+  "logical_cores": 28,
+  "numpy_version": "2.5.2",
+  "nvidia_driver": "616.56",
+  "opencv_threads": 28,
+  "opencv_version": "5.0.0",
+  "os_cpu_count": 28,
+  "physical_cores": 20,
+  "python_executable": "C:\\Program Files\\Python312\\python.exe",
+  "python_version": "3.12.0",
+  "ram_total_bytes": 68542550016,
+  "vram_free_mib": 8554,
+  "vram_total_mib": 12288
+}

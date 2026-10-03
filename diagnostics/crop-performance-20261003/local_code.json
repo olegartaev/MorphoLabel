@@ -1,0 +1,24 @@
+{
+  "branch": "feature/xray-traits-foundation",
+  "github_expected_head": "f31c39a77e1542656c4333cd6af887f434370ab2",
+  "head": "84dc2709fb5af49616dac4cd1b1d3ce5d9416769",
+  "matches_github_expected_head": false,
+  "remote": [
+    "origin\thttps://github.com/olegartaev/MorphoLabel.git (fetch)",
+    "origin\thttps://github.com/olegartaev/MorphoLabel.git (push)"
+  ],
+  "root": "D:\\SIMM_GITHUB_CLEAN",
+  "source_sha256": {
+    "app/ai_hardware.py": "46cbabf88cc584513343988bf7e66ab70ce2621ffeffbfbb7e244219ccea895f",
+    "app/crop_auto.py": "0ca1392c582519d5fe217701983ffa00ec56270d2c38d067e044ef65cc3fbc7e",
+    "app/crop_parallel.py": "890ecab861b757e105cee19d6efb4ab8be31de80522bea9dbec23af8f54c86bd",
+    "app/crop_training.py": "909700c37cc3de0661368d0601db052f33535357bde83756f1a7573a599846f4",
+    "app/normalization_pipeline.py": "8a2e9ab76ba5a330b548d87a2352008795c44239d88ea1e67b4e1cf71b2fb89b",
+    "app/performance_engine.py": "7d092c1af575ab30811d173d7ad5681108b26f3012063f1d7d2be8198dd4ccd6",
+    "app/png_atomic.py": "84328306d86257cbab6e45476708db88a8066a4e39915f87ab76968193bf8a49",
+    "app/standardize.py": "7204077b927c8fbc0a30f4269211e95aa7b0e2122c2c027250aad883f9c901d1"
+  },
+  "status": [
+    "?? git_lock_diagnostic.txt"
+  ]
+}

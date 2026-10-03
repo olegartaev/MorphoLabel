@@ -1,0 +1,148 @@
+{
+  "active_crop_model_prediction_measured": true,
+  "sample_count": 8,
+  "samples": [
+    {
+      "crop_feature_extract_ms": 29.383,
+      "crop_model_prediction_ms": 0.4755,
+      "developed_png_bytes": 33260450,
+      "developed_png_reopen_ms": 637.52,
+      "developed_png_write_ms": 3669.733,
+      "full_cpu_preparation_ms": 3514.079,
+      "height": 4016,
+      "sample_id": "sample_01",
+      "source_decode_ms": 1219.421,
+      "source_size_bytes": 27430522,
+      "width": 6016
+    },
+    {
+      "crop_feature_extract_ms": 29.593,
+      "crop_model_prediction_ms": 0.0956,
+      "developed_png_bytes": 30885269,
+      "developed_png_reopen_ms": 630.42,
+      "developed_png_write_ms": 4118.463,
+      "full_cpu_preparation_ms": 3631.131,
+      "height": 4016,
+      "sample_id": "sample_02",
+      "source_decode_ms": 1155.956,
+      "source_size_bytes": 27608173,
+      "width": 6016
+    },
+    {
+      "crop_feature_extract_ms": 29.465,
+      "crop_model_prediction_ms": 0.1007,
+      "developed_png_bytes": 27703907,
+      "developed_png_reopen_ms": 627.211,
+      "developed_png_write_ms": 4788.599,
+      "full_cpu_preparation_ms": 4052.563,
+      "height": 4016,
+      "sample_id": "sample_03",
+      "source_decode_ms": 1166.886,
+      "source_size_bytes": 25598676,
+      "width": 6016
+    },
+    {
+      "crop_feature_extract_ms": 30.243,
+      "crop_model_prediction_ms": 0.1007,
+      "developed_png_bytes": 34067438,
+      "developed_png_reopen_ms": 653.327,
+      "developed_png_write_ms": 3367.819,
+      "full_cpu_preparation_ms": 3307.347,
+      "height": 4016,
+      "sample_id": "sample_04",
+      "source_decode_ms": 1182.716,
+      "source_size_bytes": 28403517,
+      "width": 6016
+    },
+    {
+      "crop_feature_extract_ms": 34.252,
+      "crop_model_prediction_ms": 0.1034,
+      "developed_png_bytes": 32141357,
+      "developed_png_reopen_ms": 641.594,
+      "developed_png_write_ms": 3799.514,
+      "full_cpu_preparation_ms": 3511.878,
+      "height": 4016,
+      "sample_id": "sample_05",
+      "source_decode_ms": 1153.178,
+      "source_size_bytes": 27229959,
+      "width": 6016
+    },
+    {
+      "crop_feature_extract_ms": 29.72,
+      "crop_model_prediction_ms": 0.0942,
+      "developed_png_bytes": 34551377,
+      "developed_png_reopen_ms": 657.939,
+      "developed_png_write_ms": 3373.883,
+      "full_cpu_preparation_ms": 3339.829,
+      "height": 4016,
+      "sample_id": "sample_06",
+      "source_decode_ms": 1158.046,
+      "source_size_bytes": 28453260,
+      "width": 6016
+    },
+    {
+      "crop_feature_extract_ms": 30.504,
+      "crop_model_prediction_ms": 0.1671,
+      "developed_png_bytes": 29018288,
+      "developed_png_reopen_ms": 618.554,
+      "developed_png_write_ms": 4383.004,
+      "full_cpu_preparation_ms": 3856.272,
+      "height": 4016,
+      "sample_id": "sample_07",
+      "source_decode_ms": 1163.291,
+      "source_size_bytes": 26481143,
+      "width": 6016
+    },
+    {
+      "crop_feature_extract_ms": 29.361,
+      "crop_model_prediction_ms": 0.0968,
+      "developed_png_bytes": 28559665,
+      "developed_png_reopen_ms": 609.777,
+      "developed_png_write_ms": 4489.278,
+      "full_cpu_preparation_ms": 3976.515,
+      "height": 4016,
+      "sample_id": "sample_08",
+      "source_decode_ms": 1155.595,
+      "source_size_bytes": 26118890,
+      "width": 6016
+    }
+  ],
+  "stage_statistics_ms": {
+    "crop_feature_extract_ms": {
+      "count": 8,
+      "mean": 30.315187497762963,
+      "median": 29.656949991476722,
+      "p90": 34.25240000069607
+    },
+    "crop_model_prediction_ms": {
+      "count": 8,
+      "mean": 0.15424999946844764,
+      "median": 0.10069999552797526,
+      "p90": 0.4754999972647056
+    },
+    "developed_png_reopen_ms": {
+      "count": 8,
+      "mean": 634.5428375007032,
+      "median": 633.9702499972191,
+      "p90": 657.939400000032
+    },
+    "developed_png_write_ms": {
+      "count": 8,
+      "mean": 3998.7865875027637,
+      "median": 3958.988349993888,
+      "p90": 4788.599300009082
+    },
+    "full_cpu_preparation_ms": {
+      "count": 8,
+      "mean": 3648.70175,
+      "median": 3572.605,
+      "p90": 4052.563
+    },
+    "source_decode_ms": {
+      "count": 8,
+      "mean": 1169.3860750019667,
+      "median": 1160.6686500017531,
+      "p90": 1219.4214000046486
+    }
+  }
+}

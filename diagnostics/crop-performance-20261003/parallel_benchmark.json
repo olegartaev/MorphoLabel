@@ -1,0 +1,74 @@
+{
+  "best_images_per_second": 2.9436743731062793,
+  "best_workers": 20,
+  "candidates": [
+    {
+      "images_per_second": 0.8724044006173715,
+      "max_in_flight": 2,
+      "peak_process_ram_bytes": null,
+      "relative_speed_vs_1_worker": 1.0,
+      "sample_count": 8,
+      "wall_seconds": 9.170059199997922,
+      "workers": 1
+    },
+    {
+      "images_per_second": 1.5153614271525297,
+      "max_in_flight": 4,
+      "peak_process_ram_bytes": null,
+      "relative_speed_vs_1_worker": 1.7369942495477546,
+      "sample_count": 8,
+      "wall_seconds": 5.279268599988427,
+      "workers": 2
+    },
+    {
+      "images_per_second": 2.27652473587048,
+      "max_in_flight": 8,
+      "peak_process_ram_bytes": null,
+      "relative_speed_vs_1_worker": 2.6094833247739917,
+      "sample_count": 8,
+      "wall_seconds": 3.5141283000120893,
+      "workers": 4
+    },
+    {
+      "images_per_second": 2.860573195217049,
+      "max_in_flight": 16,
+      "peak_process_ram_bytes": null,
+      "relative_speed_vs_1_worker": 3.278953193258444,
+      "sample_count": 8,
+      "wall_seconds": 2.796642300003441,
+      "workers": 8
+    },
+    {
+      "images_per_second": 2.9436743731062793,
+      "max_in_flight": 40,
+      "peak_process_ram_bytes": null,
+      "relative_speed_vs_1_worker": 3.374208533362669,
+      "sample_count": 8,
+      "wall_seconds": 2.7176918999903137,
+      "workers": 20
+    }
+  ],
+  "opencv_threads_comparison": [
+    {
+      "images_per_second": 2.9494863229898853,
+      "max_in_flight": 40,
+      "opencv_threads": 1,
+      "peak_process_ram_bytes": null,
+      "sample_count": 8,
+      "wall_seconds": 2.712336700002197,
+      "workers": 20
+    },
+    {
+      "images_per_second": 2.945674255265799,
+      "max_in_flight": 40,
+      "opencv_threads": 28,
+      "peak_process_ram_bytes": null,
+      "sample_count": 8,
+      "wall_seconds": 2.715846799997962,
+      "workers": 20
+    }
+  ],
+  "opencv_threads_restored_to": 28,
+  "same_source_sample_count": 8,
+  "workload": "source_decode"
+}

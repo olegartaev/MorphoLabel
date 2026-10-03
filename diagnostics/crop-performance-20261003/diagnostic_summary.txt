@@ -1,0 +1,31 @@
+LOCAL HEAD: 84dc2709fb5af49616dac4cd1b1d3ce5d9416769
+GITHUB EXPECTED HEAD: f31c39a77e1542656c4333cd6af887f434370ab2
+CODE MATCH: NO (local HEAD differs from expected GitHub HEAD).
+SOURCE SHA256: {"app/ai_hardware.py": "46cbabf88cc584513343988bf7e66ab70ce2621ffeffbfbb7e244219ccea895f", "app/crop_auto.py": "0ca1392c582519d5fe217701983ffa00ec56270d2c38d067e044ef65cc3fbc7e", "app/crop_parallel.py": "890ecab861b757e105cee19d6efb4ab8be31de80522bea9dbec23af8f54c86bd", "app/crop_training.py": "909700c37cc3de0661368d0601db052f33535357bde83756f1a7573a599846f4", "app/normalization_pipeline.py": "8a2e9ab76ba5a330b548d87a2352008795c44239d88ea1e67b4e1cf71b2fb89b", "app/performance_engine.py": "7d092c1af575ab30811d173d7ad5681108b26f3012063f1d7d2be8198dd4ccd6", "app/png_atomic.py": "84328306d86257cbab6e45476708db88a8066a4e39915f87ab76968193bf8a49", "app/standardize.py": "7204077b927c8fbc0a30f4269211e95aa7b0e2122c2c027250aad883f9c901d1"}
+DB quick_check: ok; SQLite was opened in URI mode=ro with PRAGMA query_only=ON. Database size/mtime were unchanged during queries.
+Project aggregates: images=1303; crop_records=1303; human_verified=1303; training_eligible=1250.
+Feature cache: reusable=0; misses=1250; existing feature files with stale/invalid signature=695; absent for eligible rows=555.
+Among eligible rows, developed PNG exists for 133; source fallback is required for 1117 when feature cache misses.
+Relevant cache counts and bytes: {"crop_features": {"bytes": 1412128, "files": 696}, "developed": {"bytes": 3811187541, "files": 137}, "standardized": {"bytes": 9672841220, "files": 2594}}
+Eight-image component timing (mean ms; share of measured component mean):
+  source_decode_ms: 1169.386 ms (20.05%)
+  developed_png_write_ms: 3998.787 ms (68.55%)
+  developed_png_reopen_ms: 634.543 ms (10.88%)
+  crop_feature_extract_ms: 30.315 ms (0.52%)
+  crop_model_prediction_ms: 0.154 ms (0.00%)
+Full decode→PNG write/verify→PNG reopen→feature/model prediction mean: 3648.702 ms; median: 3572.605 ms.
+Largest measured component by mean: developed_png_write_ms.
+The measured full developed-PNG reopen cost is median 633.970 ms/image; this is the measured upper bound for that one additional read/decode step, with no broader savings assumed.
+Worker benchmark on the identical eight source files (decode only):
+  workers=1, max_in_flight=2, wall=9.170s, rate=0.872 images/s, relative=1.000x
+  workers=2, max_in_flight=4, wall=5.279s, rate=1.515 images/s, relative=1.737x
+  workers=4, max_in_flight=8, wall=3.514s, rate=2.277 images/s, relative=2.609x
+  workers=8, max_in_flight=16, wall=2.797s, rate=2.861 images/s, relative=3.279x
+  workers=20, max_in_flight=40, wall=2.718s, rate=2.944 images/s, relative=3.374x
+Best measured rate: workers=20; interpret as an 8-item bounded sample, not a universal optimum.
+OpenCV thread comparison at best workers: [{"opencv_threads": 1, "wall_seconds": 2.712, "images_per_second": 2.949}, {"opencv_threads": 28, "wall_seconds": 2.716, "images_per_second": 2.946}]
+Training math on 8 sampled production features: build_XY=0.000039s; A.T@A=0.027165s; solve=0.671883s; validation predict=0.000396s.
+Pipeline fact: on developed-cache miss, develop_full decodes source and writes/validates developed PNG; prepare_crop_result then reopens that PNG for Crop prediction. On developed-cache hit, source decode/write is skipped, but PNG reopen and prediction remain.
+Training fact: train_project checks reusable crop_features. A miss decodes the developed PNG when present, otherwise decodes the source. It does not run Crop model prediction.
+Current source auto-tunes workers and max_in_flight for bounded crop_learned_proposal and crop_feature_extract workloads. Batch size, OpenCV thread count, PNG compression, and the individual decode/write/reopen/feature stages are not auto-tuned by these Crop paths.
+Existing logs contain sparse historical stage records; counts and distributions are in existing_timings.json. No source filenames, image IDs, crop targets, locality/specimen data, photos, DB, or models are included in this report package.

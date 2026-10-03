@@ -1,0 +1,17 @@
+{
+  "A_transpose_A_plus_ridge_seconds": 0.027165099992998876,
+  "build_XY_seconds": 3.880000440403819e-05,
+  "feature_shape": [
+    8,
+    768
+  ],
+  "sample_rows": 8,
+  "solve_error_type": null,
+  "solve_pass": true,
+  "solve_seconds": 0.6718825999996625,
+  "target_shape": [
+    8,
+    6
+  ],
+  "validation_prediction_seconds": 0.00039600000309292227
+}

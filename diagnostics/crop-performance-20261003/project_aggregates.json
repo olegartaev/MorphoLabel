@@ -1,0 +1,66 @@
+{
+  "active_crop_model": {
+    "backend": "numpy_ridge_image_regression",
+    "feature_representation": "32x24 grayscale",
+    "input": "32x24 grayscale",
+    "metrics": {
+      "boundary_mae_percent": [
+        2.5355,
+        2.3691,
+        3.1176,
+        1.853
+      ],
+      "rotation_mae_degrees": 1.318790670674578,
+      "train_count": 557,
+      "validation_count": 139,
+      "validation_iou": 0.8378052652139454
+    },
+    "model_id": "crop_model_v006",
+    "parent_model_id": "crop_model_v002",
+    "previous_model_id": "crop_model_v002",
+    "training_examples": 696
+  },
+  "cache": {
+    "crop_features": {
+      "bytes": 1412128,
+      "files": 696
+    },
+    "developed": {
+      "bytes": 3811187541,
+      "files": 137
+    },
+    "standardized": {
+      "bytes": 9672841220,
+      "files": 2594
+    }
+  },
+  "crop_records": 1303,
+  "crop_training_eligible_rows": 1250,
+  "database_unchanged_during_reads": true,
+  "db_quick_check": "ok",
+  "feature_cache_detail": {
+    "missing_file_for_eligible_row": 555,
+    "present_but_invalid_or_signature_mismatch": 695,
+    "signature_mismatch_field_counts": {
+      "development": 695,
+      "mtime_ns": 695,
+      "size": 695,
+      "source_mtime_ns": 695,
+      "source_sha256": 190,
+      "source_size": 695,
+      "version": 695
+    },
+    "stored_signature_versions": {
+      "crop_feature_gray32x24_v1": 695
+    },
+    "valid_reusable": 0
+  },
+  "human_verified_crop_records": 1303,
+  "image_count": 1303,
+  "training_input_availability": {
+    "eligible_rows_falling_back_to_source_decode": 1117,
+    "eligible_rows_with_developed_png": 133
+  },
+  "training_rows_cache_miss": 1250,
+  "training_rows_reusable_feature_cache": 0
+}

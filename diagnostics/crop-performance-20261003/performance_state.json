@@ -1,0 +1,57 @@
+{
+  "autotune_latest": [],
+  "first_run_setup": {
+    "completed_at": "2026-10-01T16:06:44.552261+00:00",
+    "hardware": {
+      "acceleration": "CUDA",
+      "cpu_model": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+      "cuda_available": true,
+      "cuda_runtime": "12.1",
+      "gpu_driver": "616.56",
+      "gpu_free_mib": 7491,
+      "gpu_model": "NVIDIA GeForce RTX 3060",
+      "gpu_vram_mib": 12288,
+      "logical_cores": 28,
+      "physical_cores": 20,
+      "ram_bytes": 68542550016
+    },
+    "status": "PASS"
+  },
+  "hardware_profile": {
+    "hardware": {
+      "acceleration": "CPU",
+      "cpu_model": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+      "cuda_available": false,
+      "cuda_runtime": null,
+      "gpu_driver": "616.56",
+      "gpu_free_mib": 8313,
+      "gpu_model": "NVIDIA GeForce RTX 3060",
+      "gpu_vram_mib": 12288,
+      "logical_cores": 28,
+      "physical_cores": 20,
+      "ram_bytes": 68542550016
+    },
+    "inference_default": {
+      "batch_size": 1,
+      "device": "cpu",
+      "mixed_precision": false,
+      "persistent_workers": true,
+      "pin_memory": false,
+      "profile": "auto",
+      "workers": 4
+    },
+    "training_default": {
+      "batch_size": 1,
+      "device": "cpu",
+      "mixed_precision": false,
+      "persistent_workers": true,
+      "pin_memory": false,
+      "profile": "auto",
+      "workers": 4
+    }
+  },
+  "performance_engine_tuning": {
+    "crop_entries": {},
+    "file_present": true
+  }
+}
