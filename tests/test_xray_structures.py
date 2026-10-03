@@ -199,6 +199,17 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         self.assertIn("detached_reference",codes)
         self.assertIn("series_spacing",codes)
 
+    def test_result_review_queue_can_drop_one_excluded_specimen_and_keep_plate_mate(self):
+        issues=[
+            {"specimen_id":"a","image_id":"plate_1","severity":"high","code":"repeat_count","metric":{"difference":2},"sample":"S","plate":"p","ordinal":1,"reason":"a"},
+            {"specimen_id":"b","image_id":"plate_1","severity":"review","code":"series_spacing","metric":{"ratio":2.0},"sample":"S","plate":"p","ordinal":2,"reason":"b"},
+            {"specimen_id":"c","image_id":"plate_2","severity":"review","code":"series_spacing","metric":{"ratio":1.9},"sample":"S","plate":"q","ordinal":1,"reason":"c"},
+        ]
+        start_result_review_queue(self.project,issues)
+        value=remove_result_review_specimen(self.project,"a")
+        self.assertIsNotNone(value)
+        self.assertEqual(["b","c"],[row["specimen_id"] for row in value["items"]])
+
     def test_result_review_queue_drops_every_specimen_from_an_excluded_xray(self):
         issues=[
             {"specimen_id":"a","image_id":"plate_bad","severity":"high","code":"repeat_count","metric":{"difference":2},"sample":"S","plate":"bad","ordinal":1,"reason":"a"},
