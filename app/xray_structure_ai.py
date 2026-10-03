@@ -20,7 +20,7 @@ from .ai_hardware import get_hardware_profile, get_inference_config, get_trainin
 from .process_utils import hidden_window_kwargs
 from .runtime_paths import resource_path
 from .xray_crop import oriented_crop
-from .xray_schema import calculate_trait_values, compatible_reference_roles
+from .xray_schema import calculate_trait_values, compatible_reference_roles, spatial_series_order
 
 STRUCTURE_BACKEND = "resnet18_heatmap_v1"
 MODEL_PACKAGE_FORMAT = "morpholabel-xray-structure-model-v1"
@@ -532,14 +532,9 @@ def _comparison_match(predicted,truth,tolerance=_STRUCTURE_MATCH_TOLERANCE):
 def _comparison_role_ordinal(structure,grouped,human=False):
     sid=str(structure.get("id") or "");role=list(grouped.get(sid) or ())
     if not role:return None
-    if human and role[0].get("sort_order") is not None:
-        return int(role[0].get("sort_order") or 0)+1
     best=None;target=role[0]
     for base_id in structure.get("reuse_from") or ():
-        base=sorted(
-            grouped.get(str(base_id)) or (),
-            key=lambda point:(int(point.get("sort_order",0) or 0),float(point.get("x",0)),float(point.get("y",0))),
-        )
+        base=spatial_series_order(grouped.get(str(base_id)) or ())
         for index,point in enumerate(base):
             distance=math.hypot(float(point["x"])-float(target["x"]),float(point["y"])-float(target["y"]))
             if best is None or distance<best[0]:best=(distance,index+1)
