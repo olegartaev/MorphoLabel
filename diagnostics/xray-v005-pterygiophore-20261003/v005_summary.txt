@@ -1,0 +1,22 @@
+Structure AI v005 — read-only diagnostic
+
+HEAD: c79fa7ca3fe9adca27bf82cee283dbfb688340dd
+Project: D:\xray-test\4
+DB SHA256 before: a8dbafa0f4ce9c50dee9af12b7e8f295ba262a32e3eb8af8fd7339520d4fca93
+v005 parent: xray_structure_model_v004
+Objective: per_structure_balanced_focal_v1
+Dataset hash: bb02aa6defbea19a41eb8338efc0c3f288adc06997e178206cab65ed6ed92d06
+Train/validation: 49 / 14 specimens; 26 / 7 plates
+Validation loss=2.2387821674346924; macro F1=0.7046300121349823
+Thresholds: {"first_caudal": 0.12, "last_predorsal": 0.12, "preanal_pterygiophore": 0.3, "vertebra": 0.18}
+
+Pre-anal pterygiophore current threshold: GT=77 predicted=33 TP=28 FP=5 FN=49 P=0.8485 R=0.3636 F1=0.5091 count MAE=3.1429 median abs error=3.0000 exact=0.0000 mean FP/specimen=0.3571 mean FN/specimen=3.5000
+TP confidence={'min': 0.30636486411094666, 'median': 0.42738597095012665, 'max': 0.43310123682022095}; FP confidence={'min': 0.4171049892902374, 'median': 0.4259563982486725, 'max': 0.42927610874176025}
+Pterygiophore train/val GT totals (current DB)=265/77; raw peaks >=0.05=582
+
+Fixed benchmark: v005 validation membership, n=14; v004 train overlap=5; matching tolerance=0.02.
+Pterygiophore same benchmark v004 F1=0.000000; v005 F1=0.509091.
+
+Membership changes: +3 / -0; split changes=6. Human annotation events between model timestamps=97 (point=94, visibility=0). Recomputed current data hashes match stored v004/v005=False/True.
+
+Files contain IDs, counts, timestamps, coordinates/confidences, and metrics only. No images, DB, weights, or project files are included.

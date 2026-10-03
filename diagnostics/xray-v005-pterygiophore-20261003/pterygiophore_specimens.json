@@ -1,0 +1,696 @@
+{
+  "benchmark": "v005 validation membership",
+  "current_threshold": 0.3,
+  "matching_tolerance_normalized_crop_coordinates": 0.02,
+  "model_id": "xray_structure_model_v005",
+  "specimens": [
+    {
+      "evaluable": true,
+      "fn": 1,
+      "fp": 0,
+      "gt_coordinates": [
+        [
+          0.587291,
+          0.659493
+        ],
+        [
+          0.595151,
+          0.653843
+        ],
+        [
+          0.60203,
+          0.650312
+        ],
+        [
+          0.608318,
+          0.645368
+        ],
+        [
+          0.614803,
+          0.632655
+        ]
+      ],
+      "gt_count": 5,
+      "matched_tp": 4,
+      "predicted_count": 4,
+      "predictions": [
+        {
+          "confidence": 0.42667099833488464,
+          "matched_tp": true,
+          "x": 0.589844,
+          "y": 0.664507
+        },
+        {
+          "confidence": 0.431052565574646,
+          "matched_tp": true,
+          "x": 0.597656,
+          "y": 0.664507
+        },
+        {
+          "confidence": 0.4326551556587219,
+          "matched_tp": true,
+          "x": 0.602865,
+          "y": 0.655148
+        },
+        {
+          "confidence": 0.4328610301017761,
+          "matched_tp": true,
+          "x": 0.608073,
+          "y": 0.645789
+        }
+      ],
+      "specimen_id": "0e7693c1-73cf-5af6-aabf-c7bceeebe198"
+    },
+    {
+      "evaluable": true,
+      "fn": 3,
+      "fp": 0,
+      "gt_coordinates": [
+        [
+          0.559398,
+          0.627918
+        ],
+        [
+          0.564276,
+          0.616762
+        ],
+        [
+          0.570485,
+          0.613044
+        ],
+        [
+          0.578763,
+          0.608086
+        ],
+        [
+          0.585563,
+          0.600029
+        ]
+      ],
+      "gt_count": 5,
+      "matched_tp": 2,
+      "predicted_count": 2,
+      "predictions": [
+        {
+          "confidence": 0.42227789759635925,
+          "matched_tp": true,
+          "x": 0.574219,
+          "y": 0.627754
+        },
+        {
+          "confidence": 0.424334853887558,
+          "matched_tp": true,
+          "x": 0.582031,
+          "y": 0.616837
+        }
+      ],
+      "specimen_id": "1e84e0b2-0797-41e7-8018-dd6ee412747a"
+    },
+    {
+      "evaluable": true,
+      "fn": 5,
+      "fp": 0,
+      "gt_coordinates": [
+        [
+          0.62564,
+          0.700121
+        ],
+        [
+          0.630182,
+          0.695138
+        ],
+        [
+          0.63617,
+          0.690155
+        ],
+        [
+          0.644222,
+          0.688731
+        ],
+        [
+          0.654958,
+          0.688019
+        ],
+        [
+          0.661771,
+          0.685171
+        ],
+        [
+          0.673952,
+          0.683035
+        ]
+      ],
+      "gt_count": 7,
+      "matched_tp": 2,
+      "predicted_count": 2,
+      "predictions": [
+        {
+          "confidence": 0.4245118498802185,
+          "matched_tp": true,
+          "x": 0.626302,
+          "y": 0.704911
+        },
+        {
+          "confidence": 0.43310123682022095,
+          "matched_tp": true,
+          "x": 0.636719,
+          "y": 0.695931
+        }
+      ],
+      "specimen_id": "1ea5ed83-5284-56bc-bbbb-c4ce78abdb02"
+    },
+    {
+      "evaluable": true,
+      "fn": 5,
+      "fp": 0,
+      "gt_coordinates": [
+        [
+          0.616006,
+          0.681889
+        ],
+        [
+          0.620278,
+          0.671895
+        ],
+        [
+          0.626573,
+          0.66917
+        ],
+        [
+          0.633093,
+          0.660084
+        ],
+        [
+          0.64366,
+          0.652816
+        ],
+        [
+          0.652878,
+          0.645548
+        ]
+      ],
+      "gt_count": 6,
+      "matched_tp": 1,
+      "predicted_count": 1,
+      "predictions": [
+        {
+          "confidence": 0.42782676219940186,
+          "matched_tp": true,
+          "x": 0.626302,
+          "y": 0.662986
+        }
+      ],
+      "specimen_id": "372b46e4-74f2-5489-a2b3-e7a57e7b8fca"
+    },
+    {
+      "evaluable": true,
+      "fn": 4,
+      "fp": 0,
+      "gt_coordinates": [
+        [
+          0.570333,
+          0.651528
+        ],
+        [
+          0.576577,
+          0.64151
+        ],
+        [
+          0.583908,
+          0.636085
+        ],
+        [
+          0.594768,
+          0.634415
+        ],
+        [
+          0.603644,
+          0.626153
+        ]
+      ],
+      "gt_count": 5,
+      "matched_tp": 1,
+      "predicted_count": 1,
+      "predictions": [
+        {
+          "confidence": 0.38477277755737305,
+          "matched_tp": true,
+          "x": 0.58724,
+          "y": 0.64054
+        }
+      ],
+      "specimen_id": "3ae91523-5b3e-4fca-9d42-18b72b8e6965"
+    },
+    {
+      "evaluable": true,
+      "fn": 3,
+      "fp": 0,
+      "gt_coordinates": [
+        [
+          0.647115,
+          0.708175
+        ],
+        [
+          0.654135,
+          0.688905
+        ],
+        [
+          0.6626,
+          0.679656
+        ],
+        [
+          0.670445,
+          0.669635
+        ],
+        [
+          0.683039,
+          0.663469
+        ],
+        [
+          0.69295,
+          0.647283
+        ]
+      ],
+      "gt_count": 6,
+      "matched_tp": 3,
+      "predicted_count": 3,
+      "predictions": [
+        {
+          "confidence": 0.42107635736465454,
+          "matched_tp": true,
+          "x": 0.657552,
+          "y": 0.7
+        },
+        {
+          "confidence": 0.4274819791316986,
+          "matched_tp": true,
+          "x": 0.665365,
+          "y": 0.690278
+        },
+        {
+          "confidence": 0.30636486411094666,
+          "matched_tp": true,
+          "x": 0.696615,
+          "y": 0.661111
+        }
+      ],
+      "specimen_id": "8a4aaf19-e4d3-502f-8c29-9c779398506b"
+    },
+    {
+      "evaluable": true,
+      "fn": 5,
+      "fp": 3,
+      "gt_coordinates": [
+        [
+          0.661744,
+          0.801927
+        ],
+        [
+          0.666905,
+          0.793595
+        ],
+        [
+          0.674957,
+          0.785262
+        ],
+        [
+          0.682596,
+          0.78299
+        ],
+        [
+          0.694777,
+          0.78905
+        ]
+      ],
+      "gt_count": 5,
+      "matched_tp": 0,
+      "predicted_count": 3,
+      "predictions": [
+        {
+          "confidence": 0.4259563982486725,
+          "matched_tp": false,
+          "x": 0.675781,
+          "y": 0.82168
+        },
+        {
+          "confidence": 0.42927610874176025,
+          "matched_tp": false,
+          "x": 0.68099,
+          "y": 0.812125
+        },
+        {
+          "confidence": 0.42642101645469666,
+          "matched_tp": false,
+          "x": 0.688802,
+          "y": 0.812125
+        }
+      ],
+      "specimen_id": "8d44ba50-1e5e-52b0-8ed6-1a41228c3b64"
+    },
+    {
+      "evaluable": true,
+      "fn": 1,
+      "fp": 0,
+      "gt_coordinates": [
+        [
+          0.55615,
+          0.645914
+        ],
+        [
+          0.564802,
+          0.636531
+        ],
+        [
+          0.568173,
+          0.629829
+        ],
+        [
+          0.577162,
+          0.620446
+        ]
+      ],
+      "gt_count": 4,
+      "matched_tp": 3,
+      "predicted_count": 3,
+      "predictions": [
+        {
+          "confidence": 0.4276031255722046,
+          "matched_tp": true,
+          "x": 0.566406,
+          "y": 0.642051
+        },
+        {
+          "confidence": 0.43057024478912354,
+          "matched_tp": true,
+          "x": 0.574219,
+          "y": 0.642051
+        },
+        {
+          "confidence": 0.43213650584220886,
+          "matched_tp": true,
+          "x": 0.579427,
+          "y": 0.631695
+        }
+      ],
+      "specimen_id": "9432d323-82e1-48ed-8984-d97bf6021e97"
+    },
+    {
+      "evaluable": true,
+      "fn": 3,
+      "fp": 0,
+      "gt_coordinates": [
+        [
+          0.578311,
+          0.708811
+        ],
+        [
+          0.584235,
+          0.69773
+        ],
+        [
+          0.590519,
+          0.69219
+        ],
+        [
+          0.599316,
+          0.68665
+        ],
+        [
+          0.605779,
+          0.68111
+        ],
+        [
+          0.616551,
+          0.670029
+        ]
+      ],
+      "gt_count": 6,
+      "matched_tp": 3,
+      "predicted_count": 3,
+      "predictions": [
+        {
+          "confidence": 0.4286501109600067,
+          "matched_tp": true,
+          "x": 0.584635,
+          "y": 0.700307
+        },
+        {
+          "confidence": 0.4289054870605469,
+          "matched_tp": true,
+          "x": 0.589844,
+          "y": 0.700307
+        },
+        {
+          "confidence": 0.42450234293937683,
+          "matched_tp": true,
+          "x": 0.597656,
+          "y": 0.688827
+        }
+      ],
+      "specimen_id": "986ff99a-e4ae-55f2-8e30-42dcb17dd337"
+    },
+    {
+      "evaluable": true,
+      "fn": 4,
+      "fp": 0,
+      "gt_coordinates": [
+        [
+          0.533108,
+          0.747405
+        ],
+        [
+          0.538853,
+          0.737658
+        ],
+        [
+          0.545495,
+          0.731393
+        ],
+        [
+          0.55142,
+          0.725823
+        ],
+        [
+          0.560217,
+          0.717469
+        ]
+      ],
+      "gt_count": 5,
+      "matched_tp": 1,
+      "predicted_count": 1,
+      "predictions": [
+        {
+          "confidence": 0.41670870780944824,
+          "matched_tp": true,
+          "x": 0.545573,
+          "y": 0.737194
+        }
+      ],
+      "specimen_id": "bcfdc20b-979d-436b-a853-cd7b097a636e"
+    },
+    {
+      "evaluable": true,
+      "fn": 4,
+      "fp": 0,
+      "gt_coordinates": [
+        [
+          0.545495,
+          0.577859
+        ],
+        [
+          0.550382,
+          0.564537
+        ],
+        [
+          0.556898,
+          0.558675
+        ],
+        [
+          0.562599,
+          0.548017
+        ],
+        [
+          0.56993,
+          0.536294
+        ]
+      ],
+      "gt_count": 5,
+      "matched_tp": 1,
+      "predicted_count": 1,
+      "predictions": [
+        {
+          "confidence": 0.32183581590652466,
+          "matched_tp": true,
+          "x": 0.563802,
+          "y": 0.557135
+        }
+      ],
+      "specimen_id": "cafe40b0-3029-4ace-ba7d-434c69d93dd9"
+    },
+    {
+      "evaluable": true,
+      "fn": 2,
+      "fp": 1,
+      "gt_coordinates": [
+        [
+          0.571057,
+          0.698367
+        ],
+        [
+          0.578721,
+          0.683936
+        ],
+        [
+          0.58894,
+          0.678324
+        ],
+        [
+          0.596211,
+          0.665497
+        ],
+        [
+          0.606627,
+          0.658282
+        ]
+      ],
+      "gt_count": 5,
+      "matched_tp": 3,
+      "predicted_count": 4,
+      "predictions": [
+        {
+          "confidence": 0.4171049892902374,
+          "matched_tp": false,
+          "x": 0.574219,
+          "y": 0.706495
+        },
+        {
+          "confidence": 0.4284980297088623,
+          "matched_tp": true,
+          "x": 0.582031,
+          "y": 0.695871
+        },
+        {
+          "confidence": 0.42984792590141296,
+          "matched_tp": true,
+          "x": 0.58724,
+          "y": 0.685247
+        },
+        {
+          "confidence": 0.3417060971260071,
+          "matched_tp": true,
+          "x": 0.61849,
+          "y": 0.653375
+        }
+      ],
+      "specimen_id": "cdeb65cd-960d-461b-b36a-1437f06bb1cd"
+    },
+    {
+      "evaluable": true,
+      "fn": 4,
+      "fp": 1,
+      "gt_coordinates": [
+        [
+          0.603315,
+          0.646494
+        ],
+        [
+          0.610855,
+          0.633852
+        ],
+        [
+          0.618216,
+          0.624822
+        ],
+        [
+          0.627192,
+          0.620608
+        ],
+        [
+          0.636528,
+          0.611578
+        ],
+        [
+          0.646223,
+          0.604354
+        ]
+      ],
+      "gt_count": 6,
+      "matched_tp": 2,
+      "predicted_count": 3,
+      "predictions": [
+        {
+          "confidence": 0.4219841957092285,
+          "matched_tp": false,
+          "x": 0.608073,
+          "y": 0.654925
+        },
+        {
+          "confidence": 0.4272899627685547,
+          "matched_tp": true,
+          "x": 0.613281,
+          "y": 0.646193
+        },
+        {
+          "confidence": 0.43084070086479187,
+          "matched_tp": true,
+          "x": 0.623698,
+          "y": 0.646193
+        }
+      ],
+      "specimen_id": "d79eef10-69a2-581b-9900-1c4be57dc67b"
+    },
+    {
+      "evaluable": true,
+      "fn": 5,
+      "fp": 0,
+      "gt_coordinates": [
+        [
+          0.547246,
+          0.641544
+        ],
+        [
+          0.554059,
+          0.636023
+        ],
+        [
+          0.562317,
+          0.624191
+        ],
+        [
+          0.573053,
+          0.619459
+        ],
+        [
+          0.583996,
+          0.617881
+        ],
+        [
+          0.596177,
+          0.621036
+        ],
+        [
+          0.606913,
+          0.617093
+        ]
+      ],
+      "gt_count": 7,
+      "matched_tp": 2,
+      "predicted_count": 2,
+      "predictions": [
+        {
+          "confidence": 0.4231853187084198,
+          "matched_tp": true,
+          "x": 0.563802,
+          "y": 0.63673
+        },
+        {
+          "confidence": 0.4022335112094879,
+          "matched_tp": true,
+          "x": 0.574219,
+          "y": 0.626781
+        }
+      ],
+      "specimen_id": "e6f981cb-360b-4b12-934c-57f7ab81785d"
+    }
+  ]
+}

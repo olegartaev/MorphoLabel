@@ -1,0 +1,42 @@
+{
+  "backend": "resnet18_heatmap_v1",
+  "dataset_hash": "bb02aa6defbea19a41eb8338efc0c3f288adc06997e178206cab65ed6ed92d06",
+  "epochs_completed": 60,
+  "macro_f1": 0.7046300121349823,
+  "model_id": "xray_structure_model_v005",
+  "parent_model_id": "xray_structure_model_v004",
+  "per_structure": {
+    "first_caudal": {
+      "f1": 0.9285714285714286,
+      "precision": 0.9285714285714286,
+      "recall": 0.9285714285714286
+    },
+    "last_predorsal": {
+      "f1": 0.42857142857142855,
+      "precision": 0.42857142857142855,
+      "recall": 0.42857142857142855
+    },
+    "preanal_pterygiophore": {
+      "f1": 0.509090909090909,
+      "precision": 0.8484848484848485,
+      "recall": 0.36363636363636365
+    },
+    "vertebra": {
+      "f1": 0.952286282306163,
+      "precision": 0.9716024340770791,
+      "recall": 0.9337231968810916
+    }
+  },
+  "thresholds": {
+    "first_caudal": 0.12,
+    "last_predorsal": 0.12,
+    "preanal_pterygiophore": 0.3,
+    "vertebra": 0.18
+  },
+  "training_objective": "per_structure_balanced_focal_v1",
+  "training_plates": 26,
+  "training_specimens": 49,
+  "validation_loss": 2.2387821674346924,
+  "validation_plates": 7,
+  "validation_specimens": 14
+}

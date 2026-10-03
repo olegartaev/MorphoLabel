@@ -1,0 +1,572 @@
+{
+  "current_gt_counts_by_membership_split": {
+    "xray_structure_model_v004": {
+      "train": {
+        "first_caudal": 49,
+        "last_predorsal": 48,
+        "preanal_pterygiophore": 269,
+        "vertebra": 1843
+      },
+      "val": {
+        "first_caudal": 10,
+        "last_predorsal": 10,
+        "preanal_pterygiophore": 57,
+        "vertebra": 366
+      }
+    },
+    "xray_structure_model_v005": {
+      "train": {
+        "first_caudal": 48,
+        "last_predorsal": 47,
+        "preanal_pterygiophore": 265,
+        "vertebra": 1807
+      },
+      "val": {
+        "first_caudal": 14,
+        "last_predorsal": 14,
+        "preanal_pterygiophore": 77,
+        "vertebra": 513
+      }
+    }
+  },
+  "current_hash_reproduction": {
+    "v004_current_no_visibility": "0eb8391b0973896bfde080e62c6b00e37a1415878142089cf3283004e653becc",
+    "v004_matches_recorded": false,
+    "v005_current_with_visibility": "bb02aa6defbea19a41eb8338efc0c3f288adc06997e178206cab65ed6ed92d06",
+    "v005_matches_recorded": true
+  },
+  "dataset_changed": true,
+  "human_events_between_model_timestamps": {
+    "event_count": 97,
+    "events_by_specimen": {
+      "2ccb9913-fa43-58de-a774-a9acc7f2f785": [
+        {
+          "action": "model_seed",
+          "structure_id": "",
+          "timestamp": "2026-10-03T17:29:48+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:31:19+00:00"
+        },
+        {
+          "action": "replace_reference_with_role",
+          "structure_id": "last_predorsal",
+          "timestamp": "2026-10-03T17:31:27+00:00"
+        },
+        {
+          "action": "assign_role",
+          "structure_id": "last_predorsal",
+          "timestamp": "2026-10-03T17:31:27+00:00"
+        },
+        {
+          "action": "assign_role",
+          "structure_id": "first_caudal",
+          "timestamp": "2026-10-03T17:31:33+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:31:35+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:31:41+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:31:41+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:31:42+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:31:43+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:31:43+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:31:44+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:31:45+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:31:45+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:31:46+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:31:46+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:31:47+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:32:02+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:32:02+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:32:03+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:32:03+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:32:04+00:00"
+        },
+        {
+          "action": "verify",
+          "structure_id": "",
+          "timestamp": "2026-10-03T17:32:07+00:00"
+        }
+      ],
+      "b5c37041-452e-51a3-b726-e7174663c155": [
+        {
+          "action": "model_seed",
+          "structure_id": "",
+          "timestamp": "2026-10-03T17:32:45+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:32:54+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:32:54+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:32:55+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:32:56+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:32:56+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:32:57+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:32:57+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:32:58+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:19+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:20+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:21+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:22+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:23+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:25+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:33+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:34+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:38+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:39+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:41+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:42+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:43+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:45+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:46+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:47+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:48+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:50+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:51+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:33:53+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:34:24+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:34:26+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:34:27+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:34:28+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:34:29+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:34:33+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:34:34+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:34:35+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:34:36+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:34:37+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:34:38+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:34:39+00:00"
+        },
+        {
+          "action": "assign_role",
+          "structure_id": "last_predorsal",
+          "timestamp": "2026-10-03T17:34:45+00:00"
+        },
+        {
+          "action": "assign_role",
+          "structure_id": "first_caudal",
+          "timestamp": "2026-10-03T17:34:55+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:34:58+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:34:58+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:34:59+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:35:00+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:35:01+00:00"
+        },
+        {
+          "action": "verify",
+          "structure_id": "",
+          "timestamp": "2026-10-03T17:35:03+00:00"
+        }
+      ],
+      "fa4a990d-4adb-4a63-b697-189fe92e5a96": [
+        {
+          "action": "model_seed",
+          "structure_id": "",
+          "timestamp": "2026-10-03T17:29:48+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:30:00+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:30:01+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:30:03+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:30:05+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:30:07+00:00"
+        },
+        {
+          "action": "move",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:30:10+00:00"
+        },
+        {
+          "action": "delete",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:30:11+00:00"
+        },
+        {
+          "action": "assign_role",
+          "structure_id": "first_caudal",
+          "timestamp": "2026-10-03T17:30:23+00:00"
+        },
+        {
+          "action": "assign_role",
+          "structure_id": "last_predorsal",
+          "timestamp": "2026-10-03T17:30:28+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:30:33+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:30:33+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:30:34+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:30:35+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:30:35+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:30:36+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:30:36+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "vertebra",
+          "timestamp": "2026-10-03T17:30:37+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:30:42+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:30:43+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:30:43+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:30:44+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:30:45+00:00"
+        },
+        {
+          "action": "add",
+          "structure_id": "preanal_pterygiophore",
+          "timestamp": "2026-10-03T17:30:46+00:00"
+        },
+        {
+          "action": "verify",
+          "structure_id": "",
+          "timestamp": "2026-10-03T17:30:56+00:00"
+        }
+      ]
+    },
+    "historical_limit": "model artifacts contain dataset hashes but no historical dataset manifest; current DB labels and timestamped events are reported",
+    "point_annotation_event_count": 94,
+    "visibility_event_count": 0
+  },
+  "membership": {
+    "appeared_v005": [
+      "2ccb9913-fa43-58de-a774-a9acc7f2f785",
+      "b5c37041-452e-51a3-b726-e7174663c155",
+      "fa4a990d-4adb-4a63-b697-189fe92e5a96"
+    ],
+    "disappeared": [],
+    "split_changed": [
+      "1a08d9e0-739a-5651-9344-1f98e5b78bc4",
+      "1e84e0b2-0797-41e7-8018-dd6ee412747a",
+      "372b46e4-74f2-5489-a2b3-e7a57e7b8fca",
+      "3ae91523-5b3e-4fca-9d42-18b72b8e6965",
+      "bcfdc20b-979d-436b-a853-cd7b097a636e",
+      "cafe40b0-3029-4ace-ba7d-434c69d93dd9"
+    ],
+    "v004_count": 60,
+    "v004_val_count": 10,
+    "v005_count": 63,
+    "v005_val_count": 14
+  },
+  "model_timestamps": {
+    "v004": "2026-10-03T17:29:13+00:00",
+    "v005": "2026-10-03T18:06:03+00:00"
+  },
+  "pterygiophore_current_gt_totals": {
+    "v004_train": 269,
+    "v004_val": 57,
+    "v005_train": 265,
+    "v005_val": 77
+  },
+  "stored_dataset_hashes": {
+    "v004": "54d7e0dca8e18680b29b09f933e51644aac22c751985998e9927dfd3045dd7df",
+    "v005": "bb02aa6defbea19a41eb8338efc0c3f288adc06997e178206cab65ed6ed92d06"
+  }
+}

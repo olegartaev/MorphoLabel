@@ -1,0 +1,142 @@
+{
+  "confidence_fp_min_median_max": {
+    "max": 0.42927610874176025,
+    "median": 0.4259563982486725,
+    "min": 0.4171049892902374
+  },
+  "confidence_tp_min_median_max": {
+    "max": 0.43310123682022095,
+    "median": 0.42738597095012665,
+    "min": 0.30636486411094666
+  },
+  "current_model_threshold": 0.3,
+  "matching_tolerance_normalized_crop_coordinates": 0.02,
+  "median_nearest_gt_distance_fp": 0.021781232397287808,
+  "median_nearest_gt_distance_raw_peaks": 0.2939297112563402,
+  "median_nearest_gt_distance_tp": 0.007271525671637769,
+  "metrics": {
+    "0.05": {
+      "count_mae": 36.07142857142857,
+      "evaluable_specimens": 14,
+      "exact_count_accuracy": 0.0,
+      "f1": 0.08497723823975721,
+      "fn": 49,
+      "fp": 554,
+      "precision": 0.048109965635738834,
+      "predicted_count": 582,
+      "recall": 0.36363636363636365,
+      "tp": 28
+    },
+    "0.08": {
+      "count_mae": 3.7142857142857144,
+      "evaluable_specimens": 14,
+      "exact_count_accuracy": 0.14285714285714285,
+      "f1": 0.2718446601941747,
+      "fn": 49,
+      "fp": 101,
+      "precision": 0.21705426356589147,
+      "predicted_count": 129,
+      "recall": 0.36363636363636365,
+      "tp": 28
+    },
+    "0.12": {
+      "count_mae": 1.8571428571428572,
+      "evaluable_specimens": 14,
+      "exact_count_accuracy": 0.2857142857142857,
+      "f1": 0.36363636363636365,
+      "fn": 49,
+      "fp": 49,
+      "precision": 0.36363636363636365,
+      "predicted_count": 77,
+      "recall": 0.36363636363636365,
+      "tp": 28
+    },
+    "0.18": {
+      "count_mae": 2.5714285714285716,
+      "evaluable_specimens": 14,
+      "exact_count_accuracy": 0.07142857142857142,
+      "f1": 0.4516129032258065,
+      "fn": 49,
+      "fp": 19,
+      "precision": 0.5957446808510638,
+      "predicted_count": 47,
+      "recall": 0.36363636363636365,
+      "tp": 28
+    },
+    "0.24": {
+      "count_mae": 3.0,
+      "evaluable_specimens": 14,
+      "exact_count_accuracy": 0.0,
+      "f1": 0.4912280701754386,
+      "fn": 49,
+      "fp": 9,
+      "precision": 0.7567567567567568,
+      "predicted_count": 37,
+      "recall": 0.36363636363636365,
+      "tp": 28
+    },
+    "0.3": {
+      "count_mae": 3.142857142857143,
+      "evaluable_specimens": 14,
+      "exact_count_accuracy": 0.0,
+      "f1": 0.509090909090909,
+      "fn": 49,
+      "fp": 5,
+      "precision": 0.8484848484848485,
+      "predicted_count": 33,
+      "recall": 0.36363636363636365,
+      "tp": 28
+    },
+    "0.38": {
+      "count_mae": 3.357142857142857,
+      "evaluable_specimens": 14,
+      "exact_count_accuracy": 0.0,
+      "f1": 0.4672897196261683,
+      "fn": 52,
+      "fp": 5,
+      "precision": 0.8333333333333334,
+      "predicted_count": 30,
+      "recall": 0.3246753246753247,
+      "tp": 25
+    },
+    "0.48": {
+      "count_mae": 5.5,
+      "evaluable_specimens": 14,
+      "exact_count_accuracy": 0.0,
+      "f1": 0.0,
+      "fn": 77,
+      "fp": 0,
+      "precision": 0.0,
+      "predicted_count": 0,
+      "recall": 0.0,
+      "tp": 0
+    },
+    "0.6": {
+      "count_mae": 5.5,
+      "evaluable_specimens": 14,
+      "exact_count_accuracy": 0.0,
+      "f1": 0.0,
+      "fn": 77,
+      "fp": 0,
+      "precision": 0.0,
+      "predicted_count": 0,
+      "recall": 0.0,
+      "tp": 0
+    }
+  },
+  "model_id": "xray_structure_model_v005",
+  "raw_peak_count_ge_0_05": 582,
+  "raw_peaks_counted_at_threshold": 0.05,
+  "structure_id": "preanal_pterygiophore",
+  "thresholds": [
+    0.05,
+    0.08,
+    0.12,
+    0.18,
+    0.24,
+    0.3,
+    0.38,
+    0.48,
+    0.6
+  ]
+}
