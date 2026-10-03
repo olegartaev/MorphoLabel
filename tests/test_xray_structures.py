@@ -141,6 +141,14 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         verify=reopened.annotation_events(self.specimen_id,1)[-1]
         self.assertEqual("not_visible",verify["payload"]["structure_visibility"]["preanal_pterygiophore"])
 
+    def test_absent_or_not_visible_cannot_coexist_with_saved_markers(self):
+        self.project.add_annotation(self.specimen_id,"preanal_pterygiophore",0.55,0.65,1)
+        with self.assertRaisesRegex(ValueError,"Clear existing markers"):
+            self.project.set_structure_visibility(self.specimen_id,"preanal_pterygiophore","absent",1)
+        self.project.clear_annotations(self.specimen_id,1,structure_id="preanal_pterygiophore")
+        self.project.set_structure_visibility(self.specimen_id,"preanal_pterygiophore","absent",1)
+        self.assertEqual("absent",self.project.structure_visibility(self.specimen_id,"preanal_pterygiophore",1))
+
     def test_partial_required_structure_still_requires_at_least_one_visible_marker(self):
         v1=self.project.add_annotation(self.specimen_id,"vertebra",0.2,0.5,1)
         v2=self.project.add_annotation(self.specimen_id,"vertebra",0.4,0.5,1)
