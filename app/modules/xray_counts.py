@@ -574,7 +574,7 @@ class XRayCountsRuntime:
         tree.heading("row_no",text="#");tree.column("row_no",width=46,anchor="center",stretch=False)
         tree.heading("locality",text="Locality");tree.column("locality",width=180,anchor="w")
         tree.heading("plate",text="Plate");tree.column("plate",width=220,anchor="w")
-        tree.heading("fish",text="Specimen");tree.column("fish",width=62,anchor="center",stretch=False)
+        tree.heading("fish",text="Plate №");tree.column("fish",width=62,anchor="center",stretch=False)
         for trait in traits:
             col=trait.get("abbr") or trait["id"];tree.heading(col,text=col);tree.column(col,width=78,anchor="center",stretch=False)
         tree.heading("status",text="Status");tree.column("status",width=90,anchor="center",stretch=False)
