@@ -605,6 +605,25 @@ class XRayCropWorkspace:
         if text is None:text="Unsaved changes" if self.session.dirty else ""
         self.save_status.configure(text=text)
 
+    def _persist_draft_edits(self,*,list_changed=False):
+        """Persist one local Crop delta immediately without marking the plate reviewed."""
+        if not self.selected_image_id or not self.session.dirty:return self.session.selected_id
+        selected=self.session.selected_id;changes=self.session.changes()
+        result=self.project.apply_plate_crop_edits(
+            self.selected_image_id,
+            edits=changes["edits"],new_crops=changes["new_crops"],removed_ids=changes["removed_ids"],
+        )
+        selected=result.get("id_map",{}).get(selected,selected)
+        self.session.load(self.project.specimens(self.selected_image_id),selected_id=selected)
+        self._preferred_specimen_id=str(selected or "")
+        if selected:self._notify_selection()
+        else:
+            self._preferred_image_id=str(self.selected_image_id or "")
+            self.on_selection(self._preferred_image_id,"")
+        if list_changed:self.plate_list.refresh(preserve_scroll=True,reveal=False)
+        self._set_save_status("Saved · Apply to verify");self._refresh_flip_controls();self.on_changed()
+        return selected
+
     def _fit(self):
         if self.preview is None:return None
         cw=max(2,self.canvas.winfo_width());ch=max(2,self.canvas.winfo_height())
@@ -783,21 +802,26 @@ class XRayCropWorkspace:
         if self._drag_mode is None:return
         if self._drag_mode[0]=="draw":
             crop=self._drawing_crop;self._drag_mode=self._drag_anchor=self._drag_initial=None;self._drawing_crop=None
-            if crop is not None and float(crop.get("length",0))>=20 and float(crop.get("width",0))>=20:self.session.add(crop);self._set_save_status();self._refresh_flip_controls()
+            if crop is not None and float(crop.get("length",0))>=20 and float(crop.get("width",0))>=20:
+                self.session.add(crop);self._persist_draft_edits(list_changed=True)
             self._draw();return
-        self._drag_mode=self._drag_anchor=self._drag_initial=None;self._drag_changed=False;self._draw()
+        changed=self._drag_changed
+        self._drag_mode=self._drag_anchor=self._drag_initial=None;self._drag_changed=False
+        if changed:self._persist_draft_edits()
+        self._draw()
 
     def delete_selected(self,_event=None):
-        if self.session.delete_selected():self._set_save_status();self._draw();self._refresh_flip_controls()
+        if self.session.delete_selected():
+            self._persist_draft_edits(list_changed=True);self._draw()
         return "break"
 
     def flip_selected_horizontal(self):
         if self.session.flip_horizontal():
-            self._set_save_status("Flipped left ↔ right · apply crop");self._draw();self._refresh_controls()
+            self._persist_draft_edits();self._draw()
 
     def flip_selected_vertical(self):
         if self.session.flip_vertical():
-            self._set_save_status("Flipped top ↕ bottom · apply crop");self._draw();self._refresh_controls()
+            self._persist_draft_edits();self._draw()
 
     def clear_plate_crops(self):
         if not self.selected_image_id:return
@@ -807,7 +831,7 @@ class XRayCropWorkspace:
         if not messagebox.askyesno("Clear all crops on this plate",f"Retire all {count} current crop(s) on this plate?\n\nCoordinate annotations will be archived, not discarded. You can then create and confirm new crops.",parent=self.root,default="no"):return
         try:removed=self.project.remove_all_plate_crops(self.selected_image_id)
         except Exception as exc:messagebox.showerror("Clear plate crops",str(exc),parent=self.root);return
-        self.session.load(());self._preferred_specimen_id="";self._notify_selection();self.plate_list.refresh(preserve_scroll=True,reveal=True);self._refresh_controls();self._set_save_status(f"Cleared {removed} crop(s)");self._draw();self.on_changed()
+        self.session.load(());self._preferred_specimen_id="";self._notify_selection();self.plate_list.refresh(preserve_scroll=True,reveal=False);self._refresh_controls();self._set_save_status(f"Cleared {removed} crop(s)");self._draw();self.on_changed()
 
     def apply_current(self,silent=False):
         if not self.selected_image_id:return "FAILED"
@@ -818,7 +842,7 @@ class XRayCropWorkspace:
             return "FAILED"
         self.session.load(self.project.specimens(self.selected_image_id),selected_id=selected)
         self._preferred_specimen_id=str(selected or "");self._notify_selection()
-        self.plate_list.select(self.selected_image_id,reveal=True);self._refresh_controls();self._set_save_status("Crop applied · verified");self._draw();self.on_changed()
+        self.plate_list.refresh(preserve_scroll=True,reveal=False);self.plate_list.select(self.selected_image_id,reveal=False);self._refresh_controls();self._set_save_status("Crop applied · verified");self._draw();self.on_changed()
         return "SAVED"
 
     def start_training_batch(self):
