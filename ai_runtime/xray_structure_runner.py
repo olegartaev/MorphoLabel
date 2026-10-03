@@ -121,21 +121,24 @@ def _tensor(image):
     return (value - mean) / std
 
 
-def _gaussian(target, channel, cx, cy, sigma=2.0):
+def _gaussian(target, channel, cx, cy, sigma=2.0, supervision=None):
     import numpy as np
 
     height, width = target.shape[-2:]
     radius = max(1, int(math.ceil(3.0 * float(sigma))))
-    left = max(0, int(math.floor(cx)) - radius)
-    right = min(width, int(math.floor(cx)) + radius + 1)
-    top = max(0, int(math.floor(cy)) - radius)
-    bottom = min(height, int(math.floor(cy)) + radius + 1)
+    center_x = int(round(float(cx))); center_y = int(round(float(cy)))
+    left = max(0, center_x - radius)
+    right = min(width, center_x + radius + 1)
+    top = max(0, center_y - radius)
+    bottom = min(height, center_y + radius + 1)
     if left >= right or top >= bottom:
         return
     ys = np.arange(top, bottom, dtype=np.float32)[:, None]
     xs = np.arange(left, right, dtype=np.float32)[None, :]
-    patch = np.exp(-((xs - float(cx)) ** 2 + (ys - float(cy)) ** 2) / (2.0 * float(sigma) ** 2))
+    patch = np.exp(-((xs - float(center_x)) ** 2 + (ys - float(center_y)) ** 2) / (2.0 * float(sigma) ** 2))
     target[channel, top:bottom, left:right] = np.maximum(target[channel, top:bottom, left:right], patch)
+    if supervision is not None:
+        supervision[channel, top:bottom, left:right] = 1.0
 
 
 class _Dataset:
@@ -164,22 +167,37 @@ class _Dataset:
         out_w = self.input_size[0] // self.stride
         out_h = self.input_size[1] // self.stride
         heatmap = np.zeros((len(self.structures), out_h, out_w), dtype=np.float32)
+        supervision = np.zeros_like(heatmap)
+        visibility = dict(row.get("visibility") or {})
+        states = {}
+        for structure_id, channel in self.channel.items():
+            state = str(visibility.get(structure_id, "complete") or "complete")
+            if state not in {"complete", "partial", "not_visible", "absent"}:
+                state = "complete"
+            states[structure_id] = state
+            if state in {"complete", "absent"}:
+                supervision[channel, :, :] = 1.0
         for point in row.get("points") or ():
-            channel = self.channel.get(str(point.get("structure_id") or ""))
-            if channel is None:
+            structure_id = str(point.get("structure_id") or "")
+            channel = self.channel.get(structure_id)
+            if channel is None or states.get(structure_id) in {"not_visible", "absent"}:
                 continue
             px = (float(point["x"]) * geometry["source_w"] * geometry["scale"] + geometry["offset_x"]) / self.stride
             py = (float(point["y"]) * geometry["source_h"] * geometry["scale"] + geometry["offset_y"]) / self.stride
-            _gaussian(heatmap, channel, px, py)
-        return _tensor(image), torch.from_numpy(heatmap)
+            _gaussian(
+                heatmap, channel, px, py,
+                supervision=supervision if states.get(structure_id) == "partial" else None,
+            )
+        return _tensor(image), torch.from_numpy(heatmap), torch.from_numpy(supervision)
 
 
-def _loss(logits, target):
+def _loss(logits, target, supervision=None):
     import torch
 
     prediction = torch.sigmoid(logits).clamp(1e-4, 1.0 - 1e-4)
-    positive = target.eq(1.0).float()
-    negative = target.lt(1.0).float()
+    mask = torch.ones_like(target) if supervision is None else supervision.float()
+    positive = target.eq(1.0).float() * mask
+    negative = target.lt(1.0).float() * mask
     negative_weight = (1.0 - target).pow(4)
     positive_loss = -(prediction.log()) * (1.0 - prediction).pow(2) * positive
     negative_loss = -((1.0 - prediction).log()) * prediction.pow(2) * negative_weight * negative
@@ -277,6 +295,9 @@ def _calibrate(model, rows, meta, device):
         for threshold in grids:
             tp = fp = fn = 0
             for row, decoded in cache:
+                visibility = str((row.get("visibility") or {}).get(sid, "complete") or "complete")
+                if visibility in {"partial", "not_visible"}:
+                    continue
                 truth = [point for point in row.get("points") or () if point.get("structure_id") == sid]
                 predicted_group = next((item for item in decoded if item["structure_id"] == sid), {"points": []})
                 predicted = [point for point in predicted_group["points"] if float(point["score"]) >= threshold]
@@ -345,12 +366,13 @@ def train(payload):
     for epoch in range(1, epochs + 1):
         model.train()
         train_total = 0.0
-        for images, targets in train_loader:
+        for images, targets, supervision in train_loader:
             images = images.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
+            supervision = supervision.to(device, non_blocking=True)
             optimizer.zero_grad(set_to_none=True)
             with torch.cuda.amp.autocast(enabled=use_amp):
-                loss = _loss(model(images), targets)
+                loss = _loss(model(images), targets, supervision)
             scaler.scale(loss).backward()
             scaler.step(optimizer); scaler.update()
             train_total += float(loss.detach().cpu())
@@ -358,10 +380,11 @@ def train(payload):
         model.eval()
         val_total = 0.0
         with torch.no_grad():
-            for images, targets in val_loader:
+            for images, targets, supervision in val_loader:
                 images = images.to(device, non_blocking=True)
                 targets = targets.to(device, non_blocking=True)
-                val_total += float(_loss(model(images), targets).detach().cpu())
+                supervision = supervision.to(device, non_blocking=True)
+                val_total += float(_loss(model(images), targets, supervision).detach().cpu())
         train_loss = train_total / max(1, len(train_loader))
         val_loss = val_total / max(1, len(val_loader))
         history.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss})
