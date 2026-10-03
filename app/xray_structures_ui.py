@@ -21,7 +21,7 @@ from .xray_structure_ai import (
     compare_structure_model_to_human, export_structure_model_package, import_structure_model_package,
     predict_structures, train_structure_model,
 )
-from .xray_schema import compatible_reference_roles
+from .xray_schema import compatible_reference_roles, spatial_series_order
 from .xray_structure_display import (
     DEFAULT_LABEL_SIZE, DEFAULT_SIZE, SYMBOL_LABELS, SYMBOL_NAMES,
     draw_xray_marker, draw_xray_role_badges, load_xray_structure_display, marker_style, role_color,
@@ -49,12 +49,25 @@ def _shape_symbol(symbol):
 
 
 def _structure_button_order(structures):
-    """Display marker tools in explicit hotkey order; scheme order breaks ties."""
+    """Keep counted series first and start/stop markers after them."""
     indexed=list(enumerate(structures or ()))
     def key(item):
         index,structure=item;hotkey=str(structure.get("hotkey") or "").strip()
-        return (0,int(hotkey),index) if hotkey.isdigit() else (1,index,index)
+        numeric=int(hotkey) if hotkey.isdigit() else 999
+        return (0 if bool(structure.get("repeated")) else 1,numeric,index)
     return [structure for _index,structure in sorted(indexed,key=key)]
+
+
+def _structure_shortcuts(structures):
+    """Legacy default schemes get consecutive shortcuts in the visible role order."""
+    structures=list(structures or ());ordered=_structure_button_order(structures)
+    stored=[str(item.get("hotkey") or "").strip() for item in structures]
+    default_numeric=(
+        len(structures)<=9 and all(key.isdigit() for key in stored)
+        and set(stored)=={str(number) for number in range(1,len(structures)+1)}
+    )
+    if default_numeric:return {str(item["id"]):str(index+1) for index,item in enumerate(ordered)}
+    return {str(item["id"]):str(item.get("hotkey") or "").strip() for item in structures}
 
 
 def _first_structure_id(structures):
@@ -432,7 +445,8 @@ class XRayStructureWorkspace:
         if key=="space":
             self.verify_current();return "break"
         if key.isdigit():
-            structure=next((item for item in self.project.scheme.get("structures",()) if str(item.get("hotkey") or "")==key),None)
+            structures=list(self.project.scheme.get("structures",()));shortcuts=_structure_shortcuts(structures)
+            structure=next((item for item in structures if shortcuts.get(str(item["id"]))==key),None)
             if structure:
                 self._choose_structure(structure["id"]);return "break"
 
@@ -472,10 +486,10 @@ class XRayStructureWorkspace:
             for row in self.project.effective_annotations(self.selected_specimen_id,self.pass_no.get()):
                 counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
             states=self.project.structure_visibility_states(self.selected_specimen_id,self.pass_no.get(),"human")
-        self._marker_buttons={};self._marker_visibility_buttons={};self._marker_visibility_vars={}
+        self._marker_buttons={};self._marker_visibility_buttons={};self._marker_visibility_vars={};shortcuts=_structure_shortcuts(structures)
         for structure in _structure_button_order(structures):
             sid=str(structure["id"]);index=structures.index(structure);style=marker_style(settings,structure,index)
-            hotkey=str(structure.get("hotkey") or "");count=counts.get(sid,0);icon=self._marker_button_icon(self.marker_host,structure,style)
+            hotkey=shortcuts.get(sid,"");count=counts.get(sid,0);icon=self._marker_button_icon(self.marker_host,structure,style)
             text=f"{hotkey} · {structure['name']}  {count}" if hotkey else f"{structure['name']}  {count}"
             group=ttk.Frame(self.marker_host,style="WorkflowDock.TFrame");group.pack(side="left",padx=(0,4))
             button=ttk.Button(
@@ -722,7 +736,8 @@ class XRayStructureWorkspace:
         for sid,rows in grouped.items():
             pair=by_id.get(sid)
             if pair is None:continue
-            index,structure=pair;rows=sorted(rows,key=lambda row:(row["sort_order"],row["annotation_id"]))
+            index,structure=pair
+            rows=spatial_series_order(rows) if structure.get("repeated") else sorted(rows,key=lambda row:(row["sort_order"],row["annotation_id"]))
             for seq,row in enumerate(rows,1):
                 selected=row["annotation_id"]==self.selected_annotation_id
                 style=marker_style(settings,structure,index)
