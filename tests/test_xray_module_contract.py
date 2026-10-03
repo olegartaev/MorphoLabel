@@ -233,7 +233,8 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertIn("start_result_review_queue(self.project",module)
         self.assertIn('self.review_queue_banner=ttk.Frame(main,style="Attention.TFrame"',ui)
         self.assertIn('text="‹ Previous"',ui);self.assertIn('text="Next ›"',ui);self.assertIn("_close_result_review",ui)
-        self.assertIn("return sorted(by_specimen.values(),key=lambda row:(-row[\"score\"]",qc)
+        self.assertIn('key=lambda row:(-row["score"]',qc)
+        self.assertIn("evidence_bonus",qc)
 
 if __name__=="__main__":
     unittest.main()

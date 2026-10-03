@@ -171,7 +171,7 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         run=self.project.start_structure_repeatability(1,seed=7)
         model={"model_id":"test-model"};p1=int(run["annotation1_pass_no"]);p2=int(run["annotation2_pass_no"])
         self.assertTrue(_current_prediction_allowed(self.project,specimen_id,model,p1))
-        self.assertFalse(_current_prediction_allowed(self.project,specimen_id,model,p2))
+        self.assertTrue(_current_prediction_allowed(self.project,specimen_id,model,p2))
         predictions=[
             {"structure_id":"vertebra","x":0.22,"y":0.50,"score":0.9},
             {"structure_id":"vertebra","x":0.43,"y":0.50,"score":0.9},

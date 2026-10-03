@@ -125,7 +125,7 @@ class XRayCropViewportContractTests(unittest.TestCase):
         self.assertNotIn("if not selected:return",marker)
         self.assertIn('geometry["bottom_edge"]',marker)
         self.assertIn('fill=ventral,width=4 if selected else 3',marker)
-        self.assertIn("head_size=13 if selected else 10",marker)
+        self.assertIn("head_size=16 if selected else 13",marker)
         self.assertNotIn("create_oval",marker)
         draw=source[source.index("    def _draw(self):"):source.index("    @staticmethod\n    def _orientation_geometry",source.index("    def _draw(self):"))]
         self.assertIn("self._draw_crop_brackets(corners,color)",draw)
