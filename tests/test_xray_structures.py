@@ -59,14 +59,13 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         self.assertEqual([],self.project.annotations(self.specimen_id,1))
         self.assertEqual(["add","move","delete"],[event["action"] for event in self.project.annotation_events(self.specimen_id,1)])
 
-    def test_repeatability_freezes_annotation1_sample_and_tracks_blind_annotation2(self):
+    def test_repeatability_uses_two_dedicated_blind_passes_and_allows_new_run(self):
         specimens=[]
         for image_id in self.image_ids:
             for cx in (300,600):
                 crop=crop_from_geometry(cx,240,260,140,0,(900,480),algorithm="manual")
                 sid=self.project.add_manual_specimen(image_id,crop);specimens.append(sid)
             self.project.confirm_plate(image_id)
-        # include the fixture specimen and create enough verified Annotation 1 truth
         targets=[self.specimen_id]+specimens
         for sid in targets:
             v1=self.project.add_annotation(sid,"vertebra",0.2,0.5,1)
@@ -76,28 +75,28 @@ class XRayStructurePersistenceTests(unittest.TestCase):
             self.project.add_annotation(sid,"preanal_pterygiophore",0.6,0.65,1)
             self.project.verify_annotations(sid,1)
         run=self.project.start_structure_repeatability(3,seed=7)
-        self.assertEqual(3,run["total"]);self.assertEqual(0,run["verified"])
-        frozen={m["specimen_id"]:m["baseline"] for m in run["members"]}
-        first=run["ids"][0]
-        # Editing Annotation 1 later does not rewrite the frozen repeatability baseline.
-        self.project.add_annotation(first,"vertebra",0.7,0.5,1)
-        self.project.verify_annotations(first,1)
-        again=self.project.structure_repeatability(run["run_id"])
-        self.assertEqual(frozen[first],next(m["baseline"] for m in again["members"] if m["specimen_id"]==first))
+        self.assertEqual(3,run["total"]);self.assertFalse(run["legacy"])
+        self.assertGreater(run["annotation1_pass_no"],1)
+        self.assertGreater(run["annotation2_pass_no"],run["annotation1_pass_no"])
+        self.assertEqual(0,run["annotation1_verified"]);self.assertEqual(0,run["annotation2_verified"])
         for sid in run["ids"]:
-            for point in frozen[sid]:
-                if point["structure_id"] in {"first_caudal","last_predorsal"}:continue
-                self.project.add_annotation(sid,point["structure_id"],point["x"],point["y"],2)
-            pass2=self.project.annotations(sid,2)
-            vertebra=[p for p in pass2 if p["structure_id"]=="vertebra"]
-            self.project.assign_annotation_role(vertebra[1]["annotation_id"],"first_caudal")
-            self.project.assign_annotation_role(vertebra[0]["annotation_id"],"last_predorsal")
-            self.project.verify_annotations(sid,2)
+            for pass_no in (run["annotation1_pass_no"],run["annotation2_pass_no"]):
+                a=self.project.add_annotation(sid,"vertebra",0.2,0.5,pass_no)
+                b=self.project.add_annotation(sid,"vertebra",0.4,0.5,pass_no)
+                self.project.assign_annotation_role(b,"first_caudal")
+                self.project.assign_annotation_role(a,"last_predorsal")
+                self.project.add_annotation(sid,"preanal_pterygiophore",0.6,0.65,pass_no)
+                self.project.verify_annotations(sid,pass_no)
         finished=self.project.structure_repeatability(run["run_id"])
-        self.assertEqual("completed",finished["status"]);self.assertEqual(3,finished["verified"])
+        self.assertEqual("completed",finished["status"])
+        self.assertEqual(3,finished["annotation1_verified"]);self.assertEqual(3,finished["annotation2_verified"])
         metrics=self.project.structure_repeatability_metrics(run["run_id"])
         vertebra=next(row for row in metrics["structures"] if row["structure_id"]=="vertebra")
         self.assertEqual(1.0,vertebra["exact_count_accuracy"])
+        self.project.retire_structure_repeatability(run["run_id"])
+        newer=self.project.start_structure_repeatability(2,seed=8)
+        self.assertNotEqual(run["run_id"],newer["run_id"])
+        self.assertGreater(newer["annotation1_pass_no"],run["annotation2_pass_no"])
 
     def test_result_qc_flags_detached_reference_and_conspicuous_serial_gap(self):
         for x in (0.10,0.20,0.30,0.40,0.80,0.90):
@@ -133,6 +132,29 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         outliers=[item for item in report["issues"] if item["code"]=="sample_outlier" and item["target"]=="tv"]
         self.assertEqual(1,len(outliers))
         self.assertEqual(specimen_ids[-1],outliers[0]["specimen_id"])
+
+    def test_result_qc_flat_cluster_flags_any_deviation_without_fixed_unit_jump(self):
+        crop=crop_from_geometry(450,240,620,230,0,(900,480),algorithm="manual")
+        specimen_ids=[self.specimen_id]
+        for index in range(5):
+            sid=self.project.add_manual_specimen(self.image_ids[index%2],crop,label=f"flat-{index}")
+            specimen_ids.append(sid)
+        for image_id in self.image_ids:self.project.confirm_plate(image_id)
+        for index,sid in enumerate(specimen_ids):
+            vertebra_count=7 if index==len(specimen_ids)-1 else 6
+            vertebra=[]
+            for point_index in range(vertebra_count):
+                vertebra.append(self.project.add_annotation(sid,"vertebra",0.08+0.07*point_index,0.45,1))
+            self.project.assign_annotation_role(vertebra[min(3,len(vertebra)-1)],"first_caudal")
+            self.project.assign_annotation_role(vertebra[min(2,len(vertebra)-1)],"last_predorsal")
+            for x in (0.30,0.40,0.50,0.60,0.70):
+                self.project.add_annotation(sid,"preanal_pterygiophore",x,0.70,1)
+            self.project.verify_annotations(sid,1)
+        report=build_result_qc(self.project)
+        flagged=[item for item in report["issues"] if item["code"]=="sample_outlier" and item["target"]=="tv"]
+        self.assertEqual(1,len(flagged))
+        self.assertEqual(specimen_ids[-1],flagged[0]["specimen_id"])
+        self.assertIn("dominant cluster",flagged[0]["reason"])
 
     def test_reference_roles_reuse_existing_series_point_without_duplicate_marker(self):
         one=self.project.add_annotation(self.specimen_id,"vertebra",0.2,0.5,1)

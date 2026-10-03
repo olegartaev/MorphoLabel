@@ -248,25 +248,30 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertNotIn("RandomHorizontalFlip",runner)
         self.assertNotIn("RandomVerticalFlip",runner)
 
-    def test_structures_ui_has_current_only_prediction_repeatability_and_one_file_ai_transfer(self):
+    def test_structures_ui_has_current_prediction_landmarks_style_repeatability_and_menu_transfer(self):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         for text in (
-            "Predict current","Manual repeatability","Annotation 1","Start Annotation 2…","Results…",
-            "Export trained AI…","Import trained AI…","one portable file",
+            "Predict current","Human repeatability","Repeat…","Sample size",
+            "Annotation 1","Annotation 2","Start new sample",
+            "Models ▾","Manage models…","Transfer ▾","Import trained AI…","Export selected AI…",
+            "one portable file",
         ):
             self.assertIn(text,ui)
-        self.assertIn("predict_current_structure",ui)
+        self.assertIn("_repeatability_diagram",ui)
+        self.assertIn("_open_repeatability_pass",ui)
         self.assertIn("start_structure_repeatability",ui)
         self.assertIn("structure_repeatability_metrics",ui)
-        self.assertIn("AI suggestions are disabled during blind Annotation 2.",ui)
+        self.assertIn("AI suggestions are disabled during Human repeatability annotations.",ui)
+        self.assertNotIn('ttk.Button(train_actions,text="Export trained AI…"',ui)
+        self.assertNotIn('ttk.Button(train_actions,text="Import trained AI…"',ui)
 
     def test_structures_ui_exposes_training_prediction_review_and_portable_models(self):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         for text in (
-            "Train Structure AI","Models…","Predict next","Predict all","Review AI",
-            "Export…","Import…","human-verified pass 1",
+            "Train Structure AI","Models ▾","Predict next","Predict all","Review AI",
+            "Export selected AI…","Import trained AI…","human-verified pass 1",
         ):
             self.assertIn(text,ui)
         self.assertIn("train_structure_model",ui)

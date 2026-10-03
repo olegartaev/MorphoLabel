@@ -126,7 +126,9 @@ class XRayProject:
           run_id TEXT PRIMARY KEY, schema_version_id TEXT NOT NULL,
           created_at TEXT NOT NULL, completed_at TEXT NOT NULL DEFAULT '',
           status TEXT NOT NULL DEFAULT 'in_progress',
-          requested_count INTEGER NOT NULL DEFAULT 0, seed INTEGER NOT NULL DEFAULT 42
+          requested_count INTEGER NOT NULL DEFAULT 0, seed INTEGER NOT NULL DEFAULT 42,
+          annotation1_pass_no INTEGER NOT NULL DEFAULT 0,
+          annotation2_pass_no INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS xray_structure_repeatability_membership(
           run_id TEXT NOT NULL, specimen_id TEXT NOT NULL, position INTEGER NOT NULL,
@@ -214,6 +216,10 @@ class XRayProject:
             })
             self._ensure_columns(c,"annotation_archives",{
                 "structure_states_json":"TEXT NOT NULL DEFAULT '{}'",
+            })
+            self._ensure_columns(c,"xray_structure_repeatability_runs",{
+                "annotation1_pass_no":"INTEGER NOT NULL DEFAULT 0",
+                "annotation2_pass_no":"INTEGER NOT NULL DEFAULT 0",
             })
 
     def meta(self,key,default=""):
@@ -1528,8 +1534,8 @@ class XRayProject:
             c.execute("UPDATE annotation_runs SET status='verified',updated_at=?,verified_at=? WHERE run_id=?",(now,now,run["run_id"]))
             self._annotation_event(c,run["run_id"],"verify",payload={"counts":counts,"structure_visibility":states})
         self.recalculate_trait_results(specimen_id)
-        if int(pass_no)==2 and str(source)=="human":
-            self._update_structure_repeatability_completion(specimen_id)
+        if int(pass_no)>1 and str(source)=="human":
+            self._update_structure_repeatability_completion(specimen_id,int(pass_no))
         return {"run_id":run["run_id"],"counts":counts}
 
     def annotation_events(self,specimen_id,pass_no=1,source="human"):
@@ -1544,8 +1550,15 @@ class XRayProject:
             except Exception:row["payload"]={}
         return rows
 
+    @staticmethod
+    def _repeatability_pass_numbers(run):
+        """Dedicated blind pass numbers; legacy snapshot-based runs stay readable."""
+        first=int(run.get("annotation1_pass_no") or 0)
+        second=int(run.get("annotation2_pass_no") or 0)
+        return (first,second,False) if first>1 and second>1 else (1,2,True)
+
     def structure_repeatability(self,run_id=None):
-        """Latest persisted manual repeatability sample and its Annotation 2 progress."""
+        """Latest persisted Human repeatability run and both blind-pass progress values."""
         schema_id=self.active_scheme_record()["version_id"]
         with sqlite3.connect(self.db_path) as c:
             c.row_factory=sqlite3.Row
@@ -1554,19 +1567,23 @@ class XRayProject:
             else:
                 row=c.execute(
                     """SELECT * FROM xray_structure_repeatability_runs
-                       ORDER BY CASE status WHEN 'in_progress' THEN 0 ELSE 1 END, created_at DESC LIMIT 1"""
+                       ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'completed' THEN 1 ELSE 2 END,
+                                created_at DESC LIMIT 1"""
                 ).fetchone()
             if row is None:return None
+            run=dict(row);p1_no,p2_no,legacy=self._repeatability_pass_numbers(run)
             members=[dict(item) for item in c.execute(
                 """SELECT specimen_id,position,baseline_json,baseline_visibility_json
                    FROM xray_structure_repeatability_membership
-                   WHERE run_id=? ORDER BY position""",(row["run_id"],)
+                   WHERE run_id=? ORDER BY position""",(run["run_id"],)
             )]
-            verified={item[0] for item in c.execute(
-                """SELECT specimen_id FROM annotation_runs
-                   WHERE pass_no=2 AND source='human' AND schema_version_id=? AND status='verified'""",
-                (row["schema_version_id"],),
-            )}
+            def verified_ids(pass_no):
+                return {str(item[0]) for item in c.execute(
+                    """SELECT specimen_id FROM annotation_runs
+                       WHERE pass_no=? AND source='human' AND schema_version_id=? AND status='verified'""",
+                    (int(pass_no),run["schema_version_id"]),
+                )}
+            verified1=verified_ids(p1_no);verified2=verified_ids(p2_no)
         decoded=[]
         for item in members:
             try:baseline=json.loads(item.pop("baseline_json") or "[]")
@@ -1574,37 +1591,35 @@ class XRayProject:
             try:visibility=json.loads(item.pop("baseline_visibility_json") or "{}")
             except Exception:visibility={}
             decoded.append({**item,"baseline":baseline,"baseline_visibility":visibility})
-        ids=[item["specimen_id"] for item in decoded]
-        completed=sum(specimen_id in verified for specimen_id in ids)
+        ids=[str(item["specimen_id"]) for item in decoded]
+        p1_completed=(len(ids) if legacy else sum(specimen_id in verified1 for specimen_id in ids))
+        p2_completed=sum(specimen_id in verified2 for specimen_id in ids)
         return {
-            **dict(row),"members":decoded,"ids":ids,"total":len(ids),"verified":completed,
-            "remaining":max(0,len(ids)-completed),"schema_current":str(row["schema_version_id"])==str(schema_id),
+            **run,"members":decoded,"ids":ids,"total":len(ids),"legacy":legacy,
+            "annotation1_pass_no":p1_no,"annotation2_pass_no":p2_no,
+            "annotation1_verified":p1_completed,"annotation2_verified":p2_completed,
+            "verified":p2_completed,"remaining":max(0,len(ids)-p2_completed),
+            "schema_current":str(run["schema_version_id"])==str(schema_id),
         }
 
     def start_structure_repeatability(self,count,seed=42):
-        """Freeze Annotation 1 truth for a random sample and start blind Annotation 2."""
+        """Create a random control sample with two dedicated blind manual annotations."""
         count=max(1,int(count));seed=int(seed);schema_id=self.active_scheme_record()["version_id"]
         active=self.structure_repeatability()
-        if active and active.get("status")=="in_progress":
-            return active
+        if active and active.get("status")=="in_progress":return active
         candidates=[row for row in self.structure_specimens(1) if str(row.get("annotation_status") or "")=="verified"]
-        available=[]
-        for row in candidates:
-            if self.annotation_run(row["specimen_id"],2,"human",False) is None:
-                available.append(row)
-        if not available:
-            raise ValueError("No verified Annotation 1 specimens are available for a new repeatability sample.")
-        count=min(count,len(available))
-        selected=random.Random(seed).sample(available,count)
-        run_id=str(uuid.uuid4());now=_now()
-        payload=[]
+        if not candidates:raise ValueError("No human-verified specimens are available for a repeatability sample.")
+        count=min(count,len(candidates));selected=random.Random(seed).sample(candidates,count)
+        with sqlite3.connect(self.db_path) as c:
+            highest=int(c.execute("SELECT COALESCE(MAX(pass_no),1) FROM annotation_runs WHERE source='human'").fetchone()[0] or 1)
+            prior=int(c.execute("SELECT COALESCE(MAX(annotation2_pass_no),1) FROM xray_structure_repeatability_runs").fetchone()[0] or 1)
+        highest=max(highest,prior);p1_no=max(2,highest+1);p2_no=p1_no+1
+        run_id=str(uuid.uuid4());now=_now();payload=[]
         for position,row in enumerate(selected):
             specimen_id=str(row["specimen_id"])
             baseline=[
-                {
-                    "structure_id":str(point["structure_id"]),"x":float(point["x"]),"y":float(point["y"]),
-                    "sort_order":int(point.get("sort_order",0) or 0),
-                }
+                {"structure_id":str(point["structure_id"]),"x":float(point["x"]),"y":float(point["y"]),
+                 "sort_order":int(point.get("sort_order",0) or 0)}
                 for point in self.effective_annotations(specimen_id,1,"human")
             ]
             visibility=self.structure_visibility_states(specimen_id,1,"human")
@@ -1612,9 +1627,10 @@ class XRayProject:
         with sqlite3.connect(self.db_path) as c:
             c.execute(
                 """INSERT INTO xray_structure_repeatability_runs(
-                     run_id,schema_version_id,created_at,status,requested_count,seed
-                   ) VALUES(?,?,?,'in_progress',?,?)""",
-                (run_id,schema_id,now,count,seed),
+                     run_id,schema_version_id,created_at,status,requested_count,seed,
+                     annotation1_pass_no,annotation2_pass_no
+                   ) VALUES(?,?,?,'in_progress',?,?,?,?)""",
+                (run_id,schema_id,now,count,seed,p1_no,p2_no),
             )
             c.executemany(
                 """INSERT INTO xray_structure_repeatability_membership(
@@ -1623,29 +1639,54 @@ class XRayProject:
             )
         return self.structure_repeatability(run_id)
 
-    def _update_structure_repeatability_completion(self,specimen_id):
+    def retire_structure_repeatability(self,run_id):
+        run=self.structure_repeatability(run_id)
+        if not run:return False
         with sqlite3.connect(self.db_path) as c:
-            rows=c.execute(
-                """SELECT r.run_id,r.schema_version_id
-                   FROM xray_structure_repeatability_runs r
+            c.execute(
+                "UPDATE xray_structure_repeatability_runs SET status='retired',completed_at=? WHERE run_id=?",
+                (_now(),str(run_id)),
+            )
+        self.set_ui_state("xray_structure_active_batch",{})
+        return True
+
+    def structure_repeatability_progress(self,run_id=None):
+        run=self.structure_repeatability(run_id)
+        if not run:return {"run":None,"total":0,"annotation1":0,"annotation2":0}
+        return {
+            "run":run,"total":int(run["total"]),
+            "annotation1":int(run["annotation1_verified"]),
+            "annotation2":int(run["annotation2_verified"]),
+        }
+
+    def _update_structure_repeatability_completion(self,specimen_id,pass_no=None):
+        specimen_id=str(specimen_id);pass_no=None if pass_no is None else int(pass_no)
+        with sqlite3.connect(self.db_path) as c:
+            c.row_factory=sqlite3.Row
+            runs=[dict(row) for row in c.execute(
+                """SELECT r.* FROM xray_structure_repeatability_runs r
                    JOIN xray_structure_repeatability_membership m ON m.run_id=r.run_id
-                   WHERE r.status='in_progress' AND m.specimen_id=?""",(str(specimen_id),)
-            ).fetchall()
-            for run_id,schema_id in rows:
+                   WHERE r.status='in_progress' AND m.specimen_id=?""",(specimen_id,)
+            )]
+            for run in runs:
+                p1_no,p2_no,legacy=self._repeatability_pass_numbers(run)
+                if pass_no is not None and pass_no not in {p1_no,p2_no}:continue
                 total=int(c.execute(
-                    "SELECT COUNT(*) FROM xray_structure_repeatability_membership WHERE run_id=?",(run_id,)
+                    "SELECT COUNT(*) FROM xray_structure_repeatability_membership WHERE run_id=?",(run["run_id"],)
                 ).fetchone()[0])
-                verified=int(c.execute(
-                    """SELECT COUNT(*) FROM xray_structure_repeatability_membership m
-                       JOIN annotation_runs a ON a.specimen_id=m.specimen_id
-                       WHERE m.run_id=? AND a.pass_no=2 AND a.source='human'
-                         AND a.schema_version_id=? AND a.status='verified'""",
-                    (run_id,schema_id),
-                ).fetchone()[0])
-                if total and verified>=total:
+                def completed(number):
+                    return int(c.execute(
+                        """SELECT COUNT(*) FROM xray_structure_repeatability_membership m
+                           JOIN annotation_runs a ON a.specimen_id=m.specimen_id
+                           WHERE m.run_id=? AND a.pass_no=? AND a.source='human'
+                             AND a.schema_version_id=? AND a.status='verified'""",
+                        (run["run_id"],int(number),run["schema_version_id"]),
+                    ).fetchone()[0])
+                p1_done=total if legacy else completed(p1_no);p2_done=completed(p2_no)
+                if total and p1_done>=total and p2_done>=total:
                     c.execute(
                         "UPDATE xray_structure_repeatability_runs SET status='completed',completed_at=? WHERE run_id=?",
-                        (_now(),run_id),
+                        (_now(),run["run_id"]),
                     )
 
     @staticmethod
@@ -1661,10 +1702,18 @@ class XRayProject:
             distances.append(((float(point["x"])-float(other["x"]))**2+(float(point["y"])-float(other["y"]))**2)**0.5)
         return distances
 
+    def _repeatability_annotations(self,run,member,number):
+        p1_no,p2_no,legacy=self._repeatability_pass_numbers(run)
+        if int(number)==1 and legacy:return list(member.get("baseline") or ())
+        pass_no=p1_no if int(number)==1 else p2_no
+        current=self.annotation_run(member["specimen_id"],pass_no,"human",False)
+        if not current or str(current.get("status") or "")!="verified":return None
+        return self.effective_annotations(member["specimen_id"],pass_no,"human")
+
     def structure_repeatability_metrics(self,run_id=None):
         run=self.structure_repeatability(run_id)
         if not run:return {"run":None,"structures":[],"completed":0,"total":0}
-        scheme=self.scheme;structures=list(scheme.get("structures") or ())
+        structures=list(self.scheme.get("structures") or ())
         role_ids={str(item["id"]) for item in structures if str(item.get("learning_relation") or "")=="role_on_structure"}
         accum={
             str(item["id"]):{"name":str(item.get("name") or item["id"]),"specimens":0,"exact":0,"abs_error":0.0,
@@ -1672,12 +1721,10 @@ class XRayProject:
             for item in structures
         }
         for member in run["members"]:
-            specimen_id=member["specimen_id"]
-            pass2=self.annotation_run(specimen_id,2,"human",False)
-            if not pass2 or str(pass2.get("status") or "")!="verified":continue
-            repeated=self.effective_annotations(specimen_id,2,"human")
+            first=self._repeatability_annotations(run,member,1);second=self._repeatability_annotations(run,member,2)
+            if first is None or second is None:continue
             for structure in structures:
-                sid=str(structure["id"]);a=[p for p in member["baseline"] if p["structure_id"]==sid];b=[p for p in repeated if p["structure_id"]==sid]
+                sid=str(structure["id"]);a=[p for p in first if p["structure_id"]==sid];b=[p for p in second if p["structure_id"]==sid]
                 bucket=accum[sid];bucket["specimens"]+=1;bucket["exact"]+=int(len(a)==len(b));bucket["abs_error"]+=abs(len(a)-len(b))
                 bucket["distances"].extend(self._repeatability_match_distances(a,b))
                 if sid in role_ids and len(a)==1 and len(b)==1:
@@ -1692,7 +1739,7 @@ class XRayProject:
                 "mean_marker_difference":(sum(dist)/len(dist) if dist else None),
                 "role_same_ordinal_accuracy":(bucket["role_same"]/bucket["role_checks"] if bucket["role_checks"] else None),
             })
-        return {"run":run,"structures":result,"completed":run["verified"],"total":run["total"]}
+        return {"run":run,"structures":result,"completed":min(run["annotation1_verified"],run["annotation2_verified"]),"total":run["total"]}
 
     def annotation_summary(self,pass_no=1):
         rows=self.structure_specimens(pass_no)

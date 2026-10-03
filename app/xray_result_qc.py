@@ -115,16 +115,16 @@ def _sample_outlier_issues(rows,traits,min_group_size):
             for row,value in values:
                 z=None if mad<=1e-12 else 0.6745*(value-centre)/mad
                 robust=bool(z is not None and abs(z)>3.5)
-                flat_count=bool(
-                    method in _COUNT_METHODS and mad<=1e-12 and len(raw)>=6
-                    and same/len(raw)>=0.8 and abs(value-centre)>=2.0
+                flat_cluster=bool(
+                    mad<=1e-12 and len(raw)>=6 and same/len(raw)>=0.8
+                    and abs(value-centre)>1e-12
                 )
-                if not robust and not flat_count:continue
-                severity="high" if (z is not None and abs(z)>=5.0) or abs(value-centre)>=3 else "review"
+                if not robust and not flat_cluster:continue
+                severity="high" if z is not None and abs(z)>=5.0 else "review"
                 if robust:
-                    detail=f"value {value:g}; sample median {centre:g}; modified z = {z:.2f}"
+                    detail=f"value {value:g}; sample median {centre:g}; two-sided modified z = {z:.2f}"
                 else:
-                    detail=f"value {value:g}; sample median {centre:g}; {same}/{len(raw)} specimens equal the median"
+                    detail=f"value {value:g}; sample median {centre:g}; {same}/{len(raw)} specimens share the median and this value lies outside that dominant cluster"
                 issues.append({
                     "severity":severity,"code":"sample_outlier","specimen_id":row["specimen_id"],
                     "image_id":row["image_id"],"sample":sample,
@@ -146,10 +146,10 @@ def _repeatability_issues(project,structures):
     count_diffs={sid:[] for sid in repeated_ids}
     for member in run.get("members") or ():
         specimen_id=str(member["specimen_id"])
-        pass2=project.annotation_run(specimen_id,2,"human",False)
-        if not pass2 or str(pass2.get("status") or "")!="verified":continue
+        base=project._repeatability_annotations(run,member,1)
+        again=project._repeatability_annotations(run,member,2)
+        if base is None or again is None:continue
         specimen=project.specimen(specimen_id);image=project.source_image(specimen["image_id"])
-        base=list(member.get("baseline") or ());again=project.effective_annotations(specimen_id,2,"human")
         for sid in repeated_ids:
             a=[p for p in base if str(p["structure_id"])==sid];b=[p for p in again if str(p["structure_id"])==sid]
             diff=len(b)-len(a);count_diffs[sid].append(diff)

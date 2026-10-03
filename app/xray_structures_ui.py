@@ -72,6 +72,22 @@ _VISIBILITY_HELP=(
 )
 
 
+def _repeatability_diagram(parent):
+    """Generic two-pass visual; deliberately not tied to fish or any other taxon."""
+    canvas=tk.Canvas(parent,width=430,height=96,bg="#fbfcfd",highlightthickness=1,highlightbackground="#d8dde3")
+    def specimen(cx,cy,dots):
+        canvas.create_rectangle(cx-68,cy-26,cx+68,cy+26,fill="#f1f4f6",outline="#a5afb7",width=2)
+        canvas.create_line(cx-48,cy+9,cx-22,cy-10,cx+4,cy+4,cx+28,cy-15,cx+49,cy+8,fill="#b3bdc5",width=2,smooth=True)
+        for x,y in dots:canvas.create_oval(cx+x-4,cy+y-4,cx+x+4,cy+y+4,fill="#256d9e",outline="white",width=1)
+    specimen(105,51,[(-42,8),(-20,-8),(4,5),(27,-12),(48,7)])
+    specimen(325,51,[(-40,7),(-19,-7),(5,4),(29,-11),(47,8)])
+    canvas.create_line(184,51,246,51,fill="#8b98a3",width=2,arrow="last")
+    for cx,label in ((104,"1"),(324,"2")):
+        canvas.create_oval(cx-12,7,cx+12,31,fill="#ffffff",outline="#c6cdd3")
+        canvas.create_text(cx,19,text=label,fill="#27313a",font=("Segoe UI",9,"bold"))
+    return canvas
+
+
 class XRaySpecimenListPanel(ttk.Frame):
     """Compact searchable specimen list matching Crop/Landmarks visual language."""
 
@@ -110,9 +126,13 @@ class XRaySpecimenListPanel(ttk.Frame):
     def _catalog(self):
         rows=[]
         allowed=None
-        if int(self.pass_no)==2:
+        if int(self.pass_no)>1:
             repeat=self.project.structure_repeatability()
-            allowed=set(repeat.get("ids") or ()) if repeat and repeat.get("schema_current") else set()
+            repeat_passes=set()
+            if repeat:
+                repeat_passes={int(repeat.get("annotation1_pass_no") or 0),int(repeat.get("annotation2_pass_no") or 0)}
+            if repeat and repeat.get("schema_current") and int(self.pass_no) in repeat_passes:
+                allowed=set(repeat.get("ids") or ())
         for row in self.project.structure_specimens(self.pass_no):
             if allowed is not None and row["specimen_id"] not in allowed:continue
             status=str(row.get("annotation_status") or "")
@@ -307,13 +327,14 @@ class XRayStructureWorkspace:
         self.batch_button=ttk.Button(one,text="Start batch",command=self.start_batch);self.batch_button.grid(row=2,column=0,columnspan=3,sticky="w",pady=(5,0))
 
         two=self._workflow_card(
-            workflow,1,"2. Manual Repeatability",
-            "A random sample of verified Annotation 1 specimens is frozen, then annotated again independently. Annotation 1 markers stay hidden during Annotation 2.",
+            workflow,1,"2. Repeatability",
+            "Measure a random control sample twice without seeing the other annotation. Repeat… opens the complete workflow.",
         )
-        self.repeat_summary=ttk.Label(two,text="",style="Muted.TLabel");self.repeat_summary.grid(row=0,column=0,columnspan=3,sticky="w")
-        self.pass1_button=ttk.Button(two,text="Annotation 1",command=lambda:self._switch_pass(1));self.pass1_button.grid(row=1,column=0,sticky="w",pady=(5,0))
-        self.pass2_button=ttk.Button(two,text="Start Annotation 2…",command=self.open_repeatability);self.pass2_button.grid(row=1,column=1,sticky="w",padx=(5,0),pady=(5,0))
-        self.repeat_results_button=ttk.Button(two,text="Results…",command=self.show_repeatability_results);self.repeat_results_button.grid(row=1,column=2,sticky="w",padx=(5,0),pady=(5,0))
+        self.repeat_pool_label=ttk.Label(two,text="",style="Muted.TLabel");self.repeat_pool_label.grid(row=0,column=0,sticky="w")
+        self.repeat_pass_label=ttk.Label(two,text="",style="Muted.TLabel");self.repeat_pass_label.grid(row=0,column=1,sticky="e",padx=(8,0))
+        two.columnconfigure(1,weight=1)
+        self.repeat_button=ttk.Button(two,text="Repeat…",command=self.open_repeatability)
+        self.repeat_button.grid(row=1,column=0,columnspan=2,sticky="w",pady=(5,0))
 
         three=self._workflow_card(workflow,2,"3. Training data","Train only from human-verified pass 1 markers. AI output always returns as a draft for human review.")
         self.training_summary=ttk.Label(three,text="",style="Muted.TLabel");self.training_summary.grid(row=0,column=0,columnspan=4,sticky="w")
@@ -321,9 +342,15 @@ class XRayStructureWorkspace:
         train_actions=ttk.Frame(three);train_actions.grid(row=2,column=0,columnspan=4,sticky="ew",pady=(5,0))
         self.structure_train_button=ttk.Button(train_actions,text="Train Structure AI",command=self.train_structure_ai)
         self.structure_train_button.pack(side="left")
-        ttk.Button(train_actions,text="Models…",command=self.manage_structure_models).pack(side="left",padx=(5,0))
-        ttk.Button(train_actions,text="Export trained AI…",command=self.export_active_structure_ai).pack(side="left",padx=(5,0))
-        ttk.Button(train_actions,text="Import trained AI…",command=self.import_structure_ai_file).pack(side="left",padx=(5,0))
+        self.model_menu_button=ttk.Menubutton(train_actions,text="Models ▾",style="P.TButton")
+        self.model_menu_button.pack(side="left",padx=(5,0))
+        model_menu=tk.Menu(self.model_menu_button,tearoff=False)
+        model_menu.add_command(label="Manage models…",command=self.manage_structure_models)
+        model_menu.add_separator()
+        model_menu.add_command(label="Import trained AI…",command=self.import_structure_ai_file)
+        model_menu.add_command(label="Export active AI…",command=self.export_active_structure_ai)
+        self.model_menu_button.configure(menu=model_menu)
+        self.tip.bind(self.model_menu_button,"Manage saved Structure AI models or transfer one trained model as a portable file.")
         predict_actions=ttk.Frame(three);predict_actions.grid(row=3,column=0,columnspan=4,sticky="ew",pady=(5,0))
         ttk.Label(predict_actions,text="Next").pack(side="left")
         ttk.Spinbox(predict_actions,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(3,5))
@@ -550,23 +577,17 @@ class XRayStructureWorkspace:
         self.predict_current_button.configure(state="normal" if can_predict else "disabled")
 
     def _refresh_workflow(self):
-        p1=self.project.annotation_summary(1);p2=self.project.annotation_summary(2);batch=self.project.structure_batch(self.pass_no.get())
-        self.batch_summary.configure(text=f"{p1['verified']} verified · {p1['draft']} draft · {p1['unstarted']} not started" if self.pass_no.get()==1 else f"{p2['verified']} verified · {p2['draft']} draft · {p2['unstarted']} not started")
+        p1=self.project.annotation_summary(1);current_summary=self.project.annotation_summary(self.pass_no.get());batch=self.project.structure_batch(self.pass_no.get())
+        self.batch_summary.configure(text=f"{current_summary['verified']} verified · {current_summary['draft']} draft · {current_summary['unstarted']} not started")
         self.batch_button.configure(text="Continue batch" if batch else "Start batch")
         repeat=self.project.structure_repeatability()
         if repeat:
-            repeat_text=f"Annotation 2 {repeat['verified']}/{repeat['total']} · frozen random sample"
-            pass2_text="Continue Annotation 2" if repeat.get("status")=="in_progress" else "Review Annotation 2"
+            self.repeat_pool_label.configure(text=f"{repeat['total']} specimens")
+            self.repeat_pass_label.configure(text=f"A1 {repeat['annotation1_verified']}/{repeat['total']} · A2 {repeat['annotation2_verified']}/{repeat['total']}")
         else:
-            repeat_text=f"{p1['verified']} verified specimens available"
-            pass2_text="Start Annotation 2…"
-        self.repeat_summary.configure(text=repeat_text)
-        self.pass1_button.configure(style="Primary.TButton" if self.pass_no.get()==1 else "P.TButton")
-        self.pass2_button.configure(
-            text=pass2_text,style="Primary.TButton" if self.pass_no.get()==2 else "P.TButton",
-            state="normal" if p1["verified"] else "disabled",
-        )
-        self.repeat_results_button.configure(state="normal" if repeat and repeat.get("verified") else "disabled")
+            self.repeat_pool_label.configure(text=f"{p1['verified']} eligible")
+            self.repeat_pass_label.configure(text="A1 — · A2 —")
+        self.repeat_button.configure(state="normal" if p1["verified"] else "disabled")
         model=self.project.active_structure_model();candidates=len(self.project.structure_prediction_candidate_ids());review=len(self.project.structure_ai_review_ids())
         self.training_summary.configure(text=f"{p1['verified']} human-verified · {candidates} ready for AI · {review} to review")
         self.structure_model_label.configure(text=f"Active AI: {(model or {}).get('model_id') or 'none'}")
@@ -999,8 +1020,11 @@ class XRayStructureWorkspace:
             reload();self._refresh_workflow()
         actions=ttk.Frame(frame);actions.grid(row=2,column=0,columnspan=2,sticky="ew",pady=(9,0))
         ttk.Button(actions,text="Make active",command=activate).pack(side="left")
-        ttk.Button(actions,text="Export…",command=export_model).pack(side="left",padx=(5,0))
-        ttk.Button(actions,text="Import…",command=import_model).pack(side="left",padx=(5,0))
+        transfer=ttk.Menubutton(actions,text="Transfer ▾",style="P.TButton");transfer.pack(side="left",padx=(5,0))
+        transfer_menu=tk.Menu(transfer,tearoff=False)
+        transfer_menu.add_command(label="Import trained AI…",command=import_model)
+        transfer_menu.add_command(label="Export selected AI…",command=export_model)
+        transfer.configure(menu=transfer_menu)
         ttk.Button(actions,text="Delete…",command=delete).pack(side="left",padx=(5,0))
         ttk.Button(actions,text="Close",command=dialog.destroy).pack(side="right")
         reload((self.project.active_structure_model() or {}).get("model_id"))
@@ -1017,7 +1041,7 @@ class XRayStructureWorkspace:
     def predict_current_structure(self):
         if self._busy or not self.selected_specimen_id:return
         if self.pass_no.get()!=1:
-            messagebox.showinfo("Predict current","AI suggestions are disabled during blind Annotation 2.",parent=self.root);return
+            messagebox.showinfo("Predict current","AI suggestions are disabled during Human repeatability annotations.",parent=self.root);return
         model=self.project.active_structure_model()
         if not model:
             messagebox.showinfo("Predict current","Train or import a Structure AI model first.",parent=self.root);return
@@ -1100,7 +1124,7 @@ class XRayStructureWorkspace:
         self._open_structure_review_batch(ids)
 
     def start_batch(self):
-        if self.pass_no.get()==2:
+        if self.pass_no.get()>1:
             self.open_repeatability();return
         active=self.project.structure_batch(self.pass_no.get())
         if active:
@@ -1120,71 +1144,161 @@ class XRayStructureWorkspace:
 
     def _switch_pass(self,number):
         number=int(number)
-        if number==2:
+        if number>1:
             self.open_repeatability();return
-        self.pass_no.set(number);self.specimen_list.pass_no=number;self.selected_specimen_id="";self.refresh()
+        self.pass_no.set(1);self.specimen_list.pass_no=1;self.selected_specimen_id="";self.refresh()
 
-    def open_repeatability(self):
-        repeat=self.project.structure_repeatability()
-        if repeat and not repeat.get("schema_current"):
-            messagebox.showwarning(
-                "Manual repeatability",
-                "The trait scheme changed after this repeatability sample was created. Finish or review it with the matching scheme, or start a new sample after resolving the scheme change.",
-                parent=self.root,
-            );return
-        if repeat is None:
-            verified=self.project.annotation_summary(1)["verified"]
-            if not verified:
-                messagebox.showinfo("Manual repeatability","Verify Annotation 1 specimens first.",parent=self.root);return
-            default=min(60,int(verified))
-            count=simpledialog.askinteger(
-                "Manual repeatability",
-                "How many verified specimens should be measured again?\n\n"
-                "MorphoLabel will freeze their Annotation 1 measurements and present a random sample for a blind Annotation 2.",
-                parent=self.root,initialvalue=default,minvalue=1,maxvalue=int(verified),
-            )
-            if not count:return
-            try:repeat=self.project.start_structure_repeatability(count,seed=42)
-            except Exception as exc:messagebox.showerror("Manual repeatability",str(exc),parent=self.root);return
-        ids=list(repeat.get("ids") or ())
-        if not ids:return
+    def _open_repeatability_pass(self,run,number,launcher=None):
+        number=int(number)
+        pass_no=int(run["annotation1_pass_no"] if number==1 else run["annotation2_pass_no"])
+        if number==2 and int(run.get("annotation1_verified") or 0)<int(run.get("total") or 0):
+            messagebox.showinfo(
+                "Human repeatability","Finish Annotation 1 for the whole control sample before starting Annotation 2.",
+                parent=launcher or self.root,
+            );return False
+        ids=list(run.get("ids") or ())
+        if not ids:return False
         remaining=[]
         for specimen_id in ids:
-            run=self.project.annotation_run(specimen_id,2,"human",False)
-            if not run or str(run.get("status") or "")!="verified":remaining.append(specimen_id)
+            current=self.project.annotation_run(specimen_id,pass_no,"human",False)
+            if not current or str(current.get("status") or "")!="verified":remaining.append(specimen_id)
         browse=remaining or ids
-        self.pass_no.set(2);self.specimen_list.pass_no=2
-        self.project.set_ui_state("xray_structure_active_batch",{"pass_no":2,"ids":browse,"position":0})
+        self.pass_no.set(pass_no);self.specimen_list.pass_no=pass_no
+        self.project.set_ui_state("xray_structure_active_batch",{"pass_no":pass_no,"ids":browse,"position":0})
         self.selected_specimen_id="";self.refresh()
         if browse:self._load_specimen(browse[0])
+        if launcher is not None:
+            try:launcher.destroy()
+            except tk.TclError:pass
+        return True
 
-    def show_repeatability_results(self):
-        metrics=self.project.structure_repeatability_metrics()
+    def open_repeatability(self):
+        run=self.project.structure_repeatability()
+        if run and not run.get("schema_current"):
+            messagebox.showwarning(
+                "Human repeatability",
+                "The trait scheme changed after this repeatability sample was created. The saved run is kept for audit; start a new sample under the current trait scheme.",
+                parent=self.root,
+            )
+        dialog=tk.Toplevel(self.root);dialog.title("Human repeatability");dialog.transient(self.root);dialog.resizable(False,False)
+        frame=ttk.Frame(dialog,padding=16);frame.pack(fill="both",expand=True);frame.columnconfigure(0,weight=1)
+        ttk.Label(frame,text="Human repeatability",font=("Segoe UI",11,"bold")).grid(row=0,column=0,sticky="w")
+        _repeatability_diagram(frame).grid(row=1,column=0,sticky="ew",pady=(8,8))
+        ttk.Label(
+            frame,text="Annotate the same randomly selected specimens twice independently. This estimates your own counting and marker-placement error.",
+            justify="left",wraplength=600,
+        ).grid(row=2,column=0,sticky="w",pady=(0,2))
+        ttk.Label(
+            frame,text="Annotation 2 never shows Annotation 1. Both control annotations are separate from the main training annotation.",
+            justify="left",wraplength=600,style="Muted.TLabel",
+        ).grid(row=3,column=0,sticky="w",pady=(0,10))
+
+        eligible=int(self.project.annotation_summary(1)["verified"]);default=min(10,eligible);count=tk.IntVar(master=dialog,value=default or 0)
+        sample=ttk.LabelFrame(frame,text="Sample size",padding=(10,8));sample.grid(row=4,column=0,sticky="ew");sample.columnconfigure(3,weight=1)
+        ttk.Label(sample,text="Specimens").grid(row=0,column=0,sticky="w")
+        spin=ttk.Spinbox(sample,from_=1,to=max(1,eligible),textvariable=count,width=5);spin.grid(row=0,column=1,sticky="w",padx=(8,10))
+        sample_note=ttk.Label(sample,text="",style="Muted.TLabel");sample_note.grid(row=1,column=0,columnspan=4,sticky="w",pady=(5,0))
+        new_sample=ttk.Button(sample,text="Start new sample");new_sample.grid(row=0,column=2,sticky="w");new_sample.grid_remove()
+
+        passes=ttk.Frame(frame);passes.grid(row=5,column=0,sticky="ew",pady=(10,0));passes.columnconfigure(0,weight=1);passes.columnconfigure(1,weight=1)
+        one_box=ttk.LabelFrame(passes,text="Annotation 1",padding=(10,8));one_box.grid(row=0,column=0,sticky="nsew",padx=(0,5))
+        two_box=ttk.LabelFrame(passes,text="Annotation 2",padding=(10,8));two_box.grid(row=0,column=1,sticky="nsew",padx=(5,0))
+        one_status=ttk.Label(one_box,text="",style="Muted.TLabel");one_status.pack(anchor="w")
+        two_status=ttk.Label(two_box,text="",style="Muted.TLabel");two_status.pack(anchor="w")
+        one_open=ttk.Button(one_box,text="Start Annotation 1");one_open.pack(anchor="w",pady=(8,0))
+        two_open=ttk.Button(two_box,text="Start Annotation 2");two_open.pack(anchor="w",pady=(8,0))
+        actions=ttk.Frame(frame);actions.grid(row=6,column=0,sticky="ew",pady=(12,0))
+        results=ttk.Button(actions,text="Results…",command=lambda:self.show_repeatability_results((run or {}).get("run_id")))
+        results.pack(side="left");ttk.Button(actions,text="Close",command=dialog.destroy).pack(side="right")
+
+        def clamp_count():
+            try:value=int(count.get())
+            except (TypeError,ValueError):value=default or 1
+            value=max(1,min(max(1,eligible),value)) if eligible else 0
+            count.set(value);return value
+
+        def refresh():
+            nonlocal run
+            if run:run=self.project.structure_repeatability(run["run_id"])
+            if run and run.get("status")=="retired":run=None
+            if run:
+                total=int(run["total"]);count.set(total);new_sample.grid()
+                sample_note.configure(text=f"Current run: {total} specimens · recommended default: 10 · eligible: {eligible}. Start new sample keeps this run in audit history.")
+                a1=int(run.get("annotation1_verified") or 0);a2=int(run.get("annotation2_verified") or 0)
+                one_status.configure(text=f"{a1} / {total} specimens complete")
+                two_status.configure(text=f"{a2} / {total} specimens complete")
+                one_open.configure(text="Review Annotation 1" if a1>=total else "Continue Annotation 1" if a1 else "Start Annotation 1",state="normal")
+                two_open.configure(text="Review Annotation 2" if a2>=total else "Continue Annotation 2" if a2 else "Start Annotation 2",state="normal" if a1>=total else "disabled")
+                results.configure(state="normal" if a1 and a2 else "disabled")
+            else:
+                clamp_count();new_sample.grid_remove()
+                sample_note.configure(text=f"Recommended default: 10 · eligible human-verified specimens: {eligible}. Choose the sample size before Annotation 1.")
+                one_status.configure(text="Not started");two_status.configure(text="Not started")
+                one_open.configure(text="Start Annotation 1",state="normal" if eligible else "disabled")
+                two_open.configure(text="Start Annotation 2",state="disabled");results.configure(state="disabled")
+
+        def ensure_run():
+            nonlocal run
+            if run and run.get("schema_current"):return run
+            if not eligible:return None
+            try:run=self.project.start_structure_repeatability(clamp_count(),seed=42)
+            except Exception as exc:
+                messagebox.showerror("Human repeatability",str(exc),parent=dialog);return None
+            refresh();self._refresh_workflow();return run
+
+        def open_pass(number):
+            current=ensure_run()
+            if current:self._open_repeatability_pass(current,number,launcher=dialog)
+
+        def start_new():
+            nonlocal run
+            if run and run.get("status")=="in_progress":
+                if not messagebox.askyesno(
+                    "Start new sample",
+                    "Start a new repeatability sample?\n\nThe current run will be retired from active use but kept in the audit history.",
+                    parent=dialog,default="no",
+                ):return
+            if run:
+                try:self.project.retire_structure_repeatability(run["run_id"])
+                except Exception as exc:messagebox.showerror("Human repeatability",str(exc),parent=dialog);return
+            run=None
+            try:run=self.project.start_structure_repeatability(clamp_count(),seed=42)
+            except Exception as exc:messagebox.showerror("Human repeatability",str(exc),parent=dialog);return
+            refresh();self._refresh_workflow()
+
+        one_open.configure(command=lambda:open_pass(1));two_open.configure(command=lambda:open_pass(2));new_sample.configure(command=start_new)
+        refresh();dialog.grab_set()
+
+    def show_repeatability_results(self,run_id=None):
+        metrics=self.project.structure_repeatability_metrics(run_id)
         run=metrics.get("run")
         if not run:
-            messagebox.showinfo("Manual repeatability","No repeatability sample has been started.",parent=self.root);return
-        dialog=tk.Toplevel(self.root);dialog.title("Manual repeatability");dialog.transient(self.root);dialog.geometry("820x430")
+            messagebox.showinfo("Human repeatability","No repeatability sample has been started.",parent=self.root);return
+        dialog=tk.Toplevel(self.root);dialog.title("Human repeatability");dialog.transient(self.root);dialog.geometry("850x440")
         frame=ttk.Frame(dialog,padding=12);frame.pack(fill="both",expand=True);frame.columnconfigure(0,weight=1);frame.rowconfigure(2,weight=1)
-        ttk.Label(frame,text="Manual repeatability",style="PageTitle.TLabel").grid(row=0,column=0,sticky="w")
+        ttk.Label(frame,text="Human repeatability",style="PageTitle.TLabel").grid(row=0,column=0,sticky="w")
         ttk.Label(
-            frame,text=f"Annotation 2 completed for {metrics['completed']} / {metrics['total']} frozen specimens. "
-                       "Counts compare independent manual annotations; reference-role agreement compares the selected element number within its series.",
-            style="PageSubtitle.TLabel",wraplength=780,
+            frame,text=(
+                f"Annotation 1: {run['annotation1_verified']} / {run['total']} · Annotation 2: {run['annotation2_verified']} / {run['total']}. "
+                "Counts compare two blind manual annotations; reference-role agreement compares the selected element position within its series."
+            ),
+            style="PageSubtitle.TLabel",wraplength=810,
         ).grid(row=1,column=0,sticky="w",pady=(2,9))
-        columns=("structure","n","exact","mae","role")
+        columns=("structure","n","exact","mae","position","role")
         tree=ttk.Treeview(frame,columns=columns,show="headings")
         for key,title,width in (
-            ("structure","Structure",260),("n","Compared",90),("exact","Exact count",120),
-            ("mae","Count MAE",110),("role","Same role position",150),
+            ("structure","Structure",220),("n","Compared",80),("exact","Exact count",105),
+            ("mae","Count MAE",95),("position","Mean marker difference",150),("role","Same role position",130),
         ):
             tree.heading(key,text=title);tree.column(key,width=width,anchor="w",stretch=key=="structure")
         tree.grid(row=2,column=0,sticky="nsew")
         for row in metrics.get("structures") or ():
-            exact=row.get("exact_count_accuracy");mae=row.get("count_mae");role=row.get("role_same_ordinal_accuracy")
+            exact=row.get("exact_count_accuracy");mae=row.get("count_mae");distance=row.get("mean_marker_difference");role=row.get("role_same_ordinal_accuracy")
             tree.insert("","end",values=(
                 row["name"],row["specimens"],
                 "—" if exact is None else f"{100*exact:.1f}%",
                 "—" if mae is None else f"{mae:.3f}",
+                "—" if distance is None else f"{distance:.4f}",
                 "—" if role is None else f"{100*role:.1f}%",
             ))
         ttk.Button(frame,text="Close",command=dialog.destroy).grid(row=3,column=0,sticky="e",pady=(9,0))
