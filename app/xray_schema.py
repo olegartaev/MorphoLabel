@@ -131,12 +131,37 @@ def compatible_reference_roles(scheme,base_structure_id):
             if item is not None and not item.get("repeated") and not item.get("learning_relation"):allowed.add(ident)
     return [item for item in scheme.get("structures",()) if item["id"] in allowed and not item.get("repeated")]
 
+def spatial_series_order(points):
+    """Return a click-order-independent visual sequence along the series' main axis."""
+    rows=[dict(row) for row in (points or ())]
+    if len(rows)<2:return rows
+    xs=[float(row.get("x",0.0)) for row in rows];ys=[float(row.get("y",0.0)) for row in rows]
+    mx=sum(xs)/len(xs);my=sum(ys)/len(ys)
+    sxx=sum((x-mx)**2 for x in xs);syy=sum((y-my)**2 for y in ys);sxy=sum((x-mx)*(y-my) for x,y in zip(xs,ys))
+    if sxx+syy<=1e-15:
+        return sorted(rows,key=lambda row:(float(row.get("x",0.0)),float(row.get("y",0.0)),int(row.get("annotation_id",0) or 0)))
+    angle=0.5*math.atan2(2.0*sxy,sxx-syy);ux=math.cos(angle);uy=math.sin(angle)
+    if (abs(ux)>=abs(uy) and ux<0) or (abs(uy)>abs(ux) and uy<0):ux=-ux;uy=-uy
+    vx,vy=-uy,ux
+    return sorted(
+        rows,
+        key=lambda row:(
+            (float(row.get("x",0.0))-mx)*ux+(float(row.get("y",0.0))-my)*uy,
+            (float(row.get("x",0.0))-mx)*vx+(float(row.get("y",0.0))-my)*vy,
+            int(row.get("annotation_id",0) or 0),
+        ),
+    )
+
+
 def calculate_trait_values(scheme,annotations,unknown_structures=None):
     """Calculate trait values; partial/not-visible structures can be declared unknown."""
     scheme=normalize_scheme(scheme);grouped={};unknown={str(value) for value in (unknown_structures or ())}
+    structures={str(item["id"]):item for item in scheme.get("structures",())}
     for row in annotations or ():
         grouped.setdefault(str(row["structure_id"]),[]).append(dict(row))
-    for rows in grouped.values():rows.sort(key=lambda row:(int(row.get("sort_order",0)),int(row.get("annotation_id",0))))
+    for structure_id,rows in tuple(grouped.items()):
+        if bool((structures.get(structure_id) or {}).get("repeated")):grouped[structure_id]=spatial_series_order(rows)
+        else:rows.sort(key=lambda row:(int(row.get("sort_order",0)),int(row.get("annotation_id",0))))
     values={}
     def points(structure_id):return grouped.get(str(structure_id),[])
     def nearest_index(series,reference):
