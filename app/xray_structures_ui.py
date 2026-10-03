@@ -301,7 +301,7 @@ class XRayStructureWorkspace:
             style="P.TButton",command=self.predict_current_structure,
         )
         self.predict_current_button.pack(side="left",padx=(2,2))
-        self.tip.bind(self.predict_current_button,"Place or refresh AI suggestions on this unverified specimen only. Correct them by hand, then Apply to make the result human-verified.")
+        self.tip.bind(self.predict_current_button,"Place or refresh AI suggestions on this specimen. A verified annotation is archived before replacement; correct the suggestions and press Apply to verify again.")
         self.apply_separator=ttk.Separator(nav,orient="vertical");self.apply_separator.grid(row=0,column=1,sticky="ns",padx=7,pady=2)
         self.apply_button=ttk.Button(nav,text="Apply",image=self._xray_icon(nav,"structure_apply"),compound="left",style="NavPrimary.TButton",command=self.verify_current)
         self.apply_button.grid(row=0,column=2,sticky="e")
@@ -441,7 +441,7 @@ class XRayStructureWorkspace:
             for row in self.project.effective_annotations(self.selected_specimen_id,self.pass_no.get()):
                 counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
             states=self.project.structure_visibility_states(self.selected_specimen_id,self.pass_no.get(),"human")
-        self._marker_buttons={};self._marker_visibility_buttons={}
+        self._marker_buttons={};self._marker_visibility_buttons={};self._marker_visibility_vars={}
         for structure in _structure_button_order(structures):
             sid=str(structure["id"]);index=structures.index(structure);style=marker_style(settings,structure,index)
             hotkey=str(structure.get("hotkey") or "");count=counts.get(sid,0);icon=self._marker_button_icon(self.marker_host,structure,style)
@@ -462,11 +462,14 @@ class XRayStructureWorkspace:
             )
             visibility.pack(side="left",padx=(1,0));self._marker_visibility_buttons[sid]=visibility
             menu=tk.Menu(visibility,tearoff=False)
+            state_var=tk.StringVar(master=visibility,value=current);self._marker_visibility_vars[sid]=state_var
             for value,label in _VISIBILITY_LABELS.items():
-                prefix="✓  " if value==current else "   "
-                menu.add_command(
-                    label=prefix+_VISIBILITY_SYMBOLS.get(value,"")+"  "+label,
-                    command=lambda structure_id=sid,state=value:self._set_structure_visibility(structure_id,state),
+                menu.add_radiobutton(
+                    label=_VISIBILITY_SYMBOLS.get(value,"")+"  "+label,
+                    value=value,variable=state_var,
+                    command=lambda structure_id=sid,var=state_var:self._set_structure_visibility(
+                        structure_id,var.get()
+                    ),
                 )
             visibility.configure(menu=menu)
             self.tip.bind(
@@ -513,7 +516,9 @@ class XRayStructureWorkspace:
                 f"‘{name}’ already has {count} marker(s).\n\n"
                 f"Set it to {_VISIBILITY_LABELS[visibility]} and clear those markers?",
                 parent=self.root,default="no",
-            ):return
+            ):
+                self._build_marker_buttons()
+                return
             if count:self.project.clear_annotations(self.selected_specimen_id,self.pass_no.get(),structure_id=structure_id)
         self.active_structure_id=structure_id
         self.project.set_structure_visibility(
@@ -585,8 +590,7 @@ class XRayStructureWorkspace:
         for key,label in self.summary_labels.items():label.configure(text=f"{labels[key]}: {summary[key]}")
         state="normal" if self.selected_specimen_id else "disabled";self.apply_button.configure(state=state)
         model=self.project.active_structure_model()
-        run=self.project.annotation_run(self.selected_specimen_id,self.pass_no.get(),"human",False) if self.selected_specimen_id else None
-        can_predict=bool(self.selected_specimen_id and model and (not run or str(run.get("status") or "")!="verified"))
+        can_predict=bool(self.selected_specimen_id and model)
         self.predict_current_button.configure(state="normal" if can_predict else "disabled")
 
     def _refresh_workflow(self):
@@ -1053,16 +1057,21 @@ class XRayStructureWorkspace:
             messagebox.showinfo("Predict current","Train or import a Structure AI model first.",parent=self.root);return
         specimen_id=str(self.selected_specimen_id)
         pass_no=int(self.pass_no.get())
-        if specimen_id not in set(self.project.structure_prediction_candidate_ids(pass_no)):
-            messagebox.showinfo(
-                "Predict current",
-                "This annotation is already human-verified. Apply-confirmed work is protected from AI replacement.",
-                parent=self.root,
-            );return
+        run=self.project.annotation_run(specimen_id,pass_no,"human",False)
+        replacing_verified=bool(run and str(run.get("status") or "")=="verified")
+        if replacing_verified and not messagebox.askyesno(
+            "Predict current",
+            "This annotation is already verified.\n\n"
+            "Replace its markers with new AI suggestions? The current verified annotation will be archived first. "
+            "After correcting the AI suggestions, press Apply to verify the result again.",
+            parent=self.root,default="no",
+        ):return
         self._busy=True;events=queue.Queue()
         dialog,label,bar=self._structure_ai_dialog("Predict current","Placing AI marker suggestions on this specimen…",1)
         def worker():
-            try:events.put(("done",predict_structures(self.project,[specimen_id],model=model,pass_no=pass_no)))
+            try:events.put(("done",predict_structures(
+                self.project,[specimen_id],model=model,pass_no=pass_no,allow_verified=True
+            )))
             except Exception as exc:events.put(("error",exc))
         threading.Thread(target=worker,daemon=True,name="xray-structure-predict-current").start()
         def poll():

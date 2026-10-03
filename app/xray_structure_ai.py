@@ -402,7 +402,7 @@ def _flatten_prediction(groups):
     return rows
 
 
-def predict_structures(project, specimen_ids=None, count=None, cancel=None, progress=None, model=None, pass_no=1):
+def predict_structures(project, specimen_ids=None, count=None, cancel=None, progress=None, model=None, pass_no=1, allow_verified=False):
     model = model or project.active_structure_model()
     if not model:
         raise XRayStructureAIError("Train or import an X-ray structure model before prediction.")
@@ -412,8 +412,11 @@ def predict_structures(project, specimen_ids=None, count=None, cancel=None, prog
     pass_no = int(pass_no)
     candidates = list(project.structure_prediction_candidate_ids(pass_no))
     if specimen_ids is not None:
-        allowed = set(candidates)
-        ids = [str(value) for value in specimen_ids if str(value) in allowed]
+        if allow_verified:
+            allowed={str(row["specimen_id"]) for row in project.structure_specimens(pass_no)}
+        else:
+            allowed=set(candidates)
+        ids=[str(value) for value in specimen_ids if str(value) in allowed]
     else:
         ids = project.select_structure_prediction_ids(
             len(candidates) if count is None else max(1, int(count)),pass_no=pass_no
@@ -469,7 +472,8 @@ def predict_structures(project, specimen_ids=None, count=None, cancel=None, prog
                         raise RuntimeError("Structure model returned an incomplete prediction batch.")
                     points = _flatten_prediction(returned[offset].get("structures") or ())
                     saved = project.seed_structure_predictions(
-                        specimen_id, points, model["model_id"], pass_no=pass_no
+                        specimen_id, points, model["model_id"], pass_no=pass_no,
+                        allow_verified=bool(allow_verified),
                     )
                     success.append({"specimen_id": specimen_id, "saved": saved})
                 except Exception as exc:

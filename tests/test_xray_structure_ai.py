@@ -121,7 +121,24 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         protected=self.project.seed_structure_predictions(specimen_id,[],"xray_structure_model_v003")
         self.assertTrue(protected["protected"])
         self.assertEqual("verified",self.project.annotation_run(specimen_id,1)["status"])
-        self.assertNotIn(specimen_id,self.project.structure_ai_review_ids())
+        verified_before=[dict(row) for row in self.project.effective_annotations(specimen_id,1,"human")]
+        replaced=self.project.seed_structure_predictions(specimen_id,[
+            {"structure_id":"vertebra","x":0.34,"y":0.50,"score":0.93},
+            {"structure_id":"vertebra","x":0.55,"y":0.50,"score":0.92},
+            {"structure_id":"first_caudal","x":0.551,"y":0.501,"score":0.88},
+            {"structure_id":"last_predorsal","x":0.341,"y":0.499,"score":0.86},
+            {"structure_id":"preanal_pterygiophore","x":0.64,"y":0.66,"score":0.90},
+        ],"xray_structure_model_v004",allow_verified=True)
+        self.assertFalse(replaced["protected"])
+        self.assertEqual("draft",self.project.annotation_run(specimen_id,1)["status"])
+        archives=self.project.annotation_archives(specimen_id)
+        self.assertTrue(archives)
+        self.assertEqual("predict_current_replace_verified",archives[-1]["reason"])
+        self.assertEqual("verified",archives[-1]["status"])
+        archived_base=archives[-1]["annotations"]
+        self.assertEqual(len(self.project.annotations(specimen_id,1,"human")),replaced["annotations"])
+        self.assertGreaterEqual(len(archived_base),3)
+        self.assertTrue(any(row.get("role_structure_ids") for row in archived_base))
 
     def test_ai_seed_can_initialize_repeatability_pass_without_touching_main_truth(self):
         image_id=self.project.source_images()[0]["image_id"]
@@ -265,7 +282,9 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertIn("structure_prediction_candidate_ids(self,pass_no=1)",project)
         self.assertIn("if run and str(run.get(\"status\") or \"\")==\"verified\"",project)
         self.assertIn("pass_no=1",host)
+        self.assertIn("allow_verified=False",host)
         self.assertIn("structure_prediction_candidate_ids(pass_no)",host)
+        self.assertIn("allow_verified=bool(allow_verified)",host)
 
     def test_runner_is_variable_count_heatmap_model_without_anatomy_changing_flips(self):
         root=Path(__file__).resolve().parents[1]
@@ -296,7 +315,12 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertIn("structure_repeatability_metrics",ui)
         self.assertIn("pass_no=pass_no",ui)
         self.assertIn("_marker_visibility_buttons",ui)
+        self.assertIn("_marker_visibility_vars",ui)
+        self.assertIn("add_radiobutton",ui)
         self.assertIn("_VISIBILITY_SYMBOLS",ui)
+        self.assertIn("can_predict=bool(self.selected_specimen_id and model)",ui)
+        self.assertIn("allow_verified=True",ui)
+        self.assertIn("current verified annotation will be archived first",ui)
         self.assertNotIn('text="Visibility:"',ui)
         self.assertNotIn('ttk.Button(train_actions,text="Export trained AI…"',ui)
         self.assertNotIn('ttk.Button(train_actions,text="Import trained AI…"',ui)

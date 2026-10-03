@@ -872,13 +872,57 @@ class XRayProject:
             if specimen_id not in seen:seen.add(specimen_id);result.append(specimen_id)
         return result
 
-    def seed_structure_predictions(self,specimen_id,predictions,model_id,role_tolerance=0.035,pass_no=1):
+    def _archive_annotation_snapshot(self,c,run,reason):
+        """Persist the current annotation state before an explicit AI replacement."""
+        run_id=str(run["run_id"]);specimen_id=str(run["specimen_id"])
+        specimen=self.specimen(specimen_id)
+        rows=c.execute(
+            "SELECT annotation_id,structure_id,x,y,sort_order FROM annotations WHERE run_id=? ORDER BY structure_id,sort_order,annotation_id",
+            (run_id,),
+        ).fetchall()
+        roles=c.execute(
+            "SELECT annotation_id,structure_id FROM annotation_roles WHERE run_id=? ORDER BY role_id",(run_id,)
+        ).fetchall()
+        states=c.execute(
+            "SELECT structure_id,visibility FROM annotation_structure_states WHERE run_id=? ORDER BY structure_id",(run_id,)
+        ).fetchall()
+        if not rows and not roles and not states:return None
+        role_map={}
+        for annotation_id,structure_id in roles:
+            role_map.setdefault(int(annotation_id),[]).append(str(structure_id))
+        payload=[
+            {
+                "annotation_id":int(row[0]),"structure_id":str(row[1]),
+                "x":float(row[2]),"y":float(row[3]),"sort_order":int(row[4]),
+                "role_structure_ids":role_map.get(int(row[0]),[]),
+            }
+            for row in rows
+        ]
+        state_payload={
+            str(structure_id):str(visibility)
+            for structure_id,visibility in states
+            if str(visibility) in STRUCTURE_VISIBILITY_STATES
+        }
+        cur=c.execute(
+            """INSERT INTO annotation_archives(
+                 run_id,specimen_id,created_at,reason,crop_json,annotations_json,structure_states_json,
+                 schema_version_id,pass_no,source,status
+               ) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                run_id,specimen_id,_now(),str(reason),_json(specimen.get("crop") or {}),
+                _json(payload),_json(state_payload),str(run["schema_version_id"]),
+                int(run["pass_no"]),str(run["source"]),str(run["status"]),
+            ),
+        )
+        return int(cur.lastrowid)
+
+    def seed_structure_predictions(self,specimen_id,predictions,model_id,role_tolerance=0.035,pass_no=1,allow_verified=False):
         specimen_id=str(specimen_id);specimen=self.specimen(specimen_id);image=self.source_image(specimen["image_id"])
         if specimen["excluded"] or specimen["crop_status"]!="confirmed" or image["excluded"] or not image["crop_reviewed"]:
             raise ValueError("AI structure markers can be seeded only on confirmed specimen crops.")
         pass_no=int(pass_no)
         run=self.annotation_run(specimen_id,pass_no,"human",False)
-        if run and str(run.get("status") or "")=="verified":
+        if run and str(run.get("status") or "")=="verified" and not bool(allow_verified):
             return {"protected":True,"annotations":0,"roles":0,"model_id":str(model_id),"pass_no":pass_no}
         if run is None:
             self.ensure_annotation_run(specimen_id,pass_no,"human")
@@ -894,6 +938,9 @@ class XRayProject:
             grouped.setdefault(sid,[]).append({"x":x,"y":y,"score":score})
         inserted=[];role_count=0
         with sqlite3.connect(self.db_path) as c:
+            archive_id=self._archive_annotation_snapshot(
+                c,run,"predict_current_replace_verified" if str(run.get("status") or "")=="verified" else "model_seed_refresh"
+            )
             c.execute("DELETE FROM annotation_roles WHERE run_id=?",(run_id,))
             c.execute("DELETE FROM annotations WHERE run_id=?",(run_id,))
             for structure in structures:
@@ -942,7 +989,8 @@ class XRayProject:
             self._annotation_event(
                 c,run_id,"model_seed",payload={
                     "model_id":str(model_id),"pass_no":pass_no,"predictions":safe_predictions,
-                    "annotations":len(inserted),"roles":role_count,
+                    "annotations":len(inserted),"roles":role_count,"replaced_archive_id":archive_id,
+                    "replaced_verified":bool(str(run.get("status") or "")=="verified"),
                 },
             )
             c.execute(

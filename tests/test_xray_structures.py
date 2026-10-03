@@ -550,6 +550,19 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn("DEFAULT_PALETTE",display)
         self.assertIn('"colors":colors',display);self.assertIn('"symbols":symbols',display)
         self.assertNotIn("Same marker language as Landmarks.",ui)
+    def test_structure_presence_state_is_single_mutually_exclusive_value(self):
+        sid=self.specimen_id
+        self.project.set_structure_visibility(sid,"preanal_pterygiophore","partial",1,"human")
+        self.project.set_structure_visibility(sid,"preanal_pterygiophore","not_visible",1,"human")
+        self.assertEqual("not_visible",self.project.structure_visibility(sid,"preanal_pterygiophore",1,"human"))
+        run=self.project.annotation_run(sid,1,"human",False)
+        with sqlite3.connect(self.project.db_path) as c:
+            rows=c.execute(
+                "SELECT visibility FROM annotation_structure_states WHERE run_id=? AND structure_id=?",
+                (run["run_id"],"preanal_pterygiophore"),
+            ).fetchall()
+        self.assertEqual([("not_visible",)],rows)
+
     def test_structures_ui_has_compact_per_marker_visibility_and_quick_result_check(self):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
