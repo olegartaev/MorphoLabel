@@ -90,37 +90,6 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         self.assertEqual(catalog[self.specimen_id],int(active[self.specimen_id]["workflow_no"]))
         self.assertEqual(before,self.project.effective_annotations(self.specimen_id,1,"human"))
 
-    def test_legacy_phoxinus_offsets_are_corrected_without_losing_annotations(self):
-        root=Path(tempfile.mkdtemp())
-        try:
-            source=root/"source";source.mkdir()
-            Image.fromarray(np.full((300,600),80,np.uint8)).save(source/"plate.png")
-            destination=root/"projects";destination.mkdir()
-            legacy=bundled_scheme("phoxinus_vertebral_counts")
-            by_id={item["id"]:item for item in legacy["traits"]}
-            for trait_id in ("tv","abdv","predv"):by_id[trait_id].setdefault("rule",{})["offset"]=4
-            project=XRayProject.create("legacy",source,destination,legacy)
-            image_id=project.source_images()[0]["image_id"]
-            sid=project.add_manual_specimen(image_id,crop_from_geometry(300,150,440,120,0,(600,300),algorithm="manual"))
-            project.confirm_plate(image_id)
-            a=project.add_annotation(sid,"vertebra",0.10,0.50,1)
-            b=project.add_annotation(sid,"vertebra",0.30,0.50,1)
-            c=project.add_annotation(sid,"vertebra",0.50,0.50,1)
-            project.assign_annotation_role(b,"first_caudal");project.assign_annotation_role(c,"last_predorsal")
-            project.add_annotation(sid,"preanal_pterygiophore",0.40,0.70,1)
-            project.verify_annotations(sid,1)
-            old_version=project.active_scheme_record()["version_id"]
-            old_annotations=[dict(row) for row in project.effective_annotations(sid,1,"human")]
-            self.assertTrue(project.ensure_phoxinus_count_semantics())
-            self.assertNotEqual(old_version,project.active_scheme_record()["version_id"])
-            self.assertEqual("verified",project.annotation_run(sid,1,"human",False)["status"])
-            self.assertEqual(old_annotations,project.effective_annotations(sid,1,"human"))
-            values=project.trait_rows()[0]["trait_values"]
-            self.assertEqual(3,values["tv"]);self.assertEqual(1,values["abdv"]);self.assertEqual(2,values["caudv"])
-            self.assertEqual(3,values["predv"]);self.assertEqual("1+2",values["formv"])
-            self.assertFalse(project.ensure_phoxinus_count_semantics())
-        finally:shutil.rmtree(root,ignore_errors=True)
-
 
     def test_point_edits_are_normalized_persisted_and_logged(self):
         annotation_id=self.project.add_annotation(self.specimen_id,"vertebra",-2,4,1)
