@@ -98,16 +98,16 @@ def workload_tuning_key(*, workload: str, model: str | None = None, input_size=N
 
 
 def cpu_worker_candidates(hardware: HardwareProfile | None = None) -> tuple[int, ...]:
-    """Return useful powers-of-two plus the machine capacity, never an arbitrary cap."""
+    """Return powers-of-two plus physical and logical machine capacities."""
     profile = hardware or get_hardware_profile()
-    available = max(1, int(profile.logical_cores or profile.physical_cores or 1))
+    logical = max(1, int(profile.logical_cores or profile.physical_cores or 1))
+    physical = max(1, int(profile.physical_cores or logical))
     values, candidate = [], 1
-    while candidate <= available:
+    while candidate <= logical:
         values.append(candidate)
         candidate *= 2
-    if values[-1] != available:
-        values.append(available)
-    return tuple(values)
+    values.extend((physical, logical))
+    return tuple(sorted(set(value for value in values if 1 <= value <= logical)))
 
 def _metric_value(result, metric):
     if isinstance(result, dict):
