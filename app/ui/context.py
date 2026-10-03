@@ -85,7 +85,8 @@ class UIContext:
   """Cache project-wide Crop counters; a selection change never invalidates them."""
   if not self.project:return {"Total":0,"Reviewed":0,"AI pending":0,"Train ready":0,"Uncropped":0}
   if self._crop_counts_cache is None:
-   self._crop_counts_cache=dict(getattr(self.project,"crop_section_counts",self.project.crop_counts)())
+   counter=getattr(self.project,"crop_section_counts",None) or self.project.crop_counts
+   self._crop_counts_cache=dict(counter())
   return self._crop_counts_cache
  def crop_enabled(self):return bool(self.project and self.project.get_ui_state('crop_enabled',True))
  def set_crop_enabled(self,enabled):
