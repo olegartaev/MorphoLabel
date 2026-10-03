@@ -142,7 +142,12 @@ class XRaySpecimenListPanel(ttk.Frame):
         if yview is not None and not reveal:self.canvas.yview_moveto(yview)
 
     def select(self,specimen_id,reveal=True):
-        self.selected_specimen_id=str(specimen_id or "");self.refresh(preserve_scroll=not reveal,reveal=reveal)
+        self.selected_specimen_id=str(specimen_id or "")
+        selected_index=next((i for i,row in enumerate(self._rows) if row["specimen_id"]==self.selected_specimen_id),None)
+        if selected_index not in self.visible_indices:
+            self.refresh(preserve_scroll=True,reveal=False);return
+        visible=self.visible_indices.index(selected_index);self.canvas.selection_set(visible)
+        if reveal:self.canvas.see(visible,align_top=True)
 
     def rows(self):return list(self._rows)
     def visible_ids(self):return [self._rows[index]["specimen_id"] for index in self.visible_indices]
@@ -153,7 +158,7 @@ class XRaySpecimenListPanel(ttk.Frame):
         visible=selection[0]
         if not 0<=visible<len(self.visible_indices):return
         row=self._rows[self.visible_indices[visible]]
-        self.selected_specimen_id=row["specimen_id"];self.on_select(row["specimen_id"]);self.refresh(preserve_scroll=True)
+        self.selected_specimen_id=row["specimen_id"];self.on_select(row["specimen_id"])
 
 
 class XRayStructureWorkspace:
@@ -473,7 +478,8 @@ class XRayStructureWorkspace:
         self.specimen_list.pass_no=self.pass_no.get();rows=self.project.structure_specimens(self.pass_no.get());ids=[row["specimen_id"] for row in rows]
         batch=self.project.structure_batch(self.pass_no.get());batch_ids=list(batch.get("ids") or ())
         preferred_batch=batch_ids[int(batch.get("position",0) or 0)] if batch_ids else None
-        target=self.selected_specimen_id if self.selected_specimen_id in ids else preferred_batch if preferred_batch in ids else next((row["specimen_id"] for row in rows if row["image_id"]==self.preferred_image_id),None)
+        preferred_plate=next((row["specimen_id"] for row in rows if row["image_id"]==self.preferred_image_id),None)
+        target=self.selected_specimen_id if self.selected_specimen_id in ids else preferred_plate if preferred_plate in ids else preferred_batch if preferred_batch in ids else None
         self.selected_specimen_id=target or (ids[0] if ids else "")
         self.specimen_list.selected_specimen_id=self.selected_specimen_id;self.specimen_list.refresh(reveal=True)
         if self.selected_specimen_id:self._load_specimen(self.selected_specimen_id)
@@ -496,7 +502,7 @@ class XRayStructureWorkspace:
             messagebox.showerror("Structures",f"Could not open specimen crop:\n{exc}",parent=self.root);self.crop_image=None
         self.annotations=self.project.annotations(specimen_id,self.pass_no.get());self.roles=self.project.annotation_roles(specimen_id,self.pass_no.get())
         self.zoom=1.0;self.pan=None;self.pan_drag=None;self._raster_key=None;self._image_item=None;self.photo=None;self.canvas.delete("all")
-        self.specimen_list.select(specimen_id,reveal=True);self._build_marker_buttons();self._update_counts();self._draw();self._refresh_summary();self._refresh_workflow();self._notify_selection();self.canvas.focus_set()
+        self.specimen_list.select(specimen_id,reveal=False);self._build_marker_buttons();self._update_counts();self._draw();self._notify_selection();self.canvas.focus_set()
 
     def _clear(self):
         self.selected_specimen_id="";self.crop_image=self.photo=None;self.annotations=[];self.roles=[];self._set_context(None)
