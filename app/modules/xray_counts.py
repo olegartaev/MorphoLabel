@@ -325,9 +325,7 @@ class XRayCountsRuntime:
 
     def _ensure_working_scheme(self):
         if self.project is None:return False
-        changed=self.project.ensure_initial_bundled_scheme("phoxinus_vertebral_counts")
-        corrected=self.project.ensure_phoxinus_count_semantics()
-        return bool(changed or corrected)
+        return self.project.ensure_initial_bundled_scheme("phoxinus_vertebral_counts")
 
     @staticmethod
     def _sample_name(relative_path):
