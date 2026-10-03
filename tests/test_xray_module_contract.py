@@ -274,14 +274,18 @@ class XRayModuleContractTests(unittest.TestCase):
             def __init__(self):
                 self.order=["a","b","c"];self.values={"a":{"x":"10"},"b":{"x":"2"},"c":{"x":""}}
             def get_children(self,_parent=""):return tuple(self.order)
-            def set(self,item,column):return self.values[item][column]
+            def set(self,item,column,value=None):
+                if value is None:return self.values[item].get(column,"")
+                self.values[item][column]=value
             def move(self,item,_parent,index):
                 self.order.remove(item);self.order.insert(index,item)
             def item(self,item,tags=()):pass
             def heading(self,column,command=None):pass
         tree=Tree()
         self.assertEqual(["b","a","c"],_sort_export_tree(tree,"x",False))
+        self.assertEqual(["1","2","3"],[tree.values[item]["row_no"] for item in tree.order])
         self.assertEqual(["a","b","c"],_sort_export_tree(tree,"x",True))
+        self.assertEqual(["1","2","3"],[tree.values[item]["row_no"] for item in tree.order])
 
     def test_result_checks_start_a_ranked_navigable_review_queue(self):
         root=Path(__file__).resolve().parents[1]
