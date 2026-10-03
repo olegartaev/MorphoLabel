@@ -71,9 +71,7 @@
       "structures": [
         "vertebra"
       ],
-      "rule": {
-        "offset": 4
-      }
+      "rule": {}
     },
     {
       "id": "abdv",
@@ -86,8 +84,7 @@
       ],
       "rule": {
         "reference": "first_caudal",
-        "side": "before",
-        "offset": 4
+        "side": "before"
       }
     },
     {
@@ -115,8 +112,7 @@
       ],
       "rule": {
         "reference": "last_predorsal",
-        "side": "through",
-        "offset": 4
+        "side": "through"
       }
     },
     {
