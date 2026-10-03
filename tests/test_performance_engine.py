@@ -28,7 +28,8 @@ class PerformanceEngineTests(unittest.TestCase):
         from unittest.mock import patch
         import app.ai_hardware as hardware
         value = profile(8)
-        with patch("app.ai_hardware.detect_hardware", return_value=value) as detected:
+        with patch("app.ai_hardware.persisted_hardware_profile", return_value=None), \
+             patch("app.ai_hardware.detect_hardware", return_value=value) as detected:
             hardware._HARDWARE_PROFILE = None
             self.assertIs(value, hardware.get_hardware_profile())
             self.assertIs(value, hardware.get_hardware_profile())
