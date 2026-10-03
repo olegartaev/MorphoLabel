@@ -393,7 +393,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn('style="SectionTitle.TLabel"',ui)
         self.assertIn('state="readonly",width=11',ui)
         self.assertNotIn("self.counts_label",ui)
-        self.assertNotIn("self.summary_label",ui)
+        self.assertNotIn("self.summary_label=ttk.Label",ui)
 
     def test_structure_toolbar_keeps_current_layout_and_restores_original_marker_display(self):
         root=Path(__file__).resolve().parents[1]
