@@ -71,6 +71,8 @@ class PhotoListPanel(ttk.Frame):
   if self.context.selected in self.visible_indices:self.canvas.selection_set(self.visible_indices.index(self.context.selected))
   if yview is not None:self.canvas.yview_moveto(yview)
   elif self.context.selected in self.visible_indices:self.canvas.see(self.visible_indices.index(self.context.selected))
+  self._refresh_action()
+ def _refresh_action(self):
   row=self.context.current() or {};excluded=bool(row.get('excluded'));self.exclude_button.configure(text='Restore' if excluded else 'Exclude',image=self._action_icon('restore' if excluded else 'exclude'),state='normal' if row else 'disabled')
  def refresh_image(self,image_id):
   """Redraw one visible catalog row after a persisted background change."""
@@ -90,7 +92,8 @@ class PhotoListPanel(ttk.Frame):
    if reveal:self.canvas.see(visible,align_top=align_top)
  def _selected(self,_event=None):
   selection=self.canvas.curselection()
-  if selection and 0<=selection[0]<len(self.visible_indices):self.context.selected=self.visible_indices[selection[0]];self._notify(True);self.refresh(preserve_scroll=True)
+  if selection and 0<=selection[0]<len(self.visible_indices):
+   self.context.selected=self.visible_indices[selection[0]];self._refresh_action();self._notify(True)
  def _notify(self,preserve_list):
   if len(inspect.signature(self.on_select).parameters):self.on_select(preserve_list)
   else:self.on_select()
