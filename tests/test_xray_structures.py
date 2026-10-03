@@ -542,7 +542,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         for text in (
             "Apply","Sample","Specimen","Locality:","Plate:","Specimen:",
-            "PhotoListCanvas","status_shape=\"square\"","Annotation batch","Repeatability","Training data","Open Export",
+            "PhotoListCanvas","status_shape=\"square\"","Annotation batch","Repeatability","Training data",
             "delete_selected","clear_marker_category","clear_all_markers","clear_type_button",
             "move_annotation","replace_single","_wheel","_pan_motion","_key_pressed","_structure_button_order",
         ):
@@ -568,9 +568,13 @@ class XRayStructureUIContractTests(unittest.TestCase):
     def test_results_exposes_non_destructive_scientific_qc_review(self):
         root=Path(__file__).resolve().parents[1]
         module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
+        ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         qc=(root/"app/xray_result_qc.py").read_text(encoding="utf-8")
-        for text in ("Check results…","Rank suspicious results worst first","review queue","never automatic exclusions"):
-            self.assertIn(text,module)
+        export_section=module[module.index("    def _render_results"):module.index("    def _show_result_checks")]
+        self.assertNotIn("Check results…",export_section)
+        self.assertIn('text="Check results…"',ui)
+        self.assertIn("build_result_qc(self.project)",module)
+        self.assertIn("start_result_review_queue(self.project",module)
         for text in ("modified_z","series_spacing","sample_outlier","detached_reference","repeat_count","repeat_position"):
             self.assertIn(text,qc)
 
