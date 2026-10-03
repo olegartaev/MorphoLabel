@@ -290,8 +290,13 @@ def _calibrate(model, rows, meta, device):
         cache.append((row, _decode_one(model, row["path"], meta, device, very_low)))
     thresholds = {}
     metrics = {}
+    macro_f1_values = []
     for structure in structures:
         sid = structure["id"]
+        evaluable = sum(
+            1 for row, _decoded in cache
+            if str((row.get("visibility") or {}).get(sid, "complete") or "complete") not in {"partial", "not_visible"}
+        )
         best = None
         for threshold in grids:
             tp = fp = fn = 0
@@ -317,8 +322,11 @@ def _calibrate(model, rows, meta, device):
         metrics[f"structure/{sid}/precision"] = float(precision)
         metrics[f"structure/{sid}/recall"] = float(recall)
         metrics[f"structure/{sid}/f1"] = float(f1)
-    f1_values = [value for key, value in metrics.items() if key.endswith("/f1")]
-    metrics["structure/macro_f1"] = sum(f1_values) / max(1, len(f1_values))
+        metrics[f"structure/{sid}/evaluable_images"] = int(evaluable)
+        if evaluable:
+            macro_f1_values.append(float(f1))
+    metrics["structure/macro_f1"] = sum(macro_f1_values) / max(1, len(macro_f1_values))
+    metrics["structure/macro_evaluable_classes"] = int(len(macro_f1_values))
     return thresholds, metrics
 
 
