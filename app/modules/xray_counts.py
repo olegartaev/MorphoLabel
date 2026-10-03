@@ -223,7 +223,7 @@ class XRayCountsRuntime:
         try:image=self.project.source_image(image_id)
         except KeyError:return ""
         path=Path(image["relative_path"]);sample=self._sample_name(image["relative_path"])
-        if specimen is not None:return f"Locality: {sample}  ·  Plate: {path.name}  ·  Fish №{int(specimen.get('ordinal') or 0)}"
+        if specimen is not None:return f"Locality: {sample}  ·  Plate: {path.name}  ·  Specimen: №{int(specimen.get('ordinal') or 0)}"
         return f"Locality: {sample}  ·  Plate: {path.name}"
 
     def render(self,host):
@@ -376,7 +376,7 @@ class XRayCountsRuntime:
         tree=ttk.Treeview(host,columns=cols,show="headings",selectmode="browse",height=16)
         tree.heading("locality",text="Locality");tree.column("locality",width=180,anchor="w")
         tree.heading("plate",text="Plate");tree.column("plate",width=220,anchor="w")
-        tree.heading("fish",text="Fish №");tree.column("fish",width=62,anchor="center",stretch=False)
+        tree.heading("fish",text="Specimen");tree.column("fish",width=62,anchor="center",stretch=False)
         for trait in traits:
             col=trait.get("abbr") or trait["id"];tree.heading(col,text=col);tree.column(col,width=78,anchor="center",stretch=False)
         tree.heading("status",text="Status");tree.column("status",width=90,anchor="center",stretch=False)
