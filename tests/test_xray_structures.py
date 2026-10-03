@@ -548,6 +548,20 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn("DEFAULT_PALETTE",display)
         self.assertIn('"colors":colors',display);self.assertIn('"symbols":symbols',display)
         self.assertNotIn("Same marker language as Landmarks.",ui)
+    def test_structures_ui_has_compact_per_marker_visibility_and_quick_result_check(self):
+        root=Path(__file__).resolve().parents[1]
+        ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
+        module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
+        shell=(root/"app/ui/shell.py").read_text(encoding="utf-8")
+        self.assertIn("_VISIBILITY_SYMBOLS",ui)
+        self.assertIn("_marker_visibility_buttons",ui)
+        self.assertIn("Check results…",ui)
+        self.assertNotIn('text="Visibility:"',ui)
+        self.assertIn("standard_menu_entries",module)
+        self.assertIn("Import X-ray Structure AI…",module)
+        self.assertIn("Export active X-ray Structure AI…",module)
+        self.assertIn("standard_menu_entries",shell)
+
     def test_structures_ui_renders_oriented_crop_without_project_image_copy(self):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")

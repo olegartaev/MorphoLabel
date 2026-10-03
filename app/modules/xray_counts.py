@@ -15,6 +15,7 @@ from app.xray_project import XRayProject
 from app.xray_result_qc import build_result_qc
 from app.xray_crop_ui import XRayCropWorkspace
 from app.xray_structures_ui import XRayStructureWorkspace
+from app.xray_structure_ai import export_structure_model_package,import_structure_model_package
 from app.xray_schema import (
     MARKER_COLORS,METHOD_BY_ID,SCHEME_RESOURCE_DIR,SHAPES,TRAIT_METHODS,blank_scheme,bundled_scheme,normalize_scheme,
     compatible_reference_roles,load_scheme_file,save_scheme_file,scheme_change_impact,structure_usage,
@@ -274,6 +275,52 @@ class XRayCountsRuntime:
         key=("core",name,size)
         if key not in self._images:self._images[key]=tk_icon(master,name,size)
         return self._images[key]
+    def standard_menu_entries(self):
+        """Module-owned commands injected into MorphoLabel's top-right Menu."""
+        available=bool(self.project)
+        active=bool(available and self.project.active_structure_model())
+        return (
+            {"label":"Import X-ray Structure AI…","command":self._menu_import_structure_ai,"state":"normal" if available else "disabled"},
+            {"label":"Export active X-ray Structure AI…","command":self._menu_export_structure_ai,"state":"normal" if active else "disabled"},
+        )
+
+    def _menu_import_structure_ai(self):
+        if self.project is None:return
+        root=self.host.container.winfo_toplevel()
+        source=filedialog.askopenfilename(
+            parent=root,title="Import trained Structure AI",
+            filetypes=(("MorphoLabel Structure AI","*.zip"),("ZIP files","*.zip")),
+        )
+        if not source:return
+        try:
+            model_id=import_structure_model_package(self.project,source)
+            self.project.activate_structure_model(model_id)
+        except Exception as exc:
+            messagebox.showerror("Import Structure AI",str(exc),parent=root);return
+        if self._workspace is not None and hasattr(self._workspace,"_refresh_workflow"):
+            self._workspace._refresh_workflow();self._workspace._refresh_summary()
+        messagebox.showinfo("Import Structure AI",f"Imported and activated {model_id}.",parent=root)
+
+    def _menu_export_structure_ai(self):
+        if self.project is None:return
+        root=self.host.container.winfo_toplevel();model=self.project.active_structure_model()
+        if not model:
+            messagebox.showinfo("Export Structure AI","No active Structure AI model.",parent=root);return
+        target=filedialog.asksaveasfilename(
+            parent=root,title="Export trained Structure AI",defaultextension=".zip",
+            initialfile=f"{model['model_id']}.zip",
+            filetypes=(("MorphoLabel Structure AI","*.zip"),("ZIP files","*.zip")),
+        )
+        if not target:return
+        try:export_structure_model_package(self.project,target,model["model_id"])
+        except Exception as exc:
+            messagebox.showerror("Export Structure AI",str(exc),parent=root);return
+        messagebox.showinfo(
+            "Export Structure AI",
+            "Saved as one portable model file. Source X-rays are not included.",
+            parent=root,
+        )
+
     def _header(self,parent):
         nav=ttk.Frame(parent,style="Topbar.TFrame");nav.pack(fill="x",pady=(0,4))
         home=ttk.Button(nav,text="Modules",image=self._core_icon(nav,"modules"),compound="left",command=self._show_module_hub,style="Stage.TButton")
@@ -401,6 +448,7 @@ class XRayCountsRuntime:
             parent,self.project,
             initial_image_id=selection.get("image_id"),initial_specimen_id=selection.get("specimen_id"),
             on_selection=self._set_selection,on_open_results=lambda:self._select("results"),
+            on_check_results=self._show_result_checks,
         )
 
     @staticmethod

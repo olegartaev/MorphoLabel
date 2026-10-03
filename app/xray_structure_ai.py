@@ -402,20 +402,21 @@ def _flatten_prediction(groups):
     return rows
 
 
-def predict_structures(project, specimen_ids=None, count=None, cancel=None, progress=None, model=None):
+def predict_structures(project, specimen_ids=None, count=None, cancel=None, progress=None, model=None, pass_no=1):
     model = model or project.active_structure_model()
     if not model:
         raise XRayStructureAIError("Train or import an X-ray structure model before prediction.")
     current_digest = structure_schema_digest(project.scheme)
     if str(model.get("schema_digest") or "") != current_digest:
         raise XRayStructureAIError("The active structure model is incompatible with the current X-ray structure scheme.")
-    candidates = list(project.structure_prediction_candidate_ids())
+    pass_no = int(pass_no)
+    candidates = list(project.structure_prediction_candidate_ids(pass_no))
     if specimen_ids is not None:
         allowed = set(candidates)
         ids = [str(value) for value in specimen_ids if str(value) in allowed]
     else:
         ids = project.select_structure_prediction_ids(
-            len(candidates) if count is None else max(1, int(count))
+            len(candidates) if count is None else max(1, int(count)),pass_no=pass_no
         )
     if not ids:
         return {"success": [], "failures": [], "model_id": model["model_id"]}
@@ -467,7 +468,9 @@ def predict_structures(project, specimen_ids=None, count=None, cancel=None, prog
                     if offset >= len(returned):
                         raise RuntimeError("Structure model returned an incomplete prediction batch.")
                     points = _flatten_prediction(returned[offset].get("structures") or ())
-                    saved = project.seed_structure_predictions(specimen_id, points, model["model_id"])
+                    saved = project.seed_structure_predictions(
+                        specimen_id, points, model["model_id"], pass_no=pass_no
+                    )
                     success.append({"specimen_id": specimen_id, "saved": saved})
                 except Exception as exc:
                     failures.append({"specimen_id": specimen_id, "reason": str(exc)})

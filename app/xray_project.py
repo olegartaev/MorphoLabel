@@ -833,19 +833,23 @@ class XRayProject:
         if model_dir.exists():shutil.rmtree(model_dir)
         return model_id
 
-    def structure_prediction_candidate_ids(self):
+    def structure_prediction_candidate_ids(self,pass_no=1):
+        """Every eligible specimen except a human-verified annotation in this pass.
+
+        Drafts are intentionally eligible: Predict current / Predict all may refresh
+        unverified AI or manual drafts, while Apply/verified work is protected.
+        """
         ids=[]
-        for row in self.structure_specimens(1):
-            status=str(row.get("annotation_status") or "")
-            if status=="verified":continue
-            if not row.get("run_id"):
-                ids.append(str(row["specimen_id"]));continue
-            if status.startswith("stale") and not self.annotations(row["specimen_id"],1,"human") and not self.annotation_roles(row["specimen_id"],1,"human"):
-                ids.append(str(row["specimen_id"]))
+        for row in self.structure_specimens(int(pass_no)):
+            if str(row.get("annotation_status") or "")=="verified":continue
+            ids.append(str(row["specimen_id"]))
         return ids
 
-    def select_structure_prediction_ids(self,count,seed=42):
-        return self._sample_crop_plate_ids(self.structure_prediction_candidate_ids(),max(1,int(count)),seed=seed)
+    def select_structure_prediction_ids(self,count,seed=42,pass_no=1):
+        return self._sample_crop_plate_ids(
+            self.structure_prediction_candidate_ids(pass_no),
+            max(1,int(count)),seed=seed,
+        )
 
     def structure_ai_review_ids(self):
         schema_id=self.active_scheme_record()["version_id"]
@@ -868,16 +872,17 @@ class XRayProject:
             if specimen_id not in seen:seen.add(specimen_id);result.append(specimen_id)
         return result
 
-    def seed_structure_predictions(self,specimen_id,predictions,model_id,role_tolerance=0.035):
+    def seed_structure_predictions(self,specimen_id,predictions,model_id,role_tolerance=0.035,pass_no=1):
         specimen_id=str(specimen_id);specimen=self.specimen(specimen_id);image=self.source_image(specimen["image_id"])
         if specimen["excluded"] or specimen["crop_status"]!="confirmed" or image["excluded"] or not image["crop_reviewed"]:
             raise ValueError("AI structure markers can be seeded only on confirmed specimen crops.")
-        run=self.annotation_run(specimen_id,1,"human",False)
-        if run and not str(run.get("status") or "").startswith("stale"):
-            return {"protected":True,"annotations":0,"roles":0,"model_id":str(model_id)}
+        pass_no=int(pass_no)
+        run=self.annotation_run(specimen_id,pass_no,"human",False)
+        if run and str(run.get("status") or "")=="verified":
+            return {"protected":True,"annotations":0,"roles":0,"model_id":str(model_id),"pass_no":pass_no}
         if run is None:
-            self.ensure_annotation_run(specimen_id,1,"human")
-            run=self.annotation_run(specimen_id,1,"human",False)
+            self.ensure_annotation_run(specimen_id,pass_no,"human")
+            run=self.annotation_run(specimen_id,pass_no,"human",False)
         run_id=str(run["run_id"]);now=_now()
         structures=list(self.scheme.get("structures") or ());by_id={str(item["id"]):item for item in structures}
         grouped={}
@@ -936,7 +941,7 @@ class XRayProject:
             ]
             self._annotation_event(
                 c,run_id,"model_seed",payload={
-                    "model_id":str(model_id),"predictions":safe_predictions,
+                    "model_id":str(model_id),"pass_no":pass_no,"predictions":safe_predictions,
                     "annotations":len(inserted),"roles":role_count,
                 },
             )
@@ -944,8 +949,8 @@ class XRayProject:
                 "UPDATE annotation_runs SET status='draft',updated_at=?,verified_at='' WHERE run_id=?",
                 (now,run_id),
             )
-        self.recalculate_trait_results(specimen_id)
-        return {"protected":False,"annotations":len(inserted),"roles":role_count,"model_id":str(model_id)}
+        if pass_no==1:self.recalculate_trait_results(specimen_id)
+        return {"protected":False,"annotations":len(inserted),"roles":role_count,"model_id":str(model_id),"pass_no":pass_no}
 
     def crop_workspace_status(self):
         """Fast aggregate state for the interactive Crop workspace.

@@ -107,12 +107,32 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         self.assertEqual("draft",self.project.annotation_run(specimen_id,1)["status"])
         self.assertEqual(2,len(self.project.annotation_roles(specimen_id,1)))
         self.assertIn(specimen_id,self.project.structure_ai_review_ids())
-        self.assertNotIn(specimen_id,self.project.structure_prediction_candidate_ids())
-        protected=self.project.seed_structure_predictions(specimen_id,[],"xray_structure_model_v002")
-        self.assertTrue(protected["protected"])
+        self.assertIn(specimen_id,self.project.structure_prediction_candidate_ids())
+        refreshed=self.project.seed_structure_predictions(specimen_id,[
+            {"structure_id":"vertebra","x":0.30,"y":0.50,"score":0.90},
+            {"structure_id":"preanal_pterygiophore","x":0.62,"y":0.66,"score":0.88},
+        ],"xray_structure_model_v002")
+        self.assertFalse(refreshed["protected"])
+        self.assertEqual("draft",self.project.annotation_run(specimen_id,1)["status"])
         self.project.verify_annotations(specimen_id,1)
+        protected=self.project.seed_structure_predictions(specimen_id,[],"xray_structure_model_v003")
+        self.assertTrue(protected["protected"])
         self.assertEqual("verified",self.project.annotation_run(specimen_id,1)["status"])
         self.assertNotIn(specimen_id,self.project.structure_ai_review_ids())
+
+    def test_ai_seed_can_initialize_repeatability_pass_without_touching_main_truth(self):
+        image_id=self.project.source_images()[0]["image_id"]
+        specimen_id=self._add_specimen(image_id,450);self.project.confirm_plate(image_id)
+        self._verify_structure_truth(specimen_id)
+        main_before=[dict(row) for row in self.project.effective_annotations(specimen_id,1,"human")]
+        result=self.project.seed_structure_predictions(specimen_id,[
+            {"structure_id":"vertebra","x":0.31,"y":0.50,"score":0.91},
+            {"structure_id":"preanal_pterygiophore","x":0.62,"y":0.67,"score":0.89},
+        ],"xray_structure_model_v001",pass_no=3)
+        self.assertFalse(result["protected"]);self.assertEqual(3,result["pass_no"])
+        self.assertEqual("draft",self.project.annotation_run(specimen_id,3,"human")["status"])
+        self.assertEqual(main_before,self.project.effective_annotations(specimen_id,1,"human"))
+        self.assertIn(specimen_id,self.project.structure_prediction_candidate_ids(3))
 
     def test_structure_model_registry_preserves_lineage_activation_and_membership(self):
         digest=structure_schema_digest(self.project.scheme)
@@ -234,6 +254,16 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertEqual(((3,4),(7,8)),_role_base_coordinates(structures[1],structures,detected))
         self.assertEqual((),_role_base_coordinates(structures[2],structures,detected))
 
+    def test_prediction_contract_refreshes_any_unverified_draft_but_protects_verified(self):
+        root=Path(__file__).resolve().parents[1]
+        project=(root/"app/xray_project.py").read_text(encoding="utf-8")
+        host=(root/"app/xray_structure_ai.py").read_text(encoding="utf-8")
+        self.assertIn("if str(row.get(\"annotation_status\") or \"\")==\"verified\":continue",project)
+        self.assertIn("structure_prediction_candidate_ids(self,pass_no=1)",project)
+        self.assertIn("if run and str(run.get(\"status\") or \"\")==\"verified\"",project)
+        self.assertIn("pass_no=1",host)
+        self.assertIn("structure_prediction_candidate_ids(pass_no)",host)
+
     def test_runner_is_variable_count_heatmap_model_without_anatomy_changing_flips(self):
         root=Path(__file__).resolve().parents[1]
         runner=(root/"ai_runtime/xray_structure_runner.py").read_text(encoding="utf-8")
@@ -254,15 +284,17 @@ class XRayStructureAIContractTests(unittest.TestCase):
         for text in (
             "Predict current","Human repeatability","Repeat…","Sample size",
             "Annotation 1","Annotation 2","Start new sample",
-            "Models ▾","Manage models…","Transfer ▾","Import trained AI…","Export selected AI…",
-            "one portable file",
+            "Models…","Check results…","one portable file",
         ):
             self.assertIn(text,ui)
         self.assertIn("_repeatability_diagram",ui)
         self.assertIn("_open_repeatability_pass",ui)
         self.assertIn("start_structure_repeatability",ui)
         self.assertIn("structure_repeatability_metrics",ui)
-        self.assertIn("AI suggestions are disabled during Human repeatability annotations.",ui)
+        self.assertIn("pass_no=pass_no",ui)
+        self.assertIn("_marker_visibility_buttons",ui)
+        self.assertIn("_VISIBILITY_SYMBOLS",ui)
+        self.assertNotIn('text="Visibility:"',ui)
         self.assertNotIn('ttk.Button(train_actions,text="Export trained AI…"',ui)
         self.assertNotIn('ttk.Button(train_actions,text="Import trained AI…"',ui)
 
@@ -270,8 +302,8 @@ class XRayStructureAIContractTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         for text in (
-            "Train Structure AI","Models ▾","Predict next","Predict all","Review AI",
-            "Export selected AI…","Import trained AI…","human-verified pass 1",
+            "Train Structure AI","Models…","Predict next","Predict all","Review AI",
+            "human-verified pass 1",
         ):
             self.assertIn(text,ui)
         self.assertIn("train_structure_model",ui)

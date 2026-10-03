@@ -65,6 +65,12 @@ _VISIBILITY_LABELS={
     "absent":"Absent",
 }
 _VISIBILITY_VALUES={label:value for value,label in _VISIBILITY_LABELS.items()}
+_VISIBILITY_SYMBOLS={
+    "complete":"✓",
+    "partial":"◐",
+    "not_visible":"⊘",
+    "absent":"∅",
+}
 _VISIBILITY_HELP=(
     "Visibility for the selected marker type. Complete = every visible instance is marked; "
     "Partial = only some visible instances can be marked; Not visible = this structure cannot "
@@ -191,10 +197,11 @@ class XRayStructureWorkspace:
 
     def __init__(
         self,parent,project,on_changed=None,initial_image_id=None,initial_specimen_id=None,
-        on_selection=None,on_open_results=None,
+        on_selection=None,on_open_results=None,on_check_results=None,
     ):
         self.parent=parent;self.root=parent.winfo_toplevel();self.project=project;self.on_changed=on_changed or (lambda:None)
         self.on_selection=on_selection or (lambda _image_id,_specimen_id:None);self.on_open_results=on_open_results or (lambda:None)
+        self.on_check_results=on_check_results or (lambda:None)
         self.tip=Tooltip(self.root);self.pass_no=tk.IntVar(value=1);self.batch_size=tk.IntVar(value=24)
         self.prediction_batch_size=tk.IntVar(value=24);self._busy=False
         self.selected_specimen_id=str(initial_specimen_id or "");self.preferred_image_id=str(initial_image_id or "")
@@ -283,13 +290,18 @@ class XRayStructureWorkspace:
         self.display_button=ttk.Button(
             tools,text="Display…",image=self._icon(tools,"display"),compound="left",style="P.TButton",command=self.open_display_settings,
         )
-        self.display_button.pack(side="left",padx=(2,6));self.tip.bind(self.display_button,"Marker display.")
+        self.display_button.pack(side="left",padx=(2,2));self.tip.bind(self.display_button,"Marker display.")
+        self.check_results_button=ttk.Button(
+            tools,text="Check results…",style="P.TButton",command=self.on_check_results,
+        )
+        self.check_results_button.pack(side="left",padx=(2,4))
+        self.tip.bind(self.check_results_button,"Quickly scan saved results for values or marker patterns worth manual review.")
         self.predict_current_button=ttk.Button(
             tools,text="Predict current",image=self._xray_icon(tools,"xray_structures"),compound="left",
             style="P.TButton",command=self.predict_current_structure,
         )
         self.predict_current_button.pack(side="left",padx=(2,2))
-        self.tip.bind(self.predict_current_button,"Place AI marker suggestions on this specimen only. Existing human markers are never overwritten.")
+        self.tip.bind(self.predict_current_button,"Place or refresh AI suggestions on this unverified specimen only. Correct them by hand, then Apply to make the result human-verified.")
         self.apply_separator=ttk.Separator(nav,orient="vertical");self.apply_separator.grid(row=0,column=1,sticky="ns",padx=7,pady=2)
         self.apply_button=ttk.Button(nav,text="Apply",image=self._xray_icon(nav,"structure_apply"),compound="left",style="NavPrimary.TButton",command=self.verify_current)
         self.apply_button.grid(row=0,column=2,sticky="e")
@@ -308,15 +320,7 @@ class XRayStructureWorkspace:
 
         marker_dock=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(6,4));marker_dock.grid(row=2,column=0,sticky="ew",pady=(4,0));marker_dock.columnconfigure(1,weight=1)
         ttk.Label(marker_dock,text="Markers:",style="SectionTitle.TLabel").grid(row=0,column=0,sticky="w",padx=(0,6))
-        self.marker_host=ttk.Frame(marker_dock,style="WorkflowDock.TFrame");self.marker_host.grid(row=0,column=1,sticky="w")
-        visibility=ttk.Frame(marker_dock,style="WorkflowDock.TFrame");visibility.grid(row=0,column=2,sticky="e",padx=(10,0))
-        ttk.Label(visibility,text="Visibility:",style="Muted.TLabel").pack(side="left",padx=(0,4))
-        self.visibility_var=tk.StringVar(master=self.root,value="Complete")
-        self.visibility_box=ttk.Combobox(
-            visibility,textvariable=self.visibility_var,values=tuple(_VISIBILITY_VALUES),state="readonly",width=11,
-        )
-        self.visibility_box.pack(side="left");self.visibility_box.bind("<<ComboboxSelected>>",self._visibility_changed)
-        self.tip.bind(visibility,_VISIBILITY_HELP);self.tip.bind(self.visibility_box,_VISIBILITY_HELP)
+        self.marker_host=ttk.Frame(marker_dock,style="WorkflowDock.TFrame");self.marker_host.grid(row=0,column=1,sticky="ew")
 
         workflow=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(0,4,0,0));workflow.grid(row=3,column=0,sticky="ew")
         workflow.columnconfigure(0,weight=1);workflow.columnconfigure(1,weight=1);workflow.columnconfigure(2,weight=1);workflow.columnconfigure(3,weight=1)
@@ -342,15 +346,7 @@ class XRayStructureWorkspace:
         train_actions=ttk.Frame(three);train_actions.grid(row=2,column=0,columnspan=4,sticky="ew",pady=(5,0))
         self.structure_train_button=ttk.Button(train_actions,text="Train Structure AI",command=self.train_structure_ai)
         self.structure_train_button.pack(side="left")
-        self.model_menu_button=ttk.Menubutton(train_actions,text="Models ▾",style="P.TButton")
-        self.model_menu_button.pack(side="left",padx=(5,0))
-        model_menu=tk.Menu(self.model_menu_button,tearoff=False)
-        model_menu.add_command(label="Manage models…",command=self.manage_structure_models)
-        model_menu.add_separator()
-        model_menu.add_command(label="Import trained AI…",command=self.import_structure_ai_file)
-        model_menu.add_command(label="Export active AI…",command=self.export_active_structure_ai)
-        self.model_menu_button.configure(menu=model_menu)
-        self.tip.bind(self.model_menu_button,"Manage saved Structure AI models or transfer one trained model as a portable file.")
+        ttk.Button(train_actions,text="Models…",command=self.manage_structure_models).pack(side="left",padx=(5,0))
         predict_actions=ttk.Frame(three);predict_actions.grid(row=3,column=0,columnspan=4,sticky="ew",pady=(5,0))
         ttk.Label(predict_actions,text="Next").pack(side="left")
         ttk.Spinbox(predict_actions,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(3,5))
@@ -358,14 +354,16 @@ class XRayStructureWorkspace:
         self.structure_predict_next_button.pack(side="left")
         self.structure_predict_all_button=ttk.Button(predict_actions,text="Predict all",command=lambda:self.predict_structure_batch(None))
         self.structure_predict_all_button.pack(side="left",padx=(4,0))
+        self.tip.bind(self.structure_predict_all_button,"Predict every confirmed specimen crop that is not human-verified. Existing unverified drafts may be refreshed; verified annotations are never overwritten.")
         review_actions=ttk.Frame(three);review_actions.grid(row=4,column=0,columnspan=4,sticky="ew",pady=(5,0))
         self.structure_review_button=ttk.Button(review_actions,text="Review AI",command=self.review_structure_ai)
         self.structure_review_button.pack(side="left")
         ttk.Button(review_actions,text="Next unfinished",command=self.next_unfinished).pack(side="left",padx=(5,0))
 
         four=self._workflow_card(workflow,3,"4. Results","Trait values are recalculated from the current saved markers.")
-        self.results_summary=ttk.Label(four,text="",style="Muted.TLabel");self.results_summary.grid(row=0,column=0,sticky="w")
+        self.results_summary=ttk.Label(four,text="",style="Muted.TLabel");self.results_summary.grid(row=0,column=0,columnspan=2,sticky="w")
         ttk.Button(four,text="Open Results",command=self.on_open_results).grid(row=1,column=0,sticky="w",pady=(5,0))
+        ttk.Button(four,text="Check results…",command=self.on_check_results).grid(row=1,column=1,sticky="w",padx=(5,0),pady=(5,0))
 
     def _workflow_card(self,parent,column,title,help_text):
         label=ttk.Frame(parent);ttk.Label(label,text=title,style="WorkflowCardTitle.TLabel").pack(side="left")
@@ -438,24 +436,47 @@ class XRayStructureWorkspace:
         for child in self.marker_host.winfo_children():child.destroy()
         structures,settings=self._styles();ids={item["id"] for item in structures}
         if self.active_structure_id not in ids:self.active_structure_id=structures[0]["id"] if structures else None
-        counts={}
+        counts={};states={}
         if self.selected_specimen_id:
             for row in self.project.effective_annotations(self.selected_specimen_id,self.pass_no.get()):
                 counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
-        self._marker_buttons={}
+            states=self.project.structure_visibility_states(self.selected_specimen_id,self.pass_no.get(),"human")
+        self._marker_buttons={};self._marker_visibility_buttons={}
         for structure in _structure_button_order(structures):
-            index=structures.index(structure);style=marker_style(settings,structure,index)
-            hotkey=str(structure.get("hotkey") or "");count=counts.get(structure["id"],0);icon=self._marker_button_icon(self.marker_host,structure,style)
+            sid=str(structure["id"]);index=structures.index(structure);style=marker_style(settings,structure,index)
+            hotkey=str(structure.get("hotkey") or "");count=counts.get(sid,0);icon=self._marker_button_icon(self.marker_host,structure,style)
             text=f"{hotkey} · {structure['name']}  {count}" if hotkey else f"{structure['name']}  {count}"
+            group=ttk.Frame(self.marker_host,style="WorkflowDock.TFrame");group.pack(side="left",padx=(0,4))
             button=ttk.Button(
-                self.marker_host,text=text,image=icon,compound="left",
-                style="Primary.TButton" if structure["id"]==self.active_structure_id else "P.TButton",
-                command=lambda sid=structure["id"]:self._choose_structure(sid),
+                group,text=text,image=icon,compound="left",
+                style="Primary.TButton" if sid==self.active_structure_id else "P.TButton",
+                command=lambda value=sid:self._choose_structure(value),
             )
-            button.pack(side="left",padx=(0,4));self._marker_buttons[structure["id"]]=button
-            self.tip.bind(button,(structure.get("description") or structure["name"])+f" · shortcut {hotkey}" if hotkey else structure.get("description") or structure["name"])
+            button.pack(side="left");self._marker_buttons[sid]=button
+            help_text=(structure.get("description") or structure["name"])+(f" · shortcut {hotkey}" if hotkey else "")
+            self.tip.bind(button,help_text)
+            current=str(states.get(sid) or "complete")
+            visibility=ttk.Menubutton(
+                group,text=_VISIBILITY_SYMBOLS.get(current,"✓"),width=2,style="P.TButton",
+                state="normal" if self.selected_specimen_id else "disabled",
+            )
+            visibility.pack(side="left",padx=(1,0));self._marker_visibility_buttons[sid]=visibility
+            menu=tk.Menu(visibility,tearoff=False)
+            for value,label in _VISIBILITY_LABELS.items():
+                prefix="✓  " if value==current else "   "
+                menu.add_command(
+                    label=prefix+_VISIBILITY_SYMBOLS.get(value,"")+"  "+label,
+                    command=lambda structure_id=sid,state=value:self._set_structure_visibility(structure_id,state),
+                )
+            visibility.configure(menu=menu)
+            self.tip.bind(
+                visibility,
+                f"{structure['name']} visibility: {_VISIBILITY_LABELS.get(current,'Complete')}. "
+                "Complete = all visible instances marked; Partial = only some can be marked; "
+                "Not visible = cannot be judged; Absent = truly absent.",
+            )
         if not structures:ttk.Label(self.marker_host,text="No structures configured",style="Muted.TLabel").pack(side="left")
-        self._refresh_clear_menu(structures,settings,counts);self._refresh_visibility_control()
+        self._refresh_clear_menu(structures,settings,counts)
 
     def _refresh_clear_menu(self,structures,settings,counts):
         menu=tk.Menu(self.clear_type_button,tearoff=False);self._clear_menu_icons=[]
@@ -473,41 +494,32 @@ class XRayStructureWorkspace:
     def _choose_structure(self,structure_id):
         self.active_structure_id=structure_id;self.selected_annotation_id=None;self._build_marker_buttons();self._draw_overlays();self.canvas.focus_set()
 
-    def _refresh_visibility_control(self):
-        if not hasattr(self,"visibility_box"):return
-        self._updating_visibility=True
-        try:
-            if not self.selected_specimen_id or not self.active_structure_id:
-                self.visibility_var.set("Complete");self.visibility_box.configure(state="disabled");return
-            value=self.project.structure_visibility(
-                self.selected_specimen_id,self.active_structure_id,self.pass_no.get(),"human",
-            )
-            self.visibility_var.set(_VISIBILITY_LABELS.get(value,"Complete"));self.visibility_box.configure(state="readonly")
-        finally:self._updating_visibility=False
-
-    def _visibility_changed(self,_event=None):
-        if self._updating_visibility or not self.selected_specimen_id or not self.active_structure_id:return
-        visibility=_VISIBILITY_VALUES.get(self.visibility_var.get(),"complete")
-        current=self.project.structure_visibility(self.selected_specimen_id,self.active_structure_id,self.pass_no.get(),"human")
+    def _set_structure_visibility(self,structure_id,visibility):
+        if not self.selected_specimen_id:return
+        structure_id=str(structure_id);visibility=str(visibility)
+        if visibility not in _VISIBILITY_LABELS:return
+        current=self.project.structure_visibility(
+            self.selected_specimen_id,structure_id,self.pass_no.get(),"human",
+        )
         if visibility==current:return
-        structure=self._structure(self.active_structure_id);name=(structure or {}).get("name") or self.active_structure_id
+        structure=self._structure(structure_id);name=(structure or {}).get("name") or structure_id
         if visibility in {"not_visible","absent"}:
             count=sum(
                 1 for row in self.project.effective_annotations(self.selected_specimen_id,self.pass_no.get())
-                if row["structure_id"]==self.active_structure_id
+                if row["structure_id"]==structure_id
             )
             if count and not messagebox.askyesno(
                 "Structure visibility",
                 f"‘{name}’ already has {count} marker(s).\n\n"
                 f"Set it to {_VISIBILITY_LABELS[visibility]} and clear those markers?",
                 parent=self.root,default="no",
-            ):
-                self._refresh_visibility_control();return
-            if count:self.project.clear_annotations(self.selected_specimen_id,self.pass_no.get(),structure_id=self.active_structure_id)
+            ):return
+            if count:self.project.clear_annotations(self.selected_specimen_id,self.pass_no.get(),structure_id=structure_id)
+        self.active_structure_id=structure_id
         self.project.set_structure_visibility(
-            self.selected_specimen_id,self.active_structure_id,visibility,self.pass_no.get(),"human",
+            self.selected_specimen_id,structure_id,visibility,self.pass_no.get(),"human",
         )
-        self._after_edit(f"Visibility · {_VISIBILITY_LABELS[visibility]}")
+        self._after_edit(f"{name}: {_VISIBILITY_LABELS[visibility]}")
 
     def _ensure_structure_visible_for_marker(self,structure_id):
         state=self.project.structure_visibility(self.selected_specimen_id,structure_id,self.pass_no.get(),"human")
@@ -573,7 +585,8 @@ class XRayStructureWorkspace:
         for key,label in self.summary_labels.items():label.configure(text=f"{labels[key]}: {summary[key]}")
         state="normal" if self.selected_specimen_id else "disabled";self.apply_button.configure(state=state)
         model=self.project.active_structure_model()
-        can_predict=bool(self.selected_specimen_id and model and self.pass_no.get()==1)
+        run=self.project.annotation_run(self.selected_specimen_id,self.pass_no.get(),"human",False) if self.selected_specimen_id else None
+        can_predict=bool(self.selected_specimen_id and model and (not run or str(run.get("status") or "")!="verified"))
         self.predict_current_button.configure(state="normal" if can_predict else "disabled")
 
     def _refresh_workflow(self):
@@ -591,7 +604,7 @@ class XRayStructureWorkspace:
         model=self.project.active_structure_model();candidates=len(self.project.structure_prediction_candidate_ids());review=len(self.project.structure_ai_review_ids())
         self.training_summary.configure(text=f"{p1['verified']} human-verified · {candidates} ready for AI · {review} to review")
         self.structure_model_label.configure(text=f"Active AI: {(model or {}).get('model_id') or 'none'}")
-        state="normal" if model else "disabled"
+        state="normal" if model and self.pass_no.get()==1 else "disabled"
         self.structure_predict_next_button.configure(state=state);self.structure_predict_all_button.configure(state=state)
         self.structure_review_button.configure(state="normal" if review else "disabled")
         self.results_summary.configure(text=f"{len(self.project.scheme.get('traits') or ())} live traits · updates on every edit")
@@ -603,7 +616,7 @@ class XRayStructureWorkspace:
                 counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
         run=self.project.annotation_run(self.selected_specimen_id,self.pass_no.get(),create=False) if self.selected_specimen_id else None
         current="Verified" if run and run.get("status")=="verified" else "Draft" if run else "Not started"
-        self.save_label.configure(text=f"Current: {current}");self._refresh_visibility_control()
+        self.save_label.configure(text=f"Current: {current}")
 
     def _fit_scale(self):
         if self.crop_image is None:return 1.0
@@ -1020,11 +1033,6 @@ class XRayStructureWorkspace:
             reload();self._refresh_workflow()
         actions=ttk.Frame(frame);actions.grid(row=2,column=0,columnspan=2,sticky="ew",pady=(9,0))
         ttk.Button(actions,text="Make active",command=activate).pack(side="left")
-        transfer=ttk.Menubutton(actions,text="Transfer ▾",style="P.TButton");transfer.pack(side="left",padx=(5,0))
-        transfer_menu=tk.Menu(transfer,tearoff=False)
-        transfer_menu.add_command(label="Import trained AI…",command=import_model)
-        transfer_menu.add_command(label="Export selected AI…",command=export_model)
-        transfer.configure(menu=transfer_menu)
         ttk.Button(actions,text="Delete…",command=delete).pack(side="left",padx=(5,0))
         ttk.Button(actions,text="Close",command=dialog.destroy).pack(side="right")
         reload((self.project.active_structure_model() or {}).get("model_id"))
@@ -1040,22 +1048,21 @@ class XRayStructureWorkspace:
 
     def predict_current_structure(self):
         if self._busy or not self.selected_specimen_id:return
-        if self.pass_no.get()!=1:
-            messagebox.showinfo("Predict current","AI suggestions are disabled during Human repeatability annotations.",parent=self.root);return
         model=self.project.active_structure_model()
         if not model:
             messagebox.showinfo("Predict current","Train or import a Structure AI model first.",parent=self.root);return
         specimen_id=str(self.selected_specimen_id)
-        if specimen_id not in set(self.project.structure_prediction_candidate_ids()):
+        pass_no=int(self.pass_no.get())
+        if specimen_id not in set(self.project.structure_prediction_candidate_ids(pass_no)):
             messagebox.showinfo(
                 "Predict current",
-                "This specimen already has human markers or has already been reviewed. Existing human work is never overwritten.",
+                "This annotation is already human-verified. Apply-confirmed work is protected from AI replacement.",
                 parent=self.root,
             );return
         self._busy=True;events=queue.Queue()
         dialog,label,bar=self._structure_ai_dialog("Predict current","Placing AI marker suggestions on this specimen…",1)
         def worker():
-            try:events.put(("done",predict_structures(self.project,[specimen_id],model=model)))
+            try:events.put(("done",predict_structures(self.project,[specimen_id],model=model,pass_no=pass_no)))
             except Exception as exc:events.put(("error",exc))
         threading.Thread(target=worker,daemon=True,name="xray-structure-predict-current").start()
         def poll():

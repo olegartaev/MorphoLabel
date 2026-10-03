@@ -206,5 +206,13 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertIn("from {reference_label} to {reference_label2}",source)
 
 
+    def test_xray_runtime_exposes_module_owned_top_menu_model_transfer(self):
+        root=Path(__file__).resolve().parents[1]
+        module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
+        self.assertIn("def standard_menu_entries",module)
+        self.assertIn("Import X-ray Structure AI…",module)
+        self.assertIn("Export active X-ray Structure AI…",module)
+        self.assertIn("on_check_results=self._show_result_checks",module)
+
 if __name__=="__main__":
     unittest.main()

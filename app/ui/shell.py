@@ -498,6 +498,18 @@ class ProductionShell(tk.Tk):
         menu.add_command(label="Set up AI support...",command=self._show_first_run_setup)
         menu.add_command(label="Hardware status...",command=self.show_hardware)
         menu.add_command(label="AI model transfer...",command=self.show_model_transfer,state="normal" if self.context.project else "disabled")
+        provider=getattr(getattr(self,"_active_module_runtime",None),"standard_menu_entries",None)
+        if callable(provider):
+            entries=tuple(provider() or ())
+            if entries:
+                menu.add_separator();menu.add_command(label="Current module",state="disabled")
+                for entry in entries:
+                    if entry is None:menu.add_separator();continue
+                    menu.add_command(
+                        label=str(entry.get("label") or "Module action"),
+                        command=entry.get("command"),
+                        state=str(entry.get("state") or "normal"),
+                    )
         menu.add_separator()
         menu.add_command(label="Support",state="disabled")
         menu.add_command(label="Create diagnostic report...",command=self.create_diagnostic_report)
