@@ -360,7 +360,9 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn("self.specimen_list.select(specimen_id,reveal=False)",ui)
         self.assertNotIn("self.selected_specimen_id=row[\"specimen_id\"];self.on_select(row[\"specimen_id\"]);self.refresh(preserve_scroll=True)",ui)
         self.assertIn("preferred_plate=next((row[\"specimen_id\"] for row in rows if row[\"image_id\"]==self.preferred_image_id),None)",ui)
-        self.assertIn("preferred_plate if preferred_plate in ids else preferred_batch",ui)
+        self.assertIn("elif self.preferred_image_id:target=preferred_plate if preferred_plate in ids else None",ui)
+        self.assertIn("else:target=preferred_batch if preferred_batch in ids else (ids[0] if ids else None)",ui)
+        self.assertIn("No confirmed specimen crop is available on this plate.",ui)
 
     def test_structure_toolbar_has_no_previous_next_buttons_and_apply_stays_separate(self):
         root=Path(__file__).resolve().parents[1]
