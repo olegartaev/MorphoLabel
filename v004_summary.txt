@@ -1,0 +1,29 @@
+Structure AI v003 -> v004 read-only evaluation
+
+Repository HEAD: 1f4ffbdb38ac3e913b5a8b511684bc2911611d77
+Project root: D:\xray-test\4
+DB SHA256 before evaluation: 6179171af01c4aff379c3f460d4915e644630c22535ba8c04f06e9e01528f668
+
+v004 parent: xray_structure_model_v003
+v004 training objective: per_structure_balanced_focal_v1
+Train/validation: 50 / 10 specimens; 26 / 6 source plates
+Macro F1 v003 -> v004: 0.204700 -> 0.282526
+Validation loss v003 -> v004: 28.60089874267578 -> 14.91408920288086
+
+Per-structure registry comparison (current metadata):
+structure | F1 v003->v004 | precision v003->v004 | recall v003->v004 | threshold v003->v004
+vertebra | 0.8166409861325116 -> 0.7551020408163265 | 0.9363957597173145 -> 1.0 | 0.7240437158469946 -> 0.6065573770491803 | 0.3 -> 0.24
+first_caudal | 0.0 -> 0.0 | 0.0 -> 0.0 | 0.0 -> 0.0 | 0.12 -> 0.12
+preanal_pterygiophore | 0.002157497303128371 -> 0.0 | 0.0011494252873563218 -> 0.0 | 0.017543859649122806 -> 0.0 | 0.12 -> 0.12
+last_predorsal | 0.0 -> 0.37499999999999994 | 0.0 -> 0.5 | 0.0 -> 0.3 | 0.12 -> 0.12
+
+Current v004 validation inference, tolerance=0.02:
+vertebra: GT=366 pred=223 TP=223 FP=0 FN=143 precision=1.0000 recall=0.6093 F1=0.7572 FP/specimen=0.00 count_MAE=14.300 exact=0.000
+first_caudal: GT=10 pred=6 TP=0 FP=6 FN=10 precision=0.0000 recall=0.0000 F1=0.0000 FP/specimen=0.60 count_MAE=0.400 exact=0.600
+preanal_pterygiophore: GT=57 pred=0 TP=0 FP=0 FN=57 precision=0.0000 recall=0.0000 F1=0.0000 FP/specimen=0.00 count_MAE=5.700 exact=0.000
+last_predorsal: GT=10 pred=6 TP=3 FP=3 FN=7 precision=0.5000 recall=0.3000 F1=0.3750 FP/specimen=0.30 count_MAE=0.400 exact=0.600
+
+Reference-role audit (A/B/C combined): A reference GT within tol of GT vertebra=20; B those vertebra matched by v004 vertebra channel=15; C among B with reference channel incorrect=13. Human references represented as roles on existing vertebra annotation=20 of 20.
+preanal_pterygiophore train/val GT=269/57; raw peaks >=.12=0; current-threshold TP confidence median=None; FP confidence median=None; median nearest-GT distance among raw peaks=None
+
+Snapshot includes no database, X-ray, or model weights. No code/project files were modified.

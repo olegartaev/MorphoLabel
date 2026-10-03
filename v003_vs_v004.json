@@ -1,0 +1,166 @@
+{
+  "macro_f1": {
+    "v003": 0.20469962085891,
+    "v004": 0.2825255102040816
+  },
+  "models": {
+    "xray_structure_model_v003": {
+      "backend": "resnet18_heatmap_v1",
+      "created_at": "2026-10-03T14:46:56+00:00",
+      "dataset_hash": "54d7e0dca8e18680b29b09f933e51644aac22c751985998e9927dfd3045dd7df",
+      "epochs_completed": 60,
+      "macro_f1": 0.20469962085891,
+      "parent_model_id": "xray_structure_model_v002",
+      "per_structure": {
+        "first_caudal": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0
+        },
+        "last_predorsal": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0
+        },
+        "preanal_pterygiophore": {
+          "f1": 0.002157497303128371,
+          "precision": 0.0011494252873563218,
+          "recall": 0.017543859649122806
+        },
+        "vertebra": {
+          "f1": 0.8166409861325116,
+          "precision": 0.9363957597173145,
+          "recall": 0.7240437158469946
+        }
+      },
+      "thresholds": {
+        "first_caudal": 0.12,
+        "last_predorsal": 0.12,
+        "preanal_pterygiophore": 0.12,
+        "vertebra": 0.3
+      },
+      "training_objective": null,
+      "training_plates": 26,
+      "training_specimens": 50,
+      "validation_loss": 28.60089874267578,
+      "validation_plates": 6,
+      "validation_specimens": 10
+    },
+    "xray_structure_model_v004": {
+      "backend": "resnet18_heatmap_v1",
+      "created_at": "2026-10-03T17:29:13+00:00",
+      "dataset_hash": "54d7e0dca8e18680b29b09f933e51644aac22c751985998e9927dfd3045dd7df",
+      "epochs_completed": 60,
+      "macro_f1": 0.2825255102040816,
+      "parent_model_id": "xray_structure_model_v003",
+      "per_structure": {
+        "first_caudal": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0
+        },
+        "last_predorsal": {
+          "f1": 0.37499999999999994,
+          "precision": 0.5,
+          "recall": 0.3
+        },
+        "preanal_pterygiophore": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0
+        },
+        "vertebra": {
+          "f1": 0.7551020408163265,
+          "precision": 1.0,
+          "recall": 0.6065573770491803
+        }
+      },
+      "thresholds": {
+        "first_caudal": 0.12,
+        "last_predorsal": 0.12,
+        "preanal_pterygiophore": 0.12,
+        "vertebra": 0.24
+      },
+      "training_objective": "per_structure_balanced_focal_v1",
+      "training_plates": 26,
+      "training_specimens": 50,
+      "validation_loss": 14.91408920288086,
+      "validation_plates": 6,
+      "validation_specimens": 10
+    }
+  },
+  "per_structure_comparison": {
+    "first_caudal": {
+      "f1": {
+        "v003": 0.0,
+        "v004": 0.0
+      },
+      "precision": {
+        "v003": 0.0,
+        "v004": 0.0
+      },
+      "recall": {
+        "v003": 0.0,
+        "v004": 0.0
+      },
+      "threshold": {
+        "v003": 0.12,
+        "v004": 0.12
+      }
+    },
+    "last_predorsal": {
+      "f1": {
+        "v003": 0.0,
+        "v004": 0.37499999999999994
+      },
+      "precision": {
+        "v003": 0.0,
+        "v004": 0.5
+      },
+      "recall": {
+        "v003": 0.0,
+        "v004": 0.3
+      },
+      "threshold": {
+        "v003": 0.12,
+        "v004": 0.12
+      }
+    },
+    "preanal_pterygiophore": {
+      "f1": {
+        "v003": 0.002157497303128371,
+        "v004": 0.0
+      },
+      "precision": {
+        "v003": 0.0011494252873563218,
+        "v004": 0.0
+      },
+      "recall": {
+        "v003": 0.017543859649122806,
+        "v004": 0.0
+      },
+      "threshold": {
+        "v003": 0.12,
+        "v004": 0.12
+      }
+    },
+    "vertebra": {
+      "f1": {
+        "v003": 0.8166409861325116,
+        "v004": 0.7551020408163265
+      },
+      "precision": {
+        "v003": 0.9363957597173145,
+        "v004": 1.0
+      },
+      "recall": {
+        "v003": 0.7240437158469946,
+        "v004": 0.6065573770491803
+      },
+      "threshold": {
+        "v003": 0.3,
+        "v004": 0.24
+      }
+    }
+  }
+}

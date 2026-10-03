@@ -1,0 +1,93 @@
+{
+  "current_model_thresholds": {
+    "first_caudal": 0.12,
+    "last_predorsal": 0.12,
+    "preanal_pterygiophore": 0.12,
+    "vertebra": 0.24
+  },
+  "matching_tolerance_normalized_crop_coordinates": 0.02,
+  "model_id": "xray_structure_model_v004",
+  "per_structure": {
+    "first_caudal": {
+      "count_mae": 0.4,
+      "evaluable_specimens": 10,
+      "exact_count_accuracy": 0.6,
+      "f1": 0.0,
+      "fn": 10,
+      "fp": 6,
+      "gt_count": 10,
+      "mean_fp_per_specimen": 0.6,
+      "precision": 0.0,
+      "predicted_count": 6,
+      "recall": 0.0,
+      "tp": 0
+    },
+    "last_predorsal": {
+      "count_mae": 0.4,
+      "evaluable_specimens": 10,
+      "exact_count_accuracy": 0.6,
+      "f1": 0.37499999999999994,
+      "fn": 7,
+      "fp": 3,
+      "gt_count": 10,
+      "mean_fp_per_specimen": 0.3,
+      "precision": 0.5,
+      "predicted_count": 6,
+      "recall": 0.3,
+      "tp": 3
+    },
+    "preanal_pterygiophore": {
+      "count_mae": 5.7,
+      "evaluable_specimens": 10,
+      "exact_count_accuracy": 0.0,
+      "f1": 0.0,
+      "fn": 57,
+      "fp": 0,
+      "gt_count": 57,
+      "mean_fp_per_specimen": 0.0,
+      "precision": 0.0,
+      "predicted_count": 0,
+      "recall": 0.0,
+      "tp": 0
+    },
+    "vertebra": {
+      "count_mae": 14.3,
+      "evaluable_specimens": 10,
+      "exact_count_accuracy": 0.0,
+      "f1": 0.7572156196943972,
+      "fn": 143,
+      "fp": 0,
+      "gt_count": 366,
+      "mean_fp_per_specimen": 0.0,
+      "precision": 1.0,
+      "predicted_count": 223,
+      "recall": 0.6092896174863388,
+      "tp": 223
+    }
+  },
+  "preanal_pterygiophore_extra": {
+    "confidence_fp": {
+      "max": null,
+      "median": null,
+      "min": null,
+      "p10": null,
+      "p90": null
+    },
+    "confidence_tp": {
+      "max": null,
+      "median": null,
+      "min": null,
+      "p10": null,
+      "p90": null
+    },
+    "current_threshold": 0.12,
+    "median_nearest_gt_distance_all_raw_peaks": null,
+    "median_nearest_gt_distance_fp": null,
+    "median_nearest_gt_distance_retained_peaks": null,
+    "raw_peak_count_ge_0_12": 0,
+    "train_gt_count": 269,
+    "validation_gt_count": 57
+  },
+  "validation_specimen_count": 10,
+  "visibility_policy": "metrics exclude structures marked partial or not_visible; absent and complete remain evaluable, matching current calibration logic"
+}

@@ -1,0 +1,113 @@
+{
+  "matching_tolerance_normalized_crop_coordinates": 0.02,
+  "metrics": {
+    "0.12": {
+      "count_mae": 5.7,
+      "evaluable_specimens": 10,
+      "exact_count_accuracy": 0.0,
+      "f1": 0.0,
+      "fn": 57,
+      "fp": 0,
+      "gt_count": 57,
+      "mean_fp_per_specimen": 0.0,
+      "precision": 0.0,
+      "predicted_count": 0,
+      "recall": 0.0,
+      "tp": 0
+    },
+    "0.18": {
+      "count_mae": 5.7,
+      "evaluable_specimens": 10,
+      "exact_count_accuracy": 0.0,
+      "f1": 0.0,
+      "fn": 57,
+      "fp": 0,
+      "gt_count": 57,
+      "mean_fp_per_specimen": 0.0,
+      "precision": 0.0,
+      "predicted_count": 0,
+      "recall": 0.0,
+      "tp": 0
+    },
+    "0.24": {
+      "count_mae": 5.7,
+      "evaluable_specimens": 10,
+      "exact_count_accuracy": 0.0,
+      "f1": 0.0,
+      "fn": 57,
+      "fp": 0,
+      "gt_count": 57,
+      "mean_fp_per_specimen": 0.0,
+      "precision": 0.0,
+      "predicted_count": 0,
+      "recall": 0.0,
+      "tp": 0
+    },
+    "0.3": {
+      "count_mae": 5.7,
+      "evaluable_specimens": 10,
+      "exact_count_accuracy": 0.0,
+      "f1": 0.0,
+      "fn": 57,
+      "fp": 0,
+      "gt_count": 57,
+      "mean_fp_per_specimen": 0.0,
+      "precision": 0.0,
+      "predicted_count": 0,
+      "recall": 0.0,
+      "tp": 0
+    },
+    "0.38": {
+      "count_mae": 5.7,
+      "evaluable_specimens": 10,
+      "exact_count_accuracy": 0.0,
+      "f1": 0.0,
+      "fn": 57,
+      "fp": 0,
+      "gt_count": 57,
+      "mean_fp_per_specimen": 0.0,
+      "precision": 0.0,
+      "predicted_count": 0,
+      "recall": 0.0,
+      "tp": 0
+    },
+    "0.48": {
+      "count_mae": 5.7,
+      "evaluable_specimens": 10,
+      "exact_count_accuracy": 0.0,
+      "f1": 0.0,
+      "fn": 57,
+      "fp": 0,
+      "gt_count": 57,
+      "mean_fp_per_specimen": 0.0,
+      "precision": 0.0,
+      "predicted_count": 0,
+      "recall": 0.0,
+      "tp": 0
+    },
+    "0.6": {
+      "count_mae": 5.7,
+      "evaluable_specimens": 10,
+      "exact_count_accuracy": 0.0,
+      "f1": 0.0,
+      "fn": 57,
+      "fp": 0,
+      "gt_count": 57,
+      "mean_fp_per_specimen": 0.0,
+      "precision": 0.0,
+      "predicted_count": 0,
+      "recall": 0.0,
+      "tp": 0
+    }
+  },
+  "structure_id": "preanal_pterygiophore",
+  "thresholds": [
+    0.12,
+    0.18,
+    0.24,
+    0.3,
+    0.38,
+    0.48,
+    0.6
+  ]
+}

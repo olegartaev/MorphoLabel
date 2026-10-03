@@ -1,0 +1,296 @@
+{
+  "combined": {
+    "associated_vertebra_detected": 15,
+    "detected_vertebra_but_reference_wrong": 13,
+    "is_role_of_vertebra": 20,
+    "reference_channel_correct": 3,
+    "reference_gt_points": 20,
+    "within_tolerance_of_gt_vertebra": 20
+  },
+  "count_definitions": {
+    "associated_vertebra_detected": "the nearest GT vertebra index is matched to a predicted vertebra by the same confidence-sorted greedy matcher and tolerance",
+    "practically_on_gt_vertebra": "nearest GT vertebra Euclidean distance <= current matching tolerance",
+    "reference_channel_correct": "the reference channel prediction is matched to that reference GT within the same tolerance"
+  },
+  "matching_tolerance_normalized_crop_coordinates": 0.02,
+  "reference_structures": {
+    "first_caudal": {
+      "associated_vertebra_detected": 10,
+      "detected_vertebra_but_reference_wrong": 10,
+      "is_role_of_vertebra": 10,
+      "reference_channel_correct": 0,
+      "reference_gt_points": 10,
+      "within_tolerance_of_gt_vertebra": 10
+    },
+    "last_predorsal": {
+      "associated_vertebra_detected": 5,
+      "detected_vertebra_but_reference_wrong": 3,
+      "is_role_of_vertebra": 10,
+      "reference_channel_correct": 3,
+      "reference_gt_points": 10,
+      "within_tolerance_of_gt_vertebra": 10
+    }
+  },
+  "validation_specimens": [
+    {
+      "image_id": "99997c8f-d3a7-5052-9898-1300f28f6564",
+      "references": {
+        "first_caudal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": true,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.00046094389523993075,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ],
+        "last_predorsal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": true,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.009630074755209812,
+            "reference_channel_correct": true,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ]
+      },
+      "specimen_id": "0e7693c1-73cf-5af6-aabf-c7bceeebe198"
+    },
+    {
+      "image_id": "68b6c25c-3c3c-519c-a460-c6d2cd6d7b79",
+      "references": {
+        "first_caudal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": true,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.006436518448898561,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ],
+        "last_predorsal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": true,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.0045872726583420665,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ]
+      },
+      "specimen_id": "1a08d9e0-739a-5651-9344-1f98e5b78bc4"
+    },
+    {
+      "image_id": "6d0b9df0-8533-5557-ba05-2376574bcb60",
+      "references": {
+        "first_caudal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": true,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.0070075251901792245,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ],
+        "last_predorsal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": true,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.0067821817648230686,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ]
+      },
+      "specimen_id": "1ea5ed83-5284-56bc-bbbb-c4ce78abdb02"
+    },
+    {
+      "image_id": "cf5dd49f-2d98-5fa3-b1af-cda6f3d3a359",
+      "references": {
+        "first_caudal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": true,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.003989477151309525,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ],
+        "last_predorsal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": false,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.1935845106397804,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ]
+      },
+      "specimen_id": "8a4aaf19-e4d3-502f-8c29-9c779398506b"
+    },
+    {
+      "image_id": "6d0b9df0-8533-5557-ba05-2376574bcb60",
+      "references": {
+        "first_caudal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": true,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.004177536544124747,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ],
+        "last_predorsal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": true,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.0038889297845177847,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ]
+      },
+      "specimen_id": "8d44ba50-1e5e-52b0-8ed6-1a41228c3b64"
+    },
+    {
+      "image_id": "99997c8f-d3a7-5052-9898-1300f28f6564",
+      "references": {
+        "first_caudal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": true,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.004951603946365624,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ],
+        "last_predorsal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": false,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.08658531399455699,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ]
+      },
+      "specimen_id": "9432d323-82e1-48ed-8984-d97bf6021e97"
+    },
+    {
+      "image_id": "3d356c63-70eb-5fb6-a611-7d4de95f9338",
+      "references": {
+        "first_caudal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": true,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.008569226205907209,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ],
+        "last_predorsal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": false,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.15129170866760172,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ]
+      },
+      "specimen_id": "986ff99a-e4ae-55f2-8e30-42dcb17dd337"
+    },
+    {
+      "image_id": "d2fe679a-f84c-5fcc-89d6-6ab3fceb5477",
+      "references": {
+        "first_caudal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": true,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.002968736370112398,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ],
+        "last_predorsal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": true,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.009695070037075208,
+            "reference_channel_correct": true,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ]
+      },
+      "specimen_id": "cdeb65cd-960d-461b-b36a-1437f06bb1cd"
+    },
+    {
+      "image_id": "3d356c63-70eb-5fb6-a611-7d4de95f9338",
+      "references": {
+        "first_caudal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": true,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.0050771872210672265,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ],
+        "last_predorsal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": false,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.018893049713631312,
+            "reference_channel_correct": true,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ]
+      },
+      "specimen_id": "d79eef10-69a2-581b-9900-1c4be57dc67b"
+    },
+    {
+      "image_id": "d2fe679a-f84c-5fcc-89d6-6ab3fceb5477",
+      "references": {
+        "first_caudal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": true,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.0015143653791096752,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ],
+        "last_predorsal": [
+          {
+            "is_role_of_existing_vertebra_annotation": true,
+            "nearest_gt_vertebra_detected_by_v004_channel": false,
+            "nearest_gt_vertebra_distance": 0.0,
+            "nearest_predicted_vertebra_distance": 0.042063117385132194,
+            "reference_channel_correct": false,
+            "within_tolerance_of_gt_vertebra": true
+          }
+        ]
+      },
+      "specimen_id": "e6f981cb-360b-4b12-934c-57f7ab81785d"
+    }
+  ]
+}
