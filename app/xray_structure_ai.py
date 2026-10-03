@@ -478,7 +478,7 @@ def _safe_model_json(path):
     except (OSError, json.JSONDecodeError) as exc:
         raise XRayStructurePackageError("Structure model metadata is invalid.") from exc
     allowed = {
-        "format_version", "backend", "input_size", "output_stride", "structures", "preprocessing",
+        "format_version", "backend", "training_objective", "input_size", "output_stride", "structures", "preprocessing",
         "thresholds", "validation", "epochs_completed", "model_id", "schema_digest",
         "dataset_hash", "parent_model_id", "training_specimens", "validation_specimens",
         "training_plates", "validation_plates",

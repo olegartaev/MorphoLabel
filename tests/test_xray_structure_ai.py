@@ -189,6 +189,16 @@ class XRayStructureAIContractTests(unittest.TestCase):
         _gaussian(border,0,16.2,-0.4)
         self.assertEqual(1.0,float(border.max()))
 
+    def test_structure_heatmap_loss_balances_each_schema_structure_channel(self):
+        root=Path(__file__).resolve().parents[1]
+        runner=(root/"ai_runtime/xray_structure_runner.py").read_text(encoding="utf-8")
+        self.assertIn('TRAINING_OBJECTIVE = "per_structure_balanced_focal_v1"',runner)
+        self.assertIn("positive_counts = positive.sum(dim=reduce_dims)",runner)
+        self.assertIn("supervised_counts = mask.sum(dim=reduce_dims)",runner)
+        self.assertIn("per_structure = torch.where(positive_counts > 0, with_positive, negative_only)",runner)
+        self.assertIn("valid.sum().clamp(min=1.0)",runner)
+        self.assertNotIn("positives = positive.sum()\n    return (positive_loss.sum() + negative_loss.sum())",runner)
+
     def test_runner_is_variable_count_heatmap_model_without_anatomy_changing_flips(self):
         root=Path(__file__).resolve().parents[1]
         runner=(root/"ai_runtime/xray_structure_runner.py").read_text(encoding="utf-8")

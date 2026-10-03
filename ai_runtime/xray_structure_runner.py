@@ -10,6 +10,7 @@ import sys
 
 BACKEND = "resnet18_heatmap_v1"
 FORMAT_VERSION = 1
+TRAINING_OBJECTIVE = "per_structure_balanced_focal_v1"
 
 
 def _input():
@@ -202,8 +203,21 @@ def _loss(logits, target, supervision=None):
     negative_weight = (1.0 - target).pow(4)
     positive_loss = -(prediction.log()) * (1.0 - prediction).pow(2) * positive
     negative_loss = -((1.0 - prediction).log()) * prediction.pow(2) * negative_weight * negative
-    positives = positive.sum()
-    return (positive_loss.sum() + negative_loss.sum()) / positives.clamp(min=1.0)
+
+    # Every schema structure is a separate learning task. Normalizing one global
+    # loss by the total number of positive markers lets dense repeated structures
+    # dominate rare references or shorter series. Normalize each output channel
+    # independently, then average the supervised structure tasks.
+    reduce_dims = (0, 2, 3)
+    positive_counts = positive.sum(dim=reduce_dims)
+    supervised_counts = mask.sum(dim=reduce_dims)
+    positive_terms = positive_loss.sum(dim=reduce_dims)
+    negative_terms = negative_loss.sum(dim=reduce_dims)
+    with_positive = (positive_terms + negative_terms) / positive_counts.clamp(min=1.0)
+    negative_only = negative_terms / supervised_counts.clamp(min=1.0)
+    per_structure = torch.where(positive_counts > 0, with_positive, negative_only)
+    valid = (supervised_counts > 0).float()
+    return (per_structure * valid).sum() / valid.sum().clamp(min=1.0)
 
 
 def _local_peaks(logits, thresholds, structures):
@@ -411,6 +425,7 @@ def train(payload):
     meta = {
         "format_version": FORMAT_VERSION,
         "backend": BACKEND,
+        "training_objective": TRAINING_OBJECTIVE,
         "input_size": list(input_size),
         "output_stride": stride,
         "structures": structures,
@@ -432,7 +447,7 @@ def train(payload):
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     return {
         "checkpoint": str(checkpoint), "metadata": str(meta_path),
-        "metrics": {"structure/validation_loss": float(best_loss), **quality, "epochs_completed": len(history)},
+        "metrics": {"structure/validation_loss": float(best_loss), "structure/training_objective": TRAINING_OBJECTIVE, **quality, "epochs_completed": len(history)},
     }
 
 
