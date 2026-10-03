@@ -75,6 +75,20 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
             prepare_structure_training_dataset(self.project,self.root/"scratch2",seed=7)["dataset_hash"],
         )
 
+    def test_training_manifest_preserves_visibility_and_dataset_hash_tracks_it(self):
+        specimens=self._eight_verified()
+        baseline=prepare_structure_training_dataset(self.project,self.root/"baseline",seed=7)
+        target=specimens[0]
+        self.project.set_structure_visibility(target,"preanal_pterygiophore","partial",1)
+        self.project.verify_annotations(target,1)
+        changed=prepare_structure_training_dataset(self.project,self.root/"changed",seed=7)
+        self.assertNotEqual(baseline["dataset_hash"],changed["dataset_hash"])
+        manifest=json.loads(changed["manifest"].read_text(encoding="utf-8"))
+        rows=list(manifest["train"])+list(manifest["val"])
+        row=next(item for item in rows if item["specimen_id"]==target)
+        self.assertEqual("partial",row["visibility"]["preanal_pterygiophore"])
+        self.assertEqual(2,manifest["format_version"])
+
     def test_ai_seed_is_draft_review_not_training_truth_and_reuses_shared_roles(self):
         image_id=self.project.source_images()[0]["image_id"]
         specimen_id=self._add_specimen(image_id,450);self.project.confirm_plate(image_id)
@@ -164,6 +178,17 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
 
 
 class XRayStructureAIContractTests(unittest.TestCase):
+    def test_heatmap_target_has_exact_positive_peak_and_partial_supervision_mask(self):
+        from ai_runtime.xray_structure_runner import _gaussian
+        target=np.zeros((1,16,16),dtype=np.float32)
+        supervision=np.zeros_like(target)
+        _gaussian(target,0,5.35,6.65,supervision=supervision)
+        self.assertEqual(1.0,float(target.max()))
+        self.assertGreater(float(supervision.sum()),0.0)
+        border=np.zeros((1,16,16),dtype=np.float32)
+        _gaussian(border,0,16.2,-0.4)
+        self.assertEqual(1.0,float(border.max()))
+
     def test_runner_is_variable_count_heatmap_model_without_anatomy_changing_flips(self):
         root=Path(__file__).resolve().parents[1]
         runner=(root/"ai_runtime/xray_structure_runner.py").read_text(encoding="utf-8")
@@ -171,6 +196,9 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertIn("max_pool2d",runner)
         self.assertIn("structure.get(\"repeated\")",runner)
         self.assertIn('"intensity_inversion"',runner)
+        self.assertIn('{"complete", "absent"}',runner)
+        self.assertIn('{"partial", "not_visible"}',runner)
+        self.assertIn("supervision",runner)
         self.assertNotIn("RandomHorizontalFlip",runner)
         self.assertNotIn("RandomVerticalFlip",runner)
 
