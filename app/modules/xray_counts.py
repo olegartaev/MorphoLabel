@@ -155,7 +155,7 @@ def _sort_export_tree(tree,column,descending=False):
         present.append((key,item))
     ordered=[item for _key,item in sorted(present,key=lambda pair:pair[0],reverse=bool(descending))]+missing
     for index,item in enumerate(ordered):
-        tree.move(item,"",index);tree.item(item,tags=("alternate",) if index%2 else ())
+        tree.move(item,"",index);tree.set(item,"row_no",str(index+1));tree.item(item,tags=("alternate",) if index%2 else ())
     tree.heading(column,command=lambda c=column,d=not bool(descending):_sort_export_tree(tree,c,d))
     return ordered
 COLOR_CHOICES=(
@@ -575,7 +575,7 @@ class XRayCountsRuntime:
         for trait in traits:
             col=trait.get("abbr") or trait["id"];tree.heading(col,text=col);tree.column(col,width=78,anchor="center",stretch=False)
         tree.heading("status",text="Status");tree.column("status",width=90,anchor="center",stretch=False)
-        for column in cols:tree.heading(column,command=lambda value=column:_sort_export_tree(tree,value,False))
+        for column in cols[1:]:tree.heading(column,command=lambda value=column:_sort_export_tree(tree,value,False))
         current=self._selection().get("specimen_id")
         for index,row in enumerate(self.project.trait_rows(),1):
             path=Path(row["relative_path"]);values=row["trait_values"]
