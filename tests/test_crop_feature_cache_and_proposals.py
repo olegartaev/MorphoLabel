@@ -114,6 +114,7 @@ class CropFeatureCacheAndProposalTests(unittest.TestCase):
         self.assertTrue(developed_path.is_file())
 
     def test_learned_proposal_writes_neither_mask_nor_standard_until_review(self):
+        from app.crop_editor_async_v2 import load_project_developed
         row = self.project.catalog_rows()[0]; ident = row["image_id"]
         model_dir = self.project.data_root / "ai" / "models" / "crop_model_v001"; model_dir.mkdir(parents=True)
         weights=np.zeros((769,4),dtype=np.float32);weights[0]=[.1,.1,.9,.9]
@@ -125,7 +126,7 @@ class CropFeatureCacheAndProposalTests(unittest.TestCase):
         self.assertFalse((self.project.cache_root / "standardized" / f"{ident}.png").exists())
         commit_crop_result(self.project, result, provenance="automatic")
         self.project.record_ai_crop_prediction(ident, result, "crop_model_v001")
-        developed=Image.open(self.project.cache_root / "developed" / f"{ident}.png").convert("RGB")
+        developed,_proxy=load_project_developed(self.project,ident)
         apply_reviewed_crop(self.project, ident, developed, result["crop_bounds"], 0.0,
                             self.project.cache_root / "standardized" / f"{ident}.png", self.project.image_path(ident))
         self.assertTrue((self.project.cache_root / "standardized" / f"{ident}.png").is_file())
