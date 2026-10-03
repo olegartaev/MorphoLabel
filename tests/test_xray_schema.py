@@ -57,9 +57,19 @@ class XRaySchemaTests(unittest.TestCase):
         ordered=spatial_series_order([row for row in rows if row["structure_id"]=="vertebra"])
         self.assertEqual([0.10,0.30,0.50],[round(row["x"],2) for row in ordered])
         values=calculate_trait_values(scheme,rows)
-        self.assertEqual(5,values["abdv"])
+        self.assertEqual(3,values["tv"])
+        self.assertEqual(1,values["abdv"])
         self.assertEqual(2,values["caudv"])
-        self.assertEqual(7,values["predv"])
+        self.assertEqual(3,values["predv"])
+        self.assertEqual(-1,values["dac"])
+        self.assertEqual("1+2",values["formv"])
+        self.assertEqual(values["tv"],values["abdv"]+values["caudv"])
+
+    def test_bundled_phoxinus_counts_have_no_hidden_weberian_offset(self):
+        scheme=bundled_scheme("phoxinus_vertebral_counts")
+        by_id={item["id"]:item for item in scheme["traits"]}
+        for trait_id in ("tv","abdv","predv"):
+            self.assertEqual(0,int((by_id[trait_id].get("rule") or {}).get("offset",0) or 0))
 
     def test_count_between_can_use_two_explicit_reference_marks(self):
         scheme=blank_scheme("between")
