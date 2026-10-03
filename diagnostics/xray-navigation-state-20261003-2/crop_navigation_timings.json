@@ -1,0 +1,505 @@
+{
+  "scope": "display_preview(source_path,1400) only; separate measured real list-click includes workspace controls/canvas; cold means first call in diagnostic, OS cache not flushed",
+  "ram_preview_cache": false,
+  "samples": [
+    {
+      "sample": 1,
+      "plate_token": "626ff0c04496",
+      "cold_ms": 51.0202000150457,
+      "cold_breakdown": {
+        "source_open_decode_ms": 14.45739998598583,
+        "resize_ms": 4.886899987468496,
+        "percentile_ms": 14.12859998526983
+      },
+      "source_dimensions": [
+        3032,
+        3072
+      ],
+      "preview_dimensions": [
+        1382,
+        1400
+      ],
+      "warm_ms": 40.13340000528842,
+      "warm_breakdown": {
+        "source_open_decode_ms": 13.970600004540756,
+        "resize_ms": 1.7124000005424023,
+        "percentile_ms": 6.172599998535588
+      }
+    },
+    {
+      "sample": 2,
+      "plate_token": "82a3d3d4265f",
+      "cold_ms": 78.55130001553334,
+      "cold_breakdown": {
+        "source_open_decode_ms": 54.38280000817031,
+        "resize_ms": 1.4869000006001443,
+        "percentile_ms": 4.4649000046774745
+      },
+      "source_dimensions": [
+        3032,
+        3072
+      ],
+      "preview_dimensions": [
+        1382,
+        1400
+      ],
+      "warm_ms": 76.50710002053529,
+      "warm_breakdown": {
+        "source_open_decode_ms": 52.78910000924952,
+        "resize_ms": 1.4607000048272312,
+        "percentile_ms": 4.760499985422939
+      }
+    },
+    {
+      "sample": 3,
+      "plate_token": "b62be85a0151",
+      "cold_ms": 38.3029000076931,
+      "cold_breakdown": {
+        "source_open_decode_ms": 14.403699984541163,
+        "resize_ms": 1.6687000170350075,
+        "percentile_ms": 4.3821000144816935
+      },
+      "source_dimensions": [
+        3032,
+        3072
+      ],
+      "preview_dimensions": [
+        1382,
+        1400
+      ],
+      "warm_ms": 40.12340001645498,
+      "warm_breakdown": {
+        "source_open_decode_ms": 14.4766999874264,
+        "resize_ms": 1.3212999911047518,
+        "percentile_ms": 4.266300005838275
+      }
+    },
+    {
+      "sample": 4,
+      "plate_token": "d015c56ed33f",
+      "cold_ms": 39.61459998390637,
+      "cold_breakdown": {
+        "source_open_decode_ms": 13.565800007199869,
+        "resize_ms": 1.2538000009953976,
+        "percentile_ms": 7.18129999586381
+      },
+      "source_dimensions": [
+        3032,
+        3072
+      ],
+      "preview_dimensions": [
+        1382,
+        1400
+      ],
+      "warm_ms": 40.90409999480471,
+      "warm_breakdown": {
+        "source_open_decode_ms": 14.769500005058944,
+        "resize_ms": 1.3032999995630234,
+        "percentile_ms": 7.1770999929867685
+      }
+    },
+    {
+      "sample": 5,
+      "plate_token": "b8627f61823f",
+      "cold_ms": 38.769900012994185,
+      "cold_breakdown": {
+        "source_open_decode_ms": 13.61439996981062,
+        "resize_ms": 1.2434999807737768,
+        "percentile_ms": 6.450700020650402
+      },
+      "source_dimensions": [
+        3032,
+        3072
+      ],
+      "preview_dimensions": [
+        1382,
+        1400
+      ],
+      "warm_ms": 41.81700001936406,
+      "warm_breakdown": {
+        "source_open_decode_ms": 14.40249997540377,
+        "resize_ms": 1.2669999850913882,
+        "percentile_ms": 6.886899995151907
+      }
+    },
+    {
+      "sample": 6,
+      "plate_token": "81b696adcf7d",
+      "cold_ms": 39.78409999399446,
+      "cold_breakdown": {
+        "source_open_decode_ms": 14.05589998466894,
+        "resize_ms": 1.3453999999910593,
+        "percentile_ms": 6.8521000212058425
+      },
+      "source_dimensions": [
+        3032,
+        3072
+      ],
+      "preview_dimensions": [
+        1382,
+        1400
+      ],
+      "warm_ms": 41.46320000290871,
+      "warm_breakdown": {
+        "source_open_decode_ms": 14.136500016320497,
+        "resize_ms": 1.7177999834530056,
+        "percentile_ms": 7.528699992690235
+      }
+    }
+  ],
+  "cold_median_ms": 39.699349988950416,
+  "warm_median_ms": 41.18364999885671,
+  "list_click": {
+    "target_token": "495699912d71",
+    "total_ms": 5330.562499992084,
+    "calls": {
+      "XRayCropWorkspace._load_plate": 1,
+      "XRayProject.specimens": 1963,
+      "XRayCropWorkspace._draw": 1,
+      "XRayCropWorkspace._refresh_controls": 1,
+      "XRayProject.crop_summary": 1,
+      "XRayProject.source_images": 9,
+      "XRayProject.training_plates": 3,
+      "XRayProject.orientation_training_specimen_count": 1,
+      "XRayProject.prediction_candidate_ids": 1,
+      "XRayPlateListPanel.select": 1,
+      "XRayPlateListPanel.refresh": 2,
+      "XRayPlateListPanel._catalog_rows": 2,
+      "PhotoListCanvas.set_rows": 2,
+      "PhotoListCanvas.selection_set": 2
+    },
+    "inclusive_function_ms": {
+      "XRayProject.specimens": 5107.8017999534495,
+      "XRayCropWorkspace._draw": 14.50790002127178,
+      "XRayProject.source_images": 26.225200039334595,
+      "XRayProject.training_plates": 763.7285999953747,
+      "XRayProject.crop_summary": 3221.8089000089094,
+      "XRayProject.orientation_training_specimen_count": 248.66209999890998,
+      "XRayProject.prediction_candidate_ids": 1361.3757000130136,
+      "XRayCropWorkspace._refresh_controls": 5089.934999996331,
+      "XRayCropWorkspace._load_plate": 5188.840999995591,
+      "XRayPlateListPanel._catalog_rows": 99.63099999004044,
+      "PhotoListCanvas.set_rows": 4.354300006525591,
+      "PhotoListCanvas.selection_set": 2.914200013037771,
+      "XRayPlateListPanel.refresh": 129.0164999954868,
+      "XRayPlateListPanel.select": 70.73159998981282
+    },
+    "before_yview": [
+      0.40001276161306787,
+      0.4463374170495151
+    ],
+    "after_yview": [
+      0.40001276161306787,
+      0.4463374170495151
+    ],
+    "before_top_pixels": 6269.0,
+    "after_top_pixels": 6269.0,
+    "scroll_preserved_exactly": true,
+    "full_list_rebuild": true,
+    "explicit_see": false,
+    "caveat": "actual production workspace/list functions; callbacks that would persist current selection are captured only in memory"
+  },
+  "workspace_switches": [
+    {
+      "target_token": "82a3d3d4265f",
+      "total_ms": 5263.474500010489,
+      "calls": {
+        "XRayCropWorkspace._load_plate": 1,
+        "XRayProject.specimens": 1963,
+        "XRayCropWorkspace._draw": 1,
+        "XRayCropWorkspace._refresh_controls": 1,
+        "XRayProject.crop_summary": 1,
+        "XRayProject.source_images": 9,
+        "XRayProject.training_plates": 3,
+        "XRayProject.orientation_training_specimen_count": 1,
+        "XRayProject.prediction_candidate_ids": 1,
+        "XRayPlateListPanel.select": 1,
+        "XRayPlateListPanel.refresh": 2,
+        "XRayPlateListPanel._catalog_rows": 2,
+        "PhotoListCanvas.set_rows": 2,
+        "PhotoListCanvas.selection_set": 2
+      },
+      "inclusive_function_ms": {
+        "XRayProject.specimens": 5012.860699993325,
+        "XRayCropWorkspace._draw": 13.41739998315461,
+        "XRayProject.source_images": 19.867900031385943,
+        "XRayProject.training_plates": 785.438399965642,
+        "XRayProject.crop_summary": 3067.9831999877933,
+        "XRayProject.orientation_training_specimen_count": 264.8765000049025,
+        "XRayProject.prediction_candidate_ids": 1412.309200008167,
+        "XRayCropWorkspace._refresh_controls": 4998.150500003248,
+        "XRayCropWorkspace._load_plate": 5132.493700017221,
+        "XRayPlateListPanel._catalog_rows": 84.69690001220442,
+        "PhotoListCanvas.set_rows": 5.128399992827326,
+        "PhotoListCanvas.selection_set": 4.049800016218796,
+        "XRayPlateListPanel.refresh": 117.96360000153072,
+        "XRayPlateListPanel.select": 68.5656999994535
+      },
+      "before_yview": [
+        0.12863705972434916,
+        0.17496171516079634
+      ],
+      "after_yview": [
+        0.12863705972434916,
+        0.17496171516079634
+      ],
+      "before_top_pixels": 2016.0,
+      "after_top_pixels": 2016.0,
+      "scroll_preserved_exactly": true,
+      "full_list_rebuild": true,
+      "explicit_see": false,
+      "caveat": "actual production workspace/list functions; callbacks that would persist current selection are captured only in memory"
+    },
+    {
+      "target_token": "b62be85a0151",
+      "total_ms": 5312.3118999938015,
+      "calls": {
+        "XRayCropWorkspace._load_plate": 1,
+        "XRayProject.specimens": 1963,
+        "XRayCropWorkspace._draw": 1,
+        "XRayCropWorkspace._refresh_controls": 1,
+        "XRayProject.crop_summary": 1,
+        "XRayProject.source_images": 9,
+        "XRayProject.training_plates": 3,
+        "XRayProject.orientation_training_specimen_count": 1,
+        "XRayProject.prediction_candidate_ids": 1,
+        "XRayPlateListPanel.select": 1,
+        "XRayPlateListPanel.refresh": 2,
+        "XRayPlateListPanel._catalog_rows": 2,
+        "PhotoListCanvas.set_rows": 2,
+        "PhotoListCanvas.selection_set": 2
+      },
+      "inclusive_function_ms": {
+        "XRayProject.specimens": 5097.534100234043,
+        "XRayCropWorkspace._draw": 13.880400016205385,
+        "XRayProject.source_images": 21.919600025285035,
+        "XRayProject.training_plates": 769.931999995606,
+        "XRayProject.crop_summary": 3052.8242000145838,
+        "XRayProject.orientation_training_specimen_count": 255.517499987036,
+        "XRayProject.prediction_candidate_ids": 1499.1413000097964,
+        "XRayCropWorkspace._refresh_controls": 5066.66569999652,
+        "XRayCropWorkspace._load_plate": 5136.670100007905,
+        "XRayPlateListPanel._catalog_rows": 114.76699996273965,
+        "PhotoListCanvas.set_rows": 4.146099992794916,
+        "PhotoListCanvas.selection_set": 2.580200001830235,
+        "XRayPlateListPanel.refresh": 141.28909999271855,
+        "XRayPlateListPanel.select": 70.06890000775456
+      },
+      "before_yview": [
+        0.13016845329249618,
+        0.17649310872894333
+      ],
+      "after_yview": [
+        0.13016845329249618,
+        0.17649310872894333
+      ],
+      "before_top_pixels": 2040.0,
+      "after_top_pixels": 2040.0,
+      "scroll_preserved_exactly": true,
+      "full_list_rebuild": true,
+      "explicit_see": false,
+      "caveat": "actual production workspace/list functions; callbacks that would persist current selection are captured only in memory"
+    },
+    {
+      "target_token": "d015c56ed33f",
+      "total_ms": 5223.226100002648,
+      "calls": {
+        "XRayCropWorkspace._load_plate": 1,
+        "XRayProject.specimens": 1963,
+        "XRayCropWorkspace._draw": 1,
+        "XRayCropWorkspace._refresh_controls": 1,
+        "XRayProject.crop_summary": 1,
+        "XRayProject.source_images": 9,
+        "XRayProject.training_plates": 3,
+        "XRayProject.orientation_training_specimen_count": 1,
+        "XRayProject.prediction_candidate_ids": 1,
+        "XRayPlateListPanel.select": 1,
+        "XRayPlateListPanel.refresh": 2,
+        "XRayPlateListPanel._catalog_rows": 2,
+        "PhotoListCanvas.set_rows": 2,
+        "PhotoListCanvas.selection_set": 2
+      },
+      "inclusive_function_ms": {
+        "XRayProject.specimens": 5018.283500568941,
+        "XRayCropWorkspace._draw": 12.926600000355393,
+        "XRayProject.source_images": 22.815799951786175,
+        "XRayProject.training_plates": 769.2122000153176,
+        "XRayProject.crop_summary": 3099.6760000125505,
+        "XRayProject.orientation_training_specimen_count": 258.2090999931097,
+        "XRayProject.prediction_candidate_ids": 1377.942899998743,
+        "XRayCropWorkspace._refresh_controls": 4993.481899990002,
+        "XRayCropWorkspace._load_plate": 5057.96669999836,
+        "XRayPlateListPanel._catalog_rows": 105.36529999808408,
+        "PhotoListCanvas.set_rows": 8.57110001379624,
+        "PhotoListCanvas.selection_set": 7.7674000058323145,
+        "XRayPlateListPanel.refresh": 150.36309999413788,
+        "XRayPlateListPanel.select": 73.77930000075139
+      },
+      "before_yview": [
+        0.13169984686064318,
+        0.17802450229709035
+      ],
+      "after_yview": [
+        0.13169984686064318,
+        0.17802450229709035
+      ],
+      "before_top_pixels": 2064.0,
+      "after_top_pixels": 2064.0,
+      "scroll_preserved_exactly": true,
+      "full_list_rebuild": true,
+      "explicit_see": false,
+      "caveat": "actual production workspace/list functions; callbacks that would persist current selection are captured only in memory"
+    },
+    {
+      "target_token": "b8627f61823f",
+      "total_ms": 5307.316099992022,
+      "calls": {
+        "XRayCropWorkspace._load_plate": 1,
+        "XRayProject.specimens": 1963,
+        "XRayCropWorkspace._draw": 1,
+        "XRayCropWorkspace._refresh_controls": 1,
+        "XRayProject.crop_summary": 1,
+        "XRayProject.source_images": 9,
+        "XRayProject.training_plates": 3,
+        "XRayProject.orientation_training_specimen_count": 1,
+        "XRayProject.prediction_candidate_ids": 1,
+        "XRayPlateListPanel.select": 1,
+        "XRayPlateListPanel.refresh": 2,
+        "XRayPlateListPanel._catalog_rows": 2,
+        "PhotoListCanvas.set_rows": 2,
+        "PhotoListCanvas.selection_set": 2
+      },
+      "inclusive_function_ms": {
+        "XRayProject.specimens": 5095.376099343412,
+        "XRayCropWorkspace._draw": 13.484600000083447,
+        "XRayProject.source_images": 22.77660003164783,
+        "XRayProject.training_plates": 781.9268000021111,
+        "XRayProject.crop_summary": 3127.4869000189938,
+        "XRayProject.orientation_training_specimen_count": 267.6566999871284,
+        "XRayProject.prediction_candidate_ids": 1417.1748000080697,
+        "XRayCropWorkspace._refresh_controls": 5067.564400000265,
+        "XRayCropWorkspace._load_plate": 5139.244599995436,
+        "XRayPlateListPanel._catalog_rows": 110.78250000718981,
+        "PhotoListCanvas.set_rows": 5.984899995382875,
+        "PhotoListCanvas.selection_set": 5.95749999047257,
+        "XRayPlateListPanel.refresh": 150.13150000595488,
+        "XRayPlateListPanel.select": 75.64389999606647
+      },
+      "before_yview": [
+        0.1332312404287902,
+        0.17955589586523737
+      ],
+      "after_yview": [
+        0.1332312404287902,
+        0.17955589586523737
+      ],
+      "before_top_pixels": 2088.0,
+      "after_top_pixels": 2088.0,
+      "scroll_preserved_exactly": true,
+      "full_list_rebuild": true,
+      "explicit_see": false,
+      "caveat": "actual production workspace/list functions; callbacks that would persist current selection are captured only in memory"
+    },
+    {
+      "target_token": "81b696adcf7d",
+      "total_ms": 5148.324999987381,
+      "calls": {
+        "XRayCropWorkspace._load_plate": 1,
+        "XRayProject.specimens": 1963,
+        "XRayCropWorkspace._draw": 2,
+        "XRayCropWorkspace._refresh_controls": 1,
+        "XRayProject.crop_summary": 1,
+        "XRayProject.source_images": 9,
+        "XRayProject.training_plates": 3,
+        "XRayProject.orientation_training_specimen_count": 1,
+        "XRayProject.prediction_candidate_ids": 1,
+        "XRayPlateListPanel.select": 1,
+        "XRayPlateListPanel.refresh": 2,
+        "XRayPlateListPanel._catalog_rows": 2,
+        "PhotoListCanvas.set_rows": 2,
+        "PhotoListCanvas.selection_set": 2
+      },
+      "inclusive_function_ms": {
+        "XRayProject.specimens": 4929.880999960005,
+        "XRayCropWorkspace._draw": 20.768399961525574,
+        "XRayProject.source_images": 21.37950004544109,
+        "XRayProject.training_plates": 749.9508999462705,
+        "XRayProject.crop_summary": 3027.477600000566,
+        "XRayProject.orientation_training_specimen_count": 247.10180002148263,
+        "XRayProject.prediction_candidate_ids": 1370.2799000020605,
+        "XRayCropWorkspace._refresh_controls": 4903.367299993988,
+        "XRayCropWorkspace._load_plate": 4981.029299990041,
+        "XRayPlateListPanel._catalog_rows": 104.10149997915141,
+        "PhotoListCanvas.set_rows": 6.621499982429668,
+        "PhotoListCanvas.selection_set": 4.89080001716502,
+        "XRayPlateListPanel.refresh": 140.35749997128733,
+        "XRayPlateListPanel.select": 74.59500001277775
+      },
+      "before_yview": [
+        0.13476263399693722,
+        0.18108728943338437
+      ],
+      "after_yview": [
+        0.13476263399693722,
+        0.18108728943338437
+      ],
+      "before_top_pixels": 2112.0,
+      "after_top_pixels": 2112.0,
+      "scroll_preserved_exactly": true,
+      "full_list_rebuild": true,
+      "explicit_see": false,
+      "caveat": "actual production workspace/list functions; callbacks that would persist current selection are captured only in memory"
+    },
+    {
+      "target_token": "626ff0c04496",
+      "total_ms": 5241.435200005071,
+      "calls": {
+        "XRayCropWorkspace._load_plate": 1,
+        "XRayProject.specimens": 1963,
+        "XRayCropWorkspace._draw": 2,
+        "XRayCropWorkspace._refresh_controls": 1,
+        "XRayProject.crop_summary": 1,
+        "XRayProject.source_images": 9,
+        "XRayProject.training_plates": 3,
+        "XRayProject.orientation_training_specimen_count": 1,
+        "XRayProject.prediction_candidate_ids": 1,
+        "XRayPlateListPanel.select": 1,
+        "XRayPlateListPanel.refresh": 2,
+        "XRayPlateListPanel._catalog_rows": 2,
+        "PhotoListCanvas.set_rows": 2,
+        "PhotoListCanvas.selection_set": 2
+      },
+      "inclusive_function_ms": {
+        "XRayProject.specimens": 5015.9349996829405,
+        "XRayCropWorkspace._draw": 22.379100002581254,
+        "XRayProject.source_images": 22.388000012142584,
+        "XRayProject.training_plates": 752.3024000111036,
+        "XRayProject.crop_summary": 3086.2519000074826,
+        "XRayProject.orientation_training_specimen_count": 250.74380001751706,
+        "XRayProject.prediction_candidate_ids": 1416.9667000242043,
+        "XRayCropWorkspace._refresh_controls": 5005.6310999789275,
+        "XRayCropWorkspace._load_plate": 5076.203500007978,
+        "XRayPlateListPanel._catalog_rows": 81.7957999825012,
+        "PhotoListCanvas.set_rows": 7.513000018661842,
+        "PhotoListCanvas.selection_set": 4.0917000151239336,
+        "XRayPlateListPanel.refresh": 119.28260000422597,
+        "XRayPlateListPanel.select": 82.87320000817999
+      },
+      "before_yview": [
+        0.12710566615620214,
+        0.17343032159264932
+      ],
+      "after_yview": [
+        0.12710566615620214,
+        0.17343032159264932
+      ],
+      "before_top_pixels": 1992.0,
+      "after_top_pixels": 1992.0,
+      "scroll_preserved_exactly": true,
+      "full_list_rebuild": true,
+      "explicit_see": false,
+      "caveat": "actual production workspace/list functions; callbacks that would persist current selection are captured only in memory"
+    }
+  ],
+  "workspace_switch_median_ms": 5252.45485000778
+}

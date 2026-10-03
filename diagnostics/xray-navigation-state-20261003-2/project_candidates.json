@@ -1,0 +1,76 @@
+{
+  "selected_candidate_id": "project_1157",
+  "selection_reason": "newest non-temporary, substantially largest project; highest annotation/model activity, more than one day newer than other non-temporary candidates",
+  "found_database_count": 1157,
+  "temporary_test_database_count": 1153,
+  "candidates": [
+    {
+      "candidate_id": "project_1154",
+      "path_token": "6ba694dd8929",
+      "temporary": false,
+      "size": 303104,
+      "mtime_ns": 1790859939234238800,
+      "mtime_utc": "2026-10-01T13:05:39.234239+00:00",
+      "name_token": "6b86b273ff34",
+      "counts": {
+        "source_images": 17,
+        "specimens": 132,
+        "annotation_runs": 0,
+        "trait_results": 0,
+        "xray_crop_models": 1,
+        "xray_structure_models": null
+      }
+    },
+    {
+      "candidate_id": "project_1155",
+      "path_token": "37b1f23fd0f2",
+      "temporary": false,
+      "size": 413696,
+      "mtime_ns": 1790955051133068700,
+      "mtime_utc": "2026-10-02T15:30:51.133069+00:00",
+      "name_token": "d4735e3a265e",
+      "counts": {
+        "source_images": 40,
+        "specimens": 216,
+        "annotation_runs": 4,
+        "trait_results": 28,
+        "xray_crop_models": 1,
+        "xray_structure_models": null
+      }
+    },
+    {
+      "candidate_id": "project_1156",
+      "path_token": "6a94094b8553",
+      "temporary": false,
+      "size": 188416,
+      "mtime_ns": 1790892437729392300,
+      "mtime_utc": "2026-10-01T22:07:17.729392+00:00",
+      "name_token": "4e07408562be",
+      "counts": {
+        "source_images": 39,
+        "specimens": 54,
+        "annotation_runs": 0,
+        "trait_results": 0,
+        "xray_crop_models": 0,
+        "xray_structure_models": null
+      }
+    },
+    {
+      "candidate_id": "project_1157",
+      "path_token": "2ece77218b81",
+      "temporary": false,
+      "size": 3944448,
+      "mtime_ns": 1791039179834218100,
+      "mtime_utc": "2026-10-03T14:52:59.834218+00:00",
+      "name_token": "4b227777d4dd",
+      "counts": {
+        "source_images": 653,
+        "specimens": 1565,
+        "annotation_runs": 68,
+        "trait_results": 476,
+        "xray_crop_models": 4,
+        "xray_structure_models": 3
+      }
+    }
+  ]
+}

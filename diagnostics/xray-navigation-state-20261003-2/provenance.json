@@ -1,0 +1,28 @@
+{
+  "head": "5b201b2720a6f17675dbf2e204544261e96439db",
+  "branch": "feature/xray-traits-foundation",
+  "status": "",
+  "source_sha256": {
+    "app/xray_crop_ui.py": "9e24a347909040419bc488088ba1019a08c03a9f8c54f396edc19aa90de5e455",
+    "app/xray_structures_ui.py": "9ecd2811f4f2e7729ccfe8f883c9b874cd888c4e0d01c9ba2680af43fba89dc8",
+    "app/xray_project.py": "3b9f78bbca672a9525c7d973865b02604ad7c3310f93fb7c0b7477e281da1f30",
+    "app/modules/xray_counts.py": "e6e815c7f720251fcaa68d572a9d07ee8f09d379bcc96b64b778c759bcffbf3e",
+    "app/photo_list.py": "cfc14d8eb352cab3f8a0985349a7a505f296da2caf92bc5fe0aac469083bbdc7"
+  },
+  "launcher_root_check": true,
+  "active_python_processes_before_diagnostic": [],
+  "runtime_code_match": "UNKNOWN_NO_ACTIVE_PYTHON_PROCESS",
+  "sqlite_before": {
+    "sha256": "07b016b19bf697f614f8c322b293bafb5fa021dde972dcc290229014d1dd8eea",
+    "size": 3944448,
+    "mtime_ns": 1791039179834218100
+  },
+  "sqlite_after": {
+    "sha256": "07b016b19bf697f614f8c322b293bafb5fa021dde972dcc290229014d1dd8eea",
+    "size": 3944448,
+    "mtime_ns": 1791039179834218100
+  },
+  "project_file_stats_unchanged": true,
+  "blocked_writes": [],
+  "selected_project_token": "34d86066049d"
+}

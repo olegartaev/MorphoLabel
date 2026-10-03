@@ -1,0 +1,103 @@
+{
+  "evidence_type": "production code inspection plus isolated actual workspace selection callbacks; no persistence callbacks executed",
+  "current_valid_pair_preserved": true,
+  "unconditional_preservation": false,
+  "crop_to_structures": [
+    "Crops._notify_selection -> Runtime._set_selection -> Project.set_current_selection",
+    "Runtime._select -> _rerender -> render destroys old stage",
+    "Runtime._render_structures -> current_selection -> initial_image_id / initial_specimen_id",
+    "Structures.refresh preserves initial specimen if eligible -> _load_specimen -> _notify_selection"
+  ],
+  "structures_to_crops": [
+    "Structures._notify_selection -> Runtime._set_selection -> Project.set_current_selection",
+    "Runtime._render_crops -> current_selection -> initial_image_id / initial_specimen_id",
+    "Crops.refresh -> _load_plate uses preferred specimen only if present on selected plate"
+  ],
+  "break_points": [
+    "Crops._canvas_down empty space clears session selection and notifies specimen_id empty",
+    "Crops._load_plate clears selected specimen if preferred ID not on newly selected plate; no first-specimen default",
+    "Crops._notify_selection strips draft: IDs; new draft/deleted selection not immediately notified until Apply/reload",
+    "Project.current_selection clears invalid/excluded/rejected/superseded specimen",
+    "Structures.refresh: eligible current specimen > saved batch position > first specimen on preferred plate > first globally",
+    "Crops.refresh: valid preferred plate > saved batch position > first plate"
+  ],
+  "references": {
+    "runtime": "app/modules/xray_counts.py:199,203,229,261,346,354",
+    "crop": "app/xray_crop_ui.py:452,507,531,690,732,754",
+    "structures": "app/xray_structures_ui.py:379,472,486",
+    "project": "app/xray_project.py:982,997"
+  },
+  "operations": [
+    {
+      "operation": "Crop geometry / manual crop creation / deletion",
+      "persisted_immediately": false,
+      "selection_updated": "existing selection clicks yes; draft ID sanitized to empty; draft creation/deletion lacks immediate notification",
+      "fresh_on_other_stage": true,
+      "gap": "PlateCropEditSession only until Apply; leaving/reloading loses unapplied edits",
+      "full_rerender": "stage switch yes; local edit overlays only"
+    },
+    {
+      "operation": "Apply / confirm Crop",
+      "persisted_immediately": true,
+      "selection_updated": "yes after draft ID mapping",
+      "fresh_on_other_stage": true,
+      "gap": "none after successful Apply; coordinate-dependent annotations deliberately invalidated by crop edits",
+      "full_rerender": "other stage recreated on entry"
+    },
+    {
+      "operation": "Per-crop head / ventral orientation flips",
+      "persisted_immediately": false,
+      "selection_updated": "same crop ID; geometry metadata staged until Apply",
+      "fresh_on_other_stage": true,
+      "gap": "unapplied session state invisible to Structures",
+      "full_rerender": "other stage recreated on entry"
+    },
+    {
+      "operation": "Project-wide orientation policy",
+      "persisted_immediately": true,
+      "selection_updated": "not a selection operation",
+      "fresh_on_other_stage": true,
+      "gap": "existing crop raster belongs to workspace; next stage load recomputes from current policy",
+      "full_rerender": "setter persists metadata; existing raster requires reload; creation dialog sets initial policy"
+    },
+    {
+      "operation": "Structure marker add / delete",
+      "persisted_immediately": true,
+      "selection_updated": "same current specimen",
+      "fresh_on_other_stage": true,
+      "gap": "none after successful database operation",
+      "full_rerender": "local _after_edit; stage switch recreates workspace"
+    },
+    {
+      "operation": "Structure marker move",
+      "persisted_immediately": "on mouse release, not during drag",
+      "selection_updated": "same current specimen",
+      "fresh_on_other_stage": true,
+      "gap": "in-memory drag coordinates before release only",
+      "full_rerender": "local _after_edit after release"
+    },
+    {
+      "operation": "Verify Structures",
+      "persisted_immediately": true,
+      "selection_updated": "same current specimen; Next can subsequently change it",
+      "fresh_on_other_stage": true,
+      "gap": "none; verify_annotations writes verified run then recalculates trait results",
+      "full_rerender": "local _after_edit; stage switch recreates workspace"
+    }
+  ],
+  "runtime_caches": [
+    "Crops.session: staged geometry/orientation/deletions; lost on plate load or stage destroy before Apply",
+    "Crops.preview / photo / _photo_key: current raster only, no keyed multi-plate RAM preview cache",
+    "Structures._source_cache: one source plate in RAM, cleared on destroy, no source stat/hash validation on same-plate hit",
+    "Structures.crop_image / annotations / roles / _raster_key / photo: reloaded on _load_specimen; destroyed across stages",
+    "Runtime._images: icons only; no cross-stage specimen image cache"
+  ],
+  "queue_primitives": {
+    "visual": "app/ui/section_base.py SectionView.attention_banner: compact yellow banner, Continue, close button",
+    "existing_close_semantics": "hides banner via attention_banner_dismissed_generation_id; does NOT terminate queue",
+    "xray_state": "XRayProject.get_ui_state / set_ui_state(xray_crop_active_batch)",
+    "completion": "Crops._move_batch end uses ids=[] and finished=True; stage exit does not clear queue",
+    "science_separation": "UI-state-only queue update is separate from crop/verification/model/provenance tables",
+    "do_not_reuse": "clear_all / crop deletion are scientific-data operations, not queue dismissal"
+  }
+}

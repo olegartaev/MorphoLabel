@@ -1,0 +1,120 @@
+READ-ONLY X-RAY NAVIGATION / STATE DIAGNOSTIC -- 2026-10-03
+Scope: X-ray traits Crops and Structures; not the generic Landmarks Crop module.
+HEAD: 5b201b2720a6f17675dbf2e204544261e96439db
+Branch during measurement: feature/xray-traits-foundation
+Initial working tree: clean. Production source unchanged.
+Launcher resolves to workspace source. Active Python/pythonw process absent before diagnostic.
+RUNTIME_CODE_MATCH=UNKNOWN_NO_ACTIVE_PYTHON_PROCESS
+
+PROJECT DISCOVERY
+Filename-only D drive search for xray_project.sqlite3 found 1157 databases:
+4 non-temporary candidates; 1153 temporary test databases.
+Selected anonymous project_1157: newest non-temporary project, substantially greatest
+activity: 653 source plates, 1565 specimens, 68 annotation runs, 476 trait results,
+4 Crop models, 3 Structure models. Other real candidates have 17/40/39 plates.
+Recent preferences/logs did not identify a current real X-ray root.
+Paths, project names, source filenames, localities, and specimen labels excluded.
+
+READ-ONLY SAFETY
+SQLite opened URI mode=ro and PRAGMA query_only=ON; XRayProject constructor bypassed
+because it performs schema maintenance. All project connects forced read-only.
+Real production workspace/list functions ran in an isolated diagnostic Tk process.
+Selection persistence callbacks captured in memory; no user live UI state altered.
+No training, predictions, project writes, image/cache creation, or model loading.
+SQLite SHA256 before/after: 07b016b19bf697f614f8c322b293bafb5fa021dde972dcc290229014d1dd8eea
+SQLite size before/after: 3944448
+SQLite mtime_ns before/after: 1791039179834218100
+SQLite fingerprint identical; all project file size/mtime inventories identical.
+Blocked writes: 0.
+
+PERSISTED STATE
+Current plate exists=yes; specimen exists=yes; specimen belongs to plate=yes.
+Crop batch: prediction_review, 80 plate IDs, position=65 (zero based),
+current plate in batch=no, finished key absent, age=UNKNOWN_NO_BATCH_TIMESTAMP.
+Structure batch: pass=1, 5 IDs, position=0, current specimen in batch=no,
+finished key absent, age=UNKNOWN_NO_BATCH_TIMESTAMP.
+Current plate shows Apply crop; Confirm & Next hidden in isolated initial UI.
+STALE_CROP_BATCH_PRESENT=yes (retained persisted queue; chronological age unknown).
+CONFIRM_NEXT_CAUSE=_active_batch tests selected plate membership only; selecting any
+plate in the retained IDs switches controls to Confirm & Next regardless of ordinary
+manual navigation. No separate user-started-live-session, age or finished validation.
+Leaving Crops destroys widgets but does not clear xray_crop_active_batch.
+References: app/xray_crop_ui.py:458,460,474,517,800; app/modules/xray_counts.py:229.
+
+CROPS TIMING
+6 plates: current + at most 5 neighbors; display_preview(path,1400) called twice.
+Cold means first diagnostic call, NOT flushed OS disk cache.
+Median warm preview=41.184 ms.
+XRAY_CROP_RAM_CACHE=no (only current preview/photo raster, no multi-plate keyed cache).
+6 warmed actual list selections, UI event through completed root.update:
+CROP_SWITCH_MEDIAN_MS=5252.455
+CROP_SWITCH_PRIMARY_COST=whole-project control summary/candidate reads, not image decode
+Median _refresh_controls=5001.891 ms.
+Median specimens calls (inclusive)=5017.109 ms.
+Each click: 1963 specimens() calls, 9 source_images(), 3 training_plates(),
+2 catalog rebuilds / refresh / canvas.set_rows / selection_set; no explicit canvas.see.
+crop_summary traverses ai_review_plate_ids and untouched_plate_ids; controls additionally
+traverse training_plates, orientation training rows, prediction_candidate_ids.
+Costs include connection/read/row conversion/JSON parsing, not pure SQLite engine time.
+Nested function durations overlap and MUST NOT be summed.
+Source open/decode and resize instrumentation details are in crop_navigation_timings.json.
+References: app/xray_crop_ui.py:190,222,240,247,474,488,531;
+app/xray_project.py:571,581,594,617,637,930.
+
+STRUCTURES TIMING
+Current specimen + at most 5 neighboring confirmed specimens, actual source cache path.
+Median source load=0.0020 ms
+(neighbors share plate; median RAM hit, first source read retained in samples).
+Median oriented_crop=26.282 ms.
+Median display preparation=8.646 ms.
+Median image-only total=35.271 ms.
+6 different-plate image-only total median=54.238 ms.
+6 actual warmed list selections, UI event through completed root.update:
+STRUCTURE_SWITCH_MEDIAN_MS=175.179
+STRUCTURE_SWITCH_PRIMARY_COST=compound specimen reload: crop recomputation plus repeated
+catalog/workflow reads; no single measured function accounts for all latency.
+Median 2 list refreshes=42.175 ms;
+7 structure_specimens calls=35.195 ms;
+workflow refresh=23.594 ms.
+Measurements include diagnostic wrapping overhead and isolated UI; not a live-app trace.
+
+LIST SCROLL / REBUILD
+CROP_LIST_FULL_REBUILD_ON_CLICK=yes (twice); explicit see=no;
+CROP_SCROLL_PRESERVED_EXACTLY=yes for measured stable-catalog clicks.
+Preserve implementation stores yview fraction, not stable row/pixel anchor; catalog
+membership changes or Apply/batch navigation (reveal=True) can reposition list.
+STRUCTURE_LIST_FULL_REBUILD_ON_CLICK=yes (twice); explicit see=yes;
+STRUCTURE_SCROLL_PRESERVED_EXACTLY=no for measured clicks.
+_load_specimen -> specimen_list.select(reveal=True) -> refresh -> canvas.see(align_top=True).
+Outer _selected refresh(preserve_scroll=True) preserves the already jumped viewport.
+References: app/xray_structures_ui.py:103,125,143,149,486.
+
+CROSS-STAGE SELECTION / PERSISTENCE
+CURRENT_SELECTION_PRESERVED_ACROSS_STAGES=yes for current valid eligible persisted pair;
+NOT guaranteed once selection is cleared/invalid/draft or plate changes.
+Both isolated workspaces restored identical current plate/specimen tokens.
+SELECTION_BREAK_POINT=Crops empty-space click or new plate clears specimen;
+Structures.refresh fallback gives saved batch position priority over preferred plate
+when no eligible current specimen, then first specimen on that plate, then first global.
+Draft IDs cannot be shared before Apply. Delete/new draft lack immediate notification.
+CROSS_STAGE_PERSISTENCE_GAP=unapplied Crop geometry/flip/delete live only in edit session;
+marker moves persist at mouse release. Applied edits and completed marker operations
+are read freshly on stage entry; no persistent cross-stage raster cache observed.
+Crop geometry edits intentionally invalidate coordinate-dependent structure results.
+Source RAM cache is one plate, no stat/hash validation; potential stale source ONLY
+if external image changes while same Structures workspace remains alive, not demonstrated.
+Stage switching tears down/rebuilds workspace and rereads database; same-stage navigation
+does not rebuild entire section but rebuilds the full list twice.
+Full operation matrix and source references: selection_chain.json.
+
+QUEUE PRIMITIVES (FACTS ONLY, NO IMPLEMENTATION)
+Landmarks SectionView.attention_banner already supplies compact yellow banner,
+Continue and close controls. Existing close only stores dismissed generation ID;
+it does NOT end a queue and cannot be considered X-ray queue cancellation as-is.
+X-ray batch state resides separately in ui_state; its completion branch sets empty IDs
+and finished=True. Crop clearing/deletion/verification/model operations are separate.
+Current X-ray UI has toolbar batch controls, not requested dismissible queue banner.
+References: app/ui/section_base.py:35,59; app/xray_project.py:562,568;
+app/xray_crop_ui.py:517,800.
+
+No production changes or proposed implementation. Seven diagnostic files only.
