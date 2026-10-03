@@ -194,8 +194,8 @@ class OrientationSetupDialog(tk.Toplevel):
 
 
 class XRayCountsRuntime:
-    def __init__(self):self.host=None;self.project=None;self.stage="project";self._images={};self._tip=None
-    def close(self):self.host=None;self._images.clear();self._tip=None
+    def __init__(self):self.host=None;self.project=None;self.stage="project";self._images={};self._tip=None;self._workspace=None
+    def close(self):self.host=None;self._workspace=None;self._images.clear();self._tip=None
     def _selection(self):
         return self.project.current_selection() if self.project is not None else {"image_id":"","specimen_id":""}
 
@@ -260,6 +260,13 @@ class XRayCountsRuntime:
 
     def _select(self,key):
         if self.project is None and key!="project":return
+        if key==self.stage:return
+        flush=getattr(self._workspace,"flush_pending_edits",None)
+        if callable(flush):
+            try:flush()
+            except Exception as exc:
+                messagebox.showerror("X-ray Crops",f"Could not save the current Crop edits before changing section:\n{exc}",parent=self.host.container.winfo_toplevel())
+                return
         if self.project is not None and key in {"structures","results","export"}:self._ensure_working_scheme()
         self.stage=key;self._rerender()
 
@@ -345,7 +352,7 @@ class XRayCountsRuntime:
 
     def _render_crops(self,parent):
         selection=self._selection()
-        XRayCropWorkspace(
+        self._workspace=XRayCropWorkspace(
             parent,self.project,
             initial_image_id=selection.get("image_id"),initial_specimen_id=selection.get("specimen_id"),
             on_selection=self._set_selection,
@@ -353,7 +360,7 @@ class XRayCountsRuntime:
 
     def _render_structures(self,parent):
         self._ensure_working_scheme();selection=self._selection()
-        XRayStructureWorkspace(
+        self._workspace=XRayStructureWorkspace(
             parent,self.project,
             initial_image_id=selection.get("image_id"),initial_specimen_id=selection.get("specimen_id"),
             on_selection=self._set_selection,on_open_results=lambda:self._select("results"),
