@@ -3,7 +3,7 @@ from pathlib import Path
 
 from app.extensions.builtins import module_registry
 from app.modules.xray_counts import (
-    EDITOR_METHOD_IDS, STAGES, _clean_reference, _default_structure, _scheme_display_model,
+    EDITOR_METHOD_IDS, STAGES, _clean_reference, _default_structure, _reference_relation_text, _scheme_display_model,
 )
 from app.xray_icons import XRAY_ICON_NAMES, render_rule_preview, render_xray_icon
 
@@ -76,6 +76,24 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertIn("def _remove_structure",source)
         self.assertNotIn("+ Add structure",source)
         self.assertNotIn("Selected structure",source)
+
+    def test_reference_creation_asks_for_biological_relationship_in_plain_language(self):
+        source=(Path(__file__).resolve().parents[1]/"app/modules/xray_counts.py").read_text(encoding="utf-8")
+        for text in (
+            "How is this reference related?",
+            "It is one of the elements in an existing series",
+            "It is a separate anatomical mark",
+            "Choose the biological relationship.",
+            "Relationship…",
+        ):
+            self.assertIn(text,source)
+        from app.xray_schema import blank_scheme
+        scheme=blank_scheme("relationships")
+        series=_default_structure(scheme,"Serial elements",True);scheme["structures"].append(series)
+        role=_default_structure(scheme,"Special element",False);role.update({"learning_relation":"role_on_structure","reuse_from":[series["id"]]});scheme["structures"].append(role)
+        independent=_default_structure(scheme,"Boundary",False);independent.update({"learning_relation":"independent","reuse_from":[]});scheme["structures"].append(independent)
+        self.assertEqual("one of Serial elements",_reference_relation_text(scheme,role))
+        self.assertEqual("separate anatomical mark",_reference_relation_text(scheme,independent))
 
     def test_counting_rule_menu_exposes_only_requested_rules(self):
         self.assertEqual(("count","count_to","count_between","derived"),EDITOR_METHOD_IDS)

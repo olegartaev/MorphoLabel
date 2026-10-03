@@ -23,6 +23,10 @@ class XRaySchemaTests(unittest.TestCase):
         self.assertEqual(scheme,phoxinus_vertebral_preset())
         self.assertEqual({"tv","abdv","caudv","predv","preap","dac","formv"},{trait["id"] for trait in scheme["traits"]})
         self.assertEqual(4,len(scheme["structures"]))
+        structures={item["id"]:item for item in scheme["structures"]}
+        self.assertEqual(["vertebra"],structures["first_caudal"]["reuse_from"])
+        self.assertEqual("role_on_structure",structures["first_caudal"]["learning_relation"])
+        self.assertEqual(["vertebra"],structures["last_predorsal"]["reuse_from"])
         self.assertEqual("10.1111/jfb.14210",scheme["reference"]["doi"])
 
     def test_scientific_scheme_content_is_not_duplicated_in_python(self):
@@ -55,6 +59,23 @@ class XRaySchemaTests(unittest.TestCase):
         normalized=normalize_scheme(scheme)
         self.assertEqual(["vertebra","start","stop"],normalized["traits"][0]["structures"])
         self.assertEqual("stop",normalized["traits"][0]["rule"]["reference_end"])
+
+    def test_explicit_independent_reference_overrides_legacy_trait_inference(self):
+        from app.xray_schema import compatible_reference_roles
+        scheme=blank_scheme("relationships")
+        scheme["structures"]=[
+            {"id":"series","name":"Serial elements","repeated":True},
+            {"id":"role","name":"Special element","repeated":False,"learning_relation":"role_on_structure","reuse_from":["series"]},
+            {"id":"boundary","name":"Separate boundary","repeated":False,"learning_relation":"independent","reuse_from":[]},
+        ]
+        scheme["traits"]=[
+            {"id":"a","name":"A","method":"count_to","structures":["series","role"],"rule":{}},
+            {"id":"b","name":"B","method":"count_to","structures":["series","boundary"],"rule":{}},
+        ]
+        normalized=normalize_scheme(scheme)
+        compatible={item["id"] for item in compatible_reference_roles(normalized,"series")}
+        self.assertIn("role",compatible)
+        self.assertNotIn("boundary",compatible)
 
     def test_each_trait_method_has_user_facing_icon_and_help(self):
         for method in METHOD_BY_ID.values():

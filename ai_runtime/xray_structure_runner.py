@@ -220,6 +220,22 @@ def _loss(logits, target, supervision=None):
     return (per_structure * valid).sum() / valid.sum().clamp(min=1.0)
 
 
+def _role_base_coordinates(structure, structures, detected):
+    """Candidate coordinates for a role that belongs to another marked structure."""
+    bases={str(value) for value in (structure.get("reuse_from") or ())}
+    if not bases:return ()
+    by_id={str(item["id"]):index for index,item in enumerate(structures)}
+    coordinates=[];seen=set()
+    for base_id in bases:
+        index=by_id.get(base_id)
+        if index is None:continue
+        for _score,x,y in detected[index]:
+            key=(int(x),int(y))
+            if key not in seen:
+                seen.add(key);coordinates.append(key)
+    return tuple(coordinates)
+
+
 def _local_peaks(logits, thresholds, structures):
     import torch
     import torch.nn.functional as F
@@ -227,7 +243,7 @@ def _local_peaks(logits, thresholds, structures):
     probabilities = torch.sigmoid(logits)
     maxima = F.max_pool2d(probabilities, kernel_size=3, stride=1, padding=1)
     kept = probabilities.eq(maxima)
-    output = []
+    detected = []
     for channel, structure in enumerate(structures):
         threshold = float(thresholds.get(structure["id"], 0.30))
         scores = probabilities[0, channel]
@@ -238,7 +254,21 @@ def _local_peaks(logits, thresholds, structures):
             points = points[:1]
         else:
             points = points[:96]
-        output.append(points)
+        detected.append(points)
+
+    output=[]
+    for channel,structure in enumerate(structures):
+        coordinates=_role_base_coordinates(structure,structures,detected)
+        if not coordinates:
+            output.append(detected[channel]);continue
+        threshold=float(thresholds.get(structure["id"],0.30))
+        scores=probabilities[0,channel]
+        candidates=[
+            (float(scores[y,x].item()),int(x),int(y))
+            for x,y in coordinates if float(scores[y,x].item())>=threshold
+        ]
+        candidates.sort(reverse=True)
+        output.append(candidates[:1])
     return output
 
 

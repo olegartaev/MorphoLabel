@@ -52,6 +52,10 @@ def normalize_scheme(scheme):
         structure.setdefault("annotation","point");structure.setdefault("repeated",False);structure.setdefault("required",True)
         structure.setdefault("reuse_from",[])
         structure["reuse_from"]=[str(item) for item in (structure.get("reuse_from") or ()) if str(item)]
+        relation=str(structure.get("learning_relation") or "").strip()
+        if relation and relation not in {"role_on_structure","independent"}:raise ValueError(f"Unsupported structure relationship: {relation}")
+        if relation=="role_on_structure" and not structure["reuse_from"]:raise ValueError(f"Structure {ident} must name the series it belongs to")
+        if relation=="independent" and structure["reuse_from"]:raise ValueError(f"Independent structure {ident} cannot reuse another annotation point")
         structure.setdefault("shape",SHAPES[index%len(SHAPES)]);structure.setdefault("color",MARKER_COLORS[index%len(MARKER_COLORS)])
         hotkey=str(structure.get("hotkey","")).strip()
         if hotkey:
@@ -113,14 +117,18 @@ def compatible_reference_roles(scheme,base_structure_id):
     allowed=set()
     for item in scheme.get("structures",()):
         if item.get("repeated"):continue
+        relation=str(item.get("learning_relation") or "")
+        if relation=="independent":continue
         if base_structure_id in set(item.get("reuse_from") or ()):allowed.add(item["id"])
+    # Backward compatibility for older saved schemes that predate an explicit
+    # biological relationship. New/edited schemes store the relationship.
     for trait in scheme.get("traits",()):
         ids=list(trait.get("structures") or ())
         if not ids or ids[0]!=base_structure_id:continue
         if trait.get("method") not in {"count_to","count_between","position"}:continue
         for ident in ids[1:]:
             item=structures.get(ident)
-            if item is not None and not item.get("repeated"):allowed.add(ident)
+            if item is not None and not item.get("repeated") and not item.get("learning_relation"):allowed.add(ident)
     return [item for item in scheme.get("structures",()) if item["id"] in allowed and not item.get("repeated")]
 
 def calculate_trait_values(scheme,annotations,unknown_structures=None):
@@ -245,7 +253,7 @@ def scheme_change_impact(old,new,annotation_counts=None):
     removed_structures=sorted(set(old_s)-set(new_s))
     changed_structure_semantics=sorted(
         ident for ident in set(old_s)&set(new_s)
-        if any(old_s[ident].get(key)!=new_s[ident].get(key) for key in ("annotation","repeated"))
+        if any(old_s[ident].get(key)!=new_s[ident].get(key) for key in ("annotation","repeated","learning_relation","reuse_from"))
     )
     affected_annotations=sum(int(annotation_counts.get(ident,0) or 0) for ident in removed_structures+changed_structure_semantics)
     return {

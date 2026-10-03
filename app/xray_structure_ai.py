@@ -58,12 +58,14 @@ def structure_schema_contract(scheme):
     compatibility = {}
     for item in scheme.get("structures") or ():
         sid = str(item["id"])
-        structures.append({
+        contract={
             "id": sid,
             "repeated": bool(item.get("repeated")),
             "annotation": str(item.get("annotation") or "point"),
             "required": bool(item.get("required", True)),
-        })
+        }
+        if item.get("learning_relation"):contract["learning_relation"]=str(item.get("learning_relation"))
+        structures.append(contract)
         compatibility[sid] = [str(role["id"]) for role in compatible_reference_roles(scheme, sid)]
     return {"structures": structures, "role_compatibility": compatibility}
 
@@ -168,14 +170,20 @@ def prepare_structure_training_dataset(project, workspace_root, seed=42):
     membership = []
     digest_rows = []
     by_id = {str(item["id"]): item for item in project.scheme.get("structures") or ()}
-    structures = [
-        {
-            "id": sid,
-            "name": str(item.get("name") or sid),
-            "repeated": bool(item.get("repeated")),
+    role_sources={}
+    for base_id in by_id:
+        for role in compatible_reference_roles(project.scheme,base_id):
+            role_sources.setdefault(str(role["id"]),[]).append(str(base_id))
+    structures = []
+    for sid,item in by_id.items():
+        spec={
+            "id":sid,
+            "name":str(item.get("name") or sid),
+            "repeated":bool(item.get("repeated")),
         }
-        for sid, item in by_id.items()
-    ]
+        sources=sorted(set(role_sources.get(sid) or ()))
+        if sources:spec["reuse_from"]=sources
+        structures.append(spec)
     if not structures:
         raise ValueError("The active X-ray trait scheme has no structures to learn.")
     for index, row in enumerate(truth, 1):

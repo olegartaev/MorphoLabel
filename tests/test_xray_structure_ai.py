@@ -69,6 +69,10 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         self.assertTrue(train_images);self.assertTrue(val_images);self.assertFalse(train_images & val_images)
         manifest=json.loads(dataset["manifest"].read_text(encoding="utf-8"))
         self.assertEqual([768,256],manifest["input_size"])
+        specs={item["id"]:item for item in manifest["structures"]}
+        self.assertEqual(["vertebra"],specs["first_caudal"]["reuse_from"])
+        self.assertEqual(["vertebra"],specs["last_predorsal"]["reuse_from"])
+        self.assertNotIn("reuse_from",specs["preanal_pterygiophore"])
         self.assertEqual(structure_schema_digest(self.project.scheme),manifest["schema_digest"])
         self.assertEqual(
             dataset["dataset_hash"],
@@ -199,12 +203,28 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertIn("valid.sum().clamp(min=1.0)",runner)
         self.assertNotIn("positives = positive.sum()\n    return (positive_loss.sum() + negative_loss.sum())",runner)
 
+    def test_role_candidate_coordinates_follow_declared_base_structure(self):
+        from ai_runtime.xray_structure_runner import _role_base_coordinates
+        structures=[
+            {"id":"series","repeated":True},
+            {"id":"role","repeated":False,"reuse_from":["series"]},
+            {"id":"independent","repeated":False},
+        ]
+        detected=[
+            [(0.9,3,4),(0.8,7,8)],
+            [(0.7,99,99)],
+            [(0.6,12,13)],
+        ]
+        self.assertEqual(((3,4),(7,8)),_role_base_coordinates(structures[1],structures,detected))
+        self.assertEqual((),_role_base_coordinates(structures[2],structures,detected))
+
     def test_runner_is_variable_count_heatmap_model_without_anatomy_changing_flips(self):
         root=Path(__file__).resolve().parents[1]
         runner=(root/"ai_runtime/xray_structure_runner.py").read_text(encoding="utf-8")
         self.assertIn("resnet18",runner)
         self.assertIn("max_pool2d",runner)
         self.assertIn("structure.get(\"repeated\")",runner)
+        self.assertIn("_role_base_coordinates",runner)
         self.assertIn('"intensity_inversion"',runner)
         self.assertIn('{"complete", "absent"}',runner)
         self.assertIn('{"partial", "not_visible"}',runner)

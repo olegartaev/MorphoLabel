@@ -9,18 +9,153 @@
     "note": "Trait set follows the cited Phoxinus study; vertebral terminology there follows Naseka (1996)."
   },
   "structures": [
-    {"id":"vertebra","name":"Vertebrae","annotation":"point","repeated":true,"required":true,"hotkey":"1","shape":"circle","color":"#1976e9","description":"Repeated vertebral centres used as the ordered vertebral series."},
-    {"id":"first_caudal","name":"First caudal vertebra","annotation":"point","repeated":false,"required":true,"hotkey":"2","shape":"triangle","color":"#20a447","description":"Reference identifying the first caudal vertebra in the ordered series."},
-    {"id":"preanal_pterygiophore","name":"Pre-anal pterygiophores","annotation":"point","repeated":true,"required":true,"hotkey":"3","shape":"diamond","color":"#ef8a17","description":"Anal-fin proximal pterygiophores anterior to the first caudal vertebra."},
-    {"id":"last_predorsal","name":"Last predorsal vertebra","annotation":"point","repeated":false,"required":true,"hotkey":"4","shape":"square","color":"#7e57c2","description":"Reference used to obtain the predorsal vertebral count."}
+    {
+      "id": "vertebra",
+      "name": "Vertebrae",
+      "annotation": "point",
+      "repeated": true,
+      "required": true,
+      "hotkey": "1",
+      "shape": "circle",
+      "color": "#1976e9",
+      "description": "Repeated vertebral centres used as the ordered vertebral series."
+    },
+    {
+      "id": "first_caudal",
+      "name": "First caudal vertebra",
+      "annotation": "point",
+      "repeated": false,
+      "required": true,
+      "hotkey": "2",
+      "shape": "triangle",
+      "color": "#20a447",
+      "description": "Reference identifying the first caudal vertebra in the ordered series.",
+      "learning_relation": "role_on_structure",
+      "reuse_from": [
+        "vertebra"
+      ]
+    },
+    {
+      "id": "preanal_pterygiophore",
+      "name": "Pre-anal pterygiophores",
+      "annotation": "point",
+      "repeated": true,
+      "required": true,
+      "hotkey": "3",
+      "shape": "diamond",
+      "color": "#ef8a17",
+      "description": "Anal-fin proximal pterygiophores anterior to the first caudal vertebra."
+    },
+    {
+      "id": "last_predorsal",
+      "name": "Last predorsal vertebra",
+      "annotation": "point",
+      "repeated": false,
+      "required": true,
+      "hotkey": "4",
+      "shape": "square",
+      "color": "#7e57c2",
+      "description": "Reference used to obtain the predorsal vertebral count.",
+      "learning_relation": "role_on_structure",
+      "reuse_from": [
+        "vertebra"
+      ]
+    }
   ],
   "traits": [
-    {"id":"tv","name":"Total vertebrae","abbr":"tv","method":"count","structures":["vertebra"],"rule":{"offset":4}},
-    {"id":"abdv","name":"Abdominal vertebrae","abbr":"abdv","method":"count_to","structures":["vertebra","first_caudal"],"rule":{"reference":"first_caudal","side":"before","offset":4}},
-    {"id":"caudv","name":"Caudal vertebrae","abbr":"caudv","method":"count_to","structures":["vertebra","first_caudal"],"rule":{"reference":"first_caudal","side":"from"}},
-    {"id":"predv","name":"Predorsal vertebrae","abbr":"preDv","method":"count_to","structures":["vertebra","last_predorsal"],"rule":{"reference":"last_predorsal","side":"through","offset":4}},
-    {"id":"preap","name":"Pre-anal pterygiophores","abbr":"preAp","method":"count","structures":["preanal_pterygiophore"],"rule":{}},
-    {"id":"dac","name":"Abdominal − caudal vertebrae","abbr":"dac","method":"derived","structures":[],"rule":{"expression":"abdv-caudv","depends_on":["abdv","caudv"]}},
-    {"id":"formv","name":"Vertebral formula","abbr":"formv","method":"derived","structures":[],"rule":{"expression":"abdv+'+'+caudv","depends_on":["abdv","caudv"]}}
+    {
+      "id": "tv",
+      "name": "Total vertebrae",
+      "abbr": "tv",
+      "method": "count",
+      "structures": [
+        "vertebra"
+      ],
+      "rule": {
+        "offset": 4
+      }
+    },
+    {
+      "id": "abdv",
+      "name": "Abdominal vertebrae",
+      "abbr": "abdv",
+      "method": "count_to",
+      "structures": [
+        "vertebra",
+        "first_caudal"
+      ],
+      "rule": {
+        "reference": "first_caudal",
+        "side": "before",
+        "offset": 4
+      }
+    },
+    {
+      "id": "caudv",
+      "name": "Caudal vertebrae",
+      "abbr": "caudv",
+      "method": "count_to",
+      "structures": [
+        "vertebra",
+        "first_caudal"
+      ],
+      "rule": {
+        "reference": "first_caudal",
+        "side": "from"
+      }
+    },
+    {
+      "id": "predv",
+      "name": "Predorsal vertebrae",
+      "abbr": "preDv",
+      "method": "count_to",
+      "structures": [
+        "vertebra",
+        "last_predorsal"
+      ],
+      "rule": {
+        "reference": "last_predorsal",
+        "side": "through",
+        "offset": 4
+      }
+    },
+    {
+      "id": "preap",
+      "name": "Pre-anal pterygiophores",
+      "abbr": "preAp",
+      "method": "count",
+      "structures": [
+        "preanal_pterygiophore"
+      ],
+      "rule": {}
+    },
+    {
+      "id": "dac",
+      "name": "Abdominal − caudal vertebrae",
+      "abbr": "dac",
+      "method": "derived",
+      "structures": [],
+      "rule": {
+        "expression": "abdv-caudv",
+        "depends_on": [
+          "abdv",
+          "caudv"
+        ]
+      }
+    },
+    {
+      "id": "formv",
+      "name": "Vertebral formula",
+      "abbr": "formv",
+      "method": "derived",
+      "structures": [],
+      "rule": {
+        "expression": "abdv+'+'+caudv",
+        "depends_on": [
+          "abdv",
+          "caudv"
+        ]
+      }
+    }
   ]
 }

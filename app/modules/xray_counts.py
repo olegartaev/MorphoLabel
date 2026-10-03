@@ -16,7 +16,7 @@ from app.xray_crop_ui import XRayCropWorkspace
 from app.xray_structures_ui import XRayStructureWorkspace
 from app.xray_schema import (
     MARKER_COLORS,METHOD_BY_ID,SCHEME_RESOURCE_DIR,SHAPES,TRAIT_METHODS,blank_scheme,bundled_scheme,normalize_scheme,
-    load_scheme_file,save_scheme_file,scheme_change_impact,structure_usage,
+    compatible_reference_roles,load_scheme_file,save_scheme_file,scheme_change_impact,structure_usage,
 )
 
 STAGES=(
@@ -113,6 +113,28 @@ def _default_structure(scheme,name,repeated=False):
         "color":MARKER_COLORS[index%len(MARKER_COLORS)],
         "description":"",
     }
+
+
+def _reference_source_ids(scheme,reference_id):
+    reference_id=str(reference_id);item=next((x for x in scheme.get("structures",()) if x["id"]==reference_id),None)
+    if item is None or item.get("repeated"):return ()
+    relation=str(item.get("learning_relation") or "")
+    if relation=="independent":return ()
+    explicit=tuple(str(value) for value in (item.get("reuse_from") or ()) if str(value))
+    if explicit:return explicit
+    sources=[]
+    for base in scheme.get("structures",()):
+        if not base.get("repeated"):continue
+        if any(str(role["id"])==reference_id for role in compatible_reference_roles(scheme,base["id"])):
+            sources.append(str(base["id"]))
+    return tuple(sources)
+
+
+def _reference_relation_text(scheme,item):
+    sources=_reference_source_ids(scheme,item["id"])
+    if not sources:return "separate anatomical mark"
+    names={x["id"]:x["name"] for x in scheme.get("structures",())}
+    return "one of "+", ".join(names.get(source,source) for source in sources)
 
 def _trait_rule_summary(scheme,trait):
     structures={item["id"]:item for item in scheme.get("structures",())}
@@ -576,6 +598,59 @@ class MarkerSettingsDialog(tk.Toplevel):
         self.result=deepcopy(self.scheme);self.destroy()
 
 
+class ReferenceRelationshipDialog(tk.Toplevel):
+    """Ask for the biological relationship, not an AI/model setting."""
+    def __init__(self,parent,scheme,item=None):
+        super().__init__(parent);self.title("Reference relationship");self.transient(parent);self.resizable(False,False)
+        self.result=None;self.scheme=deepcopy(normalize_scheme(scheme));self.item=deepcopy(item or {})
+        repeated=[x for x in self.scheme.get("structures",()) if x.get("repeated")]
+        sources=_reference_source_ids(self.scheme,self.item.get("id","")) if self.item else ()
+        initial="series" if sources else ("independent" if self.item.get("learning_relation")=="independent" else "")
+        self.mode=tk.StringVar(master=self,value=initial)
+        names={x["id"]:x["name"] for x in repeated};initial_source=names.get(sources[0],"") if sources else ""
+        self.series=tk.StringVar(master=self,value=initial_source)
+        outer=ttk.Frame(self,padding=14);outer.pack(fill="both",expand=True)
+        ttk.Label(outer,text="How is this reference related?",style="PageTitle.TLabel").pack(anchor="w")
+        ttk.Label(
+            outer,text="Choose the biological relationship. MorphoLabel uses this to choose the appropriate recognition approach.",
+            style="PageSubtitle.TLabel",wraplength=620,
+        ).pack(anchor="w",pady=(2,10))
+        series_text="It is one of the elements in an existing series\nExample: a particular vertebra is one of the vertebrae."
+        separate_text="It is a separate anatomical mark\nExample: a boundary or point that is not itself one of the counted elements."
+        ttk.Radiobutton(outer,text=series_text,value="series",variable=self.mode,command=self._refresh).pack(anchor="w",pady=(0,7))
+        row=ttk.Frame(outer);row.pack(fill="x",padx=(24,0),pady=(0,10))
+        ttk.Label(row,text="Which series?").pack(side="left")
+        self.combo=ttk.Combobox(row,textvariable=self.series,values=tuple(names.values()),state="readonly",width=38)
+        self.combo.pack(side="left",padx=(7,0),fill="x",expand=True)
+        ttk.Radiobutton(outer,text=separate_text,value="independent",variable=self.mode,command=self._refresh).pack(anchor="w")
+        ttk.Label(
+            outer,text="This describes anatomy, not a technical AI option. You can change it later with Relationship…",
+            style="Muted.TLabel",wraplength=620,
+        ).pack(anchor="w",pady=(10,0))
+        actions=ttk.Frame(outer);actions.pack(anchor="e",pady=(12,0))
+        ttk.Button(actions,text="Cancel",command=self.destroy).pack(side="left")
+        ttk.Button(actions,text="OK",style="Primary.TButton",command=lambda:self._accept(names)).pack(side="left",padx=(6,0))
+        if not repeated:self.mode.set("independent")
+        self._refresh();self.grab_set()
+
+    def _refresh(self):
+        if self.mode.get()=="series":self.combo.state(["!disabled","readonly"])
+        else:self.combo.state(["disabled"])
+
+    def _accept(self,names):
+        mode=self.mode.get()
+        if mode not in {"series","independent"}:
+            messagebox.showinfo("Reference relationship","Choose one of the two biological relationships.",parent=self);return
+        if mode=="series":
+            reverse={name:ident for ident,name in names.items()}
+            source=reverse.get(self.series.get())
+            if not source:
+                messagebox.showinfo("Reference relationship","Choose which repeated element series contains this reference.",parent=self);return
+            self.result={"learning_relation":"role_on_structure","reuse_from":[source]}
+        else:self.result={"learning_relation":"independent","reuse_from":[]}
+        self.destroy()
+
+
 class TraitSchemeDialog(tk.Toplevel):
     """Biologist-facing trait editor: traits, counted elements and reference marks in one window."""
     def __init__(self,parent,scheme,annotation_counts):
@@ -666,7 +741,7 @@ class TraitSchemeDialog(tk.Toplevel):
         step1=ttk.LabelFrame(outer,padding=10);step1.grid(row=4,column=0,sticky="ew",pady=(0,8));step1.columnconfigure(0,weight=1)
         self._section_header(
             step1,1,"annotation_setup","Define what you will mark on the X-ray",
-            "Choose the repeated anatomical elements you will count and the single anatomical boundaries used as start or stop marks."
+            "Define the elements you count and the reference marks. For each reference, say whether it is one of those elements or a separate anatomical mark."
         )
         annotations=ttk.Frame(step1);annotations.grid(row=1,column=0,sticky="ew");annotations.columnconfigure(0,weight=1)
         self._build_annotation_lists(annotations)
@@ -715,14 +790,15 @@ class TraitSchemeDialog(tk.Toplevel):
 
         rh=ttk.Frame(refs);rh.grid(row=0,column=0,sticky="ew",pady=(0,4))
         ttk.Label(rh,image=self._icon(rh,"reference_mark",30)).pack(side="left",padx=(0,5))
-        ref_help=ttk.Label(rh,text="Single anatomical boundaries",style="Muted.TLabel");ref_help.pack(side="left")
+        ref_help=ttk.Label(rh,text="Reference marks — relationship is part of the definition",style="Muted.TLabel");ref_help.pack(side="left")
         self.reference_tree=ttk.Treeview(refs,show="tree",selectmode="browse",height=4);self.reference_tree.grid(row=1,column=0,sticky="nsew")
         ref_actions=ttk.Frame(refs);ref_actions.grid(row=2,column=0,sticky="w",pady=(5,0))
         self._button(ref_actions,"+ Add",lambda:self._add_structure(False),"Add one anatomical boundary that can be used to start or stop counting, for example First caudal vertebra.").pack(side="left")
         self._button(ref_actions,"Rename",lambda:self._rename_structure(False),"Rename the selected reference mark.").pack(side="left",padx=(4,0))
+        self._button(ref_actions,"Relationship…",self._edit_reference_relationship,"Say whether this reference is one of an existing element series or a separate anatomical mark.").pack(side="left",padx=(4,0))
         self._button(ref_actions,"Remove",lambda:self._remove_structure(False),"Remove the selected reference mark if no trait or saved annotation uses it.").pack(side="left",padx=(4,0))
         self.reference_tree.bind("<Double-1>",lambda _e:self._rename_structure(False))
-        self._help("Step 1B. Add the single anatomical boundaries that can start or stop a count, for example the first caudal vertebra.",ref_help,self.reference_tree)
+        self._help("Step 1B. Add a reference and describe its biological relationship. If it is one member of an existing series, MorphoLabel can recognize the series first and then identify the reference within it.",ref_help,self.reference_tree)
 
     def _field_row(self,parent,row,icon_name,label_text,variable,help_text,values=(),readonly=True):
         icon=ttk.Label(parent,image=self._icon(parent,icon_name,22));icon.grid(row=row,column=0,sticky="w",pady=(7,0))
@@ -826,7 +902,8 @@ class TraitSchemeDialog(tk.Toplevel):
         counted_icon=self._icon(self.counted_tree,"counted_element",20);ref_icon=self._icon(self.reference_tree,"reference_mark",20)
         for item in self.scheme.get("structures",()):
             tree=self.counted_tree if item.get("repeated") else self.reference_tree
-            tree.insert("","end",iid=item["id"],text=item["name"],image=counted_icon if item.get("repeated") else ref_icon)
+            text=item["name"] if item.get("repeated") else f"{item['name']}  —  {_reference_relation_text(self.scheme,item)}"
+            tree.insert("","end",iid=item["id"],text=text,image=counted_icon if item.get("repeated") else ref_icon)
         if select_id:
             for tree in (self.counted_tree,self.reference_tree):
                 if tree.exists(select_id):tree.selection_set(select_id);tree.focus(select_id);tree.see(select_id)
@@ -845,10 +922,28 @@ class TraitSchemeDialog(tk.Toplevel):
         candidate=deepcopy(self.scheme)
         if any(item["name"].strip().casefold()==name.strip().casefold() for item in candidate.get("structures",())):
             messagebox.showinfo(title,"An X-ray annotation with this name already exists.",parent=self);return
-        item=_default_structure(candidate,name.strip(),repeated);candidate["structures"].append(item)
+        item=_default_structure(candidate,name.strip(),repeated)
+        if not repeated:
+            dialog=ReferenceRelationshipDialog(self,candidate,item);self.wait_window(dialog)
+            if dialog.result is None:return
+            item.update(dialog.result)
+        candidate["structures"].append(item)
         try:self.scheme=normalize_scheme(candidate)
         except Exception as exc:messagebox.showerror(title,str(exc),parent=self);return
         self._refresh_annotation_lists(item["id"]);self._refresh_rule_preview();self.appearance_button.state(["!disabled"])
+
+    def _edit_reference_relationship(self):
+        ident=self._selected_structure_id(False)
+        if not ident:return
+        item=next((x for x in self.scheme.get("structures",()) if x["id"]==ident),None)
+        if item is None:return
+        dialog=ReferenceRelationshipDialog(self,self.scheme,item);self.wait_window(dialog)
+        if dialog.result is None:return
+        candidate=deepcopy(self.scheme);target=next(x for x in candidate["structures"] if x["id"]==ident)
+        target.update(dialog.result)
+        try:self.scheme=normalize_scheme(candidate)
+        except Exception as exc:messagebox.showerror("Reference relationship",str(exc),parent=self);return
+        self._refresh_annotation_lists(ident);self._refresh_rule_preview()
 
     def _rename_structure(self,repeated):
         ident=self._selected_structure_id(repeated)
