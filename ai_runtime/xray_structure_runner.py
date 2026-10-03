@@ -126,7 +126,8 @@ def _gaussian(target, channel, cx, cy, sigma=2.0, supervision=None):
 
     height, width = target.shape[-2:]
     radius = max(1, int(math.ceil(3.0 * float(sigma))))
-    center_x = int(round(float(cx))); center_y = int(round(float(cy)))
+    center_x = max(0, min(width - 1, int(round(float(cx)))))
+    center_y = max(0, min(height - 1, int(round(float(cy)))))
     left = max(0, center_x - radius)
     right = min(width, center_x + radius + 1)
     top = max(0, center_y - radius)
