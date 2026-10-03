@@ -237,7 +237,16 @@ class XRayPlateListPanel(ttk.Frame):
 
     def select(self,image_id,reveal=True):
         self.selected_image_id=str(image_id) if image_id else None
-        self.refresh(preserve_scroll=not reveal,reveal=reveal)
+        selected_index=next((i for i,row in enumerate(self._rows) if row["image_id"]==self.selected_image_id),None)
+        if selected_index not in self.visible_indices:
+            self.refresh(preserve_scroll=True,reveal=False);return
+        visible=self.visible_indices.index(selected_index);self.canvas.selection_set(visible)
+        if reveal:self.canvas.see(visible)
+        row=self._rows[selected_index];excluded=bool(row.get("excluded"))
+        self.exclude_button.configure(
+            text="Restore" if excluded else "Exclude",image=self._action_icon("restore" if excluded else "exclude"),
+            state="normal",
+        )
 
     def visible_ids(self):
         return [self._rows[index]["image_id"] for index in self.visible_indices]
@@ -251,7 +260,12 @@ class XRayPlateListPanel(ttk.Frame):
         # Match the Landmarks list: excluded rows stay inspectable/selectable
         # so the same Exclude button can become Restore. Workflow navigation
         # still skips excluded plates.
-        self.selected_image_id=row["image_id"];self.on_select(row["image_id"]);self.refresh(preserve_scroll=True)
+        self.selected_image_id=row["image_id"];excluded=bool(row.get("excluded"))
+        self.exclude_button.configure(
+            text="Restore" if excluded else "Exclude",image=self._action_icon("restore" if excluded else "exclude"),
+            state="normal",
+        )
+        self.on_select(row["image_id"])
 
     def navigate(self,step):
         ids=self.visible_ids()
@@ -289,7 +303,7 @@ class XRayCropWorkspace:
         self._preferred_image_id=str(initial_image_id or "");self._preferred_specimen_id=str(initial_specimen_id or "")
         self.preview=self.photo=None;self.preview_original_size=(1,1);self.display_scale=1.0;self.offset=(0,0);self._photo_key=None
         self.zoom=1.0;self.pan=None;self.pan_drag=None
-        self._busy=False;self._drag_mode=None;self._drag_anchor=None;self._drag_initial=None;self._drag_changed=False;self._drawing_crop=None
+        self._busy=False;self._queue_active=False;self._drag_mode=None;self._drag_anchor=None;self._drag_initial=None;self._drag_changed=False;self._drawing_crop=None
         self._icons={};self.training_batch_size=tk.IntVar(value=6);self.prediction_batch_size=tk.IntVar(value=6);self._tip=Tooltip(self.root)
         self._build();self.refresh(preserve_plate=False)
         self.root.bind("<Return>",self._enter_batch,add="+")
@@ -322,7 +336,7 @@ class XRayCropWorkspace:
         panes=ttk.Panedwindow(outer,orient="horizontal");panes.pack(fill="both",expand=True)
         sidebar_host=ttk.Frame(panes);main=ttk.Frame(panes)
         panes.add(sidebar_host,weight=0);panes.add(main,weight=1)
-        self.panes=panes;main.columnconfigure(0,weight=1);main.rowconfigure(1,weight=1)
+        self.panes=panes;main.columnconfigure(0,weight=1);main.rowconfigure(2,weight=1)
 
         self.plate_list=XRayPlateListPanel(sidebar_host,self.project,self._list_selected,self._tip,self._source_exclusion_changed)
         self.plate_list.pack(fill="both",expand=True)
@@ -374,7 +388,21 @@ class XRayCropWorkspace:
             "Apply these crops, mark this whole plate human-verified, and continue.",style="NavPrimary.TButton",icon="verify",
         );self.confirm_button.pack(side="left")
 
-        canvas_frame=ttk.Frame(main);canvas_frame.grid(row=1,column=0,sticky="nsew");canvas_frame.pack_propagate(False)
+        self.queue_banner=ttk.Frame(main,style="Attention.TFrame",padding=(10,6))
+        self.queue_banner_title=ttk.Label(self.queue_banner,text="",style="AttentionTitle.TLabel")
+        self.queue_banner_title.pack(side="left")
+        self.queue_banner_text=ttk.Label(self.queue_banner,text="",style="AttentionText.TLabel")
+        self.queue_banner_text.pack(side="left",padx=(8,0))
+        self._button(
+            self.queue_banner,"×",self.dismiss_batch,
+            "End this Crop review queue. Saved crops, predictions and provenance are not changed.",
+        ).pack(side="right",padx=(6,0))
+        self._button(
+            self.queue_banner,"Continue",self.continue_batch,
+            "Continue the saved Crop review queue from its current position.",style="Primary.TButton",
+        ).pack(side="right",padx=(12,0))
+
+        canvas_frame=ttk.Frame(main);canvas_frame.grid(row=2,column=0,sticky="nsew");canvas_frame.pack_propagate(False)
         self.canvas=tk.Canvas(canvas_frame,background="#202020",highlightthickness=0,cursor="crosshair",takefocus=True)
         self.canvas.pack(fill="both",expand=True)
         self.canvas.bind("<Configure>",lambda _e:self._draw())
@@ -386,7 +414,7 @@ class XRayCropWorkspace:
             self.canvas.bind(f"<ButtonRelease-{button}>",self._pan_end)
         self.canvas.bind("<Delete>",self.delete_selected);self.canvas.bind("<BackSpace>",self.delete_selected)
 
-        workflow=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(0,1,0,0));workflow.grid(row=2,column=0,sticky="ew",pady=(2,0))
+        workflow=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(0,1,0,0));workflow.grid(row=3,column=0,sticky="ew",pady=(2,0))
         workflow.columnconfigure(0,weight=1)
         wh=ttk.Frame(workflow,style="WorkflowDock.TFrame");wh.grid(row=0,column=0,sticky="ew",pady=(0,1));wh.columnconfigure(0,weight=1)
         ttk.Label(wh,text="Workflow",style="WorkflowDockTitle.TLabel").grid(row=0,column=0,sticky="w")
@@ -457,15 +485,37 @@ class XRayCropWorkspace:
 
     def _batch(self):return self.project.get_ui_state("xray_crop_active_batch",{})
 
+    @staticmethod
+    def _batch_current_id(state):
+        ids=list((state or {}).get("ids") or [])
+        if not ids:return ""
+        position=max(0,min(len(ids)-1,int((state or {}).get("position",0) or 0)))
+        return str(ids[position])
+
     def _active_batch(self):
-        state=self._batch();ids=list(state.get("ids") or [])
-        return state if self.selected_image_id in ids else None
+        state=self._batch()
+        return state if self._queue_active and self.selected_image_id==self._batch_current_id(state) else None
 
     def _set_batch(self,ids,batch_type,model_id=""):
         ids=list(dict.fromkeys(str(value) for value in ids))
-        self.project.set_ui_state("xray_crop_active_batch",{"batch_type":str(batch_type),"ids":ids,"position":0,"model_id":str(model_id or "")})
+        state={"batch_type":str(batch_type),"ids":ids,"position":0,"model_id":str(model_id or "")}
+        self.project.set_ui_state("xray_crop_active_batch",state);self._queue_active=bool(ids)
         if ids:self.selected_image_id=ids[0]
         self.refresh(preserve_plate=bool(ids));return bool(ids)
+
+    def continue_batch(self):
+        state=self._batch();current=self._batch_current_id(state)
+        if not current:
+            self._queue_active=False;self._refresh_batch_banner();self._update_batch_controls();return False
+        self._queue_active=True
+        if current!=self.selected_image_id:self._load_plate(current)
+        self.plate_list.select(current,reveal=False);self._refresh_batch_banner();self._update_batch_controls()
+        return True
+
+    def dismiss_batch(self):
+        self.project.set_ui_state("xray_crop_active_batch",{})
+        self._queue_active=False;self._refresh_batch_banner();self._update_batch_controls()
+        return True
 
     def _enter_batch(self,event):
         if event.widget.winfo_class() in {"Entry","TEntry","TCombobox","Text","Spinbox","TSpinbox"}:return
@@ -473,7 +523,7 @@ class XRayCropWorkspace:
 
     def _list_selected(self,image_id):
         if image_id==self.selected_image_id:return
-        self._load_plate(image_id);self.plate_list.select(image_id,reveal=False);self.on_changed()
+        self._load_plate(image_id);self.on_changed()
 
     def _source_exclusion_changed(self,image_id,excluded):
         state=self._batch();ids=list(state.get("ids") or [])
@@ -486,17 +536,25 @@ class XRayCropWorkspace:
         self.refresh(preserve_plate=bool(self.selected_image_id))
 
     def _refresh_controls(self):
-        summary=self.project.crop_summary();model=self.project.active_crop_model();training=self.project.training_plates()
-        orientation_ready=self.project.orientation_training_specimen_count()
-        self.training_button.configure(text="Start first batch" if not training else "Add next batch")
+        status=self.project.crop_workspace_status();model=self.project.active_crop_model()
+        self.training_button.configure(text="Start first batch" if not status["training_plates"] else "Add next batch")
         model_metrics=(model or {}).get("metrics") or {};orientation_mark=" · orientation ✓" if model_metrics.get("orientation/enabled") else ""
         self.model_label.configure(text=f"Active: {(model or {}).get('model_id') or 'none'}{orientation_mark}")
-        self.training_count_label.configure(text=f"Ready: {len(training)} plates · {summary['training_specimens']} crops · orientation {orientation_ready}")
-        self.predict_count_label.configure(text=f"Unresolved {len(self.project.prediction_candidate_ids())} · review {summary['ai_pending_plates']} · verified {summary['verified_plates']}")
+        self.training_count_label.configure(text=f"Ready: {status['training_plates']} plates · {status['training_specimens']} crops · orientation {status['orientation_training']}")
+        self.predict_count_label.configure(text=f"Unresolved {status['prediction_candidates']} · review {status['ai_pending_plates']} · verified {status['verified_plates']}")
         state="normal" if model else "disabled";self.predict_next_button.configure(state=state);self.predict_all_button.configure(state=state)
-        self.review_button.configure(state="normal" if summary["ai_pending_plates"] else "disabled")
-        self._refresh_flip_controls()
-        self._update_batch_controls()
+        self.review_button.configure(state="normal" if status["ai_pending_plates"] else "disabled")
+        self._refresh_flip_controls();self._refresh_batch_banner();self._update_batch_controls()
+
+    def _refresh_batch_banner(self):
+        state=self._batch();ids=list(state.get("ids") or [])
+        if not ids:
+            self.queue_banner.grid_remove();return
+        position=max(0,min(len(ids)-1,int(state.get("position",0) or 0)))
+        label="AI review" if state.get("batch_type")=="prediction_review" else "Training batch"
+        self.queue_banner_title.configure(text=f"{label} · {position+1}/{len(ids)}")
+        self.queue_banner_text.configure(text="Saved review queue")
+        self.queue_banner.grid(row=1,column=0,sticky="ew",pady=(0,4))
 
     def _refresh_flip_controls(self):
         state=crop_flip_button_state(bool(self.session.selected_id))
@@ -508,7 +566,7 @@ class XRayCropWorkspace:
         images=[row for row in self.project.source_images() if not row.get("excluded")];available={row["image_id"] for row in images}
         batch=self._batch();ids=list(batch.get("ids") or []);position=max(0,min(len(ids)-1,int(batch.get("position",0) or 0))) if ids else 0
         preferred=self._preferred_image_id if self._preferred_image_id in available else ""
-        target=previous if previous in available else (preferred or (ids[position] if ids and ids[position] in available else (images[0]["image_id"] if images else None)))
+        target=previous if previous in available else (preferred or (images[0]["image_id"] if images else None))
         self.plate_list.selected_image_id=target;self.plate_list.refresh(preserve_scroll=preserve_plate,reveal=not preserve_plate)
         if target:self._load_plate(target)
         else:self._clear_canvas()
@@ -523,7 +581,7 @@ class XRayCropWorkspace:
             return
         self.apply_group.grid_forget();self.instruction.grid()
         self.batch_actions.grid(row=0,column=2,sticky="e")
-        ids=list(active.get("ids") or []);pos=ids.index(self.selected_image_id)
+        ids=list(active.get("ids") or []);pos=max(0,min(len(ids)-1,int(active.get("position",0) or 0)))
         self.status_previous.configure(state="normal" if pos>0 else "disabled")
         label="AI review" if active.get("batch_type")=="prediction_review" else "Training"
         self.batch_status.configure(text=f"{pos+1}/{len(ids)} · {label}")
@@ -536,7 +594,7 @@ class XRayCropWorkspace:
         self.zoom=1.0;self.pan=None;self.pan_drag=None
         try:preview,_scale,original_size=display_preview(self.project.source_image_path(image_id),1400)
         except Exception as exc:messagebox.showerror("X-ray Crops",str(exc),parent=self.root);return
-        self.preview=preview;self.preview_original_size=original_size;self._photo_key=None;self._set_save_status();self._draw();self._refresh_controls();self._notify_selection()
+        self.preview=preview;self.preview_original_size=original_size;self._photo_key=None;self._set_save_status();self._draw();self._refresh_flip_controls();self._refresh_batch_banner();self._update_batch_controls();self._notify_selection()
 
     def _clear_canvas(self):
         self.canvas.delete("all");self.preview=self.photo=None;self._photo_key=None;self.selected_image_id=None;self.session.load(())
@@ -699,7 +757,7 @@ class XRayCropWorkspace:
             crop=item.get("crop") or {};self._drag_mode=hit;self._drag_anchor=(x,y);self._drag_changed=False
             self._drag_initial=(float(crop.get("center_x",0)),float(crop.get("center_y",0)),float(crop.get("length",0)),float(crop.get("width",0)),float(crop.get("angle_degrees",0)))
             self._drawing_crop=None;self._draw();return
-        self.session.select(None);self._preferred_specimen_id="";self._notify_selection();self._refresh_flip_controls()
+        self.session.select(None);self._refresh_flip_controls()
         self._drag_mode=("draw",0);self._drag_anchor=(x,y);self._drag_initial=None;self._drag_changed=False;self._drawing_crop=None;self._draw()
 
     def _canvas_drag(self,event):
@@ -806,7 +864,7 @@ class XRayCropWorkspace:
             batch_type=state.get("batch_type");self.project.set_ui_state("xray_crop_active_batch",{"batch_type":batch_type,"ids":[],"finished":True})
             self._refresh_controls();self.plate_list.refresh(preserve_scroll=True)
             messagebox.showinfo("Crop review batch" if batch_type=="prediction_review" else "Crop training batch","Batch complete.",parent=self.root);return True
-        state["position"]=pos;self.project.set_ui_state("xray_crop_active_batch",state);self._load_plate(ids[pos]);self.plate_list.select(ids[pos],reveal=True);self.on_changed();return True
+        state["position"]=pos;self.project.set_ui_state("xray_crop_active_batch",state);self._load_plate(ids[pos]);self.plate_list.select(ids[pos],reveal=False);self._refresh_batch_banner();self.on_changed();return True
 
     def train_model(self):
         if self._busy:return
