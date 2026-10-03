@@ -2,6 +2,7 @@ import json
 import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from ai_runtime.xray_detector_runner import _best_validation_metrics
@@ -11,7 +12,7 @@ import numpy as np
 from PIL import Image
 
 from app.xray_crop import HYBRID_ALGORITHM_VERSION, crop_from_geometry, merge_detector_proposals, proposals_from_detector_boxes
-from app.xray_crop_ui import PlateCropEditSession, apply_and_confirm_plate
+from app.xray_crop_ui import PlateCropEditSession, XRayCropWorkspace, apply_and_confirm_plate
 from app.ai_hardware import HardwareProfile
 from app.xray_detector import MIN_TRAINING_PLATES, detector_performance_settings, prepare_training_dataset
 from app.xray_project import XRayProject
@@ -36,6 +37,35 @@ class XRayDetectorWorkflowTests(unittest.TestCase):
         crop=crop_from_geometry(450,240,620,190,-8+index*4,(900,480),algorithm="manual")
         self.project.add_manual_specimen(image_id,crop)
         self.project.confirm_plate(image_id)
+
+    def test_crop_workspace_status_is_set_based_and_matches_project_truth(self):
+        ids=[row["image_id"] for row in self.project.source_images()]
+        crop=crop_from_geometry(450,240,500,160,0,(900,480),algorithm="manual")
+        specimen=self.project.add_manual_specimen(ids[0],crop)
+        self.project.confirm_plate(ids[0])
+        self.project.replace_model_proposals(ids[1],[crop],"xray_crop_model_v001")
+        with patch.object(self.project,"specimens",side_effect=AssertionError("no per-plate traversal")), \
+             patch.object(self.project,"source_images",side_effect=AssertionError("no Python catalog traversal")):
+            status=self.project.crop_workspace_status()
+            summary=self.project.crop_summary()
+        self.assertEqual(5,status["plates"])
+        self.assertEqual(1,status["verified_plates"])
+        self.assertEqual(1,status["training_plates"])
+        self.assertEqual(1,status["training_specimens"])
+        self.assertEqual(1,status["orientation_training"])
+        self.assertEqual(1,status["ai_pending_plates"])
+        self.assertEqual(3,status["uncropped_plates"])
+        self.assertEqual(3,status["prediction_candidates"])
+        self.assertEqual(2,status["specimens"])
+        self.assertEqual(1,status["confirmed"])
+        self.assertEqual(1,status["review"])
+        self.assertEqual(status["verified_plates"],summary["verified_plates"])
+        self.assertEqual("confirmed",self.project.specimen(specimen)["crop_status"])
+
+    def test_crop_queue_current_item_is_position_not_arbitrary_membership(self):
+        state={"ids":["plate-a","plate-b","plate-c"],"position":1}
+        self.assertEqual("plate-b",XRayCropWorkspace._batch_current_id(state))
+        self.assertEqual("",XRayCropWorkspace._batch_current_id({"ids":[],"position":4}))
 
     def test_human_confirmed_plate_is_only_training_authority(self):
         ids=[row["image_id"] for row in self.project.source_images()]
@@ -350,6 +380,17 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn("self.apply_group=ttk.Frame(actions",ui)
         self.assertIn("self.apply_group.grid(row=0,column=2,sticky=\"e\")",ui)
         self.assertIn("excluded rows stay inspectable/selectable",ui)
+        self.assertIn('self.queue_banner=ttk.Frame(main,style="Attention.TFrame"',ui)
+        self.assertIn("def continue_batch(self):",ui)
+        self.assertIn("def dismiss_batch(self):",ui)
+        self.assertIn('self.project.set_ui_state("xray_crop_active_batch",{})',ui)
+        self.assertIn("self._queue_active and self.selected_image_id==self._batch_current_id(state)",ui)
+        self.assertIn("def flush_pending_edits(self):",ui)
+        self.assertIn('self.plate_list.select(self.selected_image_id,reveal=False)',ui)
+        self.assertNotIn('self.on_select(row["image_id"]);self.refresh(preserve_scroll=True)',ui)
+        module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
+        self.assertIn('flush=getattr(self._workspace,"flush_pending_edits",None)',module)
+        self.assertIn("self._workspace=XRayCropWorkspace(",module)
 
     def test_runtime_runner_uses_one_class_rtmdet_tiny_and_coco(self):
         root=Path(__file__).resolve().parents[1]
