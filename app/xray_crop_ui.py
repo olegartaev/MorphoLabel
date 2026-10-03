@@ -523,6 +523,9 @@ class XRayCropWorkspace:
 
     def _list_selected(self,image_id):
         if image_id==self.selected_image_id:return
+        try:self.flush_pending_edits()
+        except Exception as exc:
+            messagebox.showerror("X-ray Crops",f"Could not save the current Crop edits:\n{exc}",parent=self.root);return
         self._load_plate(image_id);self.on_changed()
 
     def _source_exclusion_changed(self,image_id,excluded):
@@ -605,10 +608,11 @@ class XRayCropWorkspace:
         if text is None:text="Unsaved changes" if self.session.dirty else ""
         self.save_status.configure(text=text)
 
-    def _persist_draft_edits(self,*,list_changed=False):
-        """Persist one local Crop delta immediately without marking the plate reviewed."""
+    def flush_pending_edits(self):
+        """Persist the current local Crop delta before leaving this plate/stage."""
         if not self.selected_image_id or not self.session.dirty:return self.session.selected_id
         selected=self.session.selected_id;changes=self.session.changes()
+        list_changed=bool(changes["new_crops"] or changes["removed_ids"])
         result=self.project.apply_plate_crop_edits(
             self.selected_image_id,
             edits=changes["edits"],new_crops=changes["new_crops"],removed_ids=changes["removed_ids"],
@@ -803,25 +807,24 @@ class XRayCropWorkspace:
         if self._drag_mode[0]=="draw":
             crop=self._drawing_crop;self._drag_mode=self._drag_anchor=self._drag_initial=None;self._drawing_crop=None
             if crop is not None and float(crop.get("length",0))>=20 and float(crop.get("width",0))>=20:
-                self.session.add(crop);self._persist_draft_edits(list_changed=True)
+                self.session.add(crop);self._set_save_status();self._refresh_flip_controls()
             self._draw();return
         changed=self._drag_changed
         self._drag_mode=self._drag_anchor=self._drag_initial=None;self._drag_changed=False
-        if changed:self._persist_draft_edits()
+        if changed:self._set_save_status()
         self._draw()
 
     def delete_selected(self,_event=None):
-        if self.session.delete_selected():
-            self._persist_draft_edits(list_changed=True);self._draw()
+        if self.session.delete_selected():self._set_save_status();self._draw();self._refresh_flip_controls()
         return "break"
 
     def flip_selected_horizontal(self):
         if self.session.flip_horizontal():
-            self._persist_draft_edits();self._draw()
+            self._set_save_status("Flipped left ↔ right · saved when you leave or Apply");self._draw();self._refresh_flip_controls()
 
     def flip_selected_vertical(self):
         if self.session.flip_vertical():
-            self._persist_draft_edits();self._draw()
+            self._set_save_status("Flipped top ↕ bottom · saved when you leave or Apply");self._draw();self._refresh_flip_controls()
 
     def clear_plate_crops(self):
         if not self.selected_image_id:return
