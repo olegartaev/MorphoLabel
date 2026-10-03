@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+import ast
 import re
 import tkinter as tk
 from tkinter import filedialog,messagebox,simpledialog,ttk
@@ -85,6 +86,78 @@ REFERENCE_METHODS={"count_to","count_between","position","distance","angle"}
 REPEATED_METHODS={"count","count_to","count_between","position"}
 STOP_BEHAVIOR_LABELS={"before":"Do not count it","through":"Count it","from":"Start counting from it"}
 STOP_BEHAVIOR_VALUES={value:key for key,value in STOP_BEHAVIOR_LABELS.items()}
+DERIVED_OPERATION_LABELS={
+    "subtract":"Difference  A − B",
+    "add":"Sum  A + B",
+    "multiply":"Product  A × B",
+    "divide":"Ratio  A ÷ B",
+    "join":"Join as text",
+}
+DERIVED_OPERATION_VALUES={label:key for key,label in DERIVED_OPERATION_LABELS.items()}
+DERIVED_CUSTOM_LABEL="Custom existing calculation"
+DERIVED_SEPARATOR_LABELS={"+":"+","−":"−","/":"/",":":":","space":" "}
+DERIVED_SEPARATOR_VALUES={label:value for label,value in DERIVED_SEPARATOR_LABELS.items()}
+
+def _derived_trait_choices(scheme,current_trait_id=None):
+    """Return biologist-facing labels with stable trait ids for calculation dropdowns."""
+    current=str(current_trait_id or "")
+    result=[]
+    for trait in scheme.get("traits",()) or ():
+        if str(trait["id"])==current:continue
+        abbr=str(trait.get("abbr") or trait["id"]);name=str(trait.get("name") or trait["id"])
+        result.append((f"{abbr} — {name}",str(trait["id"])))
+    return result
+
+def _derived_rule_from_builder(left_id,operation,right_id,separator="+"):
+    left_id=str(left_id or "");right_id=str(right_id or "");operation=str(operation or "")
+    if not left_id or not right_id:raise ValueError("Choose two existing traits for this calculation.")
+    if operation=="subtract":expression=f"{left_id}-{right_id}"
+    elif operation=="add":expression=f"{left_id}+{right_id}"
+    elif operation=="multiply":expression=f"{left_id}*{right_id}"
+    elif operation=="divide":expression=f"{left_id}/{right_id}"
+    elif operation=="join":expression=f"{left_id}+{str(separator)!r}+{right_id}"
+    else:raise ValueError("Choose how the two traits should be combined.")
+    return {"expression":expression,"depends_on":[left_id,right_id]}
+
+def _derived_builder_from_rule(rule):
+    """Recognize calculations produced by the visual builder; preserve unknown legacy formulas."""
+    rule=dict(rule or {});deps=[str(value) for value in rule.get("depends_on") or ()];expression=str(rule.get("expression") or "").strip()
+    if len(deps)!=2:return {"operation":"custom","left_id":deps[0] if deps else "","right_id":deps[1] if len(deps)>1 else "","separator":"","expression":expression}
+    left_id,right_id=deps
+    compact="".join(expression.split())
+    for operation,symbol in (("subtract","-"),("add","+"),("multiply","*"),("divide","/")):
+        if compact==f"{left_id}{symbol}{right_id}":
+            return {"operation":operation,"left_id":left_id,"right_id":right_id,"separator":"","expression":expression}
+    try:
+        node=ast.parse(expression,mode="eval").body
+        if (
+            isinstance(node,ast.BinOp) and isinstance(node.op,ast.Add)
+            and isinstance(node.left,ast.BinOp) and isinstance(node.left.op,ast.Add)
+            and isinstance(node.left.left,ast.Name) and node.left.left.id==left_id
+            and isinstance(node.left.right,ast.Constant) and isinstance(node.left.right.value,str)
+            and isinstance(node.right,ast.Name) and node.right.id==right_id
+        ):
+            return {"operation":"join","left_id":left_id,"right_id":right_id,"separator":node.left.right.value,"expression":expression}
+    except (SyntaxError,ValueError):
+        pass
+    return {"operation":"custom","left_id":left_id,"right_id":right_id,"separator":"","expression":expression}
+
+def _sort_export_tree(tree,column,descending=False):
+    """Sort one export-preview column while keeping blank values last."""
+    rows=list(tree.get_children(""))
+    present=[];missing=[]
+    for item in rows:
+        raw=tree.set(item,column)
+        if raw is None or str(raw).strip()=="":missing.append(item);continue
+        text=str(raw).strip()
+        try:key=(0,float(text))
+        except ValueError:key=(1,text.casefold())
+        present.append((key,item))
+    ordered=[item for _key,item in sorted(present,key=lambda pair:pair[0],reverse=bool(descending))]+missing
+    for index,item in enumerate(ordered):
+        tree.move(item,"",index);tree.item(item,tags=("alternate",) if index%2 else ())
+    tree.heading(column,command=lambda c=column,d=not bool(descending):_sort_export_tree(tree,c,d))
+    return ordered
 COLOR_CHOICES=(
     ("Blue","#1976e9"),("Green","#20a447"),("Orange","#ef8a17"),
     ("Violet","#7e57c2"),("Red","#d9534f"),("Gray","#66727d"),
@@ -477,10 +550,6 @@ class XRayCountsRuntime:
         title_row=ttk.Frame(parent);title_row.pack(fill="x")
         ttk.Label(title_row,text="Export",style="PageTitle.TLabel").pack(side="left")
         actions=ttk.Frame(title_row);actions.pack(side="right")
-        self._button(
-            actions,"Check results…",self._show_result_checks,
-            "Rank suspicious results worst first and open a navigable review queue. Flags are prompts for inspection, never automatic exclusions.",
-        ).pack(side="left",padx=(0,12))
         if not hasattr(self,"_trait_export_scope"):
             self._trait_export_scope=tk.StringVar(master=self.host.container,value="verified")
         ttk.Label(actions,text="Export:",style="Muted.TLabel").pack(side="left",padx=(0,4))
@@ -496,22 +565,24 @@ class XRayCountsRuntime:
         scheme=self.project.scheme
         if not scheme.get("traits"):
             self._empty_scheme_state(parent,"No traits to calculate","Open a trait set or create traits in Project first.");return
-        traits=list(scheme["traits"]);cols=("locality","plate","fish",*(t.get("abbr") or t["id"] for t in traits),"status")
+        traits=list(scheme["traits"]);cols=("row_no","locality","plate","fish",*(t.get("abbr") or t["id"] for t in traits),"status")
         host=ttk.Frame(parent);host.pack(fill="both",expand=True);host.columnconfigure(0,weight=1);host.rowconfigure(0,weight=1)
         tree=ttk.Treeview(host,columns=cols,show="headings",selectmode="browse",height=16)
+        tree.heading("row_no",text="#");tree.column("row_no",width=46,anchor="center",stretch=False)
         tree.heading("locality",text="Locality");tree.column("locality",width=180,anchor="w")
         tree.heading("plate",text="Plate");tree.column("plate",width=220,anchor="w")
         tree.heading("fish",text="Specimen");tree.column("fish",width=62,anchor="center",stretch=False)
         for trait in traits:
             col=trait.get("abbr") or trait["id"];tree.heading(col,text=col);tree.column(col,width=78,anchor="center",stretch=False)
         tree.heading("status",text="Status");tree.column("status",width=90,anchor="center",stretch=False)
+        for column in cols:tree.heading(column,command=lambda value=column:_sort_export_tree(tree,value,False))
         current=self._selection().get("specimen_id")
-        for index,row in enumerate(self.project.trait_rows()):
+        for index,row in enumerate(self.project.trait_rows(),1):
             path=Path(row["relative_path"]);values=row["trait_values"]
-            display=[self._sample_name(row["relative_path"]),path.name,int(row.get("ordinal") or 0)]
+            display=[index,self._sample_name(row["relative_path"]),path.name,int(row.get("ordinal") or 0)]
             display.extend("" if values.get(trait["id"]) is None else str(values.get(trait["id"])) for trait in traits)
             status=str(row.get("result_status") or "not_started")
-            tree.insert("","end",iid=row["specimen_id"],values=(*display,status),tags=("alternate",) if index%2 else ())
+            tree.insert("","end",iid=row["specimen_id"],values=(*display,status),tags=("alternate",) if index%2==0 else ())
         tree.tag_configure("alternate",background="#f6f8fa")
         scroll=ttk.Scrollbar(host,orient="vertical",command=tree.yview);tree.configure(yscrollcommand=scroll.set)
         tree.grid(row=0,column=0,sticky="nsew");scroll.grid(row=0,column=1,sticky="ns")
@@ -757,7 +828,9 @@ class TraitSchemeDialog(tk.Toplevel):
         self.scheme_name=tk.StringVar();self.description=tk.StringVar();self.reference_label=tk.StringVar();self.reference_doi=tk.StringVar();self.reference_note=tk.StringVar()
         self.trait_name=tk.StringVar();self.trait_abbr=tk.StringVar();self.trait_method=tk.StringVar()
         self.trait_object=tk.StringVar();self.trait_reference=tk.StringVar();self.trait_reference2=tk.StringVar()
-        self.trait_offset=tk.StringVar();self.trait_stop_behavior=tk.StringVar();self.trait_expression=tk.StringVar();self.trait_depends=tk.StringVar()
+        self.trait_offset=tk.StringVar();self.trait_stop_behavior=tk.StringVar()
+        self.calc_left=tk.StringVar();self.calc_operation=tk.StringVar();self.calc_right=tk.StringVar();self.calc_separator=tk.StringVar(value="+")
+        self.calc_preview=tk.StringVar();self._derived_choice_lookup={};self._derived_custom_rule=None
         self._build();self._load_scheme(self.scheme,self.note);self._maximize_window();self.grab_set()
 
     def _maximize_window(self):
@@ -943,13 +1016,34 @@ class TraitSchemeDialog(tk.Toplevel):
         self.stop_behavior_combo.grid(row=0,column=3,columnspan=2,sticky="ew",padx=(7,0));self.stop_behavior_combo.bind("<<ComboboxSelected>>",lambda _e:self._refresh_rule_preview())
         self._help("Choose whether the stop mark itself belongs to the count, or whether counting begins from it.",self.stop_behavior_label,self.stop_behavior_combo)
 
-        self.derived_frame=ttk.LabelFrame(parent,text="Calculation",padding=8);self.derived_frame.grid(row=3,column=0,columnspan=5,sticky="ew",pady=(10,0));self.derived_frame.columnconfigure(1,weight=1)
-        formula_label=ttk.Label(self.derived_frame,text="Formula");formula_label.grid(row=0,column=0,sticky="w")
-        formula_entry=ttk.Entry(self.derived_frame,textvariable=self.trait_expression);formula_entry.grid(row=0,column=1,sticky="ew",padx=(7,0))
-        deps_label=ttk.Label(self.derived_frame,text="Uses traits");deps_label.grid(row=1,column=0,sticky="w",pady=(6,0))
-        deps_entry=ttk.Entry(self.derived_frame,textvariable=self.trait_depends);deps_entry.grid(row=1,column=1,sticky="ew",padx=(7,0),pady=(6,0))
-        self._help("Expression used to calculate this value from other traits.",formula_label,formula_entry)
-        self._help("Comma-separated abbreviations of traits used by the formula.",deps_label,deps_entry)
+        self.derived_frame=ttk.LabelFrame(parent,text="Calculation",padding=8);self.derived_frame.grid(row=3,column=0,columnspan=5,sticky="ew",pady=(10,0))
+        self.derived_frame.columnconfigure(1,weight=1);self.derived_frame.columnconfigure(3,weight=1)
+        left_label=ttk.Label(self.derived_frame,text="First trait");left_label.grid(row=0,column=0,sticky="w")
+        self.calc_left_combo=ttk.Combobox(self.derived_frame,textvariable=self.calc_left,state="readonly")
+        self.calc_left_combo.grid(row=0,column=1,sticky="ew",padx=(7,14))
+        operation_label=ttk.Label(self.derived_frame,text="Combine as");operation_label.grid(row=0,column=2,sticky="w")
+        self.calc_operation_combo=ttk.Combobox(
+            self.derived_frame,textvariable=self.calc_operation,
+            values=tuple(DERIVED_OPERATION_LABELS.values()),state="readonly",width=24,
+        )
+        self.calc_operation_combo.grid(row=0,column=3,sticky="ew",padx=(7,0))
+        right_label=ttk.Label(self.derived_frame,text="Second trait");right_label.grid(row=1,column=0,sticky="w",pady=(7,0))
+        self.calc_right_combo=ttk.Combobox(self.derived_frame,textvariable=self.calc_right,state="readonly")
+        self.calc_right_combo.grid(row=1,column=1,sticky="ew",padx=(7,14),pady=(7,0))
+        self.calc_separator_label=ttk.Label(self.derived_frame,text="Text separator");self.calc_separator_label.grid(row=1,column=2,sticky="w",pady=(7,0))
+        self.calc_separator_combo=ttk.Combobox(
+            self.derived_frame,textvariable=self.calc_separator,
+            values=tuple(DERIVED_SEPARATOR_LABELS),state="readonly",width=12,
+        )
+        self.calc_separator_combo.grid(row=1,column=3,sticky="w",padx=(7,0),pady=(7,0))
+        ttk.Label(self.derived_frame,text="Preview",style="Muted.TLabel").grid(row=2,column=0,sticky="w",pady=(8,0))
+        self.calc_preview_label=ttk.Label(self.derived_frame,textvariable=self.calc_preview,style="SectionTitle.TLabel")
+        self.calc_preview_label.grid(row=2,column=1,columnspan=3,sticky="w",padx=(7,0),pady=(8,0))
+        self._help("Choose an existing trait; no formula typing is needed.",left_label,self.calc_left_combo,right_label,self.calc_right_combo)
+        self._help("Choose a simple biological calculation. MorphoLabel stores the formula automatically.",operation_label,self.calc_operation_combo)
+        self._help("Used only for Join as text, for example abdominal + caudal.",self.calc_separator_label,self.calc_separator_combo)
+        for widget in (self.calc_left_combo,self.calc_operation_combo,self.calc_right_combo,self.calc_separator_combo):
+            widget.bind("<<ComboboxSelected>>",lambda _e:self._derived_builder_changed(),add="+")
 
         preview=ttk.LabelFrame(parent,text="What this rule means",padding=6);preview.grid(row=4,column=0,columnspan=5,sticky="ew",pady=(10,0))
         self.preview_label=ttk.Label(preview);self.preview_label.pack(anchor="center")
@@ -1099,7 +1193,9 @@ class TraitSchemeDialog(tk.Toplevel):
         for item in self.trait_tree.selection():self.trait_tree.selection_remove(item)
         self.trait_name.set("");self.trait_abbr.set("");self.trait_method.set(METHOD_ID_TO_LABEL["count"])
         self.trait_object.set("");self.trait_reference.set("");self.trait_reference2.set("");self.trait_offset.set("");self.trait_stop_behavior.set("")
-        self.trait_expression.set("");self.trait_depends.set("");self._refresh_method_fields();self.trait_name_entry.focus_set()
+        self._derived_custom_rule=None;self.calc_left.set("");self.calc_right.set("")
+        self.calc_operation.set(DERIVED_OPERATION_LABELS["subtract"]);self.calc_separator.set("+")
+        self._refresh_method_fields();self.trait_name_entry.focus_set()
 
     def _load_trait(self,trait_id):
         trait=next((item for item in self.scheme.get("traits",()) if item["id"]==trait_id),None)
@@ -1112,8 +1208,48 @@ class TraitSchemeDialog(tk.Toplevel):
         self.trait_reference2.set(structures.get(ids[2],{}).get("name","") if len(ids)>2 else "")
         rule=trait.get("rule") or {};self.trait_offset.set("" if "offset" not in rule else str(rule.get("offset")))
         self.trait_stop_behavior.set(STOP_BEHAVIOR_LABELS.get(rule.get("side"),""))
-        self.trait_expression.set(str(rule.get("expression") or ""));abbr={item["id"]:item.get("abbr") or item["id"] for item in self.scheme.get("traits",())};self.trait_depends.set(", ".join(abbr.get(dep,dep) for dep in (rule.get("depends_on") or ())))
+        self._derived_custom_rule=None
+        self._refresh_derived_choices()
+        if method_id=="derived":
+            parsed=_derived_builder_from_rule(rule);reverse={ident:label for label,ident in self._derived_choice_lookup.items()}
+            if parsed["operation"]=="custom":
+                self._derived_custom_rule=deepcopy(rule);self.calc_operation.set(DERIVED_CUSTOM_LABEL)
+            else:self.calc_operation.set(DERIVED_OPERATION_LABELS[parsed["operation"]])
+            self.calc_left.set(reverse.get(parsed["left_id"],""));self.calc_right.set(reverse.get(parsed["right_id"],""))
+            separator_label=next((label for label,value in DERIVED_SEPARATOR_VALUES.items() if value==parsed.get("separator","")),"+")
+            self.calc_separator.set(separator_label)
         self._refresh_method_fields()
+
+    def _refresh_derived_choices(self):
+        choices=_derived_trait_choices(self.scheme,self._editing_trait_id);labels=tuple(label for label,_ident in choices)
+        self._derived_choice_lookup={label:ident for label,ident in choices}
+        if hasattr(self,"calc_left_combo"):self.calc_left_combo.configure(values=labels)
+        if hasattr(self,"calc_right_combo"):self.calc_right_combo.configure(values=labels)
+        if self.calc_left.get() not in labels:self.calc_left.set(labels[0] if labels else "")
+        if self.calc_right.get() not in labels:
+            self.calc_right.set(labels[1] if len(labels)>1 else (labels[0] if labels else ""))
+
+    def _derived_builder_changed(self):
+        if self.calc_operation.get()!=DERIVED_CUSTOM_LABEL:self._derived_custom_rule=None
+        self._refresh_derived_preview()
+
+    def _refresh_derived_preview(self):
+        operation=DERIVED_OPERATION_VALUES.get(self.calc_operation.get())
+        join=operation=="join"
+        for widget in (self.calc_separator_label,self.calc_separator_combo):
+            if join:widget.grid()
+            else:widget.grid_remove()
+        if self.calc_operation.get()==DERIVED_CUSTOM_LABEL and self._derived_custom_rule:
+            self.calc_preview.set("Existing custom calculation is preserved until you choose a standard calculation.")
+            return
+        left=self.calc_left.get() or "First trait";right=self.calc_right.get() or "Second trait"
+        symbol={"subtract":"−","add":"+","multiply":"×","divide":"÷"}.get(operation)
+        if symbol:self.calc_preview.set(f"{left}  {symbol}  {right}")
+        elif operation=="join":
+            separator=DERIVED_SEPARATOR_VALUES.get(self.calc_separator.get(),"+")
+            shown="space" if separator==" " else separator
+            self.calc_preview.set(f"{left}  + text ‘{shown}’ +  {right}")
+        else:self.calc_preview.set("Choose two traits and how to combine them.")
 
     def _show_reference_row(self,show,second=False):
         widgets=(self.reference2_icon,self.reference2_label_widget,self.reference2_combo) if second else (self.reference_icon,self.reference_label_widget,self.reference_combo)
@@ -1125,7 +1261,12 @@ class TraitSchemeDialog(tk.Toplevel):
         method_id=METHOD_LABEL_TO_ID.get(self.trait_method.get(),"count")
         if method_id not in EDITOR_METHOD_IDS:method_id="count"
         if method_id=="derived":
-            self.annotation_frame.grid_remove();self.derived_frame.grid()
+            self.annotation_frame.grid_remove();self.derived_frame.grid();self._refresh_derived_choices()
+            values=list(DERIVED_OPERATION_LABELS.values())
+            if self._derived_custom_rule:values.append(DERIVED_CUSTOM_LABEL)
+            self.calc_operation_combo.configure(values=tuple(values))
+            if not self.calc_operation.get():self.calc_operation.set(DERIVED_OPERATION_LABELS["subtract"])
+            self._refresh_derived_preview()
         else:
             self.derived_frame.grid_remove();self.annotation_frame.grid();self.object_label.configure(text="Element to count")
             self._show_reference_row(method_id in {"count_to","count_between"})
@@ -1160,14 +1301,14 @@ class TraitSchemeDialog(tk.Toplevel):
         rule=deepcopy(old.get("rule") or {}) if old and old.get("method")==method_id else {};structures=[]
         try:
             if method_id=="derived":
-                rule["expression"]=self.trait_expression.get().strip();tokens=[part.strip() for part in self.trait_depends.get().split(",") if part.strip()]
-                lookup={}
-                for item in candidate.get("traits",()):
-                    if item["id"]==trait_id:continue
-                    lookup[item["id"].casefold()]=item["id"];lookup[(item.get("abbr") or item["id"]).casefold()]=item["id"]
-                missing=[token for token in tokens if token.casefold() not in lookup]
-                if missing:raise ValueError("Unknown dependency: "+", ".join(missing))
-                rule["depends_on"]=[lookup[token.casefold()] for token in tokens];rule.pop("reference",None);rule.pop("reference_end",None)
+                if self.calc_operation.get()==DERIVED_CUSTOM_LABEL and self._derived_custom_rule:
+                    rule=deepcopy(self._derived_custom_rule)
+                else:
+                    left_id=self._derived_choice_lookup.get(self.calc_left.get(),"");right_id=self._derived_choice_lookup.get(self.calc_right.get(),"")
+                    operation=DERIVED_OPERATION_VALUES.get(self.calc_operation.get(),"")
+                    separator=DERIVED_SEPARATOR_VALUES.get(self.calc_separator.get(),"+")
+                    rule=_derived_rule_from_builder(left_id,operation,right_id,separator)
+                rule.pop("reference",None);rule.pop("reference_end",None)
             else:
                 object_id=self._structure_id_by_name(self.trait_object.get(),True)
                 if object_id is None:raise ValueError("Choose an Element to count from step 1.")
