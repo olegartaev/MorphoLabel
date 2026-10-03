@@ -60,6 +60,14 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
             specimens.extend((first,second))
         return specimens
 
+    def test_predict_current_is_available_on_any_selected_manual_pass_with_active_model(self):
+        model={"model_id":"m"}
+        self.assertTrue(_current_prediction_allowed(self.project,"specimen",model,1))
+        self.assertTrue(_current_prediction_allowed(self.project,"specimen",model,7))
+        self.assertTrue(_current_prediction_allowed(self.project,"specimen",model,999))
+        self.assertFalse(_current_prediction_allowed(self.project,"",model,7))
+        self.assertFalse(_current_prediction_allowed(self.project,"specimen",None,7))
+
     def test_training_dataset_uses_only_verified_truth_and_splits_by_source_plate(self):
         specimens=self._eight_verified()
         dataset=prepare_structure_training_dataset(self.project,self.root/"scratch",seed=7)
@@ -348,6 +356,9 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertIn("add_radiobutton",ui)
         self.assertIn("_VISIBILITY_SYMBOLS",ui)
         self.assertIn("can_predict=_current_prediction_allowed(self.project,self.selected_specimen_id,model,self.pass_no.get())",ui)
+        helper=ui[ui.index("def _current_prediction_allowed"):ui.index("_VISIBILITY_LABELS=")]
+        self.assertIn("return bool(specimen_id and model)",helper)
+        self.assertNotIn("annotation1_verified",helper)
         load=ui[ui.index("    def _load_specimen(self,specimen_id):"):ui.index("    def _clear(self):")]
         self.assertIn("self._refresh_summary()",load)
         self.assertIn("allow_verified=True",ui)

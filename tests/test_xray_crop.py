@@ -132,6 +132,15 @@ class XRayCropViewportContractTests(unittest.TestCase):
         self.assertIn("if selected:",draw)
         self.assertIn('outline="#101b24",fill="",width=3',source)
 
+    def test_crop_overlay_keeps_full_frame_large_head_marker_and_short_ventral_stripe(self):
+        source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
+        self.assertIn('outline="#071521",fill="",width=4',source)
+        self.assertIn('outline=color,fill="",width=2',source)
+        self.assertIn("head_size=16 if selected else 13",source)
+        self.assertIn("half=min(16.0,max(10.0,length*.18))",source)
+        self.assertIn('fill=ventral,width=4 if selected else 3',source)
+        self.assertIn("short corner accents",source)
+
     def test_crop_workspace_has_landmarks_style_zoom_pan_and_two_icon_flips(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
         for text in ('"<MouseWheel>"',"def _wheel(","def _pan_start(","def _pan_motion(","flip_horizontal","flip_vertical","Flip left ↔ right. Use when the head is on the wrong side.","Flip top ↕ bottom. Use when the ventral side is on the wrong side.","#54f0aa","#168ff0","#ffad1f"):

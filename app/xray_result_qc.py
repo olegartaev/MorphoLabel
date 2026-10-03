@@ -35,22 +35,43 @@ def _issue_review_score(issue):
 
 
 def build_result_review_queue(issues):
-    """Collapse checks to one review stop per specimen and rank worst first."""
+    """Collapse checks to one review stop per specimen and rank worst first.
+
+    The strongest anomaly determines the main priority. Additional independent
+    flags add a bounded bonus, so a specimen with several real warning signals
+    is reviewed before an otherwise similar specimen with only one.
+    """
     by_specimen={}
     for issue in issues or ():
         specimen_id=str(issue.get("specimen_id") or "")
         if not specimen_id:continue
-        score=_issue_review_score(issue);entry=by_specimen.get(specimen_id)
+        raw_score=_issue_review_score(issue);severity=str(issue.get("severity") or "review")
+        entry=by_specimen.get(specimen_id)
         if entry is None:
-            entry={"specimen_id":specimen_id,"image_id":str(issue.get("image_id") or ""),
-                   "sample":str(issue.get("sample") or ""),"plate":str(issue.get("plate") or ""),
-                   "ordinal":int(issue.get("ordinal") or 0),"score":score,"severity":str(issue.get("severity") or "review"),
-                   "issue_count":0,"top_reason":str(issue.get("reason") or "")}
+            entry={
+                "specimen_id":specimen_id,"image_id":str(issue.get("image_id") or ""),
+                "sample":str(issue.get("sample") or ""),"plate":str(issue.get("plate") or ""),
+                "ordinal":int(issue.get("ordinal") or 0),"score":raw_score,"worst_score":raw_score,
+                "severity":severity,"issue_count":0,"high_count":0,"review_count":0,
+                "top_reason":str(issue.get("reason") or ""),
+            }
             by_specimen[specimen_id]=entry
         entry["issue_count"]+=1
-        if score>entry["score"]:
-            entry.update(score=score,severity=str(issue.get("severity") or "review"),top_reason=str(issue.get("reason") or ""))
-    return sorted(by_specimen.values(),key=lambda row:(-row["score"],row["sample"],row["plate"],row["ordinal"],row["specimen_id"]))
+        if severity=="high":entry["high_count"]+=1
+        elif severity=="review":entry["review_count"]+=1
+        if raw_score>entry["worst_score"]:
+            entry["worst_score"]=raw_score
+            entry["severity"]=severity
+            entry["top_reason"]=str(issue.get("reason") or "")
+    for entry in by_specimen.values():
+        extra_high=max(0,int(entry["high_count"])-1)
+        extra_review=int(entry["review_count"])
+        evidence_bonus=min(180.0,extra_high*40.0+extra_review*10.0+max(0,int(entry["issue_count"])-1)*2.0)
+        entry["score"]=round(float(entry["worst_score"])+evidence_bonus,6)
+    return sorted(
+        by_specimen.values(),
+        key=lambda row:(-row["score"],-row["high_count"],-row["issue_count"],row["sample"],row["plate"],row["ordinal"],row["specimen_id"]),
+    )
 
 
 def start_result_review_queue(project,issues):

@@ -63,15 +63,13 @@ def _first_structure_id(structures):
 
 
 def _current_prediction_allowed(project,specimen_id,model,pass_no):
-    """Current prediction follows the selected manual control pass, not batch-pass-1 policy."""
-    if not specimen_id or not model:return False
-    pass_no=int(pass_no)
-    if pass_no==1:return str(specimen_id) in {str(row["specimen_id"]) for row in project.structure_specimens(1)}
-    run=project.structure_repeatability()
-    if not run or not run.get("schema_current") or str(specimen_id) not in {str(value) for value in run.get("ids") or ()}:return False
-    first=int(run.get("annotation1_pass_no") or 0);second=int(run.get("annotation2_pass_no") or 0)
-    if pass_no==first:return True
-    return pass_no==second and int(run.get("annotation1_verified") or 0)>=int(run.get("total") or 0)
+    """Current-only AI follows the specimen currently open for manual work.
+
+    Batch prediction is deliberately stricter; this helper only controls the
+    explicit one-specimen action. Any selected confirmed crop in any annotation
+    pass may use AI as a starting point, then becomes human-verified only after Apply.
+    """
+    return bool(specimen_id and model)
 
 
 _VISIBILITY_LABELS={
@@ -324,7 +322,7 @@ class XRayStructureWorkspace:
             style="P.TButton",command=self.predict_current_structure,
         )
         self.predict_current_button.pack(side="left",padx=(2,2))
-        self.tip.bind(self.predict_current_button,"Place or refresh AI suggestions on this specimen. A verified annotation is archived before replacement; correct the suggestions and press Apply to verify again.")
+        self.tip.bind(self.predict_current_button,"Place or refresh AI suggestions on this current specimen, including repeatability passes. Correct the suggestions by hand; only Apply makes the result human-verified.")
         self.apply_separator=ttk.Separator(nav,orient="vertical");self.apply_separator.grid(row=0,column=1,sticky="ns",padx=7,pady=2)
         self.apply_button=ttk.Button(nav,text="Apply",image=self._xray_icon(nav,"structure_apply"),compound="left",style="NavPrimary.TButton",command=self.verify_current)
         self.apply_button.grid(row=0,column=2,sticky="e")
@@ -621,8 +619,10 @@ class XRayStructureWorkspace:
         if value is None:
             self.review_queue_banner.grid_remove();return
         items=value["items"];position=int(value["position"]);item=items[position]
+        priority="High priority" if item.get("severity")=="high" else "Review"
+        checks=int(item.get("issue_count") or 0)
         self.review_queue_label.configure(
-            text=f"Result review · {position+1} / {len(items)} · {item['severity'].upper()} · score {item['score']:.1f} · {item['sample']} · {item['plate']} · specimen {item['ordinal']} · {item['issue_count']} check(s)\n{item.get('top_reason') or 'Inspect this specimen and verify when the markers are correct.'}"
+            text=f"Result review · {position+1} / {len(items)} · {priority} · {checks} check{'s' if checks!=1 else ''} · {item['sample']} · {item['plate']} · specimen {item['ordinal']}\n{item.get('top_reason') or 'Inspect this specimen and verify when the markers are correct.'}"
         )
         self.review_queue_banner.grid()
 
@@ -1103,7 +1103,6 @@ class XRayStructureWorkspace:
             messagebox.showinfo("Predict current","Train or import a Structure AI model first.",parent=self.root);return
         specimen_id=str(self.selected_specimen_id)
         pass_no=int(self.pass_no.get())
-        if not _current_prediction_allowed(self.project,specimen_id,model,pass_no):return
         run=self.project.annotation_run(specimen_id,pass_no,"human",False)
         replacing_verified=bool(run and str(run.get("status") or "")=="verified")
         if replacing_verified and not messagebox.askyesno(

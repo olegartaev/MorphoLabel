@@ -131,6 +131,17 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         self.assertTrue(finished);self.assertIsNone(result_review_queue(self.project))
         clear_result_review_queue(self.project);self.assertIsNone(result_review_queue(self.project))
 
+    def test_result_review_queue_combines_multiple_warning_signals_after_worst_score(self):
+        issues=[
+            {"specimen_id":"single","image_id":"i1","severity":"high","code":"repeat_count","metric":{"difference":1},"sample":"S","plate":"p","ordinal":1,"reason":"one"},
+            {"specimen_id":"multi","image_id":"i2","severity":"high","code":"repeat_count","metric":{"difference":1},"sample":"S","plate":"p","ordinal":2,"reason":"same worst"},
+            {"specimen_id":"multi","image_id":"i2","severity":"review","code":"series_spacing","metric":{"ratio":1.9},"sample":"S","plate":"p","ordinal":2,"reason":"extra"},
+        ]
+        started=start_result_review_queue(self.project,issues)
+        self.assertEqual("multi",started["items"][0]["specimen_id"])
+        self.assertGreater(started["items"][0]["score"],started["items"][1]["score"])
+        self.assertEqual(2,started["items"][0]["issue_count"])
+
     def test_export_all_and_verified_only_keep_live_trait_calculation(self):
         self._complete_pass_one()
         pending=self.project.add_manual_specimen(self.image_ids[1],crop_from_geometry(450,240,620,230,0,(900,480),algorithm="manual"))
