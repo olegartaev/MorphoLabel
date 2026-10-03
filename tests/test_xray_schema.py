@@ -7,8 +7,8 @@ from pathlib import Path
 from app.xray_project import XRayProject
 from app.xray_schema import (
     METHOD_BY_ID, SCHEME_RESOURCE_DIR, blank_scheme, bundled_scheme, bundled_scheme_catalog,
-    load_scheme_file, normalize_scheme, phoxinus_vertebral_preset, save_scheme_file,
-    scheme_change_impact, scheme_hash,
+    calculate_trait_values, load_scheme_file, normalize_scheme, phoxinus_vertebral_preset, save_scheme_file,
+    scheme_change_impact, scheme_hash, spatial_series_order,
 )
 
 class XRaySchemaTests(unittest.TestCase):
@@ -43,6 +43,23 @@ class XRaySchemaTests(unittest.TestCase):
             self.assertEqual(source,load_scheme_file(path))
             parsed=json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual("phoxinus_vertebral_counts",parsed["scheme_id"])
+
+    def test_repeated_series_calculation_uses_spatial_order_not_click_order(self):
+        scheme=bundled_scheme("phoxinus_vertebral_counts")
+        rows=[
+            {"annotation_id":1,"structure_id":"vertebra","x":0.50,"y":0.50,"sort_order":0},
+            {"annotation_id":2,"structure_id":"vertebra","x":0.10,"y":0.50,"sort_order":1},
+            {"annotation_id":3,"structure_id":"vertebra","x":0.30,"y":0.50,"sort_order":2},
+            {"annotation_id":4,"structure_id":"first_caudal","x":0.30,"y":0.50,"sort_order":0},
+            {"annotation_id":5,"structure_id":"last_predorsal","x":0.50,"y":0.50,"sort_order":0},
+            {"annotation_id":6,"structure_id":"preanal_pterygiophore","x":0.40,"y":0.70,"sort_order":0},
+        ]
+        ordered=spatial_series_order([row for row in rows if row["structure_id"]=="vertebra"])
+        self.assertEqual([0.10,0.30,0.50],[round(row["x"],2) for row in ordered])
+        values=calculate_trait_values(scheme,rows)
+        self.assertEqual(5,values["abdv"])
+        self.assertEqual(2,values["caudv"])
+        self.assertEqual(7,values["predv"])
 
     def test_count_between_can_use_two_explicit_reference_marks(self):
         scheme=blank_scheme("between")
