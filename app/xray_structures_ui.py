@@ -307,7 +307,7 @@ class XRayStructureWorkspace:
         self.batch_button=ttk.Button(one,text="Start batch",command=self.start_batch);self.batch_button.grid(row=2,column=0,columnspan=3,sticky="w",pady=(5,0))
 
         two=self._workflow_card(
-            workflow,1,"2. Manual repeatability",
+            workflow,1,"2. Manual Repeatability",
             "A random sample of verified Annotation 1 specimens is frozen, then annotated again independently. Annotation 1 markers stay hidden during Annotation 2.",
         )
         self.repeat_summary=ttk.Label(two,text="",style="Muted.TLabel");self.repeat_summary.grid(row=0,column=0,columnspan=3,sticky="w")

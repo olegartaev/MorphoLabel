@@ -80,6 +80,7 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         first=run["ids"][0]
         # Editing Annotation 1 later does not rewrite the frozen repeatability baseline.
         self.project.add_annotation(first,"vertebra",0.7,0.5,1)
+        self.project.verify_annotations(first,1)
         again=self.project.structure_repeatability(run["run_id"])
         self.assertEqual(frozen[first],next(m["baseline"] for m in again["members"] if m["specimen_id"]==first))
         for sid in run["ids"]:
