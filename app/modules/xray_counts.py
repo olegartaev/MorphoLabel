@@ -155,7 +155,7 @@ def _sort_export_tree(tree,column,descending=False):
         present.append((key,item))
     ordered=[item for _key,item in sorted(present,key=lambda pair:pair[0],reverse=bool(descending))]+missing
     for index,item in enumerate(ordered):
-        tree.move(item,"",index);tree.set(item,"row_no",str(index+1));tree.item(item,tags=("alternate",) if index%2 else ())
+        tree.move(item,"",index);tree.item(item,tags=("alternate",) if index%2 else ())
     tree.heading(column,command=lambda c=column,d=not bool(descending):_sort_export_tree(tree,c,d))
     return ordered
 COLOR_CHOICES=(
@@ -325,7 +325,9 @@ class XRayCountsRuntime:
 
     def _ensure_working_scheme(self):
         if self.project is None:return False
-        return self.project.ensure_initial_bundled_scheme("phoxinus_vertebral_counts")
+        changed=self.project.ensure_initial_bundled_scheme("phoxinus_vertebral_counts")
+        corrected=self.project.ensure_phoxinus_count_semantics()
+        return bool(changed or corrected)
 
     @staticmethod
     def _sample_name(relative_path):
@@ -342,7 +344,10 @@ class XRayCountsRuntime:
         try:image=self.project.source_image(image_id)
         except KeyError:return ""
         path=Path(image["relative_path"]);sample=self._sample_name(image["relative_path"])
-        if specimen is not None:return f"Locality: {sample}  ·  Plate: {path.name}  ·  Specimen: №{int(specimen.get('ordinal') or 0)}"
+        if specimen is not None:
+            workflow_no=self.project.structure_workflow_number(specimen["specimen_id"])
+            number=f"#{workflow_no}" if workflow_no else f"plate specimen {int(specimen.get('ordinal') or 0)}"
+            return f"Locality: {sample}  ·  Plate: {path.name}  ·  Specimen: {number}"
         return f"Locality: {sample}  ·  Plate: {path.name}"
 
     def render(self,host):
@@ -575,11 +580,11 @@ class XRayCountsRuntime:
         for trait in traits:
             col=trait.get("abbr") or trait["id"];tree.heading(col,text=col);tree.column(col,width=78,anchor="center",stretch=False)
         tree.heading("status",text="Status");tree.column("status",width=90,anchor="center",stretch=False)
-        for column in cols[1:]:tree.heading(column,command=lambda value=column:_sort_export_tree(tree,value,False))
+        for column in cols:tree.heading(column,command=lambda value=column:_sort_export_tree(tree,value,False))
         current=self._selection().get("specimen_id")
         for index,row in enumerate(self.project.trait_rows(),1):
-            path=Path(row["relative_path"]);values=row["trait_values"]
-            display=[index,self._sample_name(row["relative_path"]),path.name,int(row.get("ordinal") or 0)]
+            path=Path(row["relative_path"]);values=row["trait_values"];workflow_no=int(row.get("workflow_no") or index)
+            display=[workflow_no,self._sample_name(row["relative_path"]),path.name,int(row.get("ordinal") or 0)]
             display.extend("" if values.get(trait["id"]) is None else str(values.get(trait["id"])) for trait in traits)
             status=str(row.get("result_status") or "not_started")
             tree.insert("","end",iid=row["specimen_id"],values=(*display,status),tags=("alternate",) if index%2==0 else ())
@@ -889,9 +894,6 @@ class TraitSchemeDialog(tk.Toplevel):
         set_menu.configure(menu=menu);set_menu._menu=menu
         self.apply_button=self._button(toolbar,"Use these traits for project",self._use_for_project,"Apply this trait set as a new project version. Changes are not saved until you choose this button.",True)
         self.apply_button.pack(side="right",padx=(8,0))
-        self.appearance_button=self._button(toolbar,"Colors & keys...",self._edit_markers,"Optional: change only the color, marker shape, and number key used during X-ray annotation.")
-        self.appearance_button.pack(side="right")
-
         scheme=ttk.LabelFrame(outer,text="Trait set",padding=8);scheme.grid(row=2,column=0,sticky="ew");scheme.columnconfigure(1,weight=1);scheme.columnconfigure(3,weight=1)
         name_label=ttk.Label(scheme,text="Name");name_label.grid(row=0,column=0,sticky="w")
         name_entry=ttk.Entry(scheme,textvariable=self.scheme_name);name_entry.grid(row=0,column=1,columnspan=3,sticky="ew",padx=(7,0))
@@ -1018,7 +1020,7 @@ class TraitSchemeDialog(tk.Toplevel):
 
         self.derived_frame=ttk.LabelFrame(parent,text="Calculation",padding=8);self.derived_frame.grid(row=3,column=0,columnspan=5,sticky="ew",pady=(10,0))
         self.derived_frame.columnconfigure(1,weight=1);self.derived_frame.columnconfigure(3,weight=1)
-        left_label=ttk.Label(self.derived_frame,text="First trait");left_label.grid(row=0,column=0,sticky="w")
+        left_label=ttk.Label(self.derived_frame,text="A · First trait");left_label.grid(row=0,column=0,sticky="w")
         self.calc_left_combo=ttk.Combobox(self.derived_frame,textvariable=self.calc_left,state="readonly")
         self.calc_left_combo.grid(row=0,column=1,sticky="ew",padx=(7,14))
         operation_label=ttk.Label(self.derived_frame,text="Combine as");operation_label.grid(row=0,column=2,sticky="w")
@@ -1027,7 +1029,7 @@ class TraitSchemeDialog(tk.Toplevel):
             values=tuple(DERIVED_OPERATION_LABELS.values()),state="readonly",width=24,
         )
         self.calc_operation_combo.grid(row=0,column=3,sticky="ew",padx=(7,0))
-        right_label=ttk.Label(self.derived_frame,text="Second trait");right_label.grid(row=1,column=0,sticky="w",pady=(7,0))
+        right_label=ttk.Label(self.derived_frame,text="B · Second trait");right_label.grid(row=1,column=0,sticky="w",pady=(7,0))
         self.calc_right_combo=ttk.Combobox(self.derived_frame,textvariable=self.calc_right,state="readonly")
         self.calc_right_combo.grid(row=1,column=1,sticky="ew",padx=(7,14),pady=(7,0))
         self.calc_separator_label=ttk.Label(self.derived_frame,text="Text separator");self.calc_separator_label.grid(row=1,column=2,sticky="w",pady=(7,0))
