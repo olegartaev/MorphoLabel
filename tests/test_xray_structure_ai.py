@@ -427,7 +427,7 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertIn("add_radiobutton",ui)
         self.assertIn("_VISIBILITY_SYMBOLS",ui)
         self.assertIn("_current_prediction_allowed(self.project,self.selected_specimen_id,model,self.pass_no.get())",ui)
-        self.assertIn("not self.current_image_excluded",ui)
+        self.assertIn("not self.current_specimen_excluded",ui)
         helper=ui[ui.index("def _current_prediction_allowed"):ui.index("_VISIBILITY_LABELS=")]
         self.assertIn("return bool(specimen_id and model)",helper)
         self.assertNotIn("annotation1_verified",helper)
