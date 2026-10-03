@@ -122,9 +122,11 @@ def _verified_truth(project):
         if not run or str(run.get("status") or "") != "verified":
             continue
         annotations = project.effective_annotations(row["specimen_id"], 1, "human")
+        visibility = project.structure_visibility_states(row["specimen_id"], 1, "human")
         rows.append({
             "specimen_id": str(row["specimen_id"]),
             "image_id": str(row["image_id"]),
+            "visibility": visibility,
             "points": [
                 {
                     "structure_id": str(point["structure_id"]),
@@ -190,15 +192,21 @@ def prepare_structure_training_dataset(project, workspace_root, seed=42):
             point for point in row["points"]
             if point["structure_id"] in by_id
         ]
+        visibility = {
+            sid: str(row.get("visibility", {}).get(sid, "complete"))
+            for sid in by_id
+        }
         groups[group].append({
             "specimen_id": row["specimen_id"],
             "image_id": row["image_id"],
             "path": str(target),
             "points": points,
+            "visibility": visibility,
         })
         membership.append({"specimen_id": row["specimen_id"], "image_id": row["image_id"], "split": group})
         digest_rows.append({
             "specimen_id": row["specimen_id"], "image_id": row["image_id"], "split": group,
+            "visibility": visibility,
             "points": [
                 {
                     "structure_id": point["structure_id"],
@@ -215,7 +223,7 @@ def prepare_structure_training_dataset(project, workspace_root, seed=42):
     if train_plates & val_plates:
         raise RuntimeError("Source-plate leakage detected between structure train and validation splits.")
     manifest = {
-        "format_version": 1,
+        "format_version": 2,
         "backend": STRUCTURE_BACKEND,
         "input_size": list(INPUT_SIZE),
         "schema_digest": structure_schema_digest(project.scheme),
