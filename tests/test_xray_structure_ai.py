@@ -88,6 +88,31 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
             prepare_structure_training_dataset(self.project,self.root/"scratch2",seed=7)["dataset_hash"],
         )
 
+    def test_repeatability_passes_never_become_structure_training_truth(self):
+        self._eight_verified()
+        run=self.project.start_structure_repeatability(1,seed=11)
+        specimen_id=run["ids"][0];main_before=self.project.effective_annotations(specimen_id,1,"human")
+        for pass_no in (int(run["annotation1_pass_no"]),int(run["annotation2_pass_no"])):
+            v1=self.project.add_annotation(specimen_id,"vertebra",0.71,0.40,pass_no)
+            v2=self.project.add_annotation(specimen_id,"vertebra",0.84,0.40,pass_no)
+            self.project.assign_annotation_role(v2,"first_caudal")
+            self.project.assign_annotation_role(v1,"last_predorsal")
+            self.project.add_annotation(specimen_id,"preanal_pterygiophore",0.76,0.72,pass_no)
+            self.project.verify_annotations(specimen_id,pass_no)
+        dataset=prepare_structure_training_dataset(self.project,self.root/"repeatability_exclusion",seed=7)
+        manifest=json.loads(dataset["manifest"].read_text(encoding="utf-8"))
+        row=next(item for item in list(manifest["train"])+list(manifest["val"]) if item["specimen_id"]==specimen_id)
+        expected=sorted(
+            (str(point["structure_id"]),round(float(point["x"]),8),round(float(point["y"]),8))
+            for point in main_before
+        )
+        actual=sorted(
+            (str(point["structure_id"]),round(float(point["x"]),8),round(float(point["y"]),8))
+            for point in row["points"]
+        )
+        self.assertEqual(expected,actual)
+        self.assertFalse(any(abs(float(point["x"])-0.71)<1e-8 or abs(float(point["x"])-0.84)<1e-8 for point in row["points"]))
+
     def test_training_manifest_preserves_visibility_and_dataset_hash_tracks_it(self):
         specimens=self._eight_verified()
         baseline=prepare_structure_training_dataset(self.project,self.root/"baseline",seed=7)
@@ -292,6 +317,12 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertAlmostEqual(-0.5,summary["repeated_count_bias"])
         self.assertAlmostEqual(0.5,summary["repeated_count_mae"])
         self.assertAlmostEqual(0.0,summary["localization_median_diag"])
+        self.assertEqual(7,len(report["traits"]))
+        self.assertTrue(all(row.get("accuracy") is not None for row in report["traits"]))
+        self.assertTrue(all(row.get("accuracy_basis")=="exact" for row in report["traits"]))
+        by_trait={row["trait_id"]:row for row in report["traits"]}
+        self.assertAlmostEqual(1.0,by_trait["tv"]["accuracy"])
+        self.assertLess(by_trait["preap"]["accuracy"],1.0)
 
     def test_heatmap_target_has_exact_positive_peak_and_partial_supervision_mask(self):
         from ai_runtime.xray_structure_runner import _gaussian
@@ -388,6 +419,8 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertIn("Exact trait values:",ui)
         self.assertIn("Count bias:",ui)
         self.assertIn("Reference role accuracy:",ui)
+        self.assertIn('("accuracy","Accuracy"',ui)
+        self.assertIn('row.get("accuracy")',ui)
         self.assertIn("pass_no=pass_no",ui)
         self.assertIn("_marker_visibility_buttons",ui)
         self.assertIn("_marker_visibility_vars",ui)
