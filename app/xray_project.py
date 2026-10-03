@@ -1106,48 +1106,6 @@ class XRayProject:
         self.save_scheme(bundled_scheme(scheme_id),"Built-in starter scheme activated for untouched blank project")
         return True
 
-    def ensure_phoxinus_count_semantics(self):
-        """Correct the legacy bundled count rules without discarding compatible annotations.
-
-        The old starter scheme added four Weberian vertebrae numerically even though
-        the annotation tool asks users to mark the complete vertebral series. The
-        literature definition counts those vertebrae directly, so an all-vertebra
-        annotation must not receive a hidden +4 correction.
-        """
-        record=self.active_scheme_record();old_scheme=normalize_scheme(record["scheme"])
-        if str(old_scheme.get("scheme_id") or "")!="phoxinus_vertebral_counts":return False
-        traits={str(item["id"]):item for item in old_scheme.get("traits") or ()}
-        legacy={"tv":4,"abdv":4,"predv":4}
-        if any(int(((traits.get(trait_id) or {}).get("rule") or {}).get("offset",0) or 0)!=offset for trait_id,offset in legacy.items()):
-            return False
-        corrected=deepcopy(old_scheme)
-        corrected_traits={str(item["id"]):item for item in corrected.get("traits") or ()}
-        for trait_id in legacy:corrected_traits[trait_id].setdefault("rule",{}).pop("offset",None)
-        old_structure_contract=[
-            (str(item["id"]),bool(item.get("repeated")),str(item.get("annotation") or "point"),
-             str(item.get("learning_relation") or ""),tuple(str(value) for value in item.get("reuse_from") or ()))
-            for item in old_scheme.get("structures") or ()
-        ]
-        new_structure_contract=[
-            (str(item["id"]),bool(item.get("repeated")),str(item.get("annotation") or "point"),
-             str(item.get("learning_relation") or ""),tuple(str(value) for value in item.get("reuse_from") or ()))
-            for item in corrected.get("structures") or ()
-        ]
-        if old_structure_contract!=new_structure_contract:raise RuntimeError("Unsafe X-ray scheme correction was refused.")
-        old_version=str(record["version_id"])
-        new_version=self.save_scheme(
-            corrected,
-            "Corrected Phoxinus vertebral count rules: every marked vertebra is counted directly; legacy hidden +4 offsets removed.",
-        )
-        if new_version==old_version:return False
-        with sqlite3.connect(self.db_path) as c:
-            c.execute("UPDATE annotation_runs SET schema_version_id=? WHERE schema_version_id=?",(new_version,old_version))
-            c.execute("UPDATE xray_structure_repeatability_runs SET schema_version_id=? WHERE schema_version_id=?",(new_version,old_version))
-            c.execute("DELETE FROM trait_results WHERE schema_version_id=?",(new_version,))
-        for row in self.structure_specimens(1,include_excluded=True):
-            self.recalculate_trait_results(row["specimen_id"])
-        return True
-
     def current_selection(self):
         state=dict(self.get_ui_state("xray_current_selection",{}) or {})
         image_id=str(state.get("image_id") or "");specimen_id=str(state.get("specimen_id") or "")
