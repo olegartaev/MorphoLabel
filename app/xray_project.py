@@ -1248,7 +1248,7 @@ class XRayProject:
             states={str(structure_id):str(visibility) for structure_id,visibility in state_rows if str(visibility) in STRUCTURE_VISIBILITY_STATES}
             role_map={}
             for base_id,role_sid in role_rows:role_map.setdefault(int(base_id),[]).append(str(role_sid))
-            if rows:
+            if rows or states:
                 payload=[
                     {"annotation_id":int(row[0]),"structure_id":row[1],"x":float(row[2]),"y":float(row[3]),"sort_order":int(row[4]),
                      "role_structure_ids":role_map.get(int(row[0]),[])}
