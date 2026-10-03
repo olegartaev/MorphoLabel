@@ -149,6 +149,13 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertEqual("10.1111/jfb.14210",model["reference_doi"])
         self.assertEqual(7,model["trait_count"])
 
+    def test_xray_user_facing_context_uses_specimen_not_fish(self):
+        root=Path(__file__).resolve().parents[1]
+        source=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
+        self.assertIn("Specimen: №",source)
+        self.assertIn('tree.heading("fish",text="Specimen")',source)
+        self.assertNotIn("Fish №",source)
+
     def test_xray_icons_include_role_step_and_fish_crop_icons(self):
         required={
             "xray","xray_project","xray_crops","xray_structures","xray_results","xray_export",
