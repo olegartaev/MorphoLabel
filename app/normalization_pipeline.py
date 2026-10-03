@@ -33,14 +33,54 @@ def paths(source:Path, *, project=None, image_id_value=None):
  base=sample_work(source.parent.name)
  return base,ident,base/"developed_full"/f"{ident}.png",base/"metadata"/f"{ident}.developed.json",base/"standardized"/f"{ident}.png",base/"metadata"/f"{ident}.json",base/"analysis"/"masks"/f"{ident}.png"
 
+def _development_meta(source,image,target,ident,digest,parameter_hash,project):
+ return {"image_id":ident,"source_relpath":source.relative_to(project.source_root).as_posix() if project else require_relative(source),"source_sha256":digest,"developed_full_relpath":str(target.relative_to(project.data_root)).replace("\\","/") if project else require_relative(target),"width":image.width,"height":image.height,"development":DEVELOPMENT,"parameters_sha256":parameter_hash}
+
 def develop_full(source:Path, *, project=None, image_id_value=None):
  base,ident,target,meta_path,*_=paths(source,project=project,image_id_value=image_id_value); digest=sha256(source);parameter_hash=_hash(DEVELOPMENT)
  if target.exists() and meta_path.exists():
   old=json.loads(meta_path.read_text(encoding="utf-8"))
   if old.get("source_sha256")==digest and old.get("parameters_sha256")==parameter_hash:return old
  decode_started=time.perf_counter();image=decode(source);record(source,"raw_decode_ms",time.perf_counter()-decode_started,image_id_value=ident);processing_started=time.perf_counter();record(source,"developed_processing_ms",time.perf_counter()-processing_started,image_id_value=ident);write_started=time.perf_counter();atomic_save_png(image,target,ident);record(source,"developed_png_write_ms",time.perf_counter()-write_started,image_id_value=ident)
- meta={"image_id":ident,"source_relpath":source.relative_to(project.source_root).as_posix() if project else require_relative(source),"source_sha256":digest,"developed_full_relpath":str(target.relative_to(project.data_root)).replace("\\","/") if project else require_relative(target),"width":image.width,"height":image.height,"development":DEVELOPMENT,"parameters_sha256":parameter_hash}
+ meta=_development_meta(source,image,target,ident,digest,parameter_hash,project)
  atomic_json_write(meta_path,meta);return meta
+
+def _crop_prediction_image(source:Path, *, project=None, image_id_value=None, allow_unmaterialized=False):
+ """Load one full RGB image for Crop inference without forcing a disposable PNG write.
+
+ A valid developed cache is reused.  On a cache miss the source is decoded once
+ and can stay in memory for proposal-only inference; interactive review or
+ downstream landmark preparation will rebuild the disposable developed cache
+ lazily when it is actually needed.
+ """
+ base,ident,target,meta_path,*_=paths(source,project=project,image_id_value=image_id_value)
+ if not allow_unmaterialized:
+  meta=develop_full(source,project=project,image_id_value=ident);opened=time.perf_counter()
+  with Image.open(target) as cached:full=cached.convert("RGB")
+  return meta,full,time.perf_counter()-opened,True
+ digest=sha256(source);parameter_hash=_hash(DEVELOPMENT)
+ if target.exists() and meta_path.exists():
+  try:
+   old=json.loads(meta_path.read_text(encoding="utf-8"))
+  except (OSError,json.JSONDecodeError):
+   old={}
+  if old.get("source_sha256")==digest and old.get("parameters_sha256")==parameter_hash:
+   opened=time.perf_counter()
+   with Image.open(target) as cached:full=cached.convert("RGB")
+   return old,full,time.perf_counter()-opened,True
+ # Never leave a stale disposable full-frame PNG where the editor could later
+ # trust it simply because the file exists.
+ for stale in (target,meta_path):
+  try:
+   if stale.exists():stale.unlink()
+  except OSError:
+   pass
+ decode_started=time.perf_counter();full=decode(source).convert("RGB");record(source,"raw_decode_ms",time.perf_counter()-decode_started,image_id_value=ident)
+ meta=_development_meta(source,full,target,ident,digest,parameter_hash,project)
+ return meta,full,0.0,False
+
+def _materialize_developed(image,meta,target,meta_path,ident,source):
+ write_started=time.perf_counter();atomic_save_png(image,target,ident);record(source,"developed_png_write_ms",time.perf_counter()-write_started,image_id_value=ident);atomic_json_write(meta_path,meta)
 
 def _candidate_mask(rgb):
  h,w=rgb.shape[:2];scale=min(1.,LOCALIZATION["max_side"]/max(h,w));small=cv2.resize(rgb,(round(w*scale),round(h*scale)),interpolation=cv2.INTER_AREA)
@@ -69,15 +109,20 @@ def localize_fish(full:Image.Image):
 def prepare_crop_result(source:Path, *, project=None, force=False, image_id_value=None, materialize_learned=False):
  """Worker-safe crop/cache computation: no Tk, SQLite, provenance, or Project mutation."""
  project = project or active_project()
- if project:
-  ident=image_id_value or image_id(source);base=project.cache_root;developed=base/"developed"/f"{ident}.png";standard=base/"standardized"/f"{ident}.png";meta_path=base/"metadata"/f"{ident}.json";mask_path=base/"masks"/f"{ident}.png"
- else:
-  base,ident,developed,_,standard,meta_path,mask_path=paths(source)
- dev=develop_full(source,project=project,image_id_value=ident);digest=dev["source_sha256"];params={"development":dev["parameters_sha256"],"localization":LOCALIZATION};param_hash=_hash(params)
+ base,ident,developed,developed_meta_path,standard,meta_path,mask_path=paths(source,project=project,image_id_value=image_id_value)
+ # Bulk learned proposals are disposable calculations.  Do not spend several
+ # seconds per image materializing a full-resolution PNG that review may never
+ # open.  Existing valid developed caches are still reused.
+ allow_unmaterialized=bool(project is not None and not materialize_learned)
+ dev,full,open_s,developed_materialized=_crop_prediction_image(source,project=project,image_id_value=ident,allow_unmaterialized=allow_unmaterialized)
+ digest=dev["source_sha256"];params={"development":dev["parameters_sha256"],"localization":LOCALIZATION};param_hash=_hash(params)
  if standard.exists() and meta_path.exists() and not force:
   old=json.loads(meta_path.read_text(encoding="utf-8"));
   if old.get("source_sha256")==digest and old.get("parameters_sha256")==param_hash:return old
- started=time.perf_counter();open_started=time.perf_counter();full=Image.open(developed).convert("RGB");open_s=time.perf_counter()-open_started;prediction_started=time.perf_counter();predicted,model_version=crop_predict(full,image_id=ident,project=project);prediction_s=time.perf_counter()-prediction_started
+ started=time.perf_counter();prediction_started=time.perf_counter();predicted,model_version=crop_predict(full,image_id=ident,project=project);prediction_s=time.perf_counter()-prediction_started
+ if predicted is None and not developed_materialized:
+  # Rule-based localization remains on the established materialized path.
+  _materialize_developed(full,dev,developed,developed_meta_path,ident,source);developed_materialized=True
  if predicted is not None:
   # A learned result is a review proposal, not a materialized scientific
   # frame.  The review canvas uses developed_full + these bounds; only the
@@ -98,7 +143,7 @@ def prepare_crop_result(source:Path, *, project=None, force=False, image_id_valu
  else:
   write_started=time.perf_counter();master=full.crop((left,top,right,bottom));atomic_save_png(master,standard,ident);write_s=time.perf_counter()-write_started;output_width,output_height=master.width,master.height
  transform=Transform(full.width,full.height,angle if predicted is not None else 0.,full.width/2,full.height/2,left,top,output_width,output_height)
- result={"image_id":ident,"source_relpath":source.relative_to(project.source_root).as_posix() if project else require_relative(source),"source_sha256":digest,"developed_full_relpath":str(developed.relative_to(project.data_root)).replace('\\','/') if project else dev["developed_full_relpath"],"standardized_relpath":str(standard.relative_to(project.data_root)).replace('\\','/') if project else require_relative(standard),"mask_relpath":None if proposal_only else (str(mask_path.relative_to(project.data_root)).replace('\\','/') if project else require_relative(mask_path)),"proposal_only":proposal_only,"normalization_status":"FAIL" if failed else "REVIEW","normalization_algorithm":LOCALIZATION["version"],"crop_model_version":qc.get("crop_model_version","rule-based"),"parameters_sha256":param_hash,"crop_bounds":[left,top,right,bottom],"mirrored":False,"rotation_degrees":angle if predicted is not None else 0.,"interpolation":"none","transform":asdict(transform),"qc":qc,"timings":{"prepare_s":time.perf_counter()-started,"developed_open_s":open_s,"prediction_s":prediction_s,"mask_s":mask_s,"standardized_write_s":write_s}}
+ result={"image_id":ident,"source_relpath":source.relative_to(project.source_root).as_posix() if project else require_relative(source),"source_sha256":digest,"developed_full_relpath":str(developed.relative_to(project.data_root)).replace('\\','/') if project else dev["developed_full_relpath"],"standardized_relpath":str(standard.relative_to(project.data_root)).replace('\\','/') if project else require_relative(standard),"mask_relpath":None if proposal_only else (str(mask_path.relative_to(project.data_root)).replace('\\','/') if project else require_relative(mask_path)),"proposal_only":proposal_only,"developed_cache_materialized":bool(developed_materialized),"original_width":int(full.width),"original_height":int(full.height),"normalization_status":"FAIL" if failed else "REVIEW","normalization_algorithm":LOCALIZATION["version"],"crop_model_version":qc.get("crop_model_version","rule-based"),"parameters_sha256":param_hash,"crop_bounds":[left,top,right,bottom],"mirrored":False,"rotation_degrees":angle if predicted is not None else 0.,"interpolation":"none","transform":asdict(transform),"qc":qc,"timings":{"prepare_s":time.perf_counter()-started,"developed_open_s":open_s,"prediction_s":prediction_s,"mask_s":mask_s,"standardized_write_s":write_s}}
  atomic_json_write(meta_path,result);return result
 
 def commit_crop_result(project,result,*,provenance="automatic"):
