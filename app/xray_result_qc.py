@@ -11,6 +11,8 @@ from statistics import median
 from datetime import datetime, timezone
 import uuid
 
+from .xray_schema import spatial_series_order
+
 
 _COUNT_METHODS={"count","count_to","count_between","position"}
 _NUMERIC_METHODS=_COUNT_METHODS|{"distance","angle"}
@@ -161,7 +163,7 @@ def _series_linearity(points):
 def _gap_issues(row,structure,points):
     """Flag conspicuous local gaps only when the repeated points form a series."""
     if len(points)<5:return []
-    ordered=sorted(points,key=lambda p:(int(p.get("sort_order",0)),int(p.get("annotation_id",0))))
+    ordered=spatial_series_order(points)
     if _series_linearity(ordered)<0.78:return []
     gaps=[
         math.hypot(float(b["x"])-float(a["x"]),float(b["y"])-float(a["y"]))
