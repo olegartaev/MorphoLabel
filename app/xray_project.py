@@ -1127,6 +1127,10 @@ class XRayProject:
         known={str(item["id"]) for item in self.scheme.get("structures",())}
         if structure_id not in known:raise KeyError(f"Unknown structure in active scheme: {structure_id}")
         if visibility not in STRUCTURE_VISIBILITY_STATES:raise ValueError(f"Unsupported structure visibility: {visibility}")
+        if visibility in {"not_visible","absent"} and any(
+            row["structure_id"]==structure_id for row in self.effective_annotations(specimen_id,pass_no,source)
+        ):
+            raise ValueError("Clear existing markers for this structure before marking it Not visible or Absent.")
         run_id=self.ensure_annotation_run(specimen_id,pass_no,source);now=_now()
         with sqlite3.connect(self.db_path) as c:
             if visibility=="complete":
