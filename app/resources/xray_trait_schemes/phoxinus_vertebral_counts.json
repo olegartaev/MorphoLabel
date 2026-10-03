@@ -21,12 +21,23 @@
       "description": "Repeated vertebral centres used as the ordered vertebral series."
     },
     {
+      "id": "preanal_pterygiophore",
+      "name": "Pre-anal pterygiophores",
+      "annotation": "point",
+      "repeated": true,
+      "required": true,
+      "hotkey": "2",
+      "shape": "diamond",
+      "color": "#ef8a17",
+      "description": "Anal-fin proximal pterygiophores anterior to the first caudal vertebra."
+    },
+    {
       "id": "first_caudal",
       "name": "First caudal vertebra",
       "annotation": "point",
       "repeated": false,
       "required": true,
-      "hotkey": "2",
+      "hotkey": "3",
       "shape": "triangle",
       "color": "#20a447",
       "description": "Reference identifying the first caudal vertebra in the ordered series.",
@@ -34,17 +45,6 @@
       "reuse_from": [
         "vertebra"
       ]
-    },
-    {
-      "id": "preanal_pterygiophore",
-      "name": "Pre-anal pterygiophores",
-      "annotation": "point",
-      "repeated": true,
-      "required": true,
-      "hotkey": "3",
-      "shape": "diamond",
-      "color": "#ef8a17",
-      "description": "Anal-fin proximal pterygiophores anterior to the first caudal vertebra."
     },
     {
       "id": "last_predorsal",
