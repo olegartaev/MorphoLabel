@@ -1,5 +1,6 @@
 """Responsive main-workspace crop canvas backed by existing crop workflow."""
 import queue,threading,math
+from collections import OrderedDict
 from dataclasses import dataclass
 import tkinter as tk
 from tkinter import messagebox
@@ -9,6 +10,7 @@ from app.crop_model import CropModel
 from app.crop_quality import assess_crop
 from app.crop_training_batch import prepare_crop_training_images
 from app.crop_workflow import apply_reviewed_crop, reviewed_crop_change
+from app.ai_hardware import persisted_hardware_profile
 
 
 @dataclass(frozen=True)
@@ -16,9 +18,24 @@ class CropViewport:
  scale: float; offset_x: float; offset_y: float; canvas_width: int; canvas_height: int; rotation_reserve: int=48
 
 
+_MIB=1024*1024
+
+def crop_navigation_cache_budget():
+ try:profile=persisted_hardware_profile();ram=int(getattr(profile,"ram_bytes",0) or 0)
+ except Exception:ram=0
+ return min(1024*_MIB,max(128*_MIB,int(ram*.02))) if ram else 256*_MIB
+
+def _image_bytes(image):
+ if image is None:return 0
+ try:return int(image.width)*int(image.height)*max(1,len(image.getbands()))
+ except Exception:return 0
+
+def _row_source_key(row):
+ return (row.get("file_size"),row.get("mtime_ns"),row.get("source_sha256"))
+
 class CropCanvasController:
  def __init__(self,parent,context,changed):
-  self.parent,self.context,self.changed=parent,context,changed;self.canvas=tk.Canvas(parent,background='#202020',highlightthickness=0);self.canvas.pack(fill='both',expand=True);self.canvas.bind('<Configure>',self._on_configure);self.canvas.bind('<Button-1>',self.down);self.canvas.bind('<B1-Motion>',self.drag);self.canvas.bind('<ButtonRelease-1>',self.up);self.base=self.photo=self.model=None;self.requested_image_id=self.displayed_image_id=None;self.scale=1.;self.offset=(0,0);self.viewport=CropViewport(1.,0.,0.,1,1);self.mode=self.anchor=self.initial=None;self.loading=False;self._load_token=0;self.requested_generation=0;self.requested_request_epoch=0;self.on_image_ready=None;self._poll_job=self._rotation_render_job=None;self._loading_pulse_job=None;self._loading_pulse_step=0;self._closed=False;self._cancel=threading.Event();self._worker=None;self._display_base=None;self._display_key=None;self._raster_key=None;self.photo_creations=0;self.preview_rotate_source_sizes=[];self.canvas.bind('<Destroy>',self._destroy,add='+');self.load_current()
+  self.parent,self.context,self.changed=parent,context,changed;self.canvas=tk.Canvas(parent,background='#202020',highlightthickness=0);self.canvas.pack(fill='both',expand=True);self.canvas.bind('<Configure>',self._on_configure);self.canvas.bind('<Button-1>',self.down);self.canvas.bind('<B1-Motion>',self.drag);self.canvas.bind('<ButtonRelease-1>',self.up);self.base=self.photo=self.model=None;self.requested_image_id=self.displayed_image_id=None;self.scale=1.;self.offset=(0,0);self.viewport=CropViewport(1.,0.,0.,1,1);self.mode=self.anchor=self.initial=None;self.loading=False;self._load_token=0;self.requested_generation=0;self.requested_request_epoch=0;self.on_image_ready=None;self._poll_job=self._rotation_render_job=None;self._loading_pulse_job=None;self._loading_pulse_step=0;self._closed=False;self._cancel=threading.Event();self._worker=None;self._display_base=None;self._display_source=None;self._display_key=None;self._raster_key=None;self._current_cache_entry=None;self._image_cache=OrderedDict();self._image_cache_bytes=0;self._image_cache_budget=crop_navigation_cache_budget();self._cache_lock=threading.Lock();self._prefetch_thread=None;self.photo_creations=0;self.preview_rotate_source_sizes=[];self.canvas.bind('<Destroy>',self._destroy,add='+');self.load_current()
  def _destroy(self,event):
   if event.widget is self.canvas:self._closed=True;self._cancel.set();self._load_token+=1
   if event.widget is self.canvas:
@@ -28,6 +45,59 @@ class CropCanvasController:
      except tk.TclError:pass
  def ready_for(self,image_id):
   return bool(image_id and self.requested_image_id==self.displayed_image_id==((self.context.current() or {}).get('image_id'))==image_id and self.base and self.model and not self.loading)
+ def _cache_get(self,row):
+  image_id=str(row.get("image_id") or "");source_key=_row_source_key(row)
+  if not image_id:return None
+  with self._cache_lock:
+   entry=self._image_cache.get(image_id)
+   if entry is None:return None
+   if entry.get("source_key")!=source_key:
+    self._image_cache_bytes-=int(entry.get("bytes") or 0);self._image_cache.pop(image_id,None);return None
+   self._image_cache.move_to_end(image_id);return entry
+ def _cache_put(self,row,base,proxy):
+  image_id=str(row.get("image_id") or "")
+  if not image_id:return None
+  size=_image_bytes(base)+_image_bytes(proxy);entry={"base":base,"proxy":proxy,"source_key":_row_source_key(row),"bytes":size,"display":None,"display_dimensions":None}
+  with self._cache_lock:
+   old=self._image_cache.pop(image_id,None)
+   if old:self._image_cache_bytes-=int(old.get("bytes") or 0)
+   self._image_cache[image_id]=entry;self._image_cache_bytes+=size
+   while self._image_cache_bytes>self._image_cache_budget and len(self._image_cache)>1:
+    old_id,old_entry=self._image_cache.popitem(last=False)
+    if old_id==image_id:
+     self._image_cache[old_id]=old_entry;break
+    self._image_cache_bytes-=int(old_entry.get("bytes") or 0)
+  return entry
+ def _crop_state(self,project,image_id,base):
+  active=project.get_ui_state("crop_active_batch",{});record=project.crop_record(image_id) or {};proposal=(active.get("proposals",{}) or {}).get(image_id)
+  return record.get("crop_json") or proposal or [0,0,base.width,base.height],float(record.get("rotation_degrees") or 0)
+ def _activate_loaded(self,row,entry,bounds,angle,token):
+  image_id=str(row["image_id"])
+  if self._closed or token!=self._load_token or image_id!=self.requested_image_id or image_id!=((self.context.current() or {}).get("image_id")):return False
+  self.loading=False;self._stop_loading_pulse();self.canvas.delete('crop_loading_status');self.base=entry["base"];self._display_source=entry.get("proxy");self._current_cache_entry=entry;self.displayed_image_id=image_id;self.model=CropModel(self.base.width,self.base.height,*bounds,angle).clamp();self._display_base=None;self._display_key=None;self._raster_key=None;self.render()
+  callback=self.on_image_ready
+  if callback and self.ready_for(image_id) and token==self.requested_generation:
+   self.canvas.after_idle(lambda: callback(image_id,token,getattr(self,'requested_request_epoch',0)) if token==self.requested_generation and self.ready_for(image_id) else None)
+  self.canvas.after_idle(self._prefetch_neighbors)
+  return True
+ def _prefetch_neighbors(self):
+  if self._closed or self._prefetch_thread and self._prefetch_thread.is_alive():return
+  project=self.context.project;rows=self.context.rows;selected=int(self.context.selected)
+  snapshots=[]
+  for index in (selected+1,selected+2,selected-1):
+   if 0<=index<len(rows):
+    row=dict(rows[index])
+    if row.get("excluded") or self._cache_get(row) is not None:continue
+    target=project.cache_root/"developed"/f"{row.get('image_id')}.png"
+    if target.is_file():snapshots.append(row)
+  if not snapshots:return
+  def prefetch():
+   for row in snapshots:
+    if self._closed:return
+    if self._cache_get(row) is not None:continue
+    try:base,proxy=load_project_developed(project,row["image_id"]);self._cache_put(row,base,proxy)
+    except Exception:continue
+  self._prefetch_thread=threading.Thread(target=prefetch,daemon=True,name="crop-navigation-prefetch");self._prefetch_thread.start()
  def _start_loading_pulse(self,text):
   self._loading_pulse_step=0
   def tick():
@@ -46,28 +116,33 @@ class CropCanvasController:
   if self._closed:return
   row=self.context.current()
   self._load_token+=1;token=self._load_token;self.requested_generation=token
+  if self._poll_job is not None:
+   try:self.canvas.after_cancel(self._poll_job)
+   except tk.TclError:pass
+   self._poll_job=None
   if request_epoch is not None:self.requested_request_epoch=request_epoch
-  self.requested_image_id=(row or {}).get('image_id');self.displayed_image_id=None;self.base=self.model=self.photo=self._display_base=None;self._display_key=self._raster_key=None;self.mode=self.anchor=self.initial=None
+  self.requested_image_id=(row or {}).get('image_id');self.displayed_image_id=None;self.base=self.model=self.photo=self._display_base=None;self._display_source=None;self._current_cache_entry=None;self._display_key=self._raster_key=None;self.mode=self.anchor=self.initial=None
   if not row:return
-  self.loading=True;project=self.context.project;row=dict(row);image_id=row['image_id'];self.canvas.delete('crop_loading_status');self.canvas.create_text(16,16,anchor='nw',fill='white',text='Preparing image for crop',tags='crop_loading_status');self._start_loading_pulse('Preparing image for crop');events=queue.Queue()
+  project=self.context.project;row=dict(row);image_id=row['image_id'];cached=self._cache_get(row)
+  if cached is not None:
+   bounds,angle=self._crop_state(project,image_id,cached["base"]);self._activate_loaded(row,cached,bounds,angle,token);return
+  self.loading=True;self.canvas.delete('crop_loading_status');self.canvas.create_text(16,16,anchor='nw',fill='white',text='Preparing image for crop',tags='crop_loading_status');self._start_loading_pulse('Preparing image for crop');events=queue.Queue()
   def worker():
    try:
-    active=project.get_ui_state("crop_active_batch",{});prepared=set(active.get("prepared_ids",()))
-    if image_id not in prepared: prepare_crop_training_images(project,[row])
-    base,_=load_project_developed(project,image_id);record=project.crop_record(image_id) or {};proposal=(active.get('proposals',{}) or {}).get(image_id);events.put(('ok',base,record.get('crop_json') or proposal or [0,0,base.width,base.height],float(record.get('rotation_degrees') or 0)))
+    active=project.get_ui_state("crop_active_batch",{});prepared=set(active.get("prepared_ids",()));record=project.crop_record(image_id) or {}
+    if image_id not in prepared and not record.get("crop_json"):
+     prepare_crop_training_images(project,[row]);record=project.crop_record(image_id) or record
+    base,proxy=load_project_developed(project,image_id);proposal=(active.get('proposals',{}) or {}).get(image_id);events.put(('ok',base,proxy,record.get('crop_json') or proposal or [0,0,base.width,base.height],float(record.get('rotation_degrees') or 0)))
    except Exception as exc:events.put(('error',exc))
   self._worker=threading.Thread(target=worker,daemon=True,name='production-main-crop-load');self._worker.start()
   def poll():
    try:kind,*data=events.get_nowait()
-   except queue.Empty:self._poll_job=self.canvas.after(80,poll);return
+   except queue.Empty:self._poll_job=self.canvas.after(20,poll);return
+   self._poll_job=None
    if self._closed or token != self._load_token or image_id!=self.requested_image_id or image_id!=((self.context.current() or {}).get('image_id')):return
-   self.loading=False;self._stop_loading_pulse()
-   self.canvas.delete('crop_loading_status')
-   if kind=='error':self.canvas.delete('all');self.canvas.create_text(16,16,anchor='nw',fill='white',text=f'Crop preparation failed: {data[0]}',tags='crop_loading_status');return
-   self.base=data[0];self.displayed_image_id=image_id;self.model=CropModel(self.base.width,self.base.height,*data[1],data[2]).clamp();self._raster_key=None;self.render()
-   callback=self.on_image_ready
-   if callback and self.ready_for(image_id) and token==self.requested_generation:
-    self.canvas.after_idle(lambda: callback(image_id,token,getattr(self,'requested_request_epoch',0)) if token==self.requested_generation and self.ready_for(image_id) else None)
+   if kind=='error':
+    self.loading=False;self._stop_loading_pulse();self.canvas.delete('all');self.canvas.create_text(16,16,anchor='nw',fill='white',text=f'Crop preparation failed: {data[0]}',tags='crop_loading_status');return
+   entry=self._cache_put(row,data[0],data[1]);self._activate_loaded(row,entry,data[2],data[3],token)
   poll()
  def _on_configure(self,_event=None):
   # A drag anchor is expressed in screen pixels and cannot survive a new viewport.
@@ -81,8 +156,15 @@ class CropCanvasController:
   reserve=48;width=max(1,self.canvas.winfo_width());height=max(1,self.canvas.winfo_height());w=max(1,width-28);h=max(1,height-28-reserve);scale=min(w/self.base.width,h/self.base.height,1.0);offset=((width-self.base.width*scale)/2,reserve+(height-reserve-self.base.height*scale)/2);self.viewport=CropViewport(scale,offset[0],offset[1],width,height,reserve);self.scale,self.offset=scale,offset
  def _display_dimensions(self):return max(1,round(self.base.width*self.scale)),max(1,round(self.base.height*self.scale))
  def _ensure_display_base(self):
-  dimensions=self._display_dimensions();key=(id(self.base),dimensions)
-  if key!=self._display_key:self._display_base=self.base.resize(dimensions,Image.Resampling.BICUBIC);self._display_key=key;self._raster_key=None
+  dimensions=self._display_dimensions();key=(id(self.base),dimensions);entry=self._current_cache_entry
+  if key==self._display_key:return
+  if entry is not None and entry.get("display_dimensions")==dimensions and entry.get("display") is not None:
+   self._display_base=entry["display"]
+  else:
+   source=self._display_source if self._display_source is not None and self._display_source.width>=dimensions[0] and self._display_source.height>=dimensions[1] else self.base
+   self._display_base=source if source.size==dimensions else source.resize(dimensions,Image.Resampling.BICUBIC)
+   if entry is not None:entry["display"]=self._display_base;entry["display_dimensions"]=dimensions
+  self._display_key=key;self._raster_key=None
  def _render_raster(self,resample=Image.Resampling.BICUBIC):
   self._ensure_display_base();key=(self._display_key,round(self.model.angle,6),resample);items=self.canvas.find_withtag('image')
   if key!=self._raster_key or not items:
