@@ -29,7 +29,7 @@ from .xray_structure_display import (
 )
 from .xray_result_qc import (
     clear_result_review_queue, complete_result_review_item,
-    move_result_review_queue, result_review_queue,
+    move_result_review_queue, remove_result_review_image, result_review_queue,
 )
 
 
@@ -317,6 +317,16 @@ class XRayStructureWorkspace:
         )
         self.check_results_button.pack(side="left",padx=(2,4))
         self.tip.bind(self.check_results_button,"Rank suspicious calculated results worst first and start a navigable manual review queue.")
+        self.exclude_xray_button=ttk.Button(
+            tools,text="Exclude X-ray",image=self._icon(tools,"exclude"),compound="left",
+            style="P.TButton",command=self.exclude_current_xray,
+        )
+        self.exclude_xray_button.pack(side="left",padx=(2,4))
+        self.tip.bind(
+            self.exclude_xray_button,
+            "Exclude the whole current X-ray when image quality or positioning makes it unsuitable. "
+            "Existing crops, annotations and history are kept; restore it later in Crops if needed.",
+        )
         self.predict_current_button=ttk.Button(
             tools,text="Predict current",image=self._xray_icon(tools,"xray_structures"),compound="left",
             style="P.TButton",command=self.predict_current_structure,
@@ -610,6 +620,7 @@ class XRayStructureWorkspace:
         labels={"verified":"Verified","draft":"Draft","unstarted":"Not started"}
         for key,label in self.summary_labels.items():label.configure(text=f"{labels[key]}: {summary[key]}")
         state="normal" if self.selected_specimen_id else "disabled";self.apply_button.configure(state=state)
+        self.exclude_xray_button.configure(state=state)
         model=self.project.active_structure_model()
         can_predict=_current_prediction_allowed(self.project,self.selected_specimen_id,model,self.pass_no.get())
         self.predict_current_button.configure(state="normal" if can_predict else "disabled")
@@ -1202,6 +1213,50 @@ class XRayStructureWorkspace:
         state={"pass_no":1,"ids":ids,"position":0}
         self.project.set_ui_state("xray_structure_active_batch",state)
         self._load_specimen(ids[0]);self._refresh_workflow()
+        return True
+
+    def exclude_current_xray(self):
+        """Exclude one unsuitable source X-ray without deleting its scientific history."""
+        if not self.selected_specimen_id:return False
+        specimen=self.project.specimen(self.selected_specimen_id);image_id=str(specimen["image_id"])
+        image=self.project.source_image(image_id);path=Path(str(image.get("relative_path") or ""))
+        active=[row for row in self.project.specimens(image_id) if not row.get("excluded")]
+        active_ids={str(row["specimen_id"]) for row in active}
+        repeat=self.project.structure_repeatability()
+        repeat_affected=bool(
+            repeat and str(repeat.get("status") or "")=="in_progress"
+            and any(str(specimen_id) in active_ids for specimen_id in repeat.get("ids") or ())
+        )
+        message=(
+            f"Exclude this X-ray from the active X-ray workflow?\n\n{path.name or image_id}\n"
+            f"Specimen crops on this X-ray: {len(active)}\n\n"
+            "It will be skipped in Structures, Structure AI training and trait export. "
+            "Existing crops, annotations and history are kept. You can restore the X-ray in Crops."
+        )
+        if repeat_affected:
+            message+=(
+                "\n\nThis X-ray is in the current Human repeatability sample. "
+                "That repeatability run will be retired but kept in history; start a new sample afterward."
+            )
+        if not messagebox.askyesno("Exclude X-ray",message,parent=self.root,default="no"):return False
+
+        current_pass=int(self.pass_no.get())
+        before=[row["specimen_id"] for row in self.project.structure_specimens(current_pass)]
+        current=str(self.selected_specimen_id);index=before.index(current) if current in before else 0
+        self.project.set_source_excluded(image_id,True)
+        remove_result_review_image(self.project,image_id)
+        if repeat_affected:
+            self.project.retire_structure_repeatability(repeat["run_id"])
+            self.pass_no.set(1);self.specimen_list.pass_no=1
+            current_pass=1
+        remaining=[row["specimen_id"] for row in self.project.structure_specimens(current_pass)]
+        remaining_set=set(remaining)
+        ordered=before[index+1:]+list(reversed(before[:index]))
+        target=next((specimen_id for specimen_id in ordered if specimen_id in remaining_set),None)
+        if target is None and remaining:target=remaining[0]
+        self.selected_specimen_id=""
+        self.preferred_image_id=self.project.specimen(target)["image_id"] if target else ""
+        self.refresh()
         return True
 
     def predict_current_structure(self):
