@@ -1,0 +1,22 @@
+READ-ONLY RUNTIME AND SOURCE STATE
+Local repository: D:\SIMM_GITHUB_CLEAN
+Launcher: START_APP.cmd -> RUN_CANONICAL.cmd shell -> tools/source_launcher.py
+Local branch: feature/xray-traits-foundation
+Local HEAD: 84dc2709fb5af49616dac4cd1b1d3ce5d9416769
+GitHub main HEAD (read-only ls-remote): 937f30b43bc3c004eb2746366aea5dbf0c077a0f
+Local source working-tree changes: none in the seven listed source/test files; unrelated pre-existing untracked git_lock_diagnostic.txt was preserved.
+
+AI runtime discovery (code order): environment MORPHOLABEL_AI_RUNTIME absent; project config has no runtime path; SIMM_AI_RUNTIME absent; LocalAppData active component selects 1.0.0-dev6; model metadata has no runtime_python; repo ai_runtime/Scripts/python.exe absent.
+Selected runtime: C:\Users\artae\AppData\Local\MorphoLabel\components\ai\1.0.0-dev6\python.exe
+Runtime probe: torch 2.1.0+cu121; torchvision 0.16.0+cu121; cuda_available=true; runner info backend=resnet18_heatmap_v1.
+
+Current local-source SHA256 values:
+app/xray_structure_ai.py SHA256=27ADCBE8BDAF4E3E0A905A9581E8771215EE31A91B3DCCAAC9696DDD4F622ADE
+ai_runtime/xray_structure_runner.py SHA256=D6912B3A27BD6251815C43D3DBC189C5057008FFD0EAC14B697AFD18D18A4B0D
+app/xray_project.py SHA256=41D79D851F1B7DE8659C36569BFCF468CBD7188BF7D4B226CE0C0D804B275252
+app/xray_schema.py SHA256=ABBAD2175BDDCB006C42F5A3393D2310F9EFB5FA133DB12364C16B4205C49F63
+app/xray_structures_ui.py SHA256=49CE937D65C0D3EB988787292B6304A0E21868B7DC4DAF7E50BE27EB1AC31A89
+app/modules/xray_counts.py SHA256=C91FD33A12F0DC763F13814C98C8ACAB95F556CB25C241D430CDBD3395ECF627
+tests/test_xray_structure_ai.py SHA256=472BBEF7EDD63518F8FA96B115EF8A003B909F91A67169A90967DBC2568BCD50
+
+No source-code diff was present in these paths; no relevant_local_diff.patch was created.

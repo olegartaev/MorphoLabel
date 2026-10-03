@@ -1,0 +1,32 @@
+MorphoLabel Structure AI v003 — diagnostic summary
+
+Repository state
+- Local repo: D:\SIMM_GITHUB_CLEAN; launch chain: START_APP.cmd -> RUN_CANONICAL.cmd shell -> tools/source_launcher.py.
+- Local branch/HEAD: feature/xray-traits-foundation / 84dc2709fb5af49616dac4cd1b1d3ce5d9416769.
+- GitHub main HEAD: 937f30b43bc3c004eb2746366aea5dbf0c077a0f (read-only comparison).
+- Local status retained: unrelated untracked git_lock_diagnostic.txt; the worktree used for this snapshot is separate.
+
+Model and dataset
+- Project root: D:\xray-test\4; SQLite: D:\xray-test\4\xray_project.sqlite3.
+- Model: xray_structure_model_v003, backend resnet18_heatmap_v1, 50 train / 10 validation specimens; 26 / 6 source plates; v001 -> v002 -> v003 lineage. Model/registry macro F1=0.20469962085891; validation loss=28.60089874267578.
+- Validation membership has no image_id overlap with training. Active schema/model structure digest: 0e670d497af9334a1f8005842d184ec9625fa9bfdf7ca5c4e176e36f9cc0a40a.
+- Database was accessed only via SQLite URI mode=ro. SHA256 before and after: 08a829c8727ebb13cc6ef0627db4357923150e061d5fa43c6fbd84d05b65c3dc (unchanged).
+- Recomputed hash from current verified annotations plus v003 membership does not equal the model's stored dataset_hash. Both values are recorded; no cause is inferred.
+
+Validation inference (production preprocessing and local xray_structure_runner helpers; tolerance=0.020 normalized crop coordinates)
+- Combined: GT=443, predicted=1171, TP=267, FP=904, FN=176; FP/specimen=90.4; exact all-structure count accuracy=0.0.
+- preanal_pterygiophore: GT=57, predicted=868, TP=1, FP=867, FN=56; F1=0.00216; FP/specimen=86.7; exact-count=0.0.
+- vertebra: GT=366, predicted=284, TP=266, FP=18, FN=100; F1=0.81846; FP/specimen=1.8; exact-count=0.1.
+- first_caudal and last_predorsal each have F1=0 on this validation pass.
+- Threshold sweep shows preanal_pterygiophore has 490 predictions / 490 FP at 0.18 and zero predictions at 0.24; this sweep does not yield a threshold with useful recall. The surplus is concentrated in this structure output. No training or model settings were changed.
+
+Dataset distribution
+- Train point totals: vertebra 1843; preanal_pterygiophore 269; first_caudal 49; last_predorsal 48.
+- Validation totals: 366; 57; 10; 10 respectively. Vertebra markers are strongly more numerous than the other classes.
+- Validation repeated-marker ranges (min/median/max per specimen): vertebra 35/36.5/38; preanal_pterygiophore 4/6/7.
+
+Core architecture facts
+- Current model independently decodes per-structure heatmap peaks. Ordered sequence, spatial region constraints, topology/graph, expected spacing, learned count, and hard-negative mining are absent from the model training/inference path. Schema-level reference roles/trait calculations exist, but inference does not enforce cross-structure relations.
+- This reports the current dataset and code only; no species-specific change is proposed.
+
+Snapshot files contain no X-ray images, model weights, or database. Temporary normalized PNGs were removed.

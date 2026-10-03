@@ -1,0 +1,241 @@
+{
+  "dataset_hash_current_verified_membership": "0eb8391b0973896bfde080e62c6b00e37a1415878142089cf3283004e653becc",
+  "dataset_hash_matches_recorded": false,
+  "matching_tolerance_normalized_crop_coordinates": 0.02,
+  "overall": {
+    "exact_count_accuracy": 0.0,
+    "f1": 0.3308550185873606,
+    "fn": 176,
+    "fp": 904,
+    "fp_confidence": {
+      "max": 0.5071049332618713,
+      "median": 0.1808989718556404,
+      "min": 0.17381742596626282,
+      "p10": 0.17537749111652373,
+      "p90": 0.19522326588630676
+    },
+    "gt_count": 443,
+    "matched_localization_error": {
+      "max": 0.01999444290462528,
+      "median": 0.0052259350620025204,
+      "min": 0.000165717395737848,
+      "p10": 0.0020251801240280826,
+      "p90": 0.01043309739878449
+    },
+    "mean_absolute_count_error": 89.4,
+    "mean_fp_per_specimen": 90.4,
+    "median_absolute_count_error": 89.5,
+    "per_structure": {
+      "first_caudal": {
+        "exact_count_accuracy": 1.0,
+        "f1": 0.0,
+        "fn": 10,
+        "fp": 10,
+        "fp_confidence": {
+          "max": 0.24751143157482147,
+          "median": 0.23370888084173203,
+          "min": 0.22471891343593597,
+          "p10": 0.2259551167488098,
+          "p90": 0.24542820006608962
+        },
+        "gt_count": 10,
+        "matched_localization_error": {
+          "max": null,
+          "median": null,
+          "min": null,
+          "p10": null,
+          "p90": null
+        },
+        "mean_absolute_count_error": 0.0,
+        "mean_fp_per_specimen": 1.0,
+        "median_absolute_count_error": 0.0,
+        "precision": 0.0,
+        "predicted_count": 10,
+        "recall": 0.0,
+        "specimen_count": 10,
+        "tp": 0,
+        "tp_confidence": {
+          "max": null,
+          "median": null,
+          "min": null,
+          "p10": null,
+          "p90": null
+        }
+      },
+      "last_predorsal": {
+        "exact_count_accuracy": 0.9,
+        "f1": 0.0,
+        "fn": 10,
+        "fp": 9,
+        "fp_confidence": {
+          "max": 0.2365877330303192,
+          "median": 0.22616420686244965,
+          "min": 0.22032512724399567,
+          "p10": 0.22248500883579253,
+          "p90": 0.23184664845466613
+        },
+        "gt_count": 10,
+        "matched_localization_error": {
+          "max": null,
+          "median": null,
+          "min": null,
+          "p10": null,
+          "p90": null
+        },
+        "mean_absolute_count_error": 0.1,
+        "mean_fp_per_specimen": 0.9,
+        "median_absolute_count_error": 0.0,
+        "precision": 0.0,
+        "predicted_count": 9,
+        "recall": 0.0,
+        "specimen_count": 10,
+        "tp": 0,
+        "tp_confidence": {
+          "max": null,
+          "median": null,
+          "min": null,
+          "p10": null,
+          "p90": null
+        }
+      },
+      "preanal_pterygiophore": {
+        "exact_count_accuracy": 0.0,
+        "f1": 0.0021621621621621626,
+        "fn": 56,
+        "fp": 867,
+        "fp_confidence": {
+          "max": 0.23287393152713776,
+          "median": 0.1806115061044693,
+          "min": 0.17381742596626282,
+          "p10": 0.17533593475818635,
+          "p90": 0.19085464179515838
+        },
+        "gt_count": 57,
+        "matched_localization_error": {
+          "max": 0.01699228108303035,
+          "median": 0.01699228108303035,
+          "min": 0.01699228108303035,
+          "p10": 0.01699228108303035,
+          "p90": 0.01699228108303035
+        },
+        "mean_absolute_count_error": 81.1,
+        "mean_fp_per_specimen": 86.7,
+        "median_absolute_count_error": 83.0,
+        "precision": 0.001152073732718894,
+        "predicted_count": 868,
+        "recall": 0.017543859649122806,
+        "specimen_count": 10,
+        "tp": 1,
+        "tp_confidence": {
+          "max": 0.17605024576187134,
+          "median": 0.17605024576187134,
+          "min": 0.17605024576187134,
+          "p10": 0.17605024576187134,
+          "p90": 0.17605024576187134
+        }
+      },
+      "vertebra": {
+        "exact_count_accuracy": 0.1,
+        "f1": 0.8184615384615386,
+        "fn": 100,
+        "fp": 18,
+        "fp_confidence": {
+          "max": 0.5071049332618713,
+          "median": 0.4576614946126938,
+          "min": 0.30241474509239197,
+          "p10": 0.33114989697933195,
+          "p90": 0.5011980950832366
+        },
+        "gt_count": 366,
+        "matched_localization_error": {
+          "max": 0.01999444290462528,
+          "median": 0.005204633108014263,
+          "min": 0.000165717395737848,
+          "p10": 0.0020189851888580976,
+          "p90": 0.010349047748601355
+        },
+        "mean_absolute_count_error": 8.2,
+        "mean_fp_per_specimen": 1.8,
+        "median_absolute_count_error": 8.5,
+        "precision": 0.9366197183098591,
+        "predicted_count": 284,
+        "recall": 0.726775956284153,
+        "specimen_count": 10,
+        "tp": 266,
+        "tp_confidence": {
+          "max": 0.5131948590278625,
+          "median": 0.48395316302776337,
+          "min": 0.3006717264652252,
+          "p10": 0.43639884889125824,
+          "p90": 0.5018755197525024
+        }
+      }
+    },
+    "precision": 0.22801024765157984,
+    "predicted_count": 1171,
+    "recall": 0.6027088036117382,
+    "specimen_count": 10,
+    "tp": 267,
+    "tp_confidence": {
+      "max": 0.5131948590278625,
+      "median": 0.4837612211704254,
+      "min": 0.17605024576187134,
+      "p10": 0.4348626732826233,
+      "p90": 0.5018662333488464
+    }
+  },
+  "recorded_dataset_hash": "54d7e0dca8e18680b29b09f933e51644aac22c751985998e9927dfd3045dd7df",
+  "specimen_count": 10,
+  "validation_membership": [
+    {
+      "image_id": "99997c8f-d3a7-5052-9898-1300f28f6564",
+      "specimen_id": "0e7693c1-73cf-5af6-aabf-c7bceeebe198",
+      "split": "val"
+    },
+    {
+      "image_id": "68b6c25c-3c3c-519c-a460-c6d2cd6d7b79",
+      "specimen_id": "1a08d9e0-739a-5651-9344-1f98e5b78bc4",
+      "split": "val"
+    },
+    {
+      "image_id": "6d0b9df0-8533-5557-ba05-2376574bcb60",
+      "specimen_id": "1ea5ed83-5284-56bc-bbbb-c4ce78abdb02",
+      "split": "val"
+    },
+    {
+      "image_id": "cf5dd49f-2d98-5fa3-b1af-cda6f3d3a359",
+      "specimen_id": "8a4aaf19-e4d3-502f-8c29-9c779398506b",
+      "split": "val"
+    },
+    {
+      "image_id": "6d0b9df0-8533-5557-ba05-2376574bcb60",
+      "specimen_id": "8d44ba50-1e5e-52b0-8ed6-1a41228c3b64",
+      "split": "val"
+    },
+    {
+      "image_id": "99997c8f-d3a7-5052-9898-1300f28f6564",
+      "specimen_id": "9432d323-82e1-48ed-8984-d97bf6021e97",
+      "split": "val"
+    },
+    {
+      "image_id": "3d356c63-70eb-5fb6-a611-7d4de95f9338",
+      "specimen_id": "986ff99a-e4ae-55f2-8e30-42dcb17dd337",
+      "split": "val"
+    },
+    {
+      "image_id": "d2fe679a-f84c-5fcc-89d6-6ab3fceb5477",
+      "specimen_id": "cdeb65cd-960d-461b-b36a-1437f06bb1cd",
+      "split": "val"
+    },
+    {
+      "image_id": "3d356c63-70eb-5fb6-a611-7d4de95f9338",
+      "specimen_id": "d79eef10-69a2-581b-9900-1c4be57dc67b",
+      "split": "val"
+    },
+    {
+      "image_id": "d2fe679a-f84c-5fcc-89d6-6ab3fceb5477",
+      "specimen_id": "e6f981cb-360b-4b12-934c-57f7ab81785d",
+      "split": "val"
+    }
+  ]
+}

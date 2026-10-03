@@ -1,0 +1,622 @@
+{
+  "active_schema": {
+    "model_schema_digest": "0e670d497af9334a1f8005842d184ec9625fa9bfdf7ca5c4e176e36f9cc0a40a",
+    "orientation_policy": {
+      "bottom": "down",
+      "head": "left"
+    },
+    "schema_digest_for_structure_model": "0e670d497af9334a1f8005842d184ec9625fa9bfdf7ca5c4e176e36f9cc0a40a",
+    "schema_hash": "83312af009269e2bfa3aa7a15b2b0b2c8760c6fca0e3b64bde9539a964052902",
+    "schema_version_id": "45f6a294-ee2b-46e8-9866-cc790672b5e9"
+  },
+  "active_schema_hash": "83312af009269e2bfa3aa7a15b2b0b2c8760c6fca0e3b64bde9539a964052902",
+  "active_schema_version_id": "45f6a294-ee2b-46e8-9866-cc790672b5e9",
+  "dataset_hash_full_reproduction": "0eb8391b0973896bfde080e62c6b00e37a1415878142089cf3283004e653becc",
+  "dataset_hash_full_reproduction_matches_model": false,
+  "dataset_hash_note": "Current verified labels and v003 membership serialized using the training code hash contract do not reproduce the recorded dataset_hash; no cause is inferred.",
+  "dataset_hash_recomputed_from_val_only": null,
+  "db_path": "D:/xray-test/4/xray_project.sqlite3",
+  "db_sha256_after": "08a829c8727ebb13cc6ef0627db4357923150e061d5fa43c6fbd84d05b65c3dc",
+  "db_sha256_before": "08a829c8727ebb13cc6ef0627db4357923150e061d5fa43c6fbd84d05b65c3dc",
+  "db_sha256_unchanged": true,
+  "lineage": [
+    {
+      "backend": "resnet18_heatmap_v1",
+      "created_at": "2026-10-02T21:09:02+00:00",
+      "metrics": {
+        "backend": "resnet18_heatmap_v1",
+        "batch_size": 8,
+        "dataset_hash": "eac7cdabf50f4993c3ee87342a866fb0a47646c0b8847e0c0d1b149a7c4a0137",
+        "device": "cuda:0",
+        "epochs_completed": 17,
+        "initialization": "imagenet_resnet18",
+        "schema_digest": "0e670d497af9334a1f8005842d184ec9625fa9bfdf7ca5c4e176e36f9cc0a40a",
+        "structure/first_caudal/f1": 0.0,
+        "structure/first_caudal/precision": 0.0,
+        "structure/first_caudal/recall": 0.0,
+        "structure/last_predorsal/f1": 0.0,
+        "structure/last_predorsal/precision": 0.0,
+        "structure/last_predorsal/recall": 0.0,
+        "structure/macro_f1": 0.01142857142857143,
+        "structure/preanal_pterygiophore/f1": 0.0,
+        "structure/preanal_pterygiophore/precision": 0.0,
+        "structure/preanal_pterygiophore/recall": 0.0,
+        "structure/validation_loss": 94952.59375,
+        "structure/vertebra/f1": 0.04571428571428572,
+        "structure/vertebra/precision": 0.03319502074688797,
+        "structure/vertebra/recall": 0.07339449541284404,
+        "training_plates": 6,
+        "validation_plates": 2
+      },
+      "model_id": "xray_structure_model_v001",
+      "parent_model_id": null
+    },
+    {
+      "backend": "resnet18_heatmap_v1",
+      "created_at": "2026-10-03T12:42:07+00:00",
+      "metrics": {
+        "backend": "resnet18_heatmap_v1",
+        "batch_size": 8,
+        "dataset_hash": "56309b514336231b19c5f36c074da12ca111cd1dbad6d6298d92c723cb5ee3af",
+        "device": "cuda:0",
+        "epochs_completed": 60,
+        "initialization": "xray_structure_model_v001",
+        "schema_digest": "0e670d497af9334a1f8005842d184ec9625fa9bfdf7ca5c4e176e36f9cc0a40a",
+        "structure/first_caudal/evaluable_images": 6,
+        "structure/first_caudal/f1": 0.0,
+        "structure/first_caudal/precision": 0.0,
+        "structure/first_caudal/recall": 0.0,
+        "structure/last_predorsal/evaluable_images": 6,
+        "structure/last_predorsal/f1": 0.16666666666666666,
+        "structure/last_predorsal/precision": 0.16666666666666666,
+        "structure/last_predorsal/recall": 0.16666666666666666,
+        "structure/macro_evaluable_classes": 4,
+        "structure/macro_f1": 0.13749456757931333,
+        "structure/preanal_pterygiophore/evaluable_images": 6,
+        "structure/preanal_pterygiophore/f1": 0.0,
+        "structure/preanal_pterygiophore/precision": 0.0,
+        "structure/preanal_pterygiophore/recall": 0.0,
+        "structure/validation_loss": 169.2300567626953,
+        "structure/vertebra/evaluable_images": 6,
+        "structure/vertebra/f1": 0.3833116036505867,
+        "structure/vertebra/precision": 0.2692307692307692,
+        "structure/vertebra/recall": 0.665158371040724,
+        "training_plates": 13,
+        "validation_plates": 3
+      },
+      "model_id": "xray_structure_model_v002",
+      "parent_model_id": "xray_structure_model_v001"
+    },
+    {
+      "backend": "resnet18_heatmap_v1",
+      "created_at": "2026-10-03T14:46:56+00:00",
+      "metrics": {
+        "backend": "resnet18_heatmap_v1",
+        "batch_size": 8,
+        "dataset_hash": "54d7e0dca8e18680b29b09f933e51644aac22c751985998e9927dfd3045dd7df",
+        "device": "cuda:0",
+        "epochs_completed": 60,
+        "initialization": "xray_structure_model_v002",
+        "schema_digest": "0e670d497af9334a1f8005842d184ec9625fa9bfdf7ca5c4e176e36f9cc0a40a",
+        "structure/first_caudal/evaluable_images": 10,
+        "structure/first_caudal/f1": 0.0,
+        "structure/first_caudal/precision": 0.0,
+        "structure/first_caudal/recall": 0.0,
+        "structure/last_predorsal/evaluable_images": 10,
+        "structure/last_predorsal/f1": 0.0,
+        "structure/last_predorsal/precision": 0.0,
+        "structure/last_predorsal/recall": 0.0,
+        "structure/macro_evaluable_classes": 4,
+        "structure/macro_f1": 0.20469962085891,
+        "structure/preanal_pterygiophore/evaluable_images": 10,
+        "structure/preanal_pterygiophore/f1": 0.002157497303128371,
+        "structure/preanal_pterygiophore/precision": 0.0011494252873563218,
+        "structure/preanal_pterygiophore/recall": 0.017543859649122806,
+        "structure/validation_loss": 28.60089874267578,
+        "structure/vertebra/evaluable_images": 10,
+        "structure/vertebra/f1": 0.8166409861325116,
+        "structure/vertebra/precision": 0.9363957597173145,
+        "structure/vertebra/recall": 0.7240437158469946,
+        "training_plates": 26,
+        "validation_plates": 6
+      },
+      "model_id": "xray_structure_model_v003",
+      "parent_model_id": "xray_structure_model_v002"
+    }
+  ],
+  "membership": [
+    {
+      "image_id": "fc365eb5-cc2e-598e-b882-b838a25637b0",
+      "specimen_id": "01ec38f2-d48d-5bc3-a33e-c4d4aa36d4b4",
+      "split": "train"
+    },
+    {
+      "image_id": "1a0858a5-1b1f-5867-846a-75f28a8863f1",
+      "specimen_id": "0275dace-cff8-50dc-909d-2d2dcca86d59",
+      "split": "train"
+    },
+    {
+      "image_id": "fae8e0a1-fb20-5383-8488-29a15be56ecd",
+      "specimen_id": "086d940f-d280-59d8-a6ef-c7fdeb11567d",
+      "split": "train"
+    },
+    {
+      "image_id": "ae27df18-79bd-5809-8d37-abaa6ec66ee3",
+      "specimen_id": "0a309acb-1d42-55f4-911f-80fef4c4879c",
+      "split": "train"
+    },
+    {
+      "image_id": "a11f9f47-0e49-5c17-ab4b-6fe697f5d014",
+      "specimen_id": "0b6b07f9-ecbe-4cc1-8e12-aa30aa181de1",
+      "split": "train"
+    },
+    {
+      "image_id": "99997c8f-d3a7-5052-9898-1300f28f6564",
+      "specimen_id": "0e7693c1-73cf-5af6-aabf-c7bceeebe198",
+      "split": "val"
+    },
+    {
+      "image_id": "a11f9f47-0e49-5c17-ab4b-6fe697f5d014",
+      "specimen_id": "14ff27bf-e93f-4d83-a898-e5140cad25e2",
+      "split": "train"
+    },
+    {
+      "image_id": "e0d4c2e6-41f4-5192-b580-c0807cc3ab87",
+      "specimen_id": "19fcfc31-0cae-5f2b-992b-a449cbe17de3",
+      "split": "train"
+    },
+    {
+      "image_id": "68b6c25c-3c3c-519c-a460-c6d2cd6d7b79",
+      "specimen_id": "1a08d9e0-739a-5651-9344-1f98e5b78bc4",
+      "split": "val"
+    },
+    {
+      "image_id": "2134ed33-3170-53e9-9219-3383a3fd6e25",
+      "specimen_id": "1d43a2a5-0f4b-42d6-b9b6-546722aea4a7",
+      "split": "train"
+    },
+    {
+      "image_id": "ac7fa40d-2d74-5943-9c98-876241d56ad5",
+      "specimen_id": "1e84e0b2-0797-41e7-8018-dd6ee412747a",
+      "split": "train"
+    },
+    {
+      "image_id": "6d0b9df0-8533-5557-ba05-2376574bcb60",
+      "specimen_id": "1ea5ed83-5284-56bc-bbbb-c4ce78abdb02",
+      "split": "val"
+    },
+    {
+      "image_id": "44ff41d1-7a56-5d56-b42c-fe8761dc4796",
+      "specimen_id": "1ebb3975-4477-4ae1-8e22-a59d6e5e854c",
+      "split": "train"
+    },
+    {
+      "image_id": "c9be3387-460a-51b9-a89b-336ff90dff9d",
+      "specimen_id": "2bef9623-7002-589e-bd04-cf6e33c8bea9",
+      "split": "train"
+    },
+    {
+      "image_id": "609ef7c0-0b29-57d7-ad3a-fbd82dd387b5",
+      "specimen_id": "2c4fa251-b184-4751-b39b-fea3ed3f6093",
+      "split": "train"
+    },
+    {
+      "image_id": "6e836f5b-c70a-53b2-aa94-afb8da035826",
+      "specimen_id": "372b46e4-74f2-5489-a2b3-e7a57e7b8fca",
+      "split": "train"
+    },
+    {
+      "image_id": "ac7fa40d-2d74-5943-9c98-876241d56ad5",
+      "specimen_id": "3ae91523-5b3e-4fca-9d42-18b72b8e6965",
+      "split": "train"
+    },
+    {
+      "image_id": "2134ed33-3170-53e9-9219-3383a3fd6e25",
+      "specimen_id": "407e1279-d7d7-4920-b2a6-9d25f4b3bd79",
+      "split": "train"
+    },
+    {
+      "image_id": "c9be3387-460a-51b9-a89b-336ff90dff9d",
+      "specimen_id": "421d2c7a-1a8d-5a56-83d2-d60ac2692c40",
+      "split": "train"
+    },
+    {
+      "image_id": "e0d4c2e6-41f4-5192-b580-c0807cc3ab87",
+      "specimen_id": "4510bcbb-6be9-5ee4-8142-b415673960f0",
+      "split": "train"
+    },
+    {
+      "image_id": "9ff1e750-6d42-5b6e-a6c4-2f0a402fed41",
+      "specimen_id": "51187e92-36cc-5da5-ab9c-84c8d639d870",
+      "split": "train"
+    },
+    {
+      "image_id": "2134ed33-3170-53e9-9219-3383a3fd6e25",
+      "specimen_id": "54a48063-aa7d-4fc1-ac4f-d08729636d5e",
+      "split": "train"
+    },
+    {
+      "image_id": "e0d4c2e6-41f4-5192-b580-c0807cc3ab87",
+      "specimen_id": "57af1c5b-2ee5-5eec-959b-7275e8d807ec",
+      "split": "train"
+    },
+    {
+      "image_id": "44ff41d1-7a56-5d56-b42c-fe8761dc4796",
+      "specimen_id": "619a9c95-8e60-5109-bdda-9d914758aaf9",
+      "split": "train"
+    },
+    {
+      "image_id": "5e95a2a1-7540-59c4-9bab-c63be8f7287d",
+      "specimen_id": "646d1db7-7f6e-51a2-8777-037c6e485135",
+      "split": "train"
+    },
+    {
+      "image_id": "fc365eb5-cc2e-598e-b882-b838a25637b0",
+      "specimen_id": "6603ca3b-9e8e-5587-951a-b4a36bff105b",
+      "split": "train"
+    },
+    {
+      "image_id": "3bebcfa4-7053-5228-bb7d-292c3ba6282a",
+      "specimen_id": "665c819a-d4ee-5c60-8fcf-ffe7c8aed943",
+      "split": "train"
+    },
+    {
+      "image_id": "c3516db2-54dd-502c-8c49-d2a316813710",
+      "specimen_id": "66cb5b79-aed5-5c04-a2ee-fee8444e1257",
+      "split": "train"
+    },
+    {
+      "image_id": "ccfdd6a6-0145-537d-99b3-755794bab3bd",
+      "specimen_id": "6fef0d69-ee94-560a-8e5f-a4d250436b74",
+      "split": "train"
+    },
+    {
+      "image_id": "e0d4c2e6-41f4-5192-b580-c0807cc3ab87",
+      "specimen_id": "7a673b01-444f-5be0-b456-257baf8eb43a",
+      "split": "train"
+    },
+    {
+      "image_id": "5e95a2a1-7540-59c4-9bab-c63be8f7287d",
+      "specimen_id": "7ca4dea8-9b4d-4f22-94a2-e0a713938721",
+      "split": "train"
+    },
+    {
+      "image_id": "a11f9f47-0e49-5c17-ab4b-6fe697f5d014",
+      "specimen_id": "7fdf8a98-349c-4a69-b7a1-c6775fa793c5",
+      "split": "train"
+    },
+    {
+      "image_id": "8aee2f1c-9944-5723-8ca1-75e660e38d9c",
+      "specimen_id": "8a2fd551-9901-5d57-b83f-23142e3a4bb6",
+      "split": "train"
+    },
+    {
+      "image_id": "cf5dd49f-2d98-5fa3-b1af-cda6f3d3a359",
+      "specimen_id": "8a4aaf19-e4d3-502f-8c29-9c779398506b",
+      "split": "val"
+    },
+    {
+      "image_id": "6d0b9df0-8533-5557-ba05-2376574bcb60",
+      "specimen_id": "8d44ba50-1e5e-52b0-8ed6-1a41228c3b64",
+      "split": "val"
+    },
+    {
+      "image_id": "87ce6bf5-76ea-522f-a2a0-5f44deb3b8dd",
+      "specimen_id": "8f9b5809-e5f8-5575-bb8d-ffb5306cd850",
+      "split": "train"
+    },
+    {
+      "image_id": "99997c8f-d3a7-5052-9898-1300f28f6564",
+      "specimen_id": "9432d323-82e1-48ed-8984-d97bf6021e97",
+      "split": "val"
+    },
+    {
+      "image_id": "a02a7aaa-5207-5711-a358-42d80cade675",
+      "specimen_id": "97ab77f2-baf0-55ed-a108-f79f0332f974",
+      "split": "train"
+    },
+    {
+      "image_id": "3d356c63-70eb-5fb6-a611-7d4de95f9338",
+      "specimen_id": "986ff99a-e4ae-55f2-8e30-42dcb17dd337",
+      "split": "val"
+    },
+    {
+      "image_id": "c48f7b38-e5cc-542a-87aa-f5350b391644",
+      "specimen_id": "9967fac6-9d83-5954-9550-363f81ce0d14",
+      "split": "train"
+    },
+    {
+      "image_id": "2134ed33-3170-53e9-9219-3383a3fd6e25",
+      "specimen_id": "a234c9c4-a2ec-41b7-bb25-3c89bf38c87c",
+      "split": "train"
+    },
+    {
+      "image_id": "fae8e0a1-fb20-5383-8488-29a15be56ecd",
+      "specimen_id": "a6b2e50b-41a2-4e2e-8ded-4cef6c6a9265",
+      "split": "train"
+    },
+    {
+      "image_id": "2134ed33-3170-53e9-9219-3383a3fd6e25",
+      "specimen_id": "ab9f66a5-e40d-42a6-8a66-6ca03d063397",
+      "split": "train"
+    },
+    {
+      "image_id": "e0d4c2e6-41f4-5192-b580-c0807cc3ab87",
+      "specimen_id": "b72f1358-a5ba-54d5-8461-5a22b59bff65",
+      "split": "train"
+    },
+    {
+      "image_id": "ac7fa40d-2d74-5943-9c98-876241d56ad5",
+      "specimen_id": "bcfdc20b-979d-436b-a853-cd7b097a636e",
+      "split": "train"
+    },
+    {
+      "image_id": "5e95a2a1-7540-59c4-9bab-c63be8f7287d",
+      "specimen_id": "c58f68d2-dd3d-5132-a2ea-bb598c7537c5",
+      "split": "train"
+    },
+    {
+      "image_id": "2134ed33-3170-53e9-9219-3383a3fd6e25",
+      "specimen_id": "c5d0405a-7b58-4747-9fad-c402e900bb5d",
+      "split": "train"
+    },
+    {
+      "image_id": "ac7fa40d-2d74-5943-9c98-876241d56ad5",
+      "specimen_id": "cafe40b0-3029-4ace-ba7d-434c69d93dd9",
+      "split": "train"
+    },
+    {
+      "image_id": "a11f9f47-0e49-5c17-ab4b-6fe697f5d014",
+      "specimen_id": "cd298b82-b5ff-4754-a38b-d6ac61f9c1a0",
+      "split": "train"
+    },
+    {
+      "image_id": "d2fe679a-f84c-5fcc-89d6-6ab3fceb5477",
+      "specimen_id": "cdeb65cd-960d-461b-b36a-1437f06bb1cd",
+      "split": "val"
+    },
+    {
+      "image_id": "3d356c63-70eb-5fb6-a611-7d4de95f9338",
+      "specimen_id": "d79eef10-69a2-581b-9900-1c4be57dc67b",
+      "split": "val"
+    },
+    {
+      "image_id": "2b2023eb-bc40-53d9-9ac9-ee530734d95e",
+      "specimen_id": "dcd060d7-8f66-4885-8938-8e369c29757e",
+      "split": "train"
+    },
+    {
+      "image_id": "ae27df18-79bd-5809-8d37-abaa6ec66ee3",
+      "specimen_id": "de8024bc-8fec-5da5-aa16-d6368a6c13ff",
+      "split": "train"
+    },
+    {
+      "image_id": "d2fe679a-f84c-5fcc-89d6-6ab3fceb5477",
+      "specimen_id": "e6f981cb-360b-4b12-934c-57f7ab81785d",
+      "split": "val"
+    },
+    {
+      "image_id": "de01f05d-3b6a-5de9-b380-83dcba8a4044",
+      "specimen_id": "e8eb14d4-8f68-5ead-9b86-e52c708729f8",
+      "split": "train"
+    },
+    {
+      "image_id": "a11f9f47-0e49-5c17-ab4b-6fe697f5d014",
+      "specimen_id": "ec540998-bc9b-4af9-9767-671734d31147",
+      "split": "train"
+    },
+    {
+      "image_id": "0bf52476-7d21-54d3-9f0e-184d090d1e1c",
+      "specimen_id": "ed10ea3b-2424-53ae-a286-08927dcaede9",
+      "split": "train"
+    },
+    {
+      "image_id": "d6bc28b0-5fa1-5b35-92e3-7c97381aed70",
+      "specimen_id": "f20e62e4-872e-5556-bc95-56a843e234d3",
+      "split": "train"
+    },
+    {
+      "image_id": "d6bc28b0-5fa1-5b35-92e3-7c97381aed70",
+      "specimen_id": "f3dade74-d23f-54a4-a230-7e1d4a195ed2",
+      "split": "train"
+    },
+    {
+      "image_id": "53df8c74-0927-5986-87dd-3eb04e042ea7",
+      "specimen_id": "f5bea0b1-ce5c-59d0-b58c-b4380d1a5e2a",
+      "split": "train"
+    }
+  ],
+  "model": {
+    "backend": "resnet18_heatmap_v1",
+    "dataset_hash": "54d7e0dca8e18680b29b09f933e51644aac22c751985998e9927dfd3045dd7df",
+    "epochs_completed": 60,
+    "format_version": 1,
+    "input_size": [
+      768,
+      256
+    ],
+    "model_id": "xray_structure_model_v003",
+    "output_stride": 2,
+    "parent_model_id": "xray_structure_model_v002",
+    "preprocessing": {
+      "host_percentile_stretch": [
+        0.5,
+        99.5
+      ],
+      "letterbox": true,
+      "spatial_flips": false,
+      "training_photometric_augmentation": [
+        "contrast",
+        "brightness",
+        "gamma",
+        "intensity_inversion"
+      ]
+    },
+    "schema_digest": "0e670d497af9334a1f8005842d184ec9625fa9bfdf7ca5c4e176e36f9cc0a40a",
+    "structures": [
+      {
+        "id": "vertebra",
+        "name": "Vertebrae",
+        "repeated": true
+      },
+      {
+        "id": "first_caudal",
+        "name": "First caudal vertebra",
+        "repeated": false
+      },
+      {
+        "id": "preanal_pterygiophore",
+        "name": "Pre-anal pterygiophores",
+        "repeated": true
+      },
+      {
+        "id": "last_predorsal",
+        "name": "Last predorsal vertebra",
+        "repeated": false
+      }
+    ],
+    "thresholds": {
+      "first_caudal": 0.12,
+      "last_predorsal": 0.12,
+      "preanal_pterygiophore": 0.12,
+      "vertebra": 0.3
+    },
+    "training_plates": 26,
+    "training_specimens": 50,
+    "validation": {
+      "best_loss": 28.60089874267578,
+      "structure/first_caudal/evaluable_images": 10,
+      "structure/first_caudal/f1": 0.0,
+      "structure/first_caudal/precision": 0.0,
+      "structure/first_caudal/recall": 0.0,
+      "structure/last_predorsal/evaluable_images": 10,
+      "structure/last_predorsal/f1": 0.0,
+      "structure/last_predorsal/precision": 0.0,
+      "structure/last_predorsal/recall": 0.0,
+      "structure/macro_evaluable_classes": 4,
+      "structure/macro_f1": 0.20469962085891,
+      "structure/preanal_pterygiophore/evaluable_images": 10,
+      "structure/preanal_pterygiophore/f1": 0.002157497303128371,
+      "structure/preanal_pterygiophore/precision": 0.0011494252873563218,
+      "structure/preanal_pterygiophore/recall": 0.017543859649122806,
+      "structure/vertebra/evaluable_images": 10,
+      "structure/vertebra/f1": 0.8166409861325116,
+      "structure/vertebra/precision": 0.9363957597173145,
+      "structure/vertebra/recall": 0.7240437158469946
+    },
+    "validation_plates": 6,
+    "validation_specimens": 10
+  },
+  "orientation_policy": {
+    "bottom": "down",
+    "head": "left"
+  },
+  "project_root": "D:/xray-test/4",
+  "registry": {
+    "backend": "resnet18_heatmap_v1",
+    "created_at": "2026-10-03T14:46:56+00:00",
+    "metrics": {
+      "backend": "resnet18_heatmap_v1",
+      "batch_size": 8,
+      "dataset_hash": "54d7e0dca8e18680b29b09f933e51644aac22c751985998e9927dfd3045dd7df",
+      "device": "cuda:0",
+      "epochs_completed": 60,
+      "initialization": "xray_structure_model_v002",
+      "schema_digest": "0e670d497af9334a1f8005842d184ec9625fa9bfdf7ca5c4e176e36f9cc0a40a",
+      "structure/first_caudal/evaluable_images": 10,
+      "structure/first_caudal/f1": 0.0,
+      "structure/first_caudal/precision": 0.0,
+      "structure/first_caudal/recall": 0.0,
+      "structure/last_predorsal/evaluable_images": 10,
+      "structure/last_predorsal/f1": 0.0,
+      "structure/last_predorsal/precision": 0.0,
+      "structure/last_predorsal/recall": 0.0,
+      "structure/macro_evaluable_classes": 4,
+      "structure/macro_f1": 0.20469962085891,
+      "structure/preanal_pterygiophore/evaluable_images": 10,
+      "structure/preanal_pterygiophore/f1": 0.002157497303128371,
+      "structure/preanal_pterygiophore/precision": 0.0011494252873563218,
+      "structure/preanal_pterygiophore/recall": 0.017543859649122806,
+      "structure/validation_loss": 28.60089874267578,
+      "structure/vertebra/evaluable_images": 10,
+      "structure/vertebra/f1": 0.8166409861325116,
+      "structure/vertebra/precision": 0.9363957597173145,
+      "structure/vertebra/recall": 0.7240437158469946,
+      "training_plates": 26,
+      "validation_plates": 6
+    },
+    "model_id": "xray_structure_model_v003",
+    "parent_model_id": "xray_structure_model_v002",
+    "train_count": 50,
+    "validation_count": 10
+  },
+  "train_validation_source_plate_check": {
+    "leakage": false,
+    "overlap_image_ids": [],
+    "train_source_plate_count": 26,
+    "validation_source_plate_count": 6
+  },
+  "training_configuration": {
+    "architecture": "ResNet-18 encoder with four skip-concatenating decoder blocks and 1x1 per-structure heatmap head",
+    "augmentation": {
+      "brightness": {
+        "factor_range": [
+          0.88,
+          1.12
+        ],
+        "probability": 0.35
+      },
+      "contrast": {
+        "factor_range": [
+          0.78,
+          1.28
+        ],
+        "probability": 0.5
+      },
+      "gamma": {
+        "probability": 0.25,
+        "range": [
+          0.75,
+          1.35
+        ]
+      },
+      "intensity_inversion": {
+        "probability": 0.2
+      },
+      "spatial_flips": false
+    },
+    "batch_size": 8,
+    "calibration_grid": [
+      0.12,
+      0.18,
+      0.24,
+      0.3,
+      0.38,
+      0.48,
+      0.6
+    ],
+    "device": "cuda:0",
+    "early_stopping_patience_epochs": "max(10, epochs // 4) = 15 for 60 requested epochs",
+    "epochs_actually_completed": 60,
+    "epochs_requested": 60,
+    "gaussian_sigma_output_pixels": 2.0,
+    "initialization": "xray_structure_model_v002 (parent; v002 parent is v001; v001 initializes from ImageNet ResNet-18)",
+    "input_size": [
+      768,
+      256
+    ],
+    "learning_rate": 0.0002,
+    "local_max_kernel": [
+      3,
+      3
+    ],
+    "loss": "sigmoid focal-style heatmap loss; positives at target==1; negatives weighted by (1-target)^4 and probability^2; normalized by positive count",
+    "matching_tolerance_normalized_crop_coordinates": 0.02,
+    "max_nonrepeated_peaks": 1,
+    "max_repeated_peaks": 96,
+    "optimizer": "AdamW",
+    "output_stride": 2,
+    "scheduler": "CosineAnnealingLR(T_max=epochs, eta_min=2e-6)",
+    "weight_decay": 0.0001
+  }
+}
