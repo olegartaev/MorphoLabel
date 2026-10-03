@@ -532,6 +532,7 @@ class XRayStructureWorkspace:
             button=ttk.Button(
                 group,text=text,image=icon,compound="left",
                 style="Primary.TButton" if sid==self.active_structure_id else "P.TButton",
+                state="normal" if self.selected_specimen_id and not self.current_image_excluded else "disabled",
                 command=lambda value=sid:self._choose_structure(value),
             )
             button.pack(side="left");self._marker_buttons[sid]=button
@@ -892,7 +893,7 @@ class XRayStructureWorkspace:
         gesture=self._right_gesture;self._right_gesture=None;self.canvas.configure(cursor="crosshair")
         if not gesture:return "break"
         if gesture["panning"]:return "break"
-        if gesture["near"] is not None:self._show_role_menu(event,gesture["near"])
+        if not self.current_image_excluded and gesture["near"] is not None:self._show_role_menu(event,gesture["near"])
         return "break"
 
     def _pan_start(self,event):
@@ -916,6 +917,7 @@ class XRayStructureWorkspace:
         new_scale=self._fit_scale();self.pan=(event.x-before[0]*new_scale,event.y-before[1]*new_scale);self._ensure_raster();self._draw_overlays()
 
     def delete_selected(self,_event=None):
+        if self.current_image_excluded:return "break"
         if self.selected_annotation_id:
             self.project.delete_annotation(self.selected_annotation_id);self.selected_annotation_id=None;self._after_edit()
         return "break"
@@ -934,7 +936,7 @@ class XRayStructureWorkspace:
         self.selected_annotation_id=None;self._after_edit(f"Cleared {name}")
 
     def clear_all_markers(self):
-        if not self.selected_specimen_id or not (self.annotations or self.roles):return
+        if not self.selected_specimen_id or self.current_image_excluded or not (self.annotations or self.roles):return
         if not messagebox.askyesno(
             "Clear all markers",
             "Remove every marker and start / stop role from this specimen?\n\nThe crop and source X-ray are not changed.",
@@ -1277,8 +1279,13 @@ class XRayStructureWorkspace:
                 if member_ids & affected:
                     self.project.retire_structure_repeatability(repeat["run_id"])
                     self.pass_no.set(1);self.specimen_list.pass_no=1
+        self.specimen_list.pass_no=self.pass_no.get()
         self.specimen_list.selected_specimen_id=self.selected_specimen_id
-        self.refresh()
+        self.specimen_list.refresh(preserve_scroll=True,reveal=False)
+        available={row["specimen_id"] for row in self.project.structure_specimens(self.pass_no.get(),include_excluded=True)}
+        if self.selected_specimen_id in available:self._load_specimen(self.selected_specimen_id)
+        else:self.refresh()
+        self._refresh_workflow()
         return True
 
     def predict_current_structure(self):
