@@ -529,11 +529,12 @@ def _comparison_match(predicted,truth,tolerance=_STRUCTURE_MATCH_TOLERANCE):
     return matched,len(predicted or ())-matched,len(remaining),distances
 
 
-def _comparison_role_ordinal(structure,grouped,human=False):
+def _comparison_role_ordinal(structure,grouped,base_ids=None,human=False):
     sid=str(structure.get("id") or "");role=list(grouped.get(sid) or ())
     if not role:return None
     best=None;target=role[0]
-    for base_id in structure.get("reuse_from") or ():
+    candidates=list(base_ids or structure.get("reuse_from") or ())
+    for base_id in candidates:
         base=spatial_series_order(grouped.get(str(base_id)) or ())
         for index,point in enumerate(base):
             distance=math.hypot(float(point["x"])-float(target["x"]),float(point["y"])-float(target["y"]))
@@ -551,10 +552,12 @@ def _comparison_equal(a,b):
 def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_STRUCTURE_MATCH_TOLERANCE):
     """Summarize read-only AI predictions against human-verified annotations."""
     structures=list(scheme.get("structures") or ());traits=list(scheme.get("traits") or ())
-    role_ids=set()
+    role_ids=set();role_bases={}
     for base in structures:
         if not bool(base.get("repeated")):continue
-        role_ids.update(str(role["id"]) for role in compatible_reference_roles(scheme,str(base["id"])))
+        base_id=str(base["id"])
+        for role in compatible_reference_roles(scheme,base_id):
+            role_id=str(role["id"]);role_ids.add(role_id);role_bases.setdefault(role_id,[]).append(base_id)
     structure_stats={
         str(item["id"]):{
             "structure_id":str(item["id"]),"name":str(item.get("name") or item["id"]),
@@ -590,9 +593,9 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
             if stat["repeated"]:
                 diff=len(p)-len(h);stat["exact_count"]+=int(diff==0);stat["count_abs"].append(abs(diff));stat["count_diff"].append(diff);repeated_diffs.append(diff)
             if sid in role_ids:
-                human_ordinal=_comparison_role_ordinal(structure,human_group,True)
+                human_ordinal=_comparison_role_ordinal(structure,human_group,role_bases.get(sid),True)
                 if human_ordinal is not None:
-                    predicted_ordinal=_comparison_role_ordinal(structure,pred_group,False)
+                    predicted_ordinal=_comparison_role_ordinal(structure,pred_group,role_bases.get(sid),False)
                     stat["role_total"]+=1;role_total+=1
                     if predicted_ordinal is not None:
                         error=abs(int(predicted_ordinal)-int(human_ordinal))
