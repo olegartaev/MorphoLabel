@@ -442,7 +442,12 @@ class XRayCropWorkspace:
         three=self._workflow_card(cards,2,"3. Predict & review","crop_apply","Predict only eligible plates; human-confirmed crops are never overwritten.")
         self.predict_count_label=ttk.Label(three,text="",style="Muted.TLabel");self.predict_count_label.grid(row=0,column=0,columnspan=5,sticky="w")
         predict_actions=ttk.Frame(three);predict_actions.grid(row=1,column=0,columnspan=5,sticky="ew",pady=(4,0))
-        ttk.Label(predict_actions,text="Next").pack(side="left")
+        self.predict_current_button=self._button(
+            predict_actions,"Predict current",self.predict_current_plate,
+            "Apply the active Crop AI model to the currently selected X-ray plate. Human-reviewed plates are protected.",
+        )
+        self.predict_current_button.pack(side="left")
+        ttk.Label(predict_actions,text="Next").pack(side="left",padx=(10,0))
         ttk.Spinbox(predict_actions,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(4,6))
         self.predict_next_button=self._button(predict_actions,"Predict next",lambda:self.predict_batch(self.prediction_batch_size.get()),"Predict the next eligible X-rays.")
         self.predict_next_button.pack(side="left")
@@ -546,6 +551,13 @@ class XRayCropWorkspace:
         self.training_count_label.configure(text=f"Ready: {status['training_plates']} plates · {status['training_specimens']} crops · orientation {status['orientation_training']}")
         self.predict_count_label.configure(text=f"Unresolved {status['prediction_candidates']} · review {status['ai_pending_plates']} · verified {status['verified_plates']}")
         state="normal" if model else "disabled";self.predict_next_button.configure(state=state);self.predict_all_button.configure(state=state)
+        current_ok=False
+        if model and self.selected_image_id:
+            try:
+                image=self.project.source_image(self.selected_image_id)
+                current_ok=not bool(image.get("excluded")) and not bool(image.get("crop_reviewed"))
+            except KeyError:current_ok=False
+        self.predict_current_button.configure(state="normal" if current_ok else "disabled")
         self.review_button.configure(state="normal" if status["ai_pending_plates"] else "disabled")
         self._refresh_flip_controls();self._refresh_batch_banner();self._update_batch_controls()
 
@@ -995,6 +1007,52 @@ class XRayCropWorkspace:
         self._button(actions,"Delete model…",delete,"Delete the selected model and its managed files; models with dependent descendants are protected.").pack(side="left",padx=(6,0))
         self._button(actions,"Close",dialog.destroy).pack(side="right")
         refresh();center(self.root,dialog)
+
+    def predict_current_plate(self):
+        """Apply the active Crop AI model to only the selected, unreviewed plate."""
+        if self._busy or not self.selected_image_id:return
+        model=self.project.active_crop_model()
+        if not model:
+            messagebox.showinfo("Predict current","Train or activate a Crop AI model first.",parent=self.root);return
+        image_id=str(self.selected_image_id);image=self.project.source_image(image_id)
+        if image.get("excluded"):
+            messagebox.showinfo("Predict current","Restore this X-ray plate before applying Crop AI.",parent=self.root);return
+        if image.get("crop_reviewed"):
+            messagebox.showinfo(
+                "Predict current",
+                "This plate is already human-reviewed, so Crop AI will not overwrite its confirmed crops. "
+                "Use direct crop editing if a confirmed crop needs correction.",
+                parent=self.root,
+            );return
+        try:self.flush_pending_edits()
+        except Exception as exc:
+            messagebox.showerror("Predict current",f"Could not save the current crop edits:\n{exc}",parent=self.root);return
+        self._busy=True;events=queue.Queue()
+        dialog=tk.Toplevel(self.root);dialog.title("Predict current");dialog.transient(self.root);dialog.resizable(False,False)
+        frame=ttk.Frame(dialog,padding=14);frame.pack(fill="both",expand=True)
+        label=ttk.Label(frame,text="Applying Crop AI to the current X-ray…");label.pack(anchor="w")
+        bar=ttk.Progressbar(frame,mode="indeterminate",length=340);bar.pack(fill="x",pady=(8,0));bar.start(12);center(self.root,dialog)
+        def worker():
+            try:events.put(("done",predict_plates(self.project,[image_id],model=model)))
+            except Exception as exc:events.put(("error",exc))
+        threading.Thread(target=worker,daemon=True,name="xray-detector-predict-current").start()
+        def poll():
+            try:event=events.get_nowait()
+            except queue.Empty:
+                if dialog.winfo_exists():dialog.after(100,poll)
+                return
+            self._busy=False
+            try:bar.stop();dialog.destroy()
+            except tk.TclError:pass
+            if event[0]=="error":
+                messagebox.showerror("Predict current",str(event[1]),parent=self.root);self._refresh_controls();return
+            result=event[1]
+            if not result.get("success"):
+                failures=list(result.get("failures") or ())
+                detail=str(failures[0].get("reason")) if failures else "No crop prediction was produced."
+                messagebox.showwarning("Predict current",detail,parent=self.root);self._refresh_controls();return
+            self.plate_list.refresh(preserve_scroll=True);self._load_plate(image_id);self._refresh_controls()
+        dialog.after(100,poll)
 
     def predict_batch(self,count):
         if self._busy:return
