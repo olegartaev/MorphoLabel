@@ -839,26 +839,69 @@ ON CONFLICT(image_id) DO UPDATE SET verified_at=excluded.verified_at""",(image_i
    rows=c.execute("SELECT cr.image_id FROM crops cr JOIN images i ON i.image_id=cr.image_id WHERE cr.provenance='manual' AND COALESCE(cr.human_verified,0)=1 AND cr.crop_json IS NOT NULL AND COALESCE(i.active,1)=1 AND COALESCE(i.excluded,0)=0 ORDER BY COALESCE(cr.reviewed_at,cr.updated_at),cr.image_id").fetchall()
   return tuple(r[0] for r in rows)
  def crop_counts(self):
-  """Canonical Crop-only status counts; never derive Crop UI from landmarks."""
+  """Canonical Crop-only status counts; explicit review history is distinct from legacy training eligibility."""
+  verified_provenance=('manual','ai_accepted','ai_corrected')
   with self.transaction() as c:
    total=c.execute("SELECT COUNT(*) FROM images WHERE COALESCE(active,1)=1 AND COALESCE(excluded,0)=0").fetchone()[0]
-   rows=c.execute("SELECT cr.provenance,cr.human_verified,cr.qc_level FROM crops cr JOIN images i ON i.image_id=cr.image_id WHERE COALESCE(i.active,1)=1 AND COALESCE(i.excluded,0)=0").fetchall()
-  auto=sum(1 for r in rows if r['provenance']=='ai_unreviewed')
-  checked=sum(1 for r in rows if r['human_verified'] and r['provenance'] in {'manual','ai_accepted','ai_corrected'})
-  uncropped=max(0,total-checked-auto)
-  return {'Total':total,'Reviewed':checked,'AI pending':auto,'Train ready':len(self.crop_training_eligible_ids()),'Uncropped':uncropped}
+   reviewed=c.execute("""SELECT COUNT(*)
+FROM crop_verified_observations o
+JOIN crops cr ON cr.image_id=o.image_id
+JOIN images i ON i.image_id=o.image_id
+WHERE COALESCE(i.active,1)=1
+  AND COALESCE(i.excluded,0)=0
+  AND COALESCE(cr.human_verified,0)=1
+  AND cr.provenance IN ('manual','ai_accepted','ai_corrected')
+  AND cr.crop_json IS NOT NULL AND cr.crop_json!='null'""").fetchone()[0]
+   ai_pending=c.execute("""SELECT COUNT(*)
+FROM crops cr JOIN images i ON i.image_id=cr.image_id
+WHERE COALESCE(i.active,1)=1
+  AND COALESCE(i.excluded,0)=0
+  AND cr.provenance='ai_unreviewed'""").fetchone()[0]
+   uncropped=c.execute("""SELECT COUNT(*)
+FROM images i LEFT JOIN crops cr ON cr.image_id=i.image_id
+WHERE COALESCE(i.active,1)=1
+  AND COALESCE(i.excluded,0)=0
+  AND (cr.image_id IS NULL OR cr.crop_json IS NULL OR cr.crop_json='null')""").fetchone()[0]
+   review_needed=c.execute("""SELECT COUNT(*)
+FROM images i
+JOIN crops cr ON cr.image_id=i.image_id
+LEFT JOIN crop_verified_observations o ON o.image_id=i.image_id
+WHERE COALESCE(i.active,1)=1
+  AND COALESCE(i.excluded,0)=0
+  AND cr.crop_json IS NOT NULL AND cr.crop_json!='null'
+  AND cr.provenance!='ai_unreviewed'
+  AND NOT (
+    o.image_id IS NOT NULL
+    AND COALESCE(cr.human_verified,0)=1
+    AND cr.provenance IN ('manual','ai_accepted','ai_corrected')
+  )""").fetchone()[0]
+  return {
+   'Total':int(total),
+   'Reviewed':int(reviewed),
+   'Review needed':int(review_needed),
+   'AI pending':int(ai_pending),
+   'Train ready':len(self.crop_training_eligible_ids()),
+   'Uncropped':int(uncropped),
+  }
  def crop_section_counts(self):
   return self.crop_counts()
  def crop_batch_counts(self,image_ids):
-  """Persisted Crop batch truth; UI completed_ids are never scientific authority."""
+  """Persisted Crop batch truth; only explicit review observations count as Reviewed."""
   ids=tuple(dict.fromkeys(str(x) for x in image_ids))
   if not ids:return {"Reviewed":0,"Remaining":0,"Train ready":0,"Total":0}
   marks=','.join('?'*len(ids))
   with self.transaction() as c:
    rows=c.execute(f"SELECT i.image_id,i.excluded,cr.provenance,cr.human_verified,cr.crop_json FROM images i LEFT JOIN crops cr ON cr.image_id=i.image_id WHERE i.image_id IN ({marks})",ids).fetchall()
    train={r[0] for r in c.execute(f"SELECT image_id FROM crops WHERE provenance IN ('manual','ai_accepted','ai_corrected') AND COALESCE(human_verified,0)=1 AND image_id IN ({marks})",ids)}
+   explicit={r[0] for r in c.execute(f"""SELECT o.image_id
+FROM crop_verified_observations o
+JOIN crops cr ON cr.image_id=o.image_id
+WHERE o.image_id IN ({marks})
+  AND COALESCE(cr.human_verified,0)=1
+  AND cr.provenance IN ('manual','ai_accepted','ai_corrected')
+  AND cr.crop_json IS NOT NULL AND cr.crop_json!='null'""",ids)}
   present={r['image_id']:r for r in rows};eligible=[ident for ident in ids if ident in present and not present[ident]['excluded']]
-  reviewed=sum(bool(present[i]['human_verified']) and present[i]['provenance'] in {'manual','ai_accepted','ai_corrected'} and bool(present[i]['crop_json']) for i in eligible)
+  reviewed=sum(i in explicit for i in eligible)
   return {"Reviewed":reviewed,"Remaining":max(0,len(eligible)-reviewed),"Train ready":len(train),"Total":len(eligible)}
  def landmark_counts(self):
   """Human-readable Landmark workspace counts; categories intentionally overlap."""

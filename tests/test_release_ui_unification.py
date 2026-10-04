@@ -255,11 +255,12 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         shell=source("app/ui/shell.py")
         sidebar=shell[shell.index("    def _sidebar("):shell.index("    def _restore_sidebar_sash",shell.index("    def _sidebar("))]
         self.assertNotIn("_align_selected_top_once",sidebar)
-        render=shell[shell.index("    def render(self):"):shell.index("    def _clear(",shell.index("    def render(self):"))]
-        self.assertIn("self._section()",render)
-        self.assertIn("self.after_idle(self._align_selected_after_layout)",render)
-        self.assertLess(render.index("self._section()"),render.index("self.after_idle(self._align_selected_after_layout)"))
-        self.assertIn("update_idletasks()",shell[shell.index("def _align_selected_after_layout"):shell.index("def _sync_photo_panel_current")])
+        workspace=shell[shell.index("    def _render_landmarks_workspace("):shell.index("    def _nav(",shell.index("    def _render_landmarks_workspace("))]
+        self.assertIn("self._section()",workspace)
+        self.assertIn("self.after_idle(self._align_selected_after_layout)",workspace)
+        self.assertLess(workspace.index("self._section()"),workspace.index("self.after_idle(self._align_selected_after_layout)"))
+        align=shell[shell.index("    def _align_selected_after_layout("):shell.index("    def _sync_photo_panel_current(",shell.index("    def _align_selected_after_layout("))]
+        self.assertIn("update_idletasks()",align)
 
     def test_modules_is_visually_separate_and_align_top_has_no_previous_row_peek(self):
         design=source("app/ui/design.py");shell=source("app/ui/shell.py");xray=source("app/modules/xray_counts.py");photo_list=source("app/photo_list.py")

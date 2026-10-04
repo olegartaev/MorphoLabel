@@ -25,9 +25,18 @@ class CropAutoWorkflowTests(unittest.TestCase):
   p.save_reviewed_crop(i,crop([10,10,90,90]));self.assertEqual(p.crop_record(i)['provenance'],'ai_accepted');self.assertEqual(p.crop_auto_candidates(rerun=True)[0],())
  def test_crop_counts_are_crop_only_and_exclude_inactive_images(self):
   p,i=self.make();p.save_reviewed_crop(i,crop([10,10,90,90]));counts=p.crop_counts()
-  self.assertEqual({'Total':1,'Reviewed':1,'AI pending':0,'Train ready':1,'Uncropped':0},counts)
+  self.assertEqual({'Total':1,'Reviewed':1,'Review needed':0,'AI pending':0,'Train ready':1,'Uncropped':0},counts)
   p.save_crop(i,crop([10,10,90,90]),'automatic','m1');p.record_ai_crop_prediction(i,crop([10,10,90,90]),'m1')
-  counts=p.crop_counts();self.assertEqual(1,counts['AI pending']);self.assertEqual(0,counts['Reviewed']);self.assertEqual(0,counts['Uncropped'])
+  counts=p.crop_counts();self.assertEqual(1,counts['AI pending']);self.assertEqual(0,counts['Reviewed']);self.assertEqual(0,counts['Review needed']);self.assertEqual(0,counts['Uncropped'])
+ def test_legacy_trainable_crop_without_explicit_review_ledger_is_not_counted_reviewed(self):
+  p,i=self.make();p.save_reviewed_crop(i,crop([10,10,90,90]))
+  with p.transaction() as c:c.execute("DELETE FROM crop_verified_observations WHERE image_id=?",(i,))
+  counts=p.crop_counts()
+  self.assertEqual(1,counts['Total']);self.assertEqual(0,counts['Reviewed']);self.assertEqual(1,counts['Review needed'])
+  self.assertEqual(1,counts['Train ready']);self.assertEqual(0,counts['AI pending']);self.assertEqual(0,counts['Uncropped'])
+  batch=p.crop_batch_counts([i])
+  self.assertEqual({"Reviewed":0,"Remaining":1,"Train ready":1,"Total":1},batch)
+
  def test_unprovable_landmark_frame_is_archived_and_not_trainable(self):
   p,i=self.make();p.save_landmark(i,1,12,13,'manual','manual');p.mark_checked(i)
   result=p.save_reviewed_crop(i,crop([10,10,90,90]))
