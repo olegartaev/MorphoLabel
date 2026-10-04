@@ -652,7 +652,7 @@ class ProductionShell(tk.Tk):
         actions=ttk.Frame(navigation,style="Attention.TFrame");actions.pack(side="right")
         self.status_previous=self.control_button(actions,"Previous",lambda:self._nav_image(-1),"Show the previous queue item.",style="Nav.TButton",icon="previous")
         self.status_previous.pack(side="left",padx=(0,3))
-        self.status_index=ttk.Label(actions,text="",padding=(6,0),style="AttentionTitle.TLabel");self.status_index.pack(side="left")
+        self.status_index=None
         self.status_next=self.control_button(actions,"Next",lambda:self._nav_image(1),"Show the next queue item.",style="Nav.TButton",icon="next")
         self.status_next.pack(side="left",padx=(3,3))
         self.control_button(
@@ -670,7 +670,6 @@ class ProductionShell(tk.Tk):
         if not self._workflow_navigation_visible(batch):
             navigation.pack_forget();return
         navigation.pack(fill="x",pady=(4,0))
-        self.status_index.configure(text=batch.get("text",""))
         kind=batch.get("kind") if batch else None
         attention_stage=batch.get("stage") if kind=="landmark_attention" else None
         queue_titles={
@@ -680,7 +679,8 @@ class ProductionShell(tk.Tk):
             "landmark_attention":"Attention queue",
             "crop":"Crop batch",
         }
-        self.status_queue_title.configure(text=queue_titles.get(kind,"Review queue"))
+        title=queue_titles.get(kind,"Review queue");position_text=str(batch.get("text") or "").strip()
+        self.status_queue_title.configure(text=f"{title} · {position_text}" if position_text else title)
         landmark_confirm=bool(self.context.section=="landmarks" and (kind in {"landmark","landmark_ai_review","landmark_suspicious"} or (kind=="landmark_attention" and attention_stage=="landmarks")))
         crop_confirm=bool(self.context.section=="crop" and ((kind=="landmark_attention" and attention_stage=="crop") or (batch and kind!="landmark_attention")))
         attention_retry=bool(self.context.section=="landmarks" and kind=="landmark_attention" and attention_stage=="prediction")
