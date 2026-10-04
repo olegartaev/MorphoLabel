@@ -631,7 +631,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         for text in ('"Complete"','"Partial"','"Not visible"','"Absent"',"_VISIBILITY_SYMBOLS","_marker_visibility_buttons","StatusChip.TLabel"):
             self.assertIn(text,ui)
-        self.assertIn('self.context_label=ElidedLabel',ui)
+        self.assertIn('build_context_row(context,("Sample","Plate","Specimen №"))',ui)
         self.assertIn('self.locality_value.configure(text=values["locality"])',ui)
         self.assertIn('self.context_label.configure(text=values["plate"])',ui)
         self.assertIn('self.specimen_value.configure(text=values["specimen"])',ui)

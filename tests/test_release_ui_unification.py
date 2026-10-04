@@ -44,16 +44,14 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         crop=source("app/xray_crop_ui.py")
         structures=source("app/xray_structures_ui.py")
         module=source("app/modules/xray_counts.py")
-        self.assertIn('text="Sample:",style="ContextKey.TLabel"',shell)
-        self.assertIn('status_locality=ElidedLabel',shell)
-        self.assertIn('columnconfigure(1,weight=1,minsize=180)',shell)
-        self.assertIn('text="Sample:",style="ContextKey.TLabel"',crop)
-        self.assertIn('text="Plate:",style="ContextKey.TLabel"',crop)
-        self.assertIn('text="Specimen №:",style="ContextKey.TLabel"',crop)
-        self.assertIn('text="Sample:",style="ContextKey.TLabel"',structures)
-        self.assertIn('text="Specimen №:",style="ContextKey.TLabel"',structures)
-        self.assertIn('style="ContextKey.TLabel"',module)
-        self.assertIn('style="ContextValue.TLabel"',module)
+        design=source("app/ui/design.py")
+        self.assertIn('build_context_row(left,("Sample","Image"))',shell)
+        self.assertIn('build_context_row(header,("Sample","Plate","Specimen №"))',crop)
+        self.assertIn('build_context_row(context,("Sample","Plate","Specimen №"))',structures)
+        self.assertIn('build_context_row(parent,("Sample","Plate","Specimen №"))',module)
+        self.assertIn('ttk.Label(row,text=f"{key}:",style="ContextKey.TLabel")',design)
+        self.assertIn('ttk.Label(row,text="—",style="ContextValue.TLabel"',design)
+        self.assertNotIn('status_locality=ElidedLabel',shell)
 
     def test_human_repeatability_is_named_explicitly_in_both_annotation_workflows(self):
         landmarks=source("app/ui/landmarks_section.py")
@@ -97,8 +95,8 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         structures=source("app/xray_structures_ui.py")
         detector=source("app/xray_detector.py")
         structure_ai=source("app/xray_structure_ai.py")
-        self.assertIn('parent_values=("RTMDet pretrained",)+tuple(item["model_id"] for item in self.project.crop_models())',crop)
-        self.assertIn('parent_values=("ImageNet ResNet18",)+tuple(item["model_id"] for item in self.project.structure_models())',structures)
+        self.assertIn('parent_values=("RTMDet pretrained",)+prediction_values',crop)
+        self.assertIn('parent_values=("ImageNet ResNet18",)+prediction_values',structures)
         self.assertIn("parent_model_id=parent_model_id",crop)
         self.assertIn("parent_model_id=parent_model_id",structures)
         self.assertIn("def train_detector(project,seed=42,epochs=80,progress=None,parent_model_id=None):",detector)
@@ -135,13 +133,18 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertGreaterEqual(structures.count('style="Nav.TButton"'),2)
         self.assertIn('style="NavPrimary.TButton"',structures)
 
-    def test_workflow_uses_real_icon_tabs_without_vertical_divider_bars(self):
+    def test_workflow_uses_icon_tabs_hover_help_start_examples_and_vertical_group_bars(self):
         workflow=source("app/ui/workflow.py")
+        landmarks=source("app/ui/landmarks_section.py");xcrop=source("app/xray_crop_ui.py");structures=source("app/xray_structures_ui.py")
         self.assertIn("ttk.Notebook(self,style='Workflow.TNotebook')",workflow)
         self.assertIn("self.notebook.add(card,**options)",workflow)
         self.assertIn("options['image']=image",workflow)
+        self.assertIn("'Training data':'Start examples'",workflow)
+        self.assertIn("self.notebook.bind('<Motion>',self._tab_motion",workflow)
+        self.assertIn("self.shell.tip.schedule(self.notebook,text",workflow)
         separator=workflow[workflow.index("def add_command_separator"):workflow.index("def build_help_button")]
-        self.assertNotIn("ttk.Separator",separator)
+        self.assertIn("ttk.Separator",separator)
+        for section in (landmarks,xcrop,structures):self.assertIn("Start examples are the initial",section)
 
     def test_landmark_verify_state_disables_after_verification_and_reenables_after_edit_state(self):
         verified=SimpleNamespace(human_verified=True,points_by_id={})
@@ -173,7 +176,7 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn("self._restore_last_project()",module)
         self.assertIn("remember_xray_project(self.project.root)",module)
 
-    def test_about_ai_rows_follow_the_active_xray_model(self):
+    def test_about_ai_rows_show_architecture_but_never_active_model_ids(self):
         class Registry:
             def available(self):
                 return (
@@ -181,25 +184,20 @@ class ReleaseUIUnificationTests(unittest.TestCase):
                     SimpleNamespace(module_id="xray_counts",display_name="X-ray Traits",source="builtin",description=""),
                 )
         class Project:
-            def __init__(self):self.crop_id="crop-v1";self.structure_id="structures-v1"
             def active_crop_model(self):
-                return {"model_id":self.crop_id,"metrics":{"backend":"rtmdet_tiny_mmdet_3_2","orientation/backend":"mobilenet_v3_small_imagenet_transfer_v1"}}
+                return {"model_id":"crop-v1","metrics":{"backend":"rtmdet_tiny_mmdet_3_2","orientation/backend":"mobilenet_v3_small_imagenet_transfer_v1"}}
             def active_structure_model(self):
-                return {"model_id":self.structure_id,"backend":"resnet18_heatmap_v1","metrics":{}}
-        project=Project()
+                return {"model_id":"structures-v1","backend":"resnet18_heatmap_v1","metrics":{}}
         shell=SimpleNamespace(
-            module_key="xray_counts",_active_module_runtime=SimpleNamespace(project=project),
+            module_key="xray_counts",_active_module_runtime=SimpleNamespace(project=Project()),
             context=SimpleNamespace(project=None),
         )
-        first={name:ai for name,_author,_scope,ai in module_credit_rows(Registry(),shell)}
-        self.assertIn("RTMDet-tiny",first["X-ray Traits"])
-        self.assertIn("MobileNetV3-Small",first["X-ray Traits"])
-        self.assertIn("ResNet-18 heatmap",first["X-ray Traits"])
-        self.assertIn("crop-v1",first["X-ray Traits"]);self.assertIn("structures-v1",first["X-ray Traits"])
-        project.crop_id="crop-v2";project.structure_id="structures-v2"
-        second={name:ai for name,_author,_scope,ai in module_credit_rows(Registry(),shell)}
-        self.assertIn("crop-v2",second["X-ray Traits"]);self.assertNotIn("crop-v1",second["X-ray Traits"])
-        self.assertIn("structures-v2",second["X-ray Traits"]);self.assertNotIn("structures-v1",second["X-ray Traits"])
+        rows={name:ai for name,_author,_scope,ai in module_credit_rows(Registry(),shell)}
+        self.assertIn("RTMDet-tiny",rows["X-ray Traits"])
+        self.assertIn("MobileNetV3-Small",rows["X-ray Traits"])
+        self.assertIn("ResNet-18 heatmap",rows["X-ray Traits"])
+        self.assertNotIn("crop-v1",rows["X-ray Traits"]);self.assertNotIn("structures-v1",rows["X-ray Traits"])
+        self.assertNotIn("active model",rows["X-ray Traits"].lower())
 
     def test_about_design_keeps_author_subdued_and_each_module_self_contained(self):
         about=source("app/ui/shell.py")
@@ -208,6 +206,40 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn('text=f"Author: {author}",style="Muted.TLabel"',about)
         for text in ("RTMPose-M","RTMDet-tiny","MobileNetV3-Small","ResNet-18 heatmap","NumPy ridge image regression"):
             self.assertIn(text,credits)
+
+    def test_window_title_always_places_current_module_after_morpholabel(self):
+        shell=source("app/ui/shell.py")
+        self.assertIn('module_name=spec.display_name if spec is not None else "Modules"',shell)
+        self.assertIn('self.title(f"{APP_NAME} — {module_name} — {APP_FULL_NAME} — v{APP_VERSION}")',shell)
+        self.assertLess(shell.index("self._update_window_title()",shell.index("def render(self):")),shell.index("self._clear()",shell.index("def render(self):")))
+
+    def test_predict_review_model_selectors_set_the_real_active_model(self):
+        landmarks=source("app/ui/landmarks_section.py");xcrop=source("app/xray_crop_ui.py");structures=source("app/xray_structures_ui.py")
+        self.assertIn("self.prediction_model_box=ttk.Combobox",landmarks)
+        self.assertIn("activate_landmark_model(self.context.project,model_id)",landmarks)
+        self.assertIn("self.prediction_model_box=ttk.Combobox",xcrop)
+        self.assertIn("self.project.activate_crop_model(model_id)",xcrop)
+        self.assertIn("self.prediction_model_box=ttk.Combobox",structures)
+        self.assertIn("self.project.activate_structure_model(model_id)",structures)
+        self.assertIn("structure_schema_digest(self.project.scheme)",structures)
+
+    def test_tooltips_die_with_their_owner_and_shared_lists_keep_selected_rows_fully_visible(self):
+        tooltips=source("app/ui/tooltips.py");photo_list=source("app/photo_list.py")
+        self.assertIn('widget.bind("<Destroy>",self._widget_destroyed',tooltips)
+        self.assertIn('widget.bind("<ButtonPress>",lambda event:self.hide(event.widget)',tooltips)
+        self.assertIn("if event.widget is self.owner:self.hide()",tooltips)
+        self.assertIn("margin=2",photo_list)
+        self.assertIn("elif y<top+margin",photo_list)
+        self.assertIn("elif y+self.row_height>bottom-margin",photo_list)
+        self.assertIn('self.bind("<Destroy>",lambda event:self._hide_tooltip()',photo_list)
+
+    def test_xray_empty_structure_context_keeps_each_field_semantically_separate(self):
+        structures=source("app/xray_structures_ui.py")
+        clear=structures[structures.index("def _clear(self):"):structures.index("def _refresh_summary",structures.index("def _clear(self):"))]
+        self.assertIn('self.locality_value.configure(text=values["locality"])',clear)
+        self.assertIn('self.context_label.configure(text=values["plate"])',clear)
+        self.assertIn('self.specimen_value.configure(text=values["specimen"])',clear)
+        self.assertNotIn("No confirmed specimen",clear.split("self.canvas.create_text",1)[0])
 
     def test_xray_specimen_number_means_ordinal_on_current_plate(self):
         structures=source("app/xray_structures_ui.py")

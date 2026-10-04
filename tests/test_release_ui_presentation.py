@@ -13,6 +13,7 @@ from PIL import Image
 
 from app.ui.design import apply_styles, structure_prediction_text, prediction_stamp, sidebar_width_for_window, dialog_width_for_columns
 from app.ui.shell import ProductionShell
+from app.ui.tooltips import Tooltip
 from app.xray_crop import crop_from_geometry
 from app.xray_crop_ui import PlateCropEditSession, XRayCropWorkspace
 from app.xray_project import XRayProject, _db_connection
@@ -132,8 +133,10 @@ class PresentationProjectTests(_ProjectFixture,unittest.TestCase):
         self.assertIn("ttk.Notebook(self,style='Workflow.TNotebook')",source)
         self.assertIn("self.notebook.add(card,**options)",source)
         self.assertIn("self.notebook.select(self._cards[self._selected_card])",source)
+        self.assertIn("'Training data':'Start examples'",source)
+        self.assertIn("self.notebook.bind('<Motion>',self._tab_motion",source)
         separator=source[source.index("def add_command_separator"):source.index("def build_help_button")]
-        self.assertNotIn("ttk.Separator",separator)
+        self.assertIn("ttk.Separator",separator)
 
     def test_saved_attention_queue_uses_the_same_compact_strip_language(self):
         source=(Path(__file__).resolve().parents[1]/"app/ui/section_base.py").read_text(encoding="utf-8")
@@ -176,6 +179,16 @@ class PresentationTkTests(_ProjectFixture,unittest.TestCase):
         self.assertGreater(widget.winfo_width(),10)
         self.assertGreaterEqual(widget.winfo_rootx(),self.root.winfo_rootx())
         self.assertLessEqual(widget.winfo_rootx()+widget.winfo_width(),self.root.winfo_rootx()+self.root.winfo_width())
+
+    def test_tooltip_is_destroyed_when_its_widget_is_destroyed(self):
+        tip=Tooltip(self.root);button=ttk.Button(self.host,text="Transient");button.pack();self.pump()
+        tip.bind(button,"temporary help");tip.schedule(button,"temporary help")
+        if tip.job:
+            self.root.after_cancel(tip.job);tip.job=None
+        tip.owner=button;tip._show(button,"temporary help");self.pump()
+        self.assertIsNotNone(tip.window)
+        button.destroy();self.pump()
+        self.assertIsNone(tip.window);self.assertIsNone(tip.owner)
 
     def test_crop_sidebar_and_all_toolbar_actions_fit_a_small_window(self):
         workspace=XRayCropWorkspace(self.host,self.project);self.pump()
