@@ -134,6 +134,13 @@ class PresentationProjectTests(_ProjectFixture,unittest.TestCase):
         self.assertIn("sep.grid(row=0,column=column+1,sticky='ns'",source)
         self.assertIn("card.grid(row=0,column=column,sticky='nsew')",source)
 
+    def test_saved_attention_queue_uses_the_same_compact_strip_language(self):
+        source=(Path(__file__).resolve().parents[1]/"app/ui/section_base.py").read_text(encoding="utf-8")
+        self.assertIn('style="Attention.TFrame",padding=(6,4)',source)
+        self.assertIn('self.button(box,"Continue"',source)
+        self.assertIn('self.button(box,"Hide"',source)
+        self.assertNotIn('message_label=ttk.Label',source)
+
     def test_preview_projects_have_real_crop_frames_and_preserve_review_edits(self):
         from tools.design_preview import build_preview_projects
         from app.landmark_frames import crop_frame_record
