@@ -722,8 +722,7 @@ class XRayStructureWorkspace:
             try:
                 image=self.project.source_image(self.preferred_image_id);path=Path(image["relative_path"])
                 values={"locality":self._sample(image["relative_path"]),"plate":path.name,"specimen":"—"}
-                text=f"{values['locality']} · {values['plate']} · No confirmed specimen"
-                self.context_label.configure(text=text)
+                self.locality_value.configure(text=values["locality"]);self.context_label.configure(text=values["plate"]);self.specimen_value.configure(text=values["specimen"])
             except Exception:self._set_context(None)
             self.canvas.create_text(
                 18,18,anchor="nw",fill="white",
