@@ -487,8 +487,13 @@ class XRayStructureWorkspace:
 
     def _close_annotation_batch(self):
         self.project.set_ui_state("xray_structure_active_batch",{})
-        self.pass_no.set(1);self.specimen_list.pass_no=1
-        self.refresh()
+        if getattr(self,"pass_no",None) is not None and getattr(self,"specimen_list",None) is not None:
+            self.pass_no.set(1);self.specimen_list.pass_no=1
+        if callable(getattr(self,"refresh",None)):
+            self.refresh()
+        else:
+            refresh_workflow=getattr(self,"_refresh_workflow",None)
+            if callable(refresh_workflow):refresh_workflow()
         return True
 
     def _refresh_prediction_info(self):

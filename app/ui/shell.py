@@ -599,7 +599,9 @@ class ProductionShell(tk.Tk):
         workflow_ids=[str(v) for v in workflow.get(key,())] if key else []
         closed_state=project.get_ui_state("landmark_training_queue_closed",{}) or {}
         workflow_closed=bool(closed_state.get("closed") and str(closed_state.get("stage") or "")==str(stage or ""))
-        if workflow_ids and not workflow_closed:
+        workflow_nav_key=(str(project.root),"landmarks","landmark",None)
+        workflow_nav_closed=workflow_nav_key in self.__dict__.get("_closed_queue_navigation",set())
+        if workflow_ids and not workflow_closed and not workflow_nav_closed:
             target=str(workflow.get("current_image_id") or workflow_ids[0])
             entries.append({
                 "title":"Landmark training batch",
@@ -839,10 +841,8 @@ class ProductionShell(tk.Tk):
         if kind=="landmark_suspicious":
             return self._close_core_queue("landmark_suspicious")
         if kind=="landmark":
-            project=self.context.project
-            state=project.get_ui_state("landmark_ai_workflow",{}) or {}
-            stage=str(state.get("stage") or "")
-            project.set_ui_state("landmark_training_queue_closed",{"stage":stage,"closed":True})
+            closed=self.__dict__.setdefault("_closed_queue_navigation",set())
+            closed.add(self._queue_navigation_key(batch))
             self.render();return True
         return False
 

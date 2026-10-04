@@ -110,6 +110,7 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn("close_review_session(project,batch_id)",shell)
         self.assertIn('project.set_ui_state("crop_active_batch",{})',shell)
         self.assertIn('project.set_ui_state("landmark_training_queue_closed"',shell)
+        self.assertIn('workflow_nav_closed=workflow_nav_key in self.__dict__.get("_closed_queue_navigation",set())',shell)
         self.assertIn("def close_review_session(project,batch_id=None):",review)
         self.assertIn('"closed":True',review)
         self.assertIn('not item.get("closed")',review)

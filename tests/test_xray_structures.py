@@ -664,7 +664,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn("self._source_cache_id",ui)
         self.assertIn("source=self._source_for(item[\"image_id\"])",ui)
         self.assertIn("self.project.orientation_policy",ui)
-        self.assertIn("align_top=True",ui)
+        self.assertIn("align_top=False",ui)
 
     def test_shared_role_ui_uses_context_menu_badges_and_preserves_right_drag_pan(self):
         root=Path(__file__).resolve().parents[1]
