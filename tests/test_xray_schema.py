@@ -65,6 +65,28 @@ class XRaySchemaTests(unittest.TestCase):
         self.assertEqual("5+2",values["formv"])
         self.assertEqual(values["tv"],values["abdv"]+values["caudv"])
 
+    def test_count_to_before_through_and_from_have_distinct_inclusive_semantics(self):
+        scheme=blank_scheme("count-to semantics")
+        scheme["structures"]=[
+            {"id":"series","name":"Series","repeated":True},
+            {"id":"reference","name":"Reference","repeated":False},
+        ]
+        rows=[
+            {"annotation_id":1,"structure_id":"series","x":0.10,"y":0.50,"sort_order":0},
+            {"annotation_id":2,"structure_id":"series","x":0.20,"y":0.50,"sort_order":1},
+            {"annotation_id":3,"structure_id":"series","x":0.30,"y":0.50,"sort_order":2},
+            {"annotation_id":4,"structure_id":"series","x":0.40,"y":0.50,"sort_order":3},
+            {"annotation_id":5,"structure_id":"series","x":0.50,"y":0.50,"sort_order":4},
+            {"annotation_id":6,"structure_id":"reference","x":0.40,"y":0.50,"sort_order":0},
+        ]
+        expected={"before":3,"through":4,"from":2}
+        for side,value in expected.items():
+            scheme["traits"]=[{
+                "id":"trait","name":"Trait","method":"count_to",
+                "structures":["series","reference"],"rule":{"side":side},
+            }]
+            self.assertEqual(value,calculate_trait_values(normalize_scheme(scheme),rows)["trait"],side)
+
     def test_bundled_phoxinus_count_offsets_are_explicit_and_internally_consistent(self):
         scheme=bundled_scheme("phoxinus_vertebral_counts")
         by_id={item["id"]:item for item in scheme["traits"]}

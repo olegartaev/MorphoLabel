@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from app.crop_editor import CropEditor
 from app.crop_model import CropModel
 from app.transforms import Transform
@@ -9,6 +10,10 @@ class T(unittest.TestCase):
   self.assertTrue(True)
  def test_gui_thread_guard_rejects_worker(self):
   self.assertTrue(hasattr(CropEditor,"_assert_gui_thread"))
+ def test_rotation_preview_keeps_source_raster_fixed(self):
+  source=(Path(__file__).resolve().parents[1]/"app/ui/crop_canvas.py").read_text(encoding="utf-8")
+  self.assertIn("Keep the biological image fixed while the persisted crop frame rotates above it.",source)
+  self.assertNotIn(".rotate(self.model.angle",source)
  def test_rotating_editor_frame_preserves_persisted_transform_geometry(self):
   model=CropModel(1000,600,220,140,780,460,27.5)
   corners=crop_frame_polygon(model)
