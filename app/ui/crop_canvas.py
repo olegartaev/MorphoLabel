@@ -8,7 +8,6 @@ from PIL import Image,ImageTk
 from app.crop_editor_async_v2 import load_project_developed
 from app.crop_model import CropModel
 from app.crop_quality import assess_crop
-from app.crop_training_batch import prepare_crop_training_images
 from app.crop_workflow import apply_reviewed_crop, reviewed_crop_change
 from app.ai_hardware import persisted_hardware_profile
 from app.ui.design import prediction_stamp
@@ -141,16 +140,15 @@ class CropCanvasController:
    self._poll_job=None
   if request_epoch is not None:self.requested_request_epoch=request_epoch
   self.requested_image_id=(row or {}).get('image_id');self.displayed_image_id=None;self.base=self.model=self.photo=self._display_base=None;self._display_source=None;self._current_cache_entry=None;self._display_key=self._raster_key=None;self.mode=self.anchor=self.initial=None;self.context_message=""
+  self.canvas.delete('crop_overlay')
   if not row:return
   project=self.context.project;row=dict(row);image_id=row['image_id'];cached=self._cache_get(row)
   if cached is not None:
    bounds,angle=self._crop_state(project,image_id,cached["base"]);self._activate_loaded(row,cached,bounds,angle,token);return
-  self.loading=True;self.canvas.delete('crop_loading_status');self.canvas.create_text(16,16,anchor='nw',fill='white',text='Preparing image for crop',tags='crop_loading_status');self._start_loading_pulse('Preparing image for crop');events=queue.Queue()
+  self.loading=True;self.canvas.delete('crop_loading_status');self.canvas.create_text(16,16,anchor='nw',fill='white',text='Loading image',tags='crop_loading_status');self._start_loading_pulse('Loading image');events=queue.Queue()
   def worker():
    try:
-    active=project.get_ui_state("crop_active_batch",{});prepared=set(active.get("prepared_ids",()));record=project.crop_record(image_id) or {}
-    if image_id not in prepared and not record.get("crop_json"):
-     prepare_crop_training_images(project,[row]);record=project.crop_record(image_id) or record
+    active=project.get_ui_state("crop_active_batch",{});record=project.crop_record(image_id) or {}
     base,proxy=load_project_developed(project,image_id);proposal=(active.get('proposals',{}) or {}).get(image_id);events.put(('ok',base,proxy,record.get('crop_json') or proposal or [0,0,base.width,base.height],float(record.get('rotation_degrees') or 0)))
    except Exception as exc:events.put(('error',exc))
   self._worker=threading.Thread(target=worker,daemon=True,name='production-main-crop-load');self._worker.start()

@@ -8,6 +8,7 @@ from PIL import Image
 
 from app.ui.context import UIContext
 from app.ui.crop_canvas import CropCanvasController, crop_navigation_cache_budget
+from pathlib import Path
 from app.ui.photo_list_panel import PhotoListPanel
 
 
@@ -20,6 +21,15 @@ class _CropCountProject:
 
 
 class CropNavigationFastPathTests(unittest.TestCase):
+    def test_plain_crop_open_never_runs_training_batch_preparation_or_leaves_stale_overlay(self):
+        source=(Path(__file__).resolve().parents[1]/"app/ui/crop_canvas.py").read_text(encoding="utf-8")
+        self.assertNotIn("prepare_crop_training_images",source)
+        load=source[source.index(" def load_current"):source.index(" def _on_configure")]
+        self.assertIn("self.canvas.delete('crop_overlay')",load)
+        self.assertIn("base,proxy=load_project_developed(project,image_id)",load)
+        self.assertIn("text='Loading image'",load)
+        self.assertNotIn("Preparing image for crop",load)
+
     def test_crop_counts_are_cached_across_selection_only_changes(self):
         project = _CropCountProject()
         context = UIContext(project)

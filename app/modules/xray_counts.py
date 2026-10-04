@@ -457,9 +457,9 @@ class XRayCountsRuntime:
 
     def _header(self,parent):
         nav=ttk.Frame(parent,style="Topbar.TFrame");nav.pack(fill="x",pady=(0,4))
-        home=ttk.Button(nav,text="Modules",image=self._core_icon(nav,"modules"),compound="left",command=self._show_module_hub,style="Stage.TButton")
-        home.pack(side="left",padx=(6,5));self._tip.bind(home,"Return to the MorphoLabel module hub.")
-        ttk.Separator(nav,orient="vertical").pack(side="left",fill="y",padx=(0,9),pady=5)
+        home=ttk.Button(nav,text="Modules",image=self._core_icon(nav,"modules"),compound="left",command=self._show_module_hub,style="Modules.TButton")
+        home.pack(side="left",padx=(8,12),pady=(1,1));self._tip.bind(home,"Return to the MorphoLabel module hub.")
+        ttk.Separator(nav,orient="vertical").pack(side="left",fill="y",padx=(0,12),pady=4)
         for key,label,icon in STAGES:
             active=self.stage==key
             b=ttk.Button(nav,text=label,image=self._icon(nav,icon,TOPBAR_ICON_SIZE),compound="left",style="StageActive.TButton" if active else "Stage.TButton",command=lambda k=key:self._select(k))

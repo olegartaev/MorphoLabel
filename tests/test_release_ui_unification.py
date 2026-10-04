@@ -251,6 +251,15 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn("self.project.activate_structure_model(model_id)",structures)
         self.assertIn("structure_schema_digest(self.project.scheme)",structures)
 
+    def test_modules_is_visually_separate_and_align_top_has_no_previous_row_peek(self):
+        design=source("app/ui/design.py");shell=source("app/ui/shell.py");xray=source("app/modules/xray_counts.py");photo_list=source("app/photo_list.py")
+        self.assertIn('style.configure("Modules.TButton"',design)
+        self.assertIn('style="Modules.TButton"',shell)
+        self.assertIn('style="Modules.TButton"',xray)
+        see=photo_list[photo_list.index(" def see(self,index,align_top=False):"):photo_list.index(" def yview(",photo_list.index(" def see(self,index,align_top=False):"))]
+        self.assertIn("target=min(max(0,y),max(0,content-height))",see)
+        self.assertNotIn("y-margin",see.split("elif y<top+margin",1)[0])
+
     def test_tooltips_die_with_their_owner_and_shared_lists_keep_selected_rows_fully_visible(self):
         tooltips=source("app/ui/tooltips.py");photo_list=source("app/photo_list.py")
         self.assertIn('widget.bind("<Destroy>",self._widget_destroyed',tooltips)

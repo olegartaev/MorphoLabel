@@ -25,7 +25,7 @@ class PhotoListCanvas(tk.Canvas):
   if not self.rows:return
   index=max(0,min(int(index),len(self.rows)-1));content=max(1,len(self.rows)*self.row_height);height=max(1,self.winfo_height());top=float(self.canvasy(0));bottom=top+height;y=index*self.row_height;margin=2
   if align_top:
-   target=min(max(0,y-margin),max(0,content-height));super().yview_moveto(target/content)
+   target=min(max(0,y),max(0,content-height));super().yview_moveto(target/content)
   elif y<top+margin:super().yview_moveto(max(0,y-margin)/content)
   elif y+self.row_height>bottom-margin:super().yview_moveto(max(0,y+self.row_height-height+margin)/content)
   self._draw();self._notify_scroll()

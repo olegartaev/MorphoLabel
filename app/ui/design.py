@@ -78,6 +78,7 @@ def apply_styles(root, style):
 
     style.configure("Stage.TButton",padding=(8,4),font=(family,9))
     style.configure("StageActive.TButton",padding=(8,4),font=(family,9,"bold"))
+    style.configure("Modules.TButton",padding=(13,6),font=(family,9,"bold"),borderwidth=2,relief="raised")
     style.configure("Topbar.TFrame",padding=(0,1))
     style.configure("Toolbar.TFrame",padding=(3,2))
     style.configure("WorkflowDock.TFrame",padding=0)

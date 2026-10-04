@@ -462,9 +462,9 @@ class ProductionShell(tk.Tk):
 
     def _nav(self):
         row=ttk.Frame(self.root,style="Topbar.TFrame"); row.grid(row=0,column=0,sticky="ew",pady=(0,4))
-        home=ttk.Button(row,text="Modules",image=self.ui_icon("modules",TOPBAR_ICON_SIZE),compound="left",command=self.show_module_hub,style="Stage.TButton")
-        home.pack(side="left",padx=(6,5));self.tip.bind(home,"Return to the MorphoLabel module hub.")
-        ttk.Separator(row,orient="vertical").pack(side="left",fill="y",padx=(0,9),pady=5)
+        home=ttk.Button(row,text="Modules",image=self.ui_icon("modules",TOPBAR_ICON_SIZE),compound="left",command=self.show_module_hub,style="Modules.TButton")
+        home.pack(side="left",padx=(8,12),pady=(1,1));self.tip.bind(home,"Return to the MorphoLabel module hub.")
+        ttk.Separator(row,orient="vertical").pack(side="left",fill="y",padx=(0,12),pady=4)
         sections=visible_sections(self.context.crop_enabled()) if self.context.project else visible_sections(True)
         for spec in sections:
             active=spec.key == self.context.section
