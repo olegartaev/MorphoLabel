@@ -763,7 +763,7 @@ class XRayStructureWorkspace:
         self._refresh_result_review_banner()
 
     def _close_result_review(self):
-        clear_result_review_queue(self.project);self._refresh_result_review_banner()
+        clear_result_review_queue(self.project);self._refresh_workflow()
 
     def _refresh_workflow(self):
         self._refresh_result_review_banner()
