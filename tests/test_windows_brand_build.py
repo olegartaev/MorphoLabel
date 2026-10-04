@@ -17,6 +17,15 @@ class WindowsBrandBuildTests(unittest.TestCase):
         self.assertIn("SetupIconFile=..\\..\\build\\brand\\MorphoLabel.ico",installer)
         self.assertIn("UninstallDisplayIcon={app}\\MorphoLabel.exe",installer)
 
+    def test_packaged_xray_ai_includes_every_required_runner(self):
+        spec=(ROOT/"packaging"/"morpholabel.spec").read_text(encoding="utf-8")
+        for runner in (
+            "xray_detector_runner.py",
+            "xray_orientation_runner.py",
+            "xray_structure_runner.py",
+        ):
+            self.assertIn(f'"{runner}"',spec)
+
     def test_uninstaller_removes_only_app_owned_install_and_state_directories(self):
         installer=(ROOT/"packaging"/"windows"/"MorphoLabel.iss").read_text(encoding="utf-8")
         self.assertIn("[UninstallDelete]",installer)
