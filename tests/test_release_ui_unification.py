@@ -202,6 +202,22 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn("self._restore_last_project()",module)
         self.assertIn("remember_xray_project(self.project.root)",module)
 
+    def test_module_hub_uses_packaged_multi_image_covers(self):
+        hub=source("app/ui/module_hub.py")
+        packaging=source("packaging/morpholabel.spec")
+        self.assertIn('resource_path("app","resources","module_covers",filename)',hub)
+        self.assertIn('self._module_covers.append(cover)',hub)
+        self.assertIn('_MODULE_COVER_DISPLAY_SIZE=(240,285)',hub)
+        self.assertIn('"app/resources/module_covers"',packaging)
+        from PIL import Image
+        expected={"landmarks.jpg":(160,190),"xray_traits.jpg":(160,190)}
+        for filename,size in expected.items():
+            path=ROOT/"app/resources/module_covers"/filename
+            self.assertTrue(path.is_file(),filename)
+            with Image.open(path) as image:
+                self.assertEqual(size,image.size)
+                self.assertEqual("JPEG",image.format)
+
     def test_about_ai_rows_show_architecture_but_never_active_model_ids(self):
         class Registry:
             def available(self):
