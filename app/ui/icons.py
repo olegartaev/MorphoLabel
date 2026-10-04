@@ -132,10 +132,12 @@ def render_icon(name: str, size: int=TOPBAR_ICON_SIZE):
         batch_stack(BLUE);sparkle(26,7,BLUE);arrow((20,27),(29,27),BLUE,1.9)
     elif name=='predict_all':
         batch_stack(BLUE);sparkle(26,7,BLUE)
-        d.ellipse(box((20,20,30,30)),fill='#ffffff',outline=GREEN,width=max(1,p(1.4)));check(25,25)
+        d.ellipse(box((20,20,30,30)),fill='#ffffff',outline=GREEN,width=max(1,p(1.4)))
+        line([(22.0,25.0),(24.2,27.0),(28.0,22.4)],GREEN,1.7)
     elif name=='accept_all':
         batch_stack(GREEN)
-        d.ellipse(box((19,19,30,30)),fill='#ffffff',outline=GREEN,width=max(1,p(1.5)));check(24.5,24.5)
+        d.ellipse(box((19,19,30,30)),fill='#ffffff',outline=GREEN,width=max(1,p(1.5)))
+        line([(21.3,24.7),(23.8,27.2),(28.1,21.8)],GREEN,1.8)
     elif name in {'predict','crop_apply','landmark_apply'}:
         specimen_card(8,5,20,22,BLUE);sparkle(8,8,BLUE);arrow((3,21),(13,21),BLUE,2.1)
     elif name=='landmark_repeat':

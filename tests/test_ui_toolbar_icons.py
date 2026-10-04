@@ -8,6 +8,7 @@ from app.ui.icons import (
     render_icon,
 )
 from app.ui.section_registry import SECTIONS
+from app.ui.design import action_icon
 
 
 class ToolbarIconContractTests(unittest.TestCase):
@@ -101,6 +102,18 @@ class ToolbarIconContractTests(unittest.TestCase):
         self.assertIn("specimen_card",source)
         self.assertIn("batch_stack",source)
         self.assertIn("sparkle",source)
+
+    def test_common_workflow_actions_receive_semantic_icons(self):
+        expected={
+            "Add next batch":"batch_add",
+            "Predict current":"predict_current",
+            "Predict next batch":"predict_batch",
+            "Predict all":"predict_all",
+            "Accept all AI":"accept_all",
+            "Calibrate samples":"measurement_calibrate",
+            "Measurement definitions…":"measurement_define",
+        }
+        self.assertEqual(expected,{label:action_icon(label) for label in expected})
 
     def test_workflow_dock_uses_compact_drawn_icons_without_changing_card_layout(self):
         source=open("app/ui/workflow.py",encoding="utf-8").read()

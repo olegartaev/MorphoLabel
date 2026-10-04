@@ -9,7 +9,7 @@ def columns_for_width(width: int, card_count: int, card_widths=None) -> int:
     required=[max(1,int(v)) for v in (card_widths or (300,)*count)]
     if len(required)!=count:raise ValueError('one requested width is required for each workflow card')
     # Each wide-mode column retains its own minimum requested width.
-    if width>=sum(required)+4*(count-1):return count
+    if width>=sum(required)+18*(count-1):return count
     return 1
 
 
@@ -38,7 +38,7 @@ class WorkflowDock(ttk.Frame):
                 ttk.Label(header,image=self.shell.ui_icon(icon, max(26,WORKFLOW_ICON_SIZE-4))).pack(side='left',padx=(0,5))
             else:ttk.Label(header,text=icon,style='WorkflowIcon.TLabel').pack(side='left',padx=(0,6))
         ttk.Label(header,text=title,style='WorkflowCardTitle.TLabel').pack(side='left')
-        card=ttk.LabelFrame(self.cards_host,labelwidget=header,padding=(5,2),style='WorkflowCard.TLabelframe')
+        card=ttk.LabelFrame(self.cards_host,labelwidget=header,padding=(8,5),style='WorkflowCard.TLabelframe')
         if help_text:self.shell.tip.bind(card,help_text);self.shell.tip.bind(header,help_text)
         index=len(self._cards);self._cards.append(card);self._card_headers.append(header)
         if index:self._stage_separators.append(ttk.Separator(self.cards_host,orient='vertical'))

@@ -115,6 +115,8 @@ def action_icon(text):
     label=str(text).strip().casefold().replace("…", "").rstrip(".")
     if label in {"help", "quick guide"}: return "help"
     if label.startswith("models"): return "models"
+    if label.startswith("calibrate"): return "measurement_calibrate"
+    if label.startswith("measurement definitions"): return "measurement_define"
     if label in {"start first batch","add next batch","start batch","continue batch"}: return "batch_add"
     if label == "train" or label.startswith("train "): return "train"
     if label.startswith("predict current"): return "predict_current"
