@@ -429,7 +429,7 @@ class XRayStructureAIContractTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         for text in (
-            "Predict current","Human repeatability","Repeat…","Sample size",
+            "Predict current","Human repeatability","Human Repeatability…","Sample size",
             "Annotation 1","Annotation 2","Start new sample",
             "Models…","Compare with human…","Check results…","one portable file",
         ):
