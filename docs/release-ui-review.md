@@ -43,6 +43,9 @@ should follow only after the demo layout is accepted, using a backup.
 - Wide windows show workflow cards together. Compact windows show stage tabs;
   controls retain their original commands and variables. Workflow can collapse.
 - Queue navigation is one additive yellow strip immediately above the working image: Previous, confirmation/next, Close queue. Result inspection retains its separate Next without confirmation. Saved queues show Continue without pretending that the current item is active.
+- The top bar exposes one `Queues` browser immediately left of `Menu`; it lists persisted annotation/review queues, opens the saved position, and closes only queue navigation/state while preserving annotations and scientific results.
+- Context rows use one vocabulary: `Sample` plus `Image` for core photographs, and `Sample | Plate | Crop/Specimen №` for X-ray workspaces. Keys are bold; values are normal weight and receive explicit width so long sample names remain readable.
+- X-ray Crop and Structure training now use the same `Active | From` pattern as Landmarks. `From` is a real saved-model selector; the pretrained baseline remains available explicitly.
 - Closing navigation preserves annotation data. Core queue membership remains
   stored and can be reopened through its workflow action. X-ray queue closing
   uses its existing UI-state behavior; the new annotation-batch Close clears
