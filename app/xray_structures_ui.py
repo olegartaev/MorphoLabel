@@ -22,7 +22,7 @@ from .xray_crop import oriented_crop
 from .xray_icons import VISIBILITY_ICON_SIZE, tk_visibility_icon, tk_xray_icon
 from .xray_structure_ai import (
     compare_structure_model_to_human, export_structure_model_package, import_structure_model_package,
-    predict_structures, train_structure_model,
+    predict_structures, structure_schema_digest, train_structure_model,
 )
 from .xray_schema import compatible_reference_roles, spatial_series_order
 from .xray_structure_display import (
@@ -789,16 +789,18 @@ class XRayStructureWorkspace:
         self.training_summary.configure(text=f"Ready: {p1['verified']} human-verified")
         active_id=(model or {}).get("model_id") or "none"
         self.structure_model_label.configure(text=f"Active: {active_id}")
-        prediction_values=tuple(item["model_id"] for item in self.project.structure_models())
+        current_digest=structure_schema_digest(self.project.scheme)
+        prediction_values=tuple(item["model_id"] for item in self.project.structure_models() if str(item.get("schema_digest") or "")==current_digest)
+        compatible_active=bool(model and str(model.get("schema_digest") or "")==current_digest)
         self.prediction_model_box.configure(values=prediction_values,state="readonly" if prediction_values else "disabled")
-        self.prediction_model_choice.set(active_id if model else "")
+        self.prediction_model_choice.set(active_id if compatible_active else "")
         parent_values=("ImageNet ResNet18",)+prediction_values
         current_parent=self.training_parent_choice.get()
         preferred_parent=(model or {}).get("model_id") or "ImageNet ResNet18"
         if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:
             self.training_parent_choice.set(preferred_parent)
         self.training_parent_box.configure(values=parent_values)
-        state="normal" if model and self.pass_no.get()==1 else "disabled"
+        state="normal" if compatible_active and self.pass_no.get()==1 else "disabled"
         self.structure_predict_next_button.configure(state=state);self.structure_predict_all_button.configure(state=state)
         self.structure_review_button.configure(state="normal" if review else "disabled")
         current=self.selected_specimen_id;ids=list(batch.get("ids") or ())

@@ -285,11 +285,12 @@ class LandmarksSection(SectionView):
    if box and box.winfo_exists():
     models=tuple(item['model_id'] for item in available_training_parents(self.context.project))
     box.configure(values=models,state='readonly' if models else 'disabled')
-    active_model=self.context.project.active_model_readonly('landmark') or {}
+    try:active_model=self.context.project.active_model_readonly('landmark') or {}
+    except ValueError:active_model={}
     self.prediction_model_choice.set(active_model.get('model_id',''))
 
  def _activate_prediction_model(self,_event=None):
-  model_id=str(getattr(self,'prediction_model_choice',tk.StringVar(master=self.shell,value='')).get() or '')
+  choice=getattr(self,'prediction_model_choice',None);model_id=str(choice.get() if choice is not None else '')
   if not model_id:return
   try:activate_landmark_model(self.context.project,model_id)
   except Exception as exc:
