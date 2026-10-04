@@ -17,7 +17,7 @@ from .tooltips import Tooltip
 from .icons import tk_icon, TOPBAR_ICON_SIZE, CONTROL_ICON_SIZE
 from .dialogs import center, info, install_auto_center
 from .photo_list_panel import PhotoListPanel
-from .design import ElidedLabel, sidebar_width_for_window, dialog_width_for_columns
+from .design import ElidedLabel, build_context_row, sidebar_width_for_window, dialog_width_for_columns
 from .landmark_sidebar import LandmarkSidebar
 from .preferences import last_project, remember_project
 from .project_section import ProjectSection
@@ -412,7 +412,13 @@ class ProductionShell(tk.Tk):
         # from a workspace does not leave an empty weighted row under the hub.
         self.root.rowconfigure(0,weight=0);self.root.rowconfigure(1,weight=0)
 
+    def _update_window_title(self):
+        spec=self.module_registry.get(self.module_key) if self.module_key else None
+        module_name=spec.display_name if spec is not None else "Modules"
+        self.title(f"{APP_NAME} — {module_name} — {APP_FULL_NAME} — v{APP_VERSION}")
+
     def render(self):
+        self._update_window_title()
         self._clear()
         if self.module_key is None:
             self.root.rowconfigure(0,weight=1);self.root.columnconfigure(0,weight=1)
@@ -621,14 +627,8 @@ class ProductionShell(tk.Tk):
         left=ttk.Frame(bar);left.grid(row=0,column=0,sticky="ew");self.status_left=left
         self.status_navigation=None;self.status_queue_title=None;self.status_previous=None;self.status_index=None;self.status_next=None
         self._status_context_full=""
-        context_fields=ttk.Frame(left);context_fields.pack(side="left",fill="x",expand=True,padx=(0,7))
-        context_fields.columnconfigure(1,weight=1,minsize=180);context_fields.columnconfigure(3,weight=2,minsize=220)
-        ttk.Label(context_fields,text="Sample:",style="ContextKey.TLabel").grid(row=0,column=0,sticky="w")
-        self.status_locality=ElidedLabel(context_fields,text="—",style="ContextValue.TLabel",anchor="w")
-        self.status_locality.grid(row=0,column=1,sticky="ew",padx=(4,14))
-        ttk.Label(context_fields,text="Image:",style="ContextKey.TLabel").grid(row=0,column=2,sticky="w")
-        self.status_context=ElidedLabel(context_fields,text="No images",style="ContextValue.TLabel",anchor="w")
-        self.status_context.grid(row=0,column=3,sticky="ew",padx=(4,0))
+        context_fields,context_values=build_context_row(left,("Sample","Image"));context_fields.pack(side="left",padx=(0,7))
+        self.status_locality=context_values["Sample"];self.status_context=context_values["Image"];self.status_context.configure(text="No images")
         self.status_count_host=ttk.Frame(left);self.status_count_host.pack(side="right")
         self.status_counts={}
         status_help={

@@ -8,7 +8,7 @@ class PhotoListCanvas(tk.Canvas):
  def __init__(self,master,**kwargs):
   self.status_shape=str(kwargs.pop("status_shape","circle") or "circle")
   super().__init__(master,highlightthickness=0,**kwargs);self.rows=[];self._selection=();self._yscroll=None;self._tooltip=None
-  self.bind("<Configure>",lambda _e:self._draw());self.bind("<Button-1>",self._click);self.bind("<MouseWheel>",self._wheel);self.bind("<Up>",lambda _e:self._move(-1));self.bind("<Down>",lambda _e:self._move(1));self.bind("<Home>",lambda _e:self._select(0));self.bind("<End>",lambda _e:self._select(len(self.rows)-1));self.bind("<Motion>",self._motion);self.bind("<Leave>",lambda _e:self._hide_tooltip());super().configure(scrollregion=(0,0,1,1),takefocus=True)
+  self.bind("<Configure>",lambda _e:self._draw());self.bind("<Button-1>",self._click);self.bind("<MouseWheel>",self._wheel);self.bind("<Up>",lambda _e:self._move(-1));self.bind("<Down>",lambda _e:self._move(1));self.bind("<Home>",lambda _e:self._select(0));self.bind("<End>",lambda _e:self._select(len(self.rows)-1));self.bind("<Motion>",self._motion);self.bind("<Leave>",lambda _e:self._hide_tooltip());self.bind("<Destroy>",lambda event:self._hide_tooltip() if event.widget is self else None,add="+");super().configure(scrollregion=(0,0,1,1),takefocus=True)
  def configure(self,cnf=None,**kwargs):
   if "yscrollcommand" in kwargs:self._yscroll=kwargs.pop("yscrollcommand")
   return super().configure(cnf,**kwargs)
@@ -23,11 +23,11 @@ class PhotoListCanvas(tk.Canvas):
   if self.rows:self._selection=(max(0,min(int(index),len(self.rows)-1)),);self._draw()
  def see(self,index,align_top=False):
   if not self.rows:return
-  index=max(0,min(int(index),len(self.rows)-1));content=max(1,len(self.rows)*self.row_height);height=max(1,self.winfo_height());top=self.canvasy(0);bottom=top+height;y=index*self.row_height
+  index=max(0,min(int(index),len(self.rows)-1));content=max(1,len(self.rows)*self.row_height);height=max(1,self.winfo_height());top=float(self.canvasy(0));bottom=top+height;y=index*self.row_height;margin=2
   if align_top:
-   target=min(y,max(0,content-height));super().yview_moveto(target/content)
-  elif y<top:super().yview_moveto(y/content)
-  elif y+self.row_height>bottom:super().yview_moveto(max(0,y+self.row_height-height)/content)
+   target=min(max(0,y-margin),max(0,content-height));super().yview_moveto(target/content)
+  elif y<top+margin:super().yview_moveto(max(0,y-margin)/content)
+  elif y+self.row_height>bottom-margin:super().yview_moveto(max(0,y+self.row_height-height+margin)/content)
   self._draw();self._notify_scroll()
  def yview(self,*args):
   result=super().yview(*args);self._draw();self._notify_scroll();return result

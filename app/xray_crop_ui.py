@@ -16,7 +16,7 @@ from app.ui.dialogs import center
 from app.ui.icons import CONTROL_ICON_SIZE, WORKFLOW_ICON_SIZE, tk_icon
 from app.ui.photo_list_panel import filtered_photo_indices, photo_search_cache
 from app.ui.tooltips import Tooltip
-from app.ui.design import ElidedLabel, FlowRow, action_icon, prediction_stamp, sidebar_width_for_window, dialog_width_for_columns
+from app.ui.design import ElidedLabel, FlowRow, action_icon, build_context_row, prediction_stamp, sidebar_width_for_window, dialog_width_for_columns
 from app.ui.workflow import WorkflowDock, add_command_separator
 from types import SimpleNamespace
 from .xray_crop import crop_corners, crop_from_geometry, detect_specimens, display_preview
@@ -350,14 +350,9 @@ class XRayCropWorkspace:
         self.root.after_idle(lambda:self._set_initial_sash())
 
         header=ttk.Frame(main);header.grid(row=0,column=0,sticky="ew",pady=(0,3));header.columnconfigure(0,weight=1)
-        context_fields=ttk.Frame(header);context_fields.grid(row=0,column=0,sticky="ew",padx=6,pady=(1,3));context_fields.columnconfigure(1,weight=1);context_fields.columnconfigure(3,weight=0)
-        ttk.Label(context_fields,text="Sample:",style="ContextKey.TLabel").grid(row=0,column=0,sticky="w")
-        self.sample_value=ttk.Label(context_fields,text="—",style="ContextValue.TLabel");self.sample_value.grid(row=0,column=1,sticky="w",padx=(4,14))
-        ttk.Label(context_fields,text="Plate:",style="ContextKey.TLabel").grid(row=0,column=2,sticky="w")
-        self.context_label=ElidedLabel(context_fields,text="—",style="ContextValue.TLabel",anchor="w");self.context_label.grid(row=0,column=3,sticky="w",padx=(4,14))
-        ttk.Label(context_fields,text="Specimen №:",style="ContextKey.TLabel").grid(row=0,column=4,sticky="w")
-        self.specimen_value=ttk.Label(context_fields,text="—",style="ContextValue.TLabel");self.specimen_value.grid(row=0,column=5,sticky="w",padx=(4,0));self.crop_value=self.specimen_value
-        self._tip.bind(self.context_label,lambda:self.context_label.full_text);self.prediction_text=""
+        context_fields,context_values=build_context_row(header,("Sample","Plate","Specimen №"));context_fields.grid(row=0,column=0,sticky="w",padx=6,pady=(1,3))
+        self.sample_value=context_values["Sample"];self.context_label=context_values["Plate"];self.specimen_value=context_values["Specimen №"];self.crop_value=self.specimen_value
+        self.prediction_text=""
         status_host=ttk.Frame(header);status_host.grid(row=0,column=1,sticky="e",padx=(10,6))
         self.predict_status_labels={}
         for key,title in (("unresolved","Unresolved"),("review","Review"),("verified","Verified")):
@@ -403,7 +398,7 @@ class XRayCropWorkspace:
         adapter=SimpleNamespace(ui_icon=lambda name,size:self._icon(main,name,size),tip=self._tip)
         workflow=WorkflowDock(main,adapter,help_factory=lambda host:self._button(host,"Help",self._show_help,"Open the X-ray Crop guide."))
         workflow.grid(row=3,column=0,sticky="ew",pady=(2,0));self.workflow_dock=workflow
-        one=workflow.add_card("1. Training data",icon="crop_training",help_text="Create human-confirmed crop and orientation examples.")
+        one=workflow.add_card("1. Training data",icon="crop_training",help_text="Start examples are the initial diverse human-confirmed plates used to establish Crop detection and head / ventral orientation.")
         batch_actions=ttk.Frame(one);batch_actions.grid(row=0,column=0,sticky="w")
         ttk.Label(batch_actions,text="Batch").pack(side="left")
         ttk.Spinbox(batch_actions,from_=1,to=100,textvariable=self.training_batch_size,width=4).pack(side="left",padx=(4,0))
@@ -430,6 +425,12 @@ class XRayCropWorkspace:
         batch_row=ttk.Frame(three);batch_row.grid(row=0,column=0,sticky="w")
         ttk.Label(batch_row,text="Next batch").pack(side="left");ttk.Spinbox(batch_row,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(4,0))
         ttk.Label(batch_row,text="plates",style="Muted.TLabel").pack(side="left",padx=(4,0))
+        add_command_separator(batch_row)
+        ttk.Label(batch_row,text="Model").pack(side="left")
+        self.prediction_model_choice=tk.StringVar(master=three,value="")
+        self.prediction_model_box=ttk.Combobox(batch_row,textvariable=self.prediction_model_choice,width=21,state="disabled")
+        self.prediction_model_box.pack(side="left",padx=(4,0));self.prediction_model_box.bind("<<ComboboxSelected>>",self._activate_prediction_model)
+        self._tip.bind(self.prediction_model_box,"Active Crop AI model used by all prediction actions. Choosing a model makes it active immediately.")
         predict_actions=ttk.Frame(three);predict_actions.grid(row=1,column=0,sticky="w",pady=(4,0))
         self.predict_current_button=self._button(predict_actions,"Predict current",self.predict_current_plate,"Apply Crop AI to the selected plate. Human-reviewed plates are protected and are never overwritten.");self.predict_current_button.pack(side="left")
         add_command_separator(predict_actions)
@@ -531,7 +532,10 @@ class XRayCropWorkspace:
         model_metrics=(model or {}).get("metrics") or {};orientation_mark=" · orientation ✓" if model_metrics.get("orientation/enabled") else ""
         active_id=(model or {}).get("model_id") or "none"
         self.model_label.configure(text=f"Active: {active_id}{orientation_mark}")
-        parent_values=("RTMDet pretrained",)+tuple(item["model_id"] for item in self.project.crop_models())
+        prediction_values=tuple(item["model_id"] for item in self.project.crop_models())
+        self.prediction_model_box.configure(values=prediction_values,state="readonly" if prediction_values else "disabled")
+        self.prediction_model_choice.set(active_id if model else "")
+        parent_values=("RTMDet pretrained",)+prediction_values
         current_parent=self.training_parent_choice.get()
         preferred_parent=(model or {}).get("model_id") or "RTMDet pretrained"
         if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:
@@ -548,6 +552,14 @@ class XRayCropWorkspace:
         self.review_button.configure(state="normal" if status["ai_pending_plates"] else "disabled")
         self._refresh_apply_state()
         self._refresh_flip_controls();self._refresh_batch_banner();self._update_batch_controls()
+
+    def _activate_prediction_model(self,_event=None):
+        model_id=str(self.prediction_model_choice.get() or "")
+        if not model_id:return
+        try:self.project.activate_crop_model(model_id)
+        except Exception as exc:
+            messagebox.showerror("X-ray Crop model",str(exc),parent=self.root);return
+        self._refresh_controls();self.on_changed()
 
     def _current_apply_needed(self):
         if not self.selected_image_id:return False

@@ -2,7 +2,7 @@
 from tkinter import ttk, messagebox, colorchooser
 import tkinter as tk
 import threading, queue
-from app.landmark_training_workflow import available_training_parents, prepare_landmark_training, run_landmark_training, validation_metrics
+from app.landmark_training_workflow import activate_landmark_model, available_training_parents, prepare_landmark_training, run_landmark_training, validation_metrics
 from app.landmark_ai_workflow import begin_improvement, control_set_summary, add_control_image, create_stage, stage_summary, workflow_current
 from app.ai_batch import active_backend, create_batch_for_ids, run_batch
 from app.landmark_ai_review import (active_review_session, activate_review_session, complete_or_advance_review, create_review_session_for_ids)
@@ -197,7 +197,7 @@ class LandmarksSection(SectionView):
   one.columnconfigure(1,weight=1)
   self.button(one,'Human Repeatability…',self.open_repeat,'Open the two independent blind annotation passes.').grid(row=1,column=0,columnspan=2,sticky='w',pady=(5,0))
 
-  two=dock.add_card('2. Training data',icon='landmark_training',help_text='Create or continue the human-annotated image set used for model training.')
+  two=dock.add_card('2. Training data',icon='landmark_training',help_text='Start examples are the initial human-verified images used to establish the first Landmark model; after that, this step adds improvement examples.')
   batch_info=stage_summary(self.context.project,create_missing=False);batch_state=batch_info['state']
   label='Start first batch' if not batch_state.get('initial_image_ids') else 'Continue batch' if batch_info['stage']=='INITIAL_TRAINING' or (batch_info['stage']=='MODEL_IMPROVEMENT' and batch_info['verified']<batch_info['total']) else 'Add next batch'
   batch_actions=ttk.Frame(two);batch_actions.grid(row=0,column=0,sticky='w')
@@ -215,7 +215,7 @@ class LandmarksSection(SectionView):
   parents=available_training_parents(self.context.project);saved=self.context.project.get_ui_state('landmark_training_parent_model_id',None);valid={item['model_id'] for item in parents};chosen=active.get('model_id') if active.get('model_id') in valid else saved if saved in valid else None
   parent_choice=tk.StringVar(master=panel,value=chosen or 'Bootstrap / first model')
   model_row=ttk.Frame(three);model_row.grid(row=0,column=0,sticky='ew');three.columnconfigure(0,weight=1)
-  ttk.Label(model_row,text=active_warning or f"Active: {active.get('model_id','None')}",style='StatusChip.TLabel').pack(side='left')
+  self.active_model_label=ttk.Label(model_row,text=active_warning or f"Active: {active.get('model_id','None')}",style='StatusChip.TLabel');self.active_model_label.pack(side='left')
   add_command_separator(model_row)
   ttk.Label(model_row,text="From").pack(side="left")
   parent_box=ttk.Combobox(model_row,textvariable=parent_choice,values=tuple(item['model_id'] for item in parents) or ('Bootstrap / first model',),width=17,state='readonly')
@@ -231,6 +231,13 @@ class LandmarksSection(SectionView):
   ttk.Label(batch_row,text='Next batch').pack(side='left')
   ttk.Spinbox(batch_row,from_=1,to=500,textvariable=prediction,width=5).pack(side='left',padx=(4,0))
   ttk.Label(batch_row,text='images',style='Muted.TLabel').pack(side='left',padx=(4,0))
+  add_command_separator(batch_row)
+  ttk.Label(batch_row,text='Model').pack(side='left')
+  prediction_models=tuple(item['model_id'] for item in parents)
+  self.prediction_model_choice=tk.StringVar(master=four,value=active.get('model_id',''))
+  self.prediction_model_box=ttk.Combobox(batch_row,textvariable=self.prediction_model_choice,values=prediction_models,width=20,state='readonly' if prediction_models else 'disabled')
+  self.prediction_model_box.pack(side='left',padx=(4,0));self.prediction_model_box.bind('<<ComboboxSelected>>',self._activate_prediction_model)
+  self.shell.tip.bind(self.prediction_model_box,'Active Landmark model used by Predict current, Predict next batch and Predict all. Choosing a model makes it active immediately.')
   predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,sticky='w',pady=(3,0))
   prediction_state='normal' if active else 'disabled'
   self.predict_current_button=self.button(
@@ -239,8 +246,8 @@ class LandmarksSection(SectionView):
    state='normal' if active and str((self.context.current() or {}).get('image_id') or '') in set(_prediction_candidate_ids(self.context.project,self.context.rows)) else 'disabled',
    icon='predict'
   );self.predict_current_button.pack(side='left')
-  self.button(predict_actions,'Predict next batch',lambda:self.predict(False,prediction.get()),'Predict the next empty or previously AI-predicted image. Human-confirmed images are never changed.',state=prediction_state,style='Primary.TButton').pack(side='left',padx=(4,0))
-  self.button(predict_actions,'Predict all',lambda:self.predict(True,prediction.get()),'Predict all empty and previously AI-predicted images. Human-confirmed images are never changed.',state=prediction_state).pack(side='left',padx=(4,0))
+  self.predict_next_button=self.button(predict_actions,'Predict next batch',lambda:self.predict(False,prediction.get()),'Predict the next empty or previously AI-predicted image. Human-confirmed images are never changed.',state=prediction_state,style='Primary.TButton');self.predict_next_button.pack(side='left',padx=(4,0))
+  self.predict_all_button=self.button(predict_actions,'Predict all',lambda:self.predict(True,prediction.get()),'Predict all empty and previously AI-predicted images. Human-confirmed images are never changed.',state=prediction_state);self.predict_all_button.pack(side='left',padx=(4,0))
   add_command_separator(predict_actions)
   self.button(
    predict_actions,'Review AI',lambda:self.review_worst(prediction.get()),
@@ -272,6 +279,25 @@ class LandmarksSection(SectionView):
    except ValueError:active=False
    eligible=current in set(_prediction_candidate_ids(self.context.project,self.context.rows)) if current else False
    predict_current.configure(state='normal' if active and eligible else 'disabled')
+   for button in (getattr(self,'predict_next_button',None),getattr(self,'predict_all_button',None)):
+    if button and button.winfo_exists():button.configure(state='normal' if active else 'disabled')
+   box=getattr(self,'prediction_model_box',None)
+   if box and box.winfo_exists():
+    models=tuple(item['model_id'] for item in available_training_parents(self.context.project))
+    box.configure(values=models,state='readonly' if models else 'disabled')
+    active_model=self.context.project.active_model_readonly('landmark') or {}
+    self.prediction_model_choice.set(active_model.get('model_id',''))
+
+ def _activate_prediction_model(self,_event=None):
+  model_id=str(getattr(self,'prediction_model_choice',tk.StringVar(master=self.shell,value='')).get() or '')
+  if not model_id:return
+  try:activate_landmark_model(self.context.project,model_id)
+  except Exception as exc:
+   messagebox.showerror('Landmark model',str(exc),parent=self.shell);return
+  self.context.invalidate_counts()
+  label=getattr(self,'active_model_label',None)
+  if label and label.winfo_exists():label.configure(text=f'Active: {model_id}')
+  self._refresh_action_buttons()
 
  def _refresh_repeatability_summary(self):
   """Refresh the visible workflow-card counters from persisted repeatability state."""

@@ -15,6 +15,7 @@ from app.ui.icons import TOPBAR_ICON_SIZE,tk_icon
 from app.xray_icons import XRAY_ICON_SIZE,TRAIT_ICON_SIZE,tk_xray_icon,tk_rule_preview
 from app.xray_project import XRayProject
 from app.ui.preferences import last_xray_project, remember_xray_project
+from app.ui.design import build_context_row
 from app.xray_result_qc import build_result_qc
 from app.xray_result_qc import start_result_review_queue,result_review_queue,clear_result_review_queue
 from app.xray_trait_export import export_trait_rows
@@ -364,12 +365,7 @@ class XRayCountsRuntime:
         return tuple(fields)
 
     def _render_selection_context(self,parent):
-        row=ttk.Frame(parent);row.pack(fill="x",pady=(2,3))
-        self._selection_context_values={}
-        for index,key in enumerate(("Sample","Plate","Specimen №")):
-            ttk.Label(row,text=f"{key}:",style="ContextKey.TLabel").pack(side="left",padx=(0 if index==0 else 14,0))
-            value=ttk.Label(row,text="—",style="ContextValue.TLabel")
-            value.pack(side="left",padx=(4,0));self._selection_context_values[key]=value
+        row,self._selection_context_values=build_context_row(parent,("Sample","Plate","Specimen №"));row.pack(fill="x",pady=(2,3))
         self._refresh_selection_context()
         return row
 

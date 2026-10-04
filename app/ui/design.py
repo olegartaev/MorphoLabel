@@ -20,6 +20,16 @@ BORDER = "#c8c8c8"
 CANVAS = "#202020"
 
 
+def build_context_row(parent,fields):
+    """Create one readable left-aligned context row and return its value labels."""
+    row=ttk.Frame(parent);values={}
+    for index,key in enumerate(tuple(fields)):
+        ttk.Label(row,text=f"{key}:",style="ContextKey.TLabel").pack(side="left",padx=(0 if index==0 else 14,0))
+        value=ttk.Label(row,text="—",style="ContextValue.TLabel",anchor="w")
+        value.pack(side="left",padx=(4,0));values[str(key)]=value
+    return row,values
+
+
 def _native_theme(style):
     themes=set(style.theme_names())
     if sys.platform.startswith("win"):

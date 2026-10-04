@@ -42,8 +42,7 @@ def _landmarks_ai(shell):
     backend=metrics.get('backend') or (metrics.get('model_info') or {}).get('backend') or 'rtmpose'
     architecture=_backend_label(backend,LANDMARK_BOOTSTRAP_ARCHITECTURE)
     if str(backend)=='rtmpose':architecture=f"{LANDMARK_BOOTSTRAP_ARCHITECTURE} (MMPose; {LANDMARK_BOOTSTRAP_DATASET} bootstrap)"
-    active_text=f"; active model: {active['model_id']}" if active and active.get('model_id') else "; active model: none"
-    return f"Landmark AI: {architecture}{active_text}. Crop: NumPy ridge image regression (non-neural)."
+    return f"Landmark AI: {architecture}. Crop: NumPy ridge image regression (non-neural)."
 
 def _xray_ai(shell):
     from app.xray_detector import DETECTOR_BACKEND
@@ -57,14 +56,10 @@ def _xray_ai(shell):
     crop_backend=crop_metrics.get('backend') or DETECTOR_BACKEND
     orientation_backend=crop_metrics.get('orientation/backend') or ORIENTATION_BACKEND
     structure_backend=(structure or {}).get('backend') or _metrics(structure).get('backend') or STRUCTURE_BACKEND
-    active=[]
-    if crop and crop.get('model_id'):active.append(f"Crop {crop['model_id']}")
-    if structure and structure.get('model_id'):active.append(f"Structures {structure['model_id']}")
-    active_text="; active: "+", ".join(active) if active else "; active models: none loaded"
     return (
         f"AI: Crop — {_backend_label(crop_backend,DETECTOR_BACKEND)}; "
         f"orientation — {_backend_label(orientation_backend,ORIENTATION_BACKEND)}; "
-        f"Structures — {_backend_label(structure_backend,STRUCTURE_BACKEND)}{active_text}."
+        f"Structures — {_backend_label(structure_backend,STRUCTURE_BACKEND)}."
     )
 
 def module_credit_rows(registry,shell=None):

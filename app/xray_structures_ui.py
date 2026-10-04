@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageTk
 
 from app.photo_list import PhotoListCanvas
 from app.ui.icons import CONTROL_ICON_SIZE, WORKFLOW_ICON_SIZE, tk_icon
-from app.ui.design import ElidedLabel, FlowRow, action_icon, structure_prediction_text, sidebar_width_for_window, dialog_width_for_columns
+from app.ui.design import ElidedLabel, FlowRow, action_icon, build_context_row, structure_prediction_text, sidebar_width_for_window, dialog_width_for_columns
 from app.ui.workflow import WorkflowDock, add_command_separator
 from types import SimpleNamespace
 from app.ui.photo_list_panel import DEFAULT_SHOW_EXCLUDED, filtered_photo_indices
@@ -354,14 +354,8 @@ class XRayStructureWorkspace:
         self.root.after_idle(self._set_initial_sash)
 
         context=ttk.Frame(main,padding=(6,2));context.grid(row=0,column=0,sticky="ew");context.columnconfigure(0,weight=1)
-        context_fields=ttk.Frame(context);context_fields.grid(row=0,column=0,sticky="ew",padx=(0,8));context_fields.columnconfigure(1,weight=1);context_fields.columnconfigure(3,weight=0)
-        ttk.Label(context_fields,text="Sample:",style="ContextKey.TLabel").grid(row=0,column=0,sticky="w")
-        self.locality_value=ttk.Label(context_fields,text="—",style="ContextValue.TLabel");self.locality_value.grid(row=0,column=1,sticky="w",padx=(4,14))
-        ttk.Label(context_fields,text="Plate:",style="ContextKey.TLabel").grid(row=0,column=2,sticky="w")
-        self.context_label=ElidedLabel(context_fields,text="—",style="ContextValue.TLabel",anchor="w");self.context_label.grid(row=0,column=3,sticky="ew",padx=(4,14))
-        ttk.Label(context_fields,text="Specimen №:",style="ContextKey.TLabel").grid(row=0,column=4,sticky="w")
-        self.specimen_value=ttk.Label(context_fields,text="—",style="ContextValue.TLabel");self.specimen_value.grid(row=0,column=5,sticky="w",padx=(4,0))
-        self.tip.bind(self.context_label,lambda:self.context_label.full_text)
+        context_fields,context_values=build_context_row(context,("Sample","Plate","Specimen №"));context_fields.grid(row=0,column=0,sticky="w",padx=(0,8))
+        self.locality_value=context_values["Sample"];self.context_label=context_values["Plate"];self.specimen_value=context_values["Specimen №"]
         status_host=ttk.Frame(context);status_host.grid(row=0,column=1,sticky="e")
         self.summary_labels={}
         for key,title in (("verified","Verified"),("draft","Draft"),("unstarted","Not started")):
@@ -424,7 +418,7 @@ class XRayStructureWorkspace:
         self.repeat_pass_label=ttk.Label(one,text="",style="Muted.TLabel");self.repeat_pass_label.grid(row=0,column=1,sticky="e",padx=(8,0));one.columnconfigure(1,weight=1)
         self.repeat_button=self._button(one,"Human Repeatability…",self.open_repeatability,"Open the complete human repeatability workflow.");self.repeat_button.grid(row=1,column=0,columnspan=2,sticky="w",pady=(5,0))
 
-        two=workflow.add_card("2. Training data",icon="landmark_training",help_text="Annotation batch: human-verify the main specimen pass for training.")
+        two=workflow.add_card("2. Training data",icon="landmark_training",help_text="Start examples are the initial human-verified Structure annotations used to establish the first model; later batches add improvement examples.")
         self.batch_summary=ttk.Label(two,text="",style="Muted.TLabel");self.batch_summary.grid(row=0,column=0,sticky="w")
         batch_actions=ttk.Frame(two);batch_actions.grid(row=1,column=0,sticky="w",pady=(4,0))
         ttk.Label(batch_actions,text="Batch").pack(side="left")
@@ -451,6 +445,12 @@ class XRayStructureWorkspace:
         four=workflow.add_card("4. Predict & review",icon="landmark_apply",help_text="Predict unverified crops, inspect AI drafts, and check calculated trait values.")
         batch_row=ttk.Frame(four);batch_row.grid(row=0,column=0,sticky="w")
         ttk.Label(batch_row,text="Next batch").pack(side="left");ttk.Spinbox(batch_row,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(4,0));ttk.Label(batch_row,text="specimens",style="Muted.TLabel").pack(side="left",padx=(4,0))
+        add_command_separator(batch_row)
+        ttk.Label(batch_row,text="Model").pack(side="left")
+        self.prediction_model_choice=tk.StringVar(master=four,value="")
+        self.prediction_model_box=ttk.Combobox(batch_row,textvariable=self.prediction_model_choice,width=21,state="disabled")
+        self.prediction_model_box.pack(side="left",padx=(4,0));self.prediction_model_box.bind("<<ComboboxSelected>>",self._activate_prediction_model)
+        self.tip.bind(self.prediction_model_box,"Active Structure AI model used by all prediction actions. Choosing a model makes it active immediately.")
         predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,sticky="w",pady=(4,0))
         self.predict_current_button=self._button(predict_actions,"Predict current",self.predict_current_structure,"Refresh AI suggestions for this specimen using the existing protection and confirmation rules.");self.predict_current_button.pack(side="left")
         add_command_separator(predict_actions)
@@ -789,7 +789,10 @@ class XRayStructureWorkspace:
         self.training_summary.configure(text=f"Ready: {p1['verified']} human-verified")
         active_id=(model or {}).get("model_id") or "none"
         self.structure_model_label.configure(text=f"Active: {active_id}")
-        parent_values=("ImageNet ResNet18",)+tuple(item["model_id"] for item in self.project.structure_models())
+        prediction_values=tuple(item["model_id"] for item in self.project.structure_models())
+        self.prediction_model_box.configure(values=prediction_values,state="readonly" if prediction_values else "disabled")
+        self.prediction_model_choice.set(active_id if model else "")
+        parent_values=("ImageNet ResNet18",)+prediction_values
         current_parent=self.training_parent_choice.get()
         preferred_parent=(model or {}).get("model_id") or "ImageNet ResNet18"
         if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:
@@ -806,6 +809,14 @@ class XRayStructureWorkspace:
             self.annotation_queue_banner.pack(fill="x")
         else:self.annotation_queue_banner.pack_forget()
 
+
+    def _activate_prediction_model(self,_event=None):
+        model_id=str(self.prediction_model_choice.get() or "")
+        if not model_id:return
+        try:self.project.activate_structure_model(model_id)
+        except Exception as exc:
+            messagebox.showerror("X-ray Structure model",str(exc),parent=self.root);return
+        self._refresh_workflow();self._refresh_summary();self.on_changed()
 
     def _update_counts(self):
         counts={}

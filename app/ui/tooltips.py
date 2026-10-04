@@ -72,29 +72,47 @@ def place_popup(window, root, x, y, *, above_y=None):
 
 class Tooltip:
  def __init__(self,root):
-  self.root=root;self.job=None;self.window=None;root.bind("<Destroy>",self._root_destroyed,add="+")
- def bind(self,widget,text): widget.bind("<Enter>",lambda _e:self._wait(widget,text),add="+");widget.bind("<Leave>",lambda _e:self.hide(),add="+")
+  self.root=root;self.job=None;self.window=None;self.owner=None;self.anchor=None
+  self._texts={};self._bound=set()
+  root.bind("<Destroy>",self._root_destroyed,add="+")
+  root.bind("<ButtonPress>",lambda _e:self.hide(),add="+")
+ def bind(self,widget,text):
+  key=str(widget);self._texts[key]=(widget,text)
+  if key in self._bound:return
+  self._bound.add(key)
+  widget.bind("<Enter>",self._enter,add="+")
+  widget.bind("<Leave>",lambda event:self.hide(event.widget),add="+")
+  widget.bind("<ButtonPress>",lambda event:self.hide(event.widget),add="+")
+  widget.bind("<Destroy>",self._widget_destroyed,add="+")
+ def _enter(self,event):
+  item=self._texts.get(str(event.widget))
+  if item:self.schedule(event.widget,item[1])
+ def _widget_destroyed(self,event):
+  key=str(event.widget);self._texts.pop(key,None);self._bound.discard(key)
+  if event.widget is self.owner:self.hide()
  def _root_destroyed(self,event):
-  if event.widget is self.root:self.job=None;self.window=None
- def _wait(self,w,text):
-  self.hide()
-  try:self.job=self.root.after(1200,lambda:self._show(w,text))
+  if event.widget is self.root:
+   self.job=None;self.window=None;self.owner=None;self.anchor=None;self._texts.clear();self._bound.clear()
+ def schedule(self,w,text,anchor=None):
+  self.hide();self.owner=w;self.anchor=anchor
+  try:self.job=self.root.after(1200,lambda:self._show(w,text,anchor))
   except tk.TclError:self.job=None
- def _show(self,w,text):
+ def _show(self,w,text,anchor=None):
   self.job=None
   try:
-   if not w.winfo_exists():return
+   if self.owner is not w or not w.winfo_exists():return
    if callable(text):text=text()
+   if not text:return
    self.window=tk.Toplevel(self.root);self.window.overrideredirect(True);self.window.attributes("-topmost",True)
-   ttk.Label(self.window,text=text,background="#fffff2",padding=(7,4),wraplength=280).pack()
-   place_popup(
-    self.window,self.root,
-    w.winfo_rootx()+6,
-    w.winfo_rooty()+w.winfo_height()+4,
-    above_y=w.winfo_rooty()-4,
-   )
+   ttk.Label(self.window,text=text,background="#fffff2",padding=(7,4),wraplength=320,justify="left").pack()
+   if anchor is None:
+    x=w.winfo_rootx()+6;y=w.winfo_rooty()+w.winfo_height()+4;above=w.winfo_rooty()-4
+   else:
+    x,y,above=anchor
+   place_popup(self.window,self.root,x,y,above_y=above)
   except tk.TclError:self.window=None
- def hide(self):
+ def hide(self,owner=None):
+  if owner is not None and self.owner is not owner:return
   if self.job:
    try:self.root.after_cancel(self.job)
    except tk.TclError:pass
@@ -103,3 +121,4 @@ class Tooltip:
    try:self.window.destroy()
    except tk.TclError:pass
    self.window=None
+  self.owner=None;self.anchor=None
