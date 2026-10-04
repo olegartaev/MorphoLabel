@@ -145,7 +145,8 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn("self.shell.tip.schedule(self.notebook,text",workflow)
         separator=workflow[workflow.index("def add_command_separator"):workflow.index("def build_help_button")]
         self.assertIn("ttk.Separator",separator)
-        for section in (landmarks,xcrop,structures):self.assertIn("Start examples are the initial",section)
+        core_crop=source("app/ui/crop_section.py")
+        for section in (core_crop,landmarks,xcrop,structures):self.assertIn("Start examples are the initial",section)
 
     def test_landmark_verify_state_disables_after_verification_and_reenables_after_edit_state(self):
         verified=SimpleNamespace(human_verified=True,points_by_id={})
@@ -215,7 +216,9 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertLess(shell.index("self._update_window_title()",shell.index("def render(self):")),shell.index("self._clear()",shell.index("def render(self):")))
 
     def test_predict_review_model_selectors_set_the_real_active_model(self):
-        landmarks=source("app/ui/landmarks_section.py");xcrop=source("app/xray_crop_ui.py");structures=source("app/xray_structures_ui.py")
+        crop=source("app/ui/crop_section.py");landmarks=source("app/ui/landmarks_section.py");xcrop=source("app/xray_crop_ui.py");structures=source("app/xray_structures_ui.py")
+        self.assertIn("self.prediction_model_box=ttk.Combobox",crop)
+        self.assertIn('self.context.project.set_active_model("crop",model_id)',crop)
         self.assertIn("self.prediction_model_box=ttk.Combobox",landmarks)
         self.assertIn("activate_landmark_model(self.context.project,model_id)",landmarks)
         self.assertIn("self.prediction_model_box=ttk.Combobox",xcrop)

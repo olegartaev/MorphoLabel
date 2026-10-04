@@ -31,7 +31,7 @@ class CropSection(SectionView):
   dock=self.workflow_dock(panel,help_title="Crop — quick guide",help_text=guide);dock.grid(row=2,column=0,sticky="ew",pady=(4,0))
 
   training_rows=self.context.project.crop_training_rows()
-  one=dock.add_card("1. Training data",icon="crop_training",help_text="Create or continue the human-corrected Crop examples used for model training.")
+  one=dock.add_card("1. Training data",icon="crop_training",help_text="Start examples are the initial human-corrected Crop images used to establish the first Crop model; later batches add improvement examples.")
   ttk.Label(one,text="Manual corrected examples",style="Muted.TLabel").grid(row=0,column=0,sticky="w")
   batch_actions=ttk.Frame(one);batch_actions.grid(row=1,column=0,sticky="w",pady=(4,0))
   ttk.Label(batch_actions,text="Batch size").pack(side="left")
@@ -45,7 +45,7 @@ class CropSection(SectionView):
   model_row=ttk.Frame(two);model_row.grid(row=0,column=0,sticky="ew");two.columnconfigure(0,weight=1)
   active_crop=self.context.project.active_model("crop") or {}
   active_crop_id=active_crop.get("model_id") or "None"
-  ttk.Label(model_row,text=f"Active: {active_crop_id}",style="StatusChip.TLabel").pack(side="left")
+  self.crop_active_model_label=ttk.Label(model_row,text=f"Active: {active_crop_id}",style="StatusChip.TLabel");self.crop_active_model_label.pack(side="left")
   add_command_separator(model_row)
   ttk.Label(model_row,text="From").pack(side="left")
   crop_models=self.context.project.models("crop");crop_model_ids=tuple(item["model_id"] for item in crop_models)
@@ -65,6 +65,12 @@ class CropSection(SectionView):
   ttk.Label(batch_row,text="Next batch").pack(side="left")
   ttk.Spinbox(batch_row,from_=1,to=500,textvariable=prediction,width=5).pack(side="left",padx=(4,0))
   ttk.Label(batch_row,text="images",style="Muted.TLabel").pack(side="left",padx=(4,0))
+  add_command_separator(batch_row)
+  ttk.Label(batch_row,text="Model").pack(side="left")
+  self.prediction_model_choice=tk.StringVar(master=three,value=active_crop.get("model_id") or "")
+  self.prediction_model_box=ttk.Combobox(batch_row,textvariable=self.prediction_model_choice,values=crop_model_ids,width=20,state="readonly" if crop_model_ids else "disabled")
+  self.prediction_model_box.pack(side="left",padx=(4,0));self.prediction_model_box.bind("<<ComboboxSelected>>",self._activate_prediction_model)
+  self.shell.tip.bind(self.prediction_model_box,"Active Crop model used by Predict next batch and Predict all. Choosing a model makes it active immediately.")
   apply_actions=ttk.Frame(three);apply_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
   self.button(apply_actions,"Predict next batch",lambda:self.auto_batch(prediction.get()),"Predict Crop for the next uncropped eligible images.",style="Primary.TButton").pack(side="left")
   self.button(apply_actions,"Predict all",lambda:self.auto_batch(None),"Predict Crop for every uncropped eligible image. Existing AI proposals are not rerun.").pack(side="left",padx=(4,0))
@@ -73,6 +79,15 @@ class CropSection(SectionView):
   self.button(apply_actions,"Review manual",self.review_manual,"Re-review crops that were created manually.").pack(side="left",padx=(4,0))
   add_command_separator(apply_actions)
   self.button(apply_actions,"Accept all AI",self.accept_all_ai_crops,"Accept every current pending AI Crop exactly as predicted, without recalculating it.").pack(side="left")
+ def _activate_prediction_model(self,_event=None):
+  model_id=str(self.prediction_model_choice.get() or "")
+  if not model_id:return
+  try:self.context.project.set_active_model("crop",model_id)
+  except Exception as exc:
+   messagebox.showerror("Crop model",str(exc),parent=self.shell);return
+  self.crop_active_model_label.configure(text=f"Active: {model_id}")
+  self.context.invalidate_counts();self.shell._update_status()
+
  def refresh(self,image_id=None):
   if image_id is not None:
    # Crop changes can also invalidate/reproject landmarks; refresh the whole
