@@ -1144,8 +1144,10 @@ ORDER BY l.image_id""",active).fetchall()
   if model and kind=="landmark" and not landmark_model_schema_compatible(self,model): raise ValueError("active landmark model landmark identities/order do not match project schema")
   return model
  def models(self,kind):
-  """Registered models of one kind, newest first, for UI selection and lineage."""
-  with self.transaction() as c:rows=c.execute("SELECT * FROM models WHERE kind=? ORDER BY created_at DESC,model_id DESC",(str(kind),)).fetchall()
+  """Registered models of one kind, newest first, without opening a write-capable UI transaction."""
+  uri=self.path.resolve().as_uri()+"?mode=ro";conn=sqlite3.connect(uri,uri=True,timeout=1);conn.row_factory=sqlite3.Row
+  try:rows=conn.execute("SELECT * FROM models WHERE kind=? ORDER BY created_at DESC,model_id DESC",(str(kind),)).fetchall()
+  finally:conn.close()
   return [dict(row) for row in rows]
  def active_model_readonly(self,kind):
   """Read one active model without opening a write-capable project transaction."""
