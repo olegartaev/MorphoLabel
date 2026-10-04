@@ -14,6 +14,12 @@ class T(unittest.TestCase):
   source=(Path(__file__).resolve().parents[1]/"app/ui/crop_canvas.py").read_text(encoding="utf-8")
   self.assertIn("Keep the biological image fixed while the persisted crop frame rotates above it.",source)
   self.assertNotIn(".rotate(self.model.angle",source)
+ def test_operational_crop_qc_is_not_drawn_over_the_image(self):
+  source=(Path(__file__).resolve().parents[1]/"app/ui/crop_canvas.py").read_text(encoding="utf-8")
+  self.assertIn("self.status_callback",source)
+  self.assertNotIn("Drag crop frame or handles.",source)
+  self.assertIn('text=self.context_message',source)
+
  def test_rotating_editor_frame_preserves_persisted_transform_geometry(self):
   model=CropModel(1000,600,220,140,780,460,27.5)
   corners=crop_frame_polygon(model)

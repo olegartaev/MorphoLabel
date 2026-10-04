@@ -228,12 +228,12 @@ class LandmarksSection(SectionView):
 
   four=dock.add_card('4. Predict & review',icon='landmark_apply',help_text='Run AI prediction, review the saved results, then perform final data QC.')
   batch_row=ttk.Frame(four);batch_row.grid(row=0,column=0,sticky='w')
-  ttk.Label(batch_row,text='Next').pack(side='left')
+  ttk.Label(batch_row,text='Next batch').pack(side='left')
   ttk.Spinbox(batch_row,from_=1,to=500,textvariable=prediction,width=5).pack(side='left',padx=(4,0))
   ttk.Label(batch_row,text='images',style='Muted.TLabel').pack(side='left',padx=(4,0))
   predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,sticky='w',pady=(3,0))
   prediction_state='normal' if active else 'disabled'
-  self.button(predict_actions,'Predict next',lambda:self.predict(False,prediction.get()),'Predict the next empty or previously AI-predicted image. Human-confirmed images are never changed.',state=prediction_state).pack(side='left')
+  self.button(predict_actions,'Predict next batch',lambda:self.predict(False,prediction.get()),'Predict the next empty or previously AI-predicted image. Human-confirmed images are never changed.',state=prediction_state,style='Primary.TButton').pack(side='left')
   self.button(predict_actions,'Predict all',lambda:self.predict(True,prediction.get()),'Predict all empty and previously AI-predicted images. Human-confirmed images are never changed.',state=prediction_state).pack(side='left',padx=(4,0))
   add_command_separator(predict_actions)
   self.button(

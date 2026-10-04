@@ -635,7 +635,9 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn('self.specimen_value.configure(text=values["specimen"])',ui)
         self.assertIn('style="ContextKey.TLabel"',ui)
         self.assertIn('style="MarkerStatus.TButton"',ui)
-        self.assertIn('image=self._marker_status_spacer',ui)
+        self.assertIn('image=visibility_icon',ui)
+        self.assertIn("tk_visibility_icon",ui)
+        self.assertIn("VISIBILITY_ICON_SIZE",ui)
         self.assertIn("def _post_marker_visibility_menu",ui)
         self.assertNotIn('text="Visibility:"',ui)
         self.assertNotIn("self.visibility_box",ui)
@@ -711,6 +713,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn('"number":str(int(row.get("workflow_no") or index+1))',ui)
         self.assertNotIn('text="Delete"',ui)
         self.assertNotIn("Wheel = zoom · right-drag = pan",ui)
+        self.assertNotIn("Choose marker · click = place · right-click point = role",ui)
 
 
 if __name__=="__main__":

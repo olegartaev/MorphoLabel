@@ -61,6 +61,7 @@ class ToolbarIconContractTests(unittest.TestCase):
             "landmark_repeat","landmark_training","landmark_train","landmark_apply",
             "measurement_calibrate","measurement_define","measurement_export",
             "export_landmarks","export_measurements",
+            "batch_add","predict_current","predict_batch","predict_all","accept_all",
         }
         self.assertEqual(32,WORKFLOW_ICON_SIZE)
         self.assertTrue(selected.issubset(ICON_NAMES))
@@ -89,6 +90,17 @@ class ToolbarIconContractTests(unittest.TestCase):
         for path,needles in mappings.items():
             source=open(path,encoding="utf-8").read()
             for needle in needles:self.assertIn(needle,source)
+
+    def test_batch_and_prediction_actions_use_pictorial_icons(self):
+        source=open("app/ui/icons.py",encoding="utf-8").read()
+        for name in ("batch_add","predict_current","predict_batch","predict_all","accept_all"):
+            self.assertIn(f"'{name}'",source)
+            image=render_icon(name,CONTROL_ICON_SIZE)
+            self.assertEqual((CONTROL_ICON_SIZE,CONTROL_ICON_SIZE),image.size)
+            self.assertIsNotNone(image.getbbox(),name)
+        self.assertIn("specimen_card",source)
+        self.assertIn("batch_stack",source)
+        self.assertIn("sparkle",source)
 
     def test_workflow_dock_uses_compact_drawn_icons_without_changing_card_layout(self):
         source=open("app/ui/workflow.py",encoding="utf-8").read()

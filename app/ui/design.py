@@ -50,11 +50,11 @@ def apply_styles(root, style):
         style.configure("Treeview",background=PAPER,fieldbackground=PAPER,foreground=INK)
         style.configure("Treeview.Heading",background="#e9e9e9",foreground=INK)
 
-    style.configure("TButton",padding=(8,4),width=0)
+    style.configure("TButton",padding=(9,5),width=0)
     for name in ("P.TButton","Icon.TButton","Nav.TButton","ReviewAction.TButton"):
-        style.configure(name,padding=(8,4),font=(family,9))
+        style.configure(name,padding=(9,5),font=(family,9))
     for name in ("Primary.TButton","NavPrimary.TButton","CropNext.TButton","CropApply.TButton"):
-        style.configure(name,padding=(8,4),font=(family,9,"bold"))
+        style.configure(name,padding=(9,5),font=(family,9,"bold"))
     style.configure("Marker.TButton",padding=(7,4),font=(family,9))
     style.configure("MarkerActive.TButton",padding=(7,4),font=(family,9,"bold"))
     style.configure("MarkerStatus.TButton",padding=(7,4),font=(family,9))
@@ -65,7 +65,7 @@ def apply_styles(root, style):
     style.configure("Toolbar.TFrame",padding=(3,2))
     style.configure("WorkflowDock.TFrame",padding=0)
     style.configure("WorkflowDockTitle.TLabel",font=(family,9,"bold"),foreground=MUTED)
-    style.configure("WorkflowCard.TLabelframe",padding=(5,3))
+    style.configure("WorkflowCard.TLabelframe",padding=(8,5),borderwidth=1,relief="groove")
     style.configure("WorkflowCardTitle.TLabel",font=(family,9,"bold"))
     style.configure("SectionTitle.TLabel",font=(family,9,"bold"))
     style.configure("PageTitle.TLabel",font=(family,15,"bold"))
@@ -115,11 +115,21 @@ def action_icon(text):
     label=str(text).strip().casefold().replace("…", "").rstrip(".")
     if label in {"help", "quick guide"}: return "help"
     if label.startswith("models"): return "models"
+    if label in {"start first batch","add next batch","start batch","continue batch"}: return "batch_add"
+    if label == "train" or label.startswith("train "): return "train"
+    if label.startswith("predict current"): return "predict_current"
+    if label.startswith("predict next"): return "predict_batch"
+    if label.startswith("predict all"): return "predict_all"
     if label.startswith("export") or label == "open export": return "export"
     if label.startswith("review"): return "review_worst"
+    if label.startswith("accept all"): return "accept_all"
     if label in {"check results", "final data qc"}: return "complex_qc"
     if label.startswith("repeat"): return "landmark_repeat"
     if label.startswith("display"): return "display"
+    if label in {"verify specimen","verify image","confirm & next","verify & next","apply crop","apply crops"}: return "verify"
+    if label=="previous": return "previous"
+    if label in {"next","next unfinished","continue"}: return "next"
+    if label=="close queue": return "close"
     if label in {"exclude", "restore"}: return label
     return None
 

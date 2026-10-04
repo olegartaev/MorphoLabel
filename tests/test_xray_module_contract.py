@@ -7,7 +7,7 @@ from app.modules.xray_counts import (
     _derived_rule_from_builder, _derived_trait_choices, _reference_relation_text,
     _renumber_default_structure_hotkeys, _scheme_display_model, _sort_export_tree,
 )
-from app.xray_icons import XRAY_ICON_NAMES, _count_to_indices, render_rule_preview, render_xray_icon
+from app.xray_icons import VISIBILITY_ICON_SIZE, VISIBILITY_STATES, XRAY_ICON_NAMES, _count_to_indices, render_rule_preview, render_visibility_icon, render_xray_icon
 
 
 class XRayOrientationAndStorageContractTests(unittest.TestCase):
@@ -30,6 +30,15 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertEqual("X-ray traits",spec.display_name)
         self.assertIsNotNone(spec.factory)
         self.assertNotIn("fish",spec.description.lower())
+
+    def test_visibility_icons_are_large_readable_and_semantically_distinct(self):
+        self.assertEqual(32,VISIBILITY_ICON_SIZE)
+        images={state:render_visibility_icon(state) for state in VISIBILITY_STATES}
+        for state,image in images.items():
+            self.assertEqual((VISIBILITY_ICON_SIZE,VISIBILITY_ICON_SIZE),image.size)
+            self.assertIsNotNone(image.getbbox(),state)
+        self.assertEqual(len(images),len({image.tobytes() for image in images.values()}))
+        self.assertNotEqual(images["not_visible"].tobytes(),images["absent"].tobytes())
 
     def test_workflow_matches_landmarks_shape(self):
         self.assertEqual(("project","crops","structures","export"),tuple(item[0] for item in STAGES))

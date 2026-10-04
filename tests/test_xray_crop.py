@@ -119,7 +119,8 @@ class XRayCropViewportContractTests(unittest.TestCase):
     def test_all_crops_show_clear_boundary_and_compact_orientation(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
         self.assertIn("def _draw_crop_brackets",source)
-        self.assertIn("blue triangle = head · amber stripe = ventral side",source)
+        self.assertNotIn("blue triangle = head · amber stripe = ventral side",source)
+        self.assertNotIn("crop_hint",source)
         self.assertIn("def _draw_orientation_markers(self,crop,selected):",source)
         marker=source[source.index("    def _draw_orientation_markers(self,crop,selected):"):source.index("    def _draw_handles(self,crop):")]
         self.assertNotIn("if not selected:return",marker)
@@ -151,6 +152,24 @@ class XRayCropViewportContractTests(unittest.TestCase):
         self.assertIn('"Clear all…",self.clear_plate_crops',source)
         self.assertNotIn("rotate_180",source);self.assertNotIn("turn180",source)
 
+
+    def test_crop_workflow_uses_shared_batch_language_and_top_status(self):
+        source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
+        self.assertIn('text="Next batch"',source)
+        self.assertIn('"Predict next batch"',source)
+        self.assertIn('self.predict_status_labels["unresolved"]',source)
+        self.assertIn('self.predict_status_labels["review"]',source)
+        self.assertIn('self.predict_status_labels["verified"]',source)
+        self.assertIn('next_state="normal" if model and status["prediction_candidates"] else "disabled"',source)
+        self.assertIn('self.apply_separator=ttk.Separator',source)
+        self.assertIn('self.apply_group.pack(side="left")',source)
+
+    def test_crop_queue_is_one_additive_strip_above_image(self):
+        source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
+        self.assertIn('self.queue_banner=ttk.Frame(main,style="Attention.TFrame"',source)
+        self.assertIn('self.queue_banner.grid(row=1,column=0,sticky="ew"',source)
+        self.assertIn('"Previous"',source);self.assertIn('"Confirm & Next"',source);self.assertIn('"Close queue"',source)
+        self.assertNotIn("self.queue_banner_text",source)
 
     def test_crop_ai_can_predict_only_the_current_selected_plate(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")

@@ -23,6 +23,54 @@ XRAY_MID="#73899a"
 XRAY_PAPER="#f8fbfd"
 XRAY_FILM="#e6f0f6"
 ACCENT_ORANGE="#ffb000"  # same ventral-side orange used on the X-ray crop canvas
+VISIBILITY_ICON_SIZE=32
+VISIBILITY_STATES=("complete","partial","not_visible","absent")
+
+
+def render_visibility_icon(state,size=VISIBILITY_ICON_SIZE):
+    """Readable biological visibility states; absent is deliberately not an eye."""
+    state=str(state)
+    if state not in VISIBILITY_STATES:raise KeyError(f"Unknown visibility state: {state}")
+    im,d,p,w=_ctx(size)
+
+    def eye(outline=XRAY_DARK,iris=BLUE,fill="#ffffff"):
+        # Almond silhouette with separate lids, iris and pupil remains legible at 24–40 px.
+        upper=[(4.0,16.0),(7.5,11.4),(12.0,8.9),(16.0,8.1),(20.0,8.9),(24.5,11.4),(28.0,16.0)]
+        lower=[(28.0,16.0),(24.4,20.5),(20.0,23.1),(16.0,23.9),(12.0,23.1),(7.6,20.5),(4.0,16.0)]
+        d.polygon([(p(x),p(y)) for x,y in upper+lower[1:]],fill=fill)
+        _line(d,p,upper,outline,1.5);_line(d,p,lower,outline,1.5)
+        d.ellipse((p(11.2),p(11.2),p(20.8),p(20.8)),fill="#dceaf3",outline=iris,width=w(1.2))
+        d.ellipse((p(14.2),p(14.2),p(17.8),p(17.8)),fill=iris)
+        d.ellipse((p(15.0),p(14.8),p(15.9),p(15.7)),fill="#ffffff")
+
+    if state=="complete":
+        eye(iris=GREEN)
+        d.ellipse((p(21),p(20),p(30),p(29)),fill="#ffffff",outline=GREEN,width=w(1.2))
+        _line(d,p,[(23.0,24.4),(25.0,26.4),(28.2,22.4)],GREEN,1.7)
+    elif state=="partial":
+        eye(iris=ACCENT_ORANGE)
+        # translucent-looking occluder on the right half, plus a crisp boundary.
+        d.polygon([(p(16),p(8.4)),(p(28.3),p(15.9)),(p(16),p(23.6))],fill="#f6dfb5")
+        _line(d,p,[(16,8.6),(16,23.4)],ACCENT_ORANGE,1.5)
+        for y in (11.5,15.2,18.9,22.0):_line(d,p,[(18.0,y),(24.5,y+2.2)],ACCENT_ORANGE,.75)
+    elif state=="not_visible":
+        eye(outline=MUTED,iris=MUTED,fill="#f7f8f9")
+        # Eye-with-slash is reserved only for "cannot be judged".
+        _line(d,p,[(6.0,27.0),(27.0,6.0)],RED,3.0)
+        _line(d,p,[(7.0,28.0),(28.0,7.0)],"#ffffff",.8)
+    else:  # absent
+        # Absence is a vacant anatomical slot, not poor visibility: no eye glyph.
+        d.rounded_rectangle((p(6),p(7),p(26),p(25)),radius=p(4),fill="#ffffff",outline=XRAY_MID,width=w(1.4))
+        d.rounded_rectangle((p(9),p(10),p(23),p(22)),radius=p(3),fill="#f3f5f7",outline="#c7d0d7",width=w(.8))
+        _line(d,p,[(11,12),(21,20)],RED,2.3);_line(d,p,[(21,12),(11,20)],RED,2.3)
+        # small broken baseline reinforces "nothing present" rather than "hidden".
+        _line(d,p,[(7,28),(13,28)],MUTED,1.1);_line(d,p,[(19,28),(25,28)],MUTED,1.1)
+
+    return im.resize((int(size),int(size)),Image.Resampling.LANCZOS)
+
+
+def tk_visibility_icon(master,state,size=VISIBILITY_ICON_SIZE):
+    return ImageTk.PhotoImage(render_visibility_icon(state,size),master=master)
 
 
 def _ctx(size):

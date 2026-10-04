@@ -17,7 +17,7 @@ from .tooltips import Tooltip
 from .icons import tk_icon, TOPBAR_ICON_SIZE, CONTROL_ICON_SIZE
 from .dialogs import center, info, install_auto_center
 from .photo_list_panel import PhotoListPanel
-from .design import sidebar_width_for_window, dialog_width_for_columns
+from .design import ElidedLabel, sidebar_width_for_window, dialog_width_for_columns
 from .landmark_sidebar import LandmarkSidebar
 from .preferences import last_project, remember_project
 from .project_section import ProjectSection
@@ -499,11 +499,15 @@ class ProductionShell(tk.Tk):
     def _status(self):
         """Reserve the right-side navigation before flexible descriptive status text."""
         bar=ttk.Frame(self.main,padding=(2,1)); bar.grid(row=0,column=0,sticky="ew");bar.columnconfigure(0,weight=1);self.status_bar=bar
-        left=ttk.Frame(bar);left.grid(row=0,column=0,sticky="ew");left.columnconfigure(0,weight=1);self.status_left=left
+        left=ttk.Frame(bar);left.grid(row=0,column=0,sticky="ew");self.status_left=left
         navigation=ttk.Frame(bar,style="Attention.TFrame",padding=(6,4));navigation.grid(row=1,column=0,columnspan=2,sticky="ew",pady=(3,0));self.status_navigation=navigation
-        ttk.Label(navigation,text="Review queue",style="AttentionTitle.TLabel").pack(side="left",padx=(0,10))
+        self.status_queue_title=ttk.Label(navigation,text="Review queue",style="AttentionTitle.TLabel");self.status_queue_title.pack(side="left",padx=(0,10))
         self._status_context_full=""
-        self.status_context=ttk.Label(left,text="",style="SectionTitle.TLabel",anchor="w",width=1);self.status_context.pack(side="left",fill="x",expand=True,padx=(0,7));self.status_context.bind("<Configure>",lambda _event:self._refresh_status_context(),add="+")
+        context_fields=ttk.Frame(left);context_fields.pack(side="left",fill="x",expand=True,padx=(0,7))
+        ttk.Label(context_fields,text="Locality:",style="ContextKey.TLabel").pack(side="left")
+        self.status_locality=ElidedLabel(context_fields,text="—",style="ContextValue.TLabel",anchor="w");self.status_locality.pack(side="left",padx=(4,14))
+        ttk.Label(context_fields,text="Image:",style="ContextKey.TLabel").pack(side="left")
+        self.status_context=ElidedLabel(context_fields,text="No images",style="ContextValue.TLabel",anchor="w");self.status_context.pack(side="left",fill="x",expand=True,padx=(4,0))
         self.status_count_host=ttk.Frame(left);self.status_count_host.pack(side="right")
         self.status_counts={}
         status_help={
@@ -525,14 +529,10 @@ class ProductionShell(tk.Tk):
         self._update_status()
 
     def _refresh_status_context(self):
-        """Ellipsize only non-critical left text; navigation never loses its reserved column."""
+        """Context values use the same bold-key / normal-value language as X-ray."""
         label=getattr(self,"status_context",None)
-        if label is None or not label.winfo_exists(): return
-        text=getattr(self,"_status_context_full","")
-        # Segoe UI 9 averages approximately seven logical pixels per compact character.
-        limit=max(8,int(label.winfo_width()//7))
-        shown=text if len(text)<=limit else text[:max(1,limit-1)].rstrip()+"…"
-        if label.cget("text")!=shown: label.configure(text=shown)
+        if label is None or not label.winfo_exists():return
+        label.configure(text=getattr(self,"_status_context_full",""))
     def _sidebar(self,parent):
         if self.context.section == "landmarks":
             self.photo_panel=LandmarkSidebar(parent,self.context,self._selected_image,self.tip,self._select_landmark,on_exclusion=self._photo_exclusion_changed)
@@ -594,8 +594,9 @@ class ProductionShell(tk.Tk):
     def _update_status(self):
         if not hasattr(self,"status_context"): return
         row=self.context.current() or {}; name=row.get("original_name","No images"); sample=row.get("locality",row.get("sample_id",""))
-        self._status_context_full=f"{self.context.section.title()} | {name} | {sample}"
-        self._refresh_status_context()
+        self._status_context_full=str(name or "No images")
+        self.status_context.configure(text=self._status_context_full)
+        self.status_locality.configure(text=str(sample or "—"))
         if hasattr(self,"status_index"):
             batch=self._active_batch_summary()
             if self._workflow_navigation_visible(batch):
@@ -605,6 +606,14 @@ class ProductionShell(tk.Tk):
                 self.status_navigation.grid_remove()
             kind=batch.get('kind') if batch else None
             attention_stage=batch.get('stage') if kind=='landmark_attention' else None
+            queue_titles={
+                'landmark':'Annotation batch',
+                'landmark_ai_review':'AI review',
+                'landmark_suspicious':'QC review',
+                'landmark_attention':'Attention queue',
+                'crop':'Crop batch',
+            }
+            self.status_queue_title.configure(text=queue_titles.get(kind,'Review queue'))
             landmark_confirm=bool(self.context.section=='landmarks' and (kind in {'landmark','landmark_ai_review','landmark_suspicious'} or (kind=='landmark_attention' and attention_stage=='landmarks')))
             crop_confirm=bool(self.context.section=='crop' and ((kind=='landmark_attention' and attention_stage=='crop') or (batch and kind!='landmark_attention')))
             attention_retry=bool(self.context.section=='landmarks' and kind=='landmark_attention' and attention_stage=='prediction')

@@ -127,6 +127,13 @@ class PresentationProjectTests(_ProjectFixture,unittest.TestCase):
         self.assertGreaterEqual(dialog_width_for_columns(crop_model_columns,1456,chrome=105),sum(crop_model_columns)+105)
         self.assertLessEqual(dialog_width_for_columns(crop_model_columns,1024,chrome=105),944)
 
+    def test_workflow_dock_equalizes_stage_cards_and_separates_stages(self):
+        source=(Path(__file__).resolve().parents[1]/"app/ui/workflow.py").read_text(encoding="utf-8")
+        self.assertIn("target_height=max(card.winfo_reqheight() for card in self._cards)",source)
+        self.assertIn("uniform='workflow_stage'",source)
+        self.assertIn("sep.grid(row=0,column=column+1,sticky='ns'",source)
+        self.assertIn("card.grid(row=0,column=column,sticky='nsew')",source)
+
     def test_preview_projects_have_real_crop_frames_and_preserve_review_edits(self):
         from tools.design_preview import build_preview_projects
         from app.landmark_frames import crop_frame_record

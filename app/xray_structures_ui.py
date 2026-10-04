@@ -19,7 +19,7 @@ from types import SimpleNamespace
 from app.ui.photo_list_panel import DEFAULT_SHOW_EXCLUDED, filtered_photo_indices
 from app.ui.tooltips import Tooltip
 from .xray_crop import oriented_crop
-from .xray_icons import tk_xray_icon
+from .xray_icons import VISIBILITY_ICON_SIZE, tk_visibility_icon, tk_xray_icon
 from .xray_structure_ai import (
     compare_structure_model_to_human, export_structure_model_package, import_structure_model_package,
     predict_structures, train_structure_model,
@@ -303,7 +303,7 @@ class XRayStructureWorkspace:
         if key not in self._icons:self._icons[key]=tk_xray_icon(master,name,CONTROL_ICON_SIZE)
         return self._icons[key]
 
-    def _marker_button_icon(self,master,structure,style,size=24):
+    def _marker_button_icon(self,master,structure,style,size=32):
         key=("marker",structure["id"],style["color"],style["symbol"],int(size))
         if key in self._icons:return self._icons[key]
         aa=3;side=int(size)*aa;image=Image.new("RGBA",(side,side),(0,0,0,0));draw=ImageDraw.Draw(image)
@@ -329,6 +329,11 @@ class XRayStructureWorkspace:
             if symbol=="target":draw.ellipse((cx-r*.32,cy-r*.32,cx+r*.32,cy+r*.32),fill=color)
         icon=ImageTk.PhotoImage(image.resize((int(size),int(size)),Image.Resampling.LANCZOS),master=master)
         self._icons[key]=icon;return icon
+
+    def _visibility_icon(self,master,state,size=VISIBILITY_ICON_SIZE):
+        key=("visibility",str(state),int(size))
+        if key not in self._icons:self._icons[key]=tk_visibility_icon(master,state,size)
+        return self._icons[key]
 
     def _button(self,parent,text,command,help_text="",icon=None,style="P.TButton"):
         icon=icon or action_icon(text)
@@ -437,11 +442,11 @@ class XRayStructureWorkspace:
 
         four=workflow.add_card("4. Predict & review",icon="landmark_apply",help_text="Predict unverified crops, inspect AI drafts, and check calculated trait values.")
         batch_row=ttk.Frame(four);batch_row.grid(row=0,column=0,sticky="w")
-        ttk.Label(batch_row,text="Next").pack(side="left");ttk.Spinbox(batch_row,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(4,0))
+        ttk.Label(batch_row,text="Next batch").pack(side="left");ttk.Spinbox(batch_row,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(4,0));ttk.Label(batch_row,text="specimens",style="Muted.TLabel").pack(side="left",padx=(4,0))
         predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,sticky="w",pady=(4,0))
         self.predict_current_button=self._button(predict_actions,"Predict current",self.predict_current_structure,"Refresh AI suggestions for this specimen using the existing protection and confirmation rules.");self.predict_current_button.pack(side="left")
         add_command_separator(predict_actions)
-        self.structure_predict_next_button=self._button(predict_actions,"Predict next",lambda:self.predict_structure_batch(self.prediction_batch_size.get()),"Predict the next eligible specimen crops.");self.structure_predict_next_button.pack(side="left")
+        self.structure_predict_next_button=self._button(predict_actions,"Predict next batch",lambda:self.predict_structure_batch(self.prediction_batch_size.get()),"Predict the next eligible specimen crops.",style="Primary.TButton");self.structure_predict_next_button.pack(side="left")
         self.structure_predict_all_button=self._button(predict_actions,"Predict all",lambda:self.predict_structure_batch(None),"Predict all eligible unverified crops; preserve verified annotations.");self.structure_predict_all_button.pack(side="left",padx=(4,0))
         add_command_separator(predict_actions)
         self.structure_review_button=self._button(predict_actions,"Review AI",self.review_structure_ai,"Inspect saved AI drafts before verification.",style="ReviewAction.TButton");self.structure_review_button.pack(side="left")
@@ -541,11 +546,9 @@ class XRayStructureWorkspace:
                 counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
             states=self.project.structure_visibility_states(self.selected_specimen_id,self.pass_no.get(),"human")
         self._marker_buttons={};self._marker_visibility_buttons={};self._marker_visibility_vars={};shortcuts=_structure_shortcuts(structures)
-        # The marker action carries a 24 px scientific icon. Give the adjacent
-        # status button the same image-height floor so native Windows ttk cannot
-        # render the two controls at visibly different heights.
-        if not getattr(self,"_marker_status_spacer",None):
-            self._marker_status_spacer=tk.PhotoImage(master=self.marker_host,width=1,height=24)
+        # Marker and visibility controls share a 32 px pictorial floor. This keeps
+        # native Windows button heights identical and makes the four states readable at a glance.
+        self._visibility_menu_icons=[]
         for structure in _structure_button_order(structures):
             sid=str(structure["id"]);index=structures.index(structure);style=marker_style(settings,structure,index)
             hotkey=shortcuts.get(sid,"");count=counts.get(sid,0);icon=self._marker_button_icon(self.marker_host,structure,style)
@@ -561,17 +564,19 @@ class XRayStructureWorkspace:
             help_text=(structure.get("description") or structure["name"])+(f" · shortcut {hotkey}" if hotkey else "")
             self.tip.bind(button,help_text)
             current=str(states.get(sid) or "complete")
+            visibility_icon=self._visibility_icon(group,current)
             visibility=ttk.Button(
-                group,text=_VISIBILITY_SYMBOLS.get(current,"✓"),image=self._marker_status_spacer,compound="left",
+                group,text="",image=visibility_icon,compound="left",
                 width=2,style="MarkerStatus.TButton",
                 state="normal" if self.selected_specimen_id and not self.current_specimen_excluded else "disabled",
             )
-            visibility.pack(side="left",padx=(1,0));self._marker_visibility_buttons[sid]=visibility
+            visibility.pack(side="left",padx=(2,0));self._marker_visibility_buttons[sid]=visibility
             menu=tk.Menu(visibility,tearoff=False)
             state_var=tk.StringVar(master=visibility,value=current);self._marker_visibility_vars[sid]=state_var
             for value,label in _VISIBILITY_LABELS.items():
+                menu_icon=self._visibility_icon(menu,value);self._visibility_menu_icons.append(menu_icon)
                 menu.add_radiobutton(
-                    label=_VISIBILITY_SYMBOLS.get(value,"")+"  "+label,
+                    label=label,image=menu_icon,compound="left",
                     value=value,variable=state_var,
                     command=lambda structure_id=sid,var=state_var:self._set_structure_visibility(
                         structure_id,var.get()
@@ -829,19 +834,9 @@ class XRayStructureWorkspace:
                     if role_pair is None:continue
                     role_index,role_structure=role_pair;role_colors.append(role_color(settings,role_structure,role_index))
                 draw_xray_role_badges(self.canvas,sx,sy,colors=role_colors,size=style["size"],tags=(f"annotation:{row['annotation_id']}",))
-        message_y=12
         if self.prediction_text:
-            self.canvas.create_text(13,message_y+1,anchor="nw",text=self.prediction_text,fill="#202020",font=("Segoe UI",10,"bold"),tags=("structure_hint","prediction_shadow"))
-            self.canvas.create_text(12,message_y,anchor="nw",text=self.prediction_text,fill="#ffdf80",font=("Segoe UI",10,"bold"),tags=("structure_hint","prediction"))
-            message_y+=23
-        if self.selected_annotation_id:
-            attached=roles_by_annotation.get(int(self.selected_annotation_id),())
-            role_names=[by_id[role["structure_id"]][1]["name"] for role in attached if role["structure_id"] in by_id]
-            hint="Drag = move · Delete = remove"
-            if role_names:hint+=" · also: "+", ".join(role_names)
-        else:hint="Choose marker · click = place · right-click point = role"
-        self.canvas.create_text(13,message_y+1,anchor="nw",text=hint,fill="#202020",font=("Segoe UI",9,"bold"),tags=("structure_hint","hint_shadow"))
-        self.canvas.create_text(12,message_y,anchor="nw",text=hint,fill="white",font=("Segoe UI",9,"bold"),tags=("structure_hint","hint"))
+            self.canvas.create_text(13,13,anchor="nw",text=self.prediction_text,fill="#202020",font=("Segoe UI",10,"bold"),tags=("structure_hint","prediction_shadow"))
+            self.canvas.create_text(12,12,anchor="nw",text=self.prediction_text,fill="#ffdf80",font=("Segoe UI",10,"bold"),tags=("structure_hint","prediction"))
 
     def _nearest(self,event):
         size=int(self.display_settings.get("size",DEFAULT_SIZE));best=None;limit=max(14,size+8)

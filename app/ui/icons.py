@@ -10,7 +10,7 @@ BLUE='#246b9b'; RED='#bd4850'; GREEN='#27815c'; YELLOW='#bc872a'
 ICON_NAMES=frozenset({
     'modules','project','crop','landmarks','structures','measurements','export',
     'missing','delete','clear','clear_type','verify','display','exclude','restore','review_worst','complex_qc',
-    'help','models','train','predict','previous','next','close','flip_horizontal','flip_vertical',
+    'help','models','train','predict','batch_add','predict_current','predict_batch','predict_all','accept_all','previous','next','close','flip_horizontal','flip_vertical',
     'crop_training','crop_train','crop_apply','landmark_repeat','landmark_training','landmark_train','landmark_apply',
     'measurement_calibrate','measurement_define','measurement_export','export_landmarks','export_measurements',
 })
@@ -39,6 +39,19 @@ def render_icon(name: str, size: int=TOPBAR_ICON_SIZE):
     def card(x=5,y=5,w=22,h=22):
         rect((x,y,x+w,y+h),fill='#f8fbfd');dot(x+w-5,y+5,MUTED,1.4)
         line([(x+4,y+h-5),(x+9,y+h-11),(x+14,y+h-6),(x+w-4,y+h-9)],MUTED,1.4)
+    def specimen_card(x=6,y=6,w=20,h=20,accent=BLUE):
+        rect((x,y,x+w,y+h),fill='#fbfdff',color=OUTLINE,width=1.5,r=2.2)
+        # compact biological silhouette: head, trunk, tail, not a generic node diagram
+        d.ellipse(box((x+4,y+8,x+8,y+12)),fill=accent)
+        d.rounded_rectangle(box((x+7,y+8.2,x+14.5,y+11.8)),radius=p(1.8),fill=PALE_BLUE,outline=accent,width=max(1,p(1.0)))
+        d.polygon([tuple(map(p,pt)) for pt in ((x+14.2,y+10),(x+18,y+7.3),(x+17.2,y+10),(x+18,y+12.7))],fill=accent)
+    def sparkle(cx,cy,color=BLUE):
+        line([(cx,cy-4),(cx,cy+4)],color,1.7);line([(cx-4,cy),(cx+4,cy)],color,1.7)
+        line([(cx-2.6,cy-2.6),(cx+2.6,cy+2.6)],color,1.0);line([(cx+2.6,cy-2.6),(cx-2.6,cy+2.6)],color,1.0)
+    def batch_stack(accent=BLUE):
+        rect((9,4,27,21),fill=PALE,color=MUTED,width=1.2,r=2)
+        rect((6,7,24,24),fill='#f5f9fc',color=MUTED,width=1.2,r=2)
+        specimen_card(3,10,18,18,accent)
     def brackets():
         for pts in (((5,11),(5,5),(11,5)),((21,5),(27,5),(27,11)),((5,21),(5,27),(11,27)),((21,27),(27,27),(27,21))):line(pts,BLUE,2.2)
     def points(offset=0):
@@ -108,8 +121,23 @@ def render_icon(name: str, size: int=TOPBAR_ICON_SIZE):
         rect((7,4,27,23),fill=PALE,color=MUTED);rect((4,9,24,28),fill='#f8fbfd')
         for y,n in ((15,12),(20,18),(25,15)):line([(8,y),(n,y)],BLUE,1.8)
     elif name in {'train','crop_train','landmark_train'}:chip()
+    elif name=='batch_add':
+        batch_stack(BLUE)
+        d.ellipse(box((20,19,30,29)),fill='#ffffff',outline=GREEN,width=max(1,p(1.5)))
+        line([(25,21.5),(25,26.5)],GREEN,2);line([(22.5,24),(27.5,24)],GREEN,2)
+    elif name=='predict_current':
+        specimen_card(4,6,22,20,BLUE);sparkle(25,7,BLUE)
+        d.rounded_rectangle(box((7,23,18,27)),radius=p(1.2),fill=PALE_BLUE,outline=BLUE,width=max(1,p(1)))
+    elif name=='predict_batch':
+        batch_stack(BLUE);sparkle(26,7,BLUE);arrow((20,27),(29,27),BLUE,1.9)
+    elif name=='predict_all':
+        batch_stack(BLUE);sparkle(26,7,BLUE)
+        d.ellipse(box((20,20,30,30)),fill='#ffffff',outline=GREEN,width=max(1,p(1.4)));check(25,25)
+    elif name=='accept_all':
+        batch_stack(GREEN)
+        d.ellipse(box((19,19,30,30)),fill='#ffffff',outline=GREEN,width=max(1,p(1.5)));check(24.5,24.5)
     elif name in {'predict','crop_apply','landmark_apply'}:
-        card(11,5,17,23);arrow((3,16),(15,16),BLUE,2.4);dot(19,13);dot(23,20)
+        specimen_card(8,5,20,22,BLUE);sparkle(8,8,BLUE);arrow((3,21),(13,21),BLUE,2.1)
     elif name=='landmark_repeat':
         rect((3,7,14,26),fill='#f8fbfd');rect((18,7,29,26),fill='#f8fbfd')
         for x in (8,23):dot(x,13,BLUE,1.8);dot(x+2,20,BLUE,1.8)

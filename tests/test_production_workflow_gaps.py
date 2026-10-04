@@ -68,6 +68,15 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   self.assertIn("No compatible active model",source)
   self.assertIn("prediction_state='normal' if active else 'disabled'",source)
 
+ def test_core_crop_and_landmarks_share_prediction_batch_language(self):
+  root=Path(__file__).parents[1]
+  crop=(root/'app'/'ui'/'crop_section.py').read_text(encoding='utf8')
+  landmarks=(root/'app'/'ui'/'landmarks_section.py').read_text(encoding='utf8')
+  for source in (crop,landmarks):
+   self.assertIn("Next batch",source)
+   self.assertIn("Predict next batch",source)
+  self.assertNotIn('ttk.Label(three,text=f"Uncropped',crop)
+
  def test_train_ready_means_current_state_not_yet_in_active_lineage(self):
   project=SimpleNamespace()
   with patch('app.ui.context.training_ready_image_ids',return_value=('c',)):

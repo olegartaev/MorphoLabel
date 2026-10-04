@@ -29,19 +29,20 @@ should follow only after the demo layout is accepted, using a backup.
 - On Windows, standard ttk Windows themes provide the ordinary desktop control chrome; custom blue panel/button skinning is avoided. Semantic warning/review states remain distinct.
 - Shared spacing, typography, active-stage appearance and primary buttons.
 - Workflow cards are vertically compact; commands with different roles are grouped with spacing and vertical separators instead of being scattered across the card.
-- Workflow cards no longer stretch short stages to the height of the tallest card; each stage is capped at roughly two compact control rows in the reviewed modules.
+- All stages in one wide Workflow row use the same height, set by the tallest compact stage, with a separate vertical divider between stages. Crop, Landmarks and X-ray use the same card geometry.
+- Batch prediction controls start with `Next batch`, use the shared `Predict next batch` action, and keep unresolved/review/verified counters in the common context/status row rather than inside one workflow card.
 - Model provenance is rendered over the working image in the established yellow Landmarks style, using persisted model IDs and event/prediction timestamps only.
 - X-ray context rows use bold field names (`Sample`, `Plate`, `Crop`, `Specimen №`) with normal-weight values; the vertical orientation control uses the same orange as the ventral marker.
 - Core Crop keeps the source image visually fixed while its editable crop frame rotates; the persisted rotation/crop transform is unchanged and regression-tested against `Transform.original_to_standardized`.
 - Crop/Structures side lists open wide enough for readable labels while remaining capped near 29% of the workspace, and model-list dialogs expand to expose their normal columns when screen width allows.
 - The current-project block is visually distinct from project settings and uses a concise Open action.
 - The Traits editor opens large enough to expose both biological-definition steps when possible, otherwise maximizes, and uses explicit anatomical/counting language for reference marks.
-- One original drawn icon family; existing scientific marker symbols remain.
+- One original drawn icon family. Batch/prediction actions use specimen-card, stack and review metaphors rather than generic lines/dots. X-ray visibility uses larger anatomical eye/occlusion icons; `Not visible` is an eye with a slash, while `Absent` is an empty anatomical slot, so the two states do not share a silhouette.
+- Existing scientific annotation symbols on the image remain unchanged; only toolbar/status icon presentation is enlarged.
 - Common image context, actions, image canvas and workflow organization.
 - Wide windows show workflow cards together. Compact windows show stage tabs;
   controls retain their original commands and variables. Workflow can collapse.
-- Queue navigation is grouped separately: Previous, confirmation/next, Close
-  queue. Result inspection retains its separate Next without confirmation.
+- Queue navigation is one additive yellow strip immediately above the working image: Previous, confirmation/next, Close queue. Result inspection retains its separate Next without confirmation. Saved queues show Continue without pretending that the current item is active.
 - Closing navigation preserves annotation data. Core queue membership remains
   stored and can be reopened through its workflow action. X-ray queue closing
   uses its existing UI-state behavior; the new annotation-batch Close clears
@@ -67,7 +68,7 @@ Review at normal and compact widths and the Windows display scaling you use:
 2. All workflow tabs are reachable; collapse increases image space.
 3. Crops: deletion, both flips, Apply and batch confirmation remain distinct.
 4. Structures: select marker type, place/move/delete marks, change visibility,
-   assign a reference role, Verify, and inspect model/time caption.
+   distinguish Complete / Partial / Not visible / Absent at a glance, assign a reference role, Verify, and inspect model/time caption.
 5. Previous does not confirm. Verify & Next rejects incomplete annotations.
    Close queue removes navigation and keeps annotations.
 6. Traits opens with both definition steps reachable; the reference-mark wording is biologically clear and no essential controls are clipped.

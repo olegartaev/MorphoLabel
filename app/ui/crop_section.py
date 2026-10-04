@@ -19,11 +19,12 @@ class CropSection(SectionView):
   header=ttk.Frame(panel);header.grid(row=0,column=0,sticky="ew",pady=(0,4))
   actions=ttk.Frame(header,style="Toolbar.TFrame");actions.pack(fill="x")
   self.button(actions,"Apply crop",self.apply_current,"Save this reversible crop and stay on the current image.",style="Primary.TButton",icon="verify").pack(side="left")
-  ttk.Label(actions,text="Adjust the green frame; drag the yellow handle to rotate.",style="Muted.TLabel").pack(side="left",padx=10)
+  self.crop_qc_label=ttk.Label(actions,text="",style="Muted.TLabel");self.crop_qc_label.pack(side="left",padx=10)
   self.attention_banner(header,self.shell.open_landmark_attention,stages={"crop"})
 
   self.canvas_frame=ttk.Frame(panel);self.canvas_frame.grid(row=1,column=0,sticky="nsew")
   self.canvas=CropCanvasController(self.canvas_frame,self.context,self.refresh);self.canvas.on_image_ready=self._crop_ready
+  self.canvas.status_callback=lambda text:self.crop_qc_label.configure(text=text)
 
   batch=tk.IntVar(value=24);prediction=tk.IntVar(value=24)
   guide="Why: Crop reduces irrelevant differences in framing and rotation before downstream analysis.\n\n1. Adjust the crop\nMove or resize the frame. Use the yellow handle when rotation is needed. Apply crop saves the current image.\n\n2. Training batch\nCorrect a batch manually and use Confirm & Next for each image.\n\n3. Train\nTrain from all human-confirmed crops.\n\n4. Predict and review\nPredict only uncropped images, then review and confirm pending AI Crop proposals."
@@ -50,13 +51,12 @@ class CropSection(SectionView):
   self.button(train_actions,"Models…",lambda:self.shell.show_models('crop'),"Compare and select saved Crop model versions.").pack(side="left")
 
   three=dock.add_card("3. Predict & review",icon="crop_apply",help_text="Predict only uncropped images. Pending AI Crop proposals are a separate review state and are not predicted again.")
-  counts=self.context.project.crop_section_counts();three.columnconfigure(0,weight=1)
-  ttk.Label(three,text=f"Uncropped {counts.get('Uncropped',0)} · AI review {counts.get('AI pending',0)} · Verified {counts.get('Reviewed',0)}",style="Muted.TLabel").grid(row=0,column=0,sticky="w")
-  batch_row=ttk.Frame(three);batch_row.grid(row=0,column=1,sticky="e",padx=(8,0))
-  ttk.Label(batch_row,text="Next").pack(side="left")
+  batch_row=ttk.Frame(three);batch_row.grid(row=0,column=0,sticky="w")
+  ttk.Label(batch_row,text="Next batch").pack(side="left")
   ttk.Spinbox(batch_row,from_=1,to=500,textvariable=prediction,width=5).pack(side="left",padx=(4,0))
-  apply_actions=ttk.Frame(three);apply_actions.grid(row=1,column=0,columnspan=2,sticky="w",pady=(3,0))
-  self.button(apply_actions,"Predict next",lambda:self.auto_batch(prediction.get()),"Predict Crop for the next uncropped eligible images.").pack(side="left")
+  ttk.Label(batch_row,text="images",style="Muted.TLabel").pack(side="left",padx=(4,0))
+  apply_actions=ttk.Frame(three);apply_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
+  self.button(apply_actions,"Predict next batch",lambda:self.auto_batch(prediction.get()),"Predict Crop for the next uncropped eligible images.",style="Primary.TButton").pack(side="left")
   self.button(apply_actions,"Predict all",lambda:self.auto_batch(None),"Predict Crop for every uncropped eligible image. Existing AI proposals are not rerun.").pack(side="left",padx=(4,0))
   add_command_separator(apply_actions)
   self.button(apply_actions,"Review AI",self.review_worst,"Review pending AI Crop proposals, worst first.").pack(side="left")

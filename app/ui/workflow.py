@@ -21,7 +21,7 @@ class WorkflowDock(ttk.Frame):
     """
     def __init__(self,parent,shell,*,help_factory=None,title='Workflow'):
         super().__init__(parent,style='WorkflowDock.TFrame',padding=(0,1,0,0))
-        self.shell=shell;self._cards=[];self._card_headers=[];self._tabs=[];self._layout_after=None;self._last_columns=None;self._selected_card=0;self._last_selection=None;self._collapsed=False
+        self.shell=shell;self._cards=[];self._card_headers=[];self._stage_separators=[];self._tabs=[];self._layout_after=None;self._last_columns=None;self._selected_card=0;self._last_selection=None;self._collapsed=False
         header=ttk.Frame(self,style='WorkflowDock.TFrame');header.grid(row=0,column=0,sticky='ew',pady=(0,1));header.columnconfigure(0,weight=1)
         self.toggle=ttk.Button(header,text=title+' ▾',style='Stage.TButton',command=self._toggle)
         self.toggle.grid(row=0,column=0,sticky='w');self._title=title
@@ -41,6 +41,7 @@ class WorkflowDock(ttk.Frame):
         card=ttk.LabelFrame(self.cards_host,labelwidget=header,padding=(5,2),style='WorkflowCard.TLabelframe')
         if help_text:self.shell.tip.bind(card,help_text);self.shell.tip.bind(header,help_text)
         index=len(self._cards);self._cards.append(card);self._card_headers.append(header)
+        if index:self._stage_separators.append(ttk.Separator(self.cards_host,orient='vertical'))
         label=title.split('. ',1)[-1]
         short={'Repeatability':'Repeatability','Training data':'Examples','Train model':'Train','Predict & review':'Predict & review'}.get(label,label)
         tab=ttk.Button(self.tab_host,text=f'{index+1}. {short}',style='Stage.TButton',command=lambda value=index:self._select_card(value))
@@ -78,16 +79,25 @@ class WorkflowDock(ttk.Frame):
         for card,header in zip(self._cards,self._card_headers):
             card.grid_forget()
             card.configure(labelwidget="" if compact else header)
-        for index in range(len(self._cards)):self.cards_host.columnconfigure(index,weight=0,uniform='',minsize=0)
+        for separator in self._stage_separators:separator.grid_forget()
+        for index in range(max(1,len(self._cards)*2-1)):self.cards_host.columnconfigure(index,weight=0,uniform='',minsize=0)
+        self.cards_host.rowconfigure(0,minsize=0)
         if compact:
             self.cards_host.columnconfigure(0,weight=1)
-            self._cards[self._selected_card].grid(row=0,column=0,sticky='new')
+            self._cards[self._selected_card].grid(row=0,column=0,sticky='nsew')
         else:
-            for column in range(columns):self.cards_host.columnconfigure(column,weight=1,uniform='',minsize=self._cards[column].winfo_reqwidth())
+            # Equal-height stage cards make Crop/Landmarks/X-ray read as one workflow.
+            # Height follows the tallest *compact* card, not the available window height.
+            self.update_idletasks()
+            target_height=max(card.winfo_reqheight() for card in self._cards)
+            self.cards_host.rowconfigure(0,minsize=target_height)
             for index,card in enumerate(self._cards):
-                card.grid(
-                    row=0,column=index,sticky='new',padx=(0 if index==0 else 4,0),
-                )
+                column=index*2
+                self.cards_host.columnconfigure(column,weight=1,uniform='workflow_stage',minsize=card.winfo_reqwidth())
+                card.grid(row=0,column=column,sticky='nsew')
+                if index<len(self._cards)-1:
+                    sep=self._stage_separators[index]
+                    sep.grid(row=0,column=column+1,sticky='ns',padx=8,pady=5)
         for index,tab in enumerate(self._tabs):tab.configure(style='StageActive.TButton' if index==self._selected_card else 'Stage.TButton')
 
 
