@@ -1,6 +1,5 @@
 """Current opened Project context, isolated per worker thread."""
 from contextlib import contextmanager
-from pathlib import Path
 import threading
 from .project_storage import Project
 from .landmark_state import load_current_landmark_state
