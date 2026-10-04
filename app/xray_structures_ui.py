@@ -789,11 +789,12 @@ class XRayStructureWorkspace:
         active_id=(model or {}).get("model_id") or "none"
         self.structure_model_label.configure(text=f"Active: {active_id}")
         current_digest=structure_schema_digest(self.project.scheme)
-        prediction_values=tuple(item["model_id"] for item in self.project.structure_models() if str(item.get("schema_digest") or "")==current_digest)
+        structure_models=tuple(self.project.structure_models())
+        prediction_values=tuple(item["model_id"] for item in structure_models if str(item.get("schema_digest") or "")==current_digest)
         compatible_active=bool(model and str(model.get("schema_digest") or "")==current_digest)
         self.prediction_model_box.configure(values=prediction_values,state="readonly" if prediction_values else "disabled")
         self.prediction_model_choice.set(active_id if compatible_active else "")
-        parent_values=("ImageNet ResNet18",)+prediction_values
+        parent_values=("ImageNet ResNet18",)+tuple(item["model_id"] for item in structure_models)
         current_parent=self.training_parent_choice.get()
         preferred_parent=(model or {}).get("model_id") or "ImageNet ResNet18"
         if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:
