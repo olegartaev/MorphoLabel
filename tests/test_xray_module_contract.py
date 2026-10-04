@@ -226,7 +226,8 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertIn('tree.heading("fish",text="Specimen №")',module)
         self.assertIn('tree.heading("locality",text="Sample")',module)
         self.assertIn('int(row.get("ordinal") or 0)',module)
-        self.assertIn('text="Specimen №:",style="ContextKey.TLabel"',structures)
+        self.assertIn('build_context_row(context,("Sample","Plate","Specimen №"))',structures)
+        self.assertIn('self.specimen_value=context_values["Specimen №"]',structures)
         self.assertIn('"specimen":str(int(item.get("ordinal") or 0))',structures)
         self.assertNotIn("Fish №",module)
 
