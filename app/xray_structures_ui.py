@@ -556,8 +556,8 @@ class XRayStructureWorkspace:
             help_text=(structure.get("description") or structure["name"])+(f" · shortcut {hotkey}" if hotkey else "")
             self.tip.bind(button,help_text)
             current=str(states.get(sid) or "complete")
-            visibility=ttk.Menubutton(
-                group,text=_VISIBILITY_SYMBOLS.get(current,"✓"),width=2,style="MarkerStatus.TMenubutton",
+            visibility=ttk.Button(
+                group,text=_VISIBILITY_SYMBOLS.get(current,"✓"),width=2,style="MarkerStatus.TButton",
                 state="normal" if self.selected_specimen_id and not self.current_specimen_excluded else "disabled",
             )
             visibility.pack(side="left",padx=(1,0));self._marker_visibility_buttons[sid]=visibility
@@ -571,7 +571,7 @@ class XRayStructureWorkspace:
                         structure_id,var.get()
                     ),
                 )
-            visibility.configure(menu=menu)
+            visibility.configure(command=lambda widget=visibility,popup=menu:self._post_marker_visibility_menu(widget,popup))
             self.tip.bind(
                 visibility,
                 f"{structure['name']} visibility: {_VISIBILITY_LABELS.get(current,'Complete')}. "
@@ -581,6 +581,12 @@ class XRayStructureWorkspace:
         if not structures:ttk.Label(self.marker_host,text="No structures configured",style="Muted.TLabel").pack(side="left")
         self._refresh_clear_menu(structures,settings,counts)
         self.marker_host.relayout()
+
+    @staticmethod
+    def _post_marker_visibility_menu(button,menu):
+        """Open the compact visibility menu from a native-height button."""
+        try:menu.tk_popup(button.winfo_rootx(),button.winfo_rooty()+button.winfo_height())
+        finally:menu.grab_release()
 
     def _refresh_clear_menu(self,structures,settings,counts):
         menu=tk.Menu(self.clear_type_button,tearoff=False);self._clear_menu_icons=[]

@@ -57,7 +57,7 @@ def apply_styles(root, style):
         style.configure(name,padding=(8,4),font=(family,9,"bold"))
     style.configure("Marker.TButton",padding=(7,4),font=(family,9))
     style.configure("MarkerActive.TButton",padding=(7,4),font=(family,9,"bold"))
-    style.configure("MarkerStatus.TMenubutton",padding=(6,4),font=(family,9))
+    style.configure("MarkerStatus.TButton",padding=(7,4),font=(family,9))
 
     style.configure("Stage.TButton",padding=(8,4),font=(family,9))
     style.configure("StageActive.TButton",padding=(8,4),font=(family,9,"bold"))
