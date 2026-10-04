@@ -219,14 +219,16 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertEqual("10.1111/jfb.14210",model["reference_doi"])
         self.assertEqual(7,model["trait_count"])
 
-    def test_xray_user_facing_context_uses_specimen_not_fish(self):
+    def test_xray_user_facing_context_uses_plate_specimen_ordinal_not_global_row_number(self):
         root=Path(__file__).resolve().parents[1]
-        source=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
-        self.assertIn("structure_workflow_number",source)
-        self.assertIn('tree.heading("fish",text="Specimen №")',source)
-        self.assertIn('tree.heading("locality",text="Sample")',source)
-        self.assertIn('workflow_no=int(row.get("workflow_no") or index)',source)
-        self.assertNotIn("Fish №",source)
+        module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
+        structures=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
+        self.assertIn('tree.heading("fish",text="Specimen №")',module)
+        self.assertIn('tree.heading("locality",text="Sample")',module)
+        self.assertIn('int(row.get("ordinal") or 0)',module)
+        self.assertIn('text="Specimen №:",style="ContextKey.TLabel"',structures)
+        self.assertIn('"specimen":str(int(item.get("ordinal") or 0))',structures)
+        self.assertNotIn("Fish №",module)
 
     def test_xray_icons_include_role_step_and_fish_crop_icons(self):
         required={

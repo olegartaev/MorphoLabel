@@ -175,6 +175,40 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertNotIn('current_ok=not bool(image.get("excluded")) and not bool(image.get("crop_reviewed"))',crop)
         self.assertIn("self._refresh_plate_context();self._refresh_predict_current_state()",crop)
 
+    def test_queue_strip_is_mounted_after_toolbar_and_before_image(self):
+        crop=source("app/ui/crop_section.py")
+        landmarks=source("app/ui/landmarks_section.py")
+        self.assertLess(crop.index('self.shell.build_queue_navigation(header)'),crop.index('self.canvas_frame=ttk.Frame(panel)'))
+        self.assertLess(landmarks.index('controls.relayout()'),landmarks.index('self.shell.build_queue_navigation(header)'))
+        self.assertLess(landmarks.index('self.shell.build_queue_navigation(header)'),landmarks.index("batch=tk.IntVar"))
+        shell=source("app/ui/shell.py")
+        self.assertIn('actions=ttk.Frame(navigation,style="Attention.TFrame");actions.pack(side="right")',shell)
+
+    def test_xray_queue_close_returns_repeatability_list_to_main_pass(self):
+        structures=source("app/xray_structures_ui.py")
+        close_block=structures[structures.index("def _close_annotation_batch"):structures.index("def _refresh_prediction_info")]
+        self.assertIn('self.project.set_ui_state("xray_structure_active_batch",{})',close_block)
+        self.assertIn("self.pass_no.set(1);self.specimen_list.pass_no=1",close_block)
+        self.assertIn("self.refresh()",close_block)
+        module=source("app/modules/xray_counts.py")
+        self.assertNotIn('Queues (',module)
+        self.assertIn('title="Human Repeatability" if pass_no>1 else "Structure annotation batch"',module)
+
+    def test_xray_selection_is_one_project_state_across_crop_structure_and_export(self):
+        module=source("app/modules/xray_counts.py")
+        self.assertIn("return self.project.current_selection()",module)
+        self.assertIn("self.project.set_current_selection(image_id=image_id,specimen_id=specimen_id)",module)
+        self.assertIn('initial_image_id=selection.get("image_id"),initial_specimen_id=selection.get("specimen_id")',module)
+        self.assertGreaterEqual(module.count('initial_image_id=selection.get("image_id"),initial_specimen_id=selection.get("specimen_id")'),2)
+        self.assertIn('self._set_selection(specimen["image_id"],chosen[0]);self._refresh_selection_context()',module)
+
+    def test_export_uses_plate_ordinal_for_specimen_number_and_keeps_row_index_separate(self):
+        module=source("app/modules/xray_counts.py")
+        self.assertIn('tree.heading("row_no",text="#")',module)
+        self.assertIn('tree.heading("fish",text="Specimen №")',module)
+        self.assertIn('int(row.get("ordinal") or 0)',module)
+        self.assertIn("workflow_no=int(row.get(\"workflow_no\") or index)",module)
+
     def test_modules_are_visually_separated_and_queues_sit_left_of_menu(self):
         shell=source("app/ui/shell.py")
         xray=source("app/modules/xray_counts.py")
