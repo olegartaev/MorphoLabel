@@ -93,7 +93,7 @@ class ToolbarIconContractTests(unittest.TestCase):
     def test_workflow_dock_uses_compact_drawn_icons_without_changing_card_layout(self):
         source=open("app/ui/workflow.py",encoding="utf-8").read()
         self.assertIn("icon in ICON_NAMES",source)
-        self.assertIn("self.shell.ui_icon(icon, WORKFLOW_ICON_SIZE)",source)
+        self.assertIn("self.shell.ui_icon(icon, max(26,WORKFLOW_ICON_SIZE-4))",source)
         self.assertIn("card.grid(",source)
 
     def test_exclude_button_changes_icon_without_changing_exclusion_semantics(self):

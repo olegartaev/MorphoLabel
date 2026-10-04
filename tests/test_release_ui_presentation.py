@@ -15,7 +15,7 @@ from app.ui.design import apply_styles, structure_prediction_text, prediction_st
 from app.ui.shell import ProductionShell
 from app.xray_crop import crop_from_geometry
 from app.xray_crop_ui import PlateCropEditSession, XRayCropWorkspace
-from app.xray_project import XRayProject
+from app.xray_project import XRayProject, _db_connection
 from app.xray_schema import bundled_scheme
 from app.xray_structures_ui import XRayStructureWorkspace
 
@@ -47,7 +47,7 @@ class _ProjectFixture:
 class PresentationProjectTests(_ProjectFixture,unittest.TestCase):
     def test_provenance_uses_actual_prediction_event_and_is_read_only(self):
         self.seed();run=self.project.annotation_run(self.ids[0])
-        with sqlite3.connect(self.project.db_path) as db:
+        with _db_connection(self.project.db_path) as db:
             db.execute("UPDATE annotation_events SET created_at=? WHERE run_id=? AND action='model_seed'",("2024-01-02T03:04:00",run["run_id"]))
             db.execute("UPDATE annotation_runs SET updated_at=? WHERE run_id=?",("2035-12-31T23:59:00",run["run_id"]))
         before=hashlib.sha256(self.project.db_path.read_bytes()).digest()
@@ -78,7 +78,7 @@ class PresentationProjectTests(_ProjectFixture,unittest.TestCase):
         self.project.add_annotation(self.ids[0],"vertebra",.2,.5)
         self.assertEqual("",structure_prediction_text(self.project,self.ids[0]))
         self.seed();run=self.project.annotation_run(self.ids[0])
-        with sqlite3.connect(self.project.db_path) as db:db.execute("UPDATE annotation_runs SET status='stale' WHERE run_id=?",(run["run_id"],))
+        with _db_connection(self.project.db_path) as db:db.execute("UPDATE annotation_runs SET status='stale' WHERE run_id=?",(run["run_id"],))
         self.assertEqual("",structure_prediction_text(self.project,self.ids[0]))
         self.assertIn("time not recorded",prediction_stamp("legacy-model",None))
 
@@ -104,7 +104,7 @@ class PresentationProjectTests(_ProjectFixture,unittest.TestCase):
 
     def test_crop_caption_reads_recorded_detector_provenance_without_writing(self):
         specimen=self.project.specimen(self.ids[0])
-        with sqlite3.connect(self.project.db_path) as db:
+        with _db_connection(self.project.db_path) as db:
             self.project._event(db,self.ids[0],"detect","model",{"model_id":"recorded-crop-model"})
             db.execute("UPDATE crop_events SET created_at=? WHERE specimen_id=? AND action='detect'",("2024-05-06T07:08:00",self.ids[0]))
         workspace=SimpleNamespace(project=self.project,selected_image_id=specimen["image_id"],

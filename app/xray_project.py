@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import random
 import sqlite3
+from contextlib import contextmanager
 import shutil
 from datetime import datetime, timezone
 import uuid
@@ -15,6 +16,16 @@ from .xray_schema import bundled_scheme, calculate_trait_values, compatible_refe
 
 IMAGE_EXTENSIONS={".png",".jpg",".jpeg",".tif",".tiff",".bmp"}
 STRUCTURE_VISIBILITY_STATES=("complete","partial","not_visible","absent")
+
+@contextmanager
+def _db_connection(path):
+    """SQLite transaction whose file handle is always closed before returning."""
+    connection=sqlite3.connect(path)
+    try:
+        with connection:
+            yield connection
+    finally:
+        connection.close()
 
 def _now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -59,7 +70,7 @@ class XRayProject:
         try:
             cls._copy_source_files(source,root/"source",[path.relative_to(source) for path in source_files])
             policy=normalize_orientation_policy(orientation_policy)
-            with sqlite3.connect(db) as c:
+            with _db_connection(db) as c:
                 cls._create_tables(c)
                 c.executemany("INSERT INTO meta(key,value) VALUES(?,?)",(
                     ("name",str(name)),("source","source"),("source_storage","managed_v1"),
@@ -195,7 +206,7 @@ class XRayProject:
             if name not in existing:c.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
 
     def _ensure_schema(self):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             self._create_tables(c)
             self._ensure_columns(c,"source_images",{
                 "crop_reviewed":"INTEGER NOT NULL DEFAULT 0",
@@ -223,7 +234,7 @@ class XRayProject:
             })
 
     def meta(self,key,default=""):
-        with sqlite3.connect(self.db_path) as c:row=c.execute("SELECT value FROM meta WHERE key=?",(key,)).fetchone()
+        with _db_connection(self.db_path) as c:row=c.execute("SELECT value FROM meta WHERE key=?",(key,)).fetchone()
         return default if row is None else row[0]
 
     @property
@@ -249,7 +260,7 @@ class XRayProject:
 
     def set_orientation_policy(self,value):
         policy=normalize_orientation_policy(value)
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.execute("INSERT INTO meta(key,value) VALUES('orientation_policy',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(_json(policy),))
         return policy
 
@@ -264,7 +275,7 @@ class XRayProject:
         shutil.rmtree(staging,ignore_errors=True)
         try:
             result=self._copy_source_files(source,staging,relative);staging.replace(target)
-            with sqlite3.connect(self.db_path) as c:
+            with _db_connection(self.db_path) as c:
                 c.execute("INSERT INTO meta(key,value) VALUES('source','source') ON CONFLICT(key) DO UPDATE SET value='source'")
                 c.execute("INSERT INTO meta(key,value) VALUES('source_storage','managed_v1') ON CONFLICT(key) DO UPDATE SET value='managed_v1'")
             return {"changed":True,**result}
@@ -334,16 +345,16 @@ class XRayProject:
                 relative=path.relative_to(source).as_posix()
                 image_id=str(uuid.uuid5(uuid.NAMESPACE_URL,relative.lower()))
                 rows.append((image_id,relative))
-        with sqlite3.connect(self.db_path) as c:c.executemany("INSERT OR IGNORE INTO source_images(image_id,relative_path) VALUES(?,?)",rows)
+        with _db_connection(self.db_path) as c:c.executemany("INSERT OR IGNORE INTO source_images(image_id,relative_path) VALUES(?,?)",rows)
         return len(rows)
 
     def source_images(self):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             return [dict(row) for row in c.execute("SELECT image_id,relative_path,excluded,crop_reviewed,crop_reviewed_at FROM source_images ORDER BY relative_path")]
 
     def source_image(self,image_id):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row;row=c.execute("SELECT * FROM source_images WHERE image_id=?",(image_id,)).fetchone()
         if row is None:raise KeyError(f"Unknown X-ray source image: {image_id}")
         return dict(row)
@@ -353,7 +364,7 @@ class XRayProject:
 
     def set_source_excluded(self,image_id,excluded=True):
         self.source_image(image_id)
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.execute("UPDATE source_images SET excluded=? WHERE image_id=?",(int(bool(excluded)),image_id))
         return bool(excluded)
 
@@ -371,12 +382,12 @@ class XRayProject:
         if image_id is not None:where.append("image_id=?");args.append(image_id)
         if active_only:where.append("crop_status NOT IN ('superseded','rejected')")
         sql="SELECT * FROM specimens"+((" WHERE "+" AND ".join(where)) if where else "")+" ORDER BY image_id,ordinal,label"
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             return [self._decode_specimen(row) for row in c.execute(sql,args)]
 
     def specimen(self,specimen_id):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row;row=c.execute("SELECT * FROM specimens WHERE specimen_id=?",(specimen_id,)).fetchone()
         if row is None:raise KeyError(f"Unknown specimen: {specimen_id}")
         return self._decode_specimen(row)
@@ -403,7 +414,7 @@ class XRayProject:
             return {"proposed":0,"high":0,"review":0,"protected":len(self.specimens(image_id))}
         proposals=[p.to_dict() if hasattr(p,"to_dict") else dict(p) for p in proposals]
         now=_now();stem=self.source_image_path(image_id).stem
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             protected=[self._decode_specimen(row) for row in c.execute(
                 "SELECT * FROM specimens WHERE image_id=? AND excluded=0 AND (crop_status='confirmed' OR crop_source='manual')",(image_id,))]
@@ -450,7 +461,7 @@ class XRayProject:
         item=self.specimen(specimen_id)
         if item["crop_status"]=="confirmed" and not item["excluded"] and bool((item.get("crop") or {}).get("orientation_verified")):return False
         now=_now();crop=self._orientation_verified_crop(item.get("crop") or {},source,now)
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.execute("UPDATE specimens SET crop_json=?,crop_status='confirmed',excluded=0,updated_at=? WHERE specimen_id=?",(_json(crop),now,specimen_id))
             self._event(c,specimen_id,"confirm",source,{"previous_status":item["crop_status"],"orientation_verified":True})
         return True
@@ -459,7 +470,7 @@ class XRayProject:
         rows=[item for item in self.specimens(image_id) if not item["excluded"]]
         if not rows:raise ValueError("This plate has no specimen crops to confirm.")
         now=_now();confirmed=0
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             for item in rows:
                 crop=self._orientation_verified_crop(item.get("crop") or {},source,now)
                 if item["crop_status"]!="confirmed":confirmed+=1
@@ -486,7 +497,7 @@ class XRayProject:
         item=self.specimen(specimen_id);crop=apply_orientation_defaults(crop,self.orientation_policy);crop["confidence"]="high";crop["orientation_verified"]=False;now=_now()
         reviewed=bool(self.source_image(item["image_id"]).get("crop_reviewed"))
         status="confirmed" if reviewed else "proposed"
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.execute("UPDATE specimens SET crop_json=?,crop_source='manual',crop_status=?,crop_qc_json=?,model_id='',excluded=0,updated_at=? WHERE specimen_id=?",
                       (_json(crop),status,_json(list(qc)),now,specimen_id))
             self._event(c,specimen_id,"edit","human",{"previous_crop":item.get("crop") or {},"crop":crop})
@@ -498,7 +509,7 @@ class XRayProject:
         ordinal=1+max((int(x.get("ordinal") or 0) for x in self.specimens(image_id)),default=0)
         if not label:label=f"{self.source_image_path(image_id).stem}-{ordinal:02d}"
         status="confirmed" if self.source_image(image_id).get("crop_reviewed") else "proposed"
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.execute("INSERT INTO specimens(specimen_id,image_id,label,crop_json,excluded,ordinal,crop_source,crop_status,crop_qc_json,model_id,updated_at) VALUES(?,?,?,?,0,?,'manual',?,'[]','',?)",
                       (specimen_id,image_id,label,_json(crop),ordinal,status,now))
             self._event(c,specimen_id,"add","human",{"crop":crop})
@@ -506,7 +517,7 @@ class XRayProject:
 
     def reject_specimen(self,specimen_id):
         item=self.specimen(specimen_id)
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.execute("UPDATE specimens SET crop_status='rejected',excluded=1,updated_at=? WHERE specimen_id=?",(_now(),specimen_id))
             self._event(c,specimen_id,"reject","human",{"previous_status":item["crop_status"]})
 
@@ -515,7 +526,7 @@ class XRayProject:
         image=self.source_image(image_id);reviewed=bool(image.get("crop_reviewed"));status="confirmed" if reviewed else "proposed";now=_now()
         edits=[dict(item) for item in edits];new_crops=[dict(item) for item in new_crops];removed_ids={str(value) for value in removed_ids}
         id_map={};updated=added=removed=0
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             rows={row["specimen_id"]:self._decode_specimen(row) for row in c.execute("SELECT * FROM specimens WHERE image_id=?",(image_id,))}
             for specimen_id in removed_ids:
@@ -554,7 +565,7 @@ class XRayProject:
     def remove_all_plate_crops(self,image_id):
         """Retire every current crop on a plate while preserving event/archive history."""
         self.source_image(image_id);now=_now();removed=0
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             rows=[self._decode_specimen(row) for row in c.execute("SELECT * FROM specimens WHERE image_id=?",(image_id,))]
             for item in rows:
@@ -567,12 +578,12 @@ class XRayProject:
         return removed
 
     def set_specimen_excluded(self,specimen_id,excluded=True):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.execute("UPDATE specimens SET excluded=?,updated_at=? WHERE specimen_id=?",(int(bool(excluded)),_now(),specimen_id))
             self._event(c,specimen_id,"exclude" if excluded else "restore","human",{})
 
     def crop_events(self,specimen_id):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row;rows=[dict(row) for row in c.execute("SELECT * FROM crop_events WHERE specimen_id=? ORDER BY event_id",(specimen_id,))]
         for row in rows:
             try:row["payload"]=json.loads(row.pop("payload_json"))
@@ -580,13 +591,13 @@ class XRayProject:
         return rows
 
     def get_ui_state(self,key,default=None):
-        with sqlite3.connect(self.db_path) as c:row=c.execute("SELECT payload_json FROM ui_state WHERE key=?",(str(key),)).fetchone()
+        with _db_connection(self.db_path) as c:row=c.execute("SELECT payload_json FROM ui_state WHERE key=?",(str(key),)).fetchone()
         if row is None:return {} if default is None else default
         try:return json.loads(row[0])
         except Exception:return {} if default is None else default
 
     def set_ui_state(self,key,value):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.execute("INSERT INTO ui_state(key,payload_json) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET payload_json=excluded.payload_json",(str(key),_json(value)))
 
     def training_plates(self):
@@ -664,12 +675,12 @@ class XRayProject:
         return self._sample_crop_plate_ids(candidates,len(candidates) if count is None else max(1,int(count)))
 
     def next_crop_model_id(self):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             count=c.execute("SELECT COUNT(*) FROM xray_crop_models").fetchone()[0]
         return f"xray_crop_model_v{int(count)+1:03d}"
 
     def active_crop_model(self):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row;row=c.execute("SELECT * FROM xray_crop_models WHERE active=1 ORDER BY created_at DESC LIMIT 1").fetchone()
         if row is None:return None
         out=dict(row)
@@ -678,7 +689,7 @@ class XRayProject:
         return out
 
     def crop_models(self):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row;rows=[dict(row) for row in c.execute("SELECT * FROM xray_crop_models ORDER BY created_at DESC")]
         for row in rows:
             try:row["metrics"]=json.loads(row.pop("metrics_json") or "{}")
@@ -687,7 +698,7 @@ class XRayProject:
 
     def register_crop_model(self,model_id,path,config_path,parent_model_id,metrics,training_plate_ids,training_specimen_count,activate=True):
         now=_now()
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             if activate:c.execute("UPDATE xray_crop_models SET active=0")
             c.execute("""INSERT INTO xray_crop_models(model_id,created_at,path,config_path,parent_model_id,metrics_json,training_plate_count,training_specimen_count,active)
                          VALUES(?,?,?,?,?,?,?,?,?)""",
@@ -697,7 +708,7 @@ class XRayProject:
 
     def activate_crop_model(self,model_id):
         """Select a registered crop model as the sole active model."""
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             if not c.execute("SELECT 1 FROM xray_crop_models WHERE model_id=?",(str(model_id),)).fetchone():
                 raise KeyError(f"Unknown X-ray crop model: {model_id}")
             c.execute("UPDATE xray_crop_models SET active=CASE WHEN model_id=? THEN 1 ELSE 0 END",(str(model_id),))
@@ -706,7 +717,7 @@ class XRayProject:
     def delete_crop_model(self,model_id):
         """Delete a managed model and its registry rows without breaking descendants."""
         model_id=str(model_id)
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             row=c.execute("SELECT * FROM xray_crop_models WHERE model_id=?",(model_id,)).fetchone()
             if row is None:raise KeyError(f"Unknown X-ray crop model: {model_id}")
@@ -730,7 +741,7 @@ class XRayProject:
         return model_id
 
     def next_structure_model_id(self):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             existing={str(row[0]) for row in c.execute("SELECT model_id FROM xray_structure_models")}
         number=1
         while True:
@@ -747,13 +758,13 @@ class XRayProject:
         return out
 
     def active_structure_model(self):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             row=c.execute("SELECT * FROM xray_structure_models WHERE active=1 ORDER BY created_at DESC LIMIT 1").fetchone()
         return self._structure_model_dict(row)
 
     def structure_models(self):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             rows=[self._structure_model_dict(row) for row in c.execute(
                 "SELECT * FROM xray_structure_models ORDER BY created_at DESC,model_id DESC"
@@ -768,7 +779,7 @@ class XRayProject:
         train_count=sum(str(item.get("split"))=="train" for item in rows) if training_specimen_count is None else int(training_specimen_count)
         val_count=sum(str(item.get("split"))=="val" for item in rows) if validation_specimen_count is None else int(validation_specimen_count)
         now=_now()
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             if parent_model_id and not c.execute(
                 "SELECT 1 FROM xray_structure_models WHERE model_id=?",(str(parent_model_id),)
             ).fetchone():
@@ -789,7 +800,7 @@ class XRayProject:
         return model_id
 
     def structure_model_membership(self,model_id):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             return [dict(row) for row in c.execute(
                 "SELECT model_id,specimen_id,split FROM xray_structure_training_membership WHERE model_id=? ORDER BY split,specimen_id",
@@ -798,7 +809,7 @@ class XRayProject:
 
     def activate_structure_model(self,model_id):
         model_id=str(model_id)
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             if not c.execute("SELECT 1 FROM xray_structure_models WHERE model_id=?",(model_id,)).fetchone():
                 raise KeyError(f"Unknown X-ray structure model: {model_id}")
             c.execute("UPDATE xray_structure_models SET active=CASE WHEN model_id=? THEN 1 ELSE 0 END",(model_id,))
@@ -806,7 +817,7 @@ class XRayProject:
 
     def delete_structure_model(self,model_id):
         model_id=str(model_id)
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             row=c.execute("SELECT * FROM xray_structure_models WHERE model_id=?",(model_id,)).fetchone()
             if row is None:raise KeyError(f"Unknown X-ray structure model: {model_id}")
@@ -853,7 +864,7 @@ class XRayProject:
 
     def structure_ai_review_ids(self):
         schema_id=self.active_scheme_record()["version_id"]
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             rows=c.execute(
                 """SELECT r.specimen_id,e.event_id
                    FROM annotation_events e
@@ -937,7 +948,7 @@ class XRayProject:
             except (KeyError,TypeError,ValueError):continue
             grouped.setdefault(sid,[]).append({"x":x,"y":y,"score":score})
         inserted=[];role_count=0
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             archive_id=self._archive_annotation_snapshot(
                 c,run,"predict_current_replace_verified" if str(run.get("status") or "")=="verified" else "model_seed_refresh"
             )
@@ -1007,7 +1018,7 @@ class XRayProject:
         hundreds of times.  Keep these counters DB-authoritative, but calculate
         them with set-based queries in one connection.
         """
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             plate=c.execute("""
                 SELECT
@@ -1072,7 +1083,7 @@ class XRayProject:
 
     def save_scheme(self,scheme,note="Scheme update"):
         normalized=normalize_scheme(scheme);digest=scheme_hash(normalized)
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             existing=c.execute("SELECT version_id FROM schema_versions WHERE scheme_hash=? ORDER BY created_at DESC LIMIT 1",(digest,)).fetchone()
             if existing:
                 c.execute("UPDATE schema_versions SET active=CASE WHEN version_id=? THEN 1 ELSE 0 END",(existing[0],));return existing[0]
@@ -1082,7 +1093,7 @@ class XRayProject:
         return version_id
 
     def active_scheme_record(self):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             row=c.execute("SELECT * FROM schema_versions WHERE active=1 ORDER BY created_at DESC LIMIT 1").fetchone()
         if row is None:raise RuntimeError("X-ray project has no active trait scheme")
@@ -1099,7 +1110,7 @@ class XRayProject:
             and str(scheme.get("name") or "")=="Untitled X-ray trait scheme"
         )
         if not untouched:return False
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             annotations=int(c.execute("SELECT COUNT(*) FROM annotations").fetchone()[0])
             results=int(c.execute("SELECT COUNT(*) FROM trait_results").fetchone()[0])
         if annotations or results:return False
@@ -1131,7 +1142,7 @@ class XRayProject:
         self.set_ui_state("xray_current_selection",value);return value
 
     def schema_history(self):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             return [dict(row) for row in c.execute("SELECT version_id,created_at,scheme_hash,note,active FROM schema_versions ORDER BY created_at DESC")]
 
@@ -1152,13 +1163,13 @@ class XRayProject:
             WHERE s.crop_status='confirmed' AND i.crop_reviewed=1 AND i.excluded=0
             ORDER BY i.relative_path,s.ordinal,s.label,s.specimen_id
         """
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row;rows=[dict(row) for row in c.execute(sql,(pass_no,schema_id))]
         for workflow_no,row in enumerate(rows,1):row["workflow_no"]=workflow_no
         if not include_excluded:rows=[row for row in rows if not bool(row.get("excluded"))]
         if pass_no>1:
             verified=set()
-            with sqlite3.connect(self.db_path) as c:
+            with _db_connection(self.db_path) as c:
                 verified={row[0] for row in c.execute(
                     "SELECT specimen_id FROM annotation_runs WHERE pass_no=1 AND source='human' AND schema_version_id=? AND status='verified'",
                     (schema_id,),
@@ -1180,7 +1191,7 @@ class XRayProject:
             first=self.annotation_run(specimen_id,1,source,False)
             if not first or first.get("status")!="verified":
                 raise ValueError("Verify manual pass 1 before starting repeatability pass 2.")
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             row=c.execute(
                 "SELECT run_id FROM annotation_runs WHERE specimen_id=? AND pass_no=? AND source=? AND schema_version_id=?",
                 (specimen_id,pass_no,str(source),schema_id),
@@ -1197,7 +1208,7 @@ class XRayProject:
 
     def annotation_run(self,specimen_id,pass_no=1,source="human",create=False):
         schema_id=self.active_scheme_record()["version_id"]
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row;row=c.execute(
                 "SELECT * FROM annotation_runs WHERE specimen_id=? AND pass_no=? AND source=? AND schema_version_id=?",
                 (specimen_id,int(pass_no),str(source),schema_id),
@@ -1209,7 +1220,7 @@ class XRayProject:
     def annotations(self,specimen_id,pass_no=1,source="human"):
         run=self.annotation_run(specimen_id,pass_no,source,False)
         if run is None:return []
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             return [dict(row) for row in c.execute(
                 "SELECT annotation_id,run_id,structure_id,x,y,sort_order FROM annotations WHERE run_id=? ORDER BY structure_id,sort_order,annotation_id",
@@ -1219,7 +1230,7 @@ class XRayProject:
     def annotation_roles(self,specimen_id,pass_no=1,source="human"):
         run=self.annotation_run(specimen_id,pass_no,source,False)
         if run is None:return []
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             return [dict(row) for row in c.execute(
                 """SELECT ar.role_id,ar.run_id,ar.annotation_id,ar.structure_id,
@@ -1245,7 +1256,7 @@ class XRayProject:
         states={structure_id:"complete" for structure_id in known}
         run=self.annotation_run(specimen_id,pass_no,source,False)
         if run is None:return states
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             rows=c.execute(
                 "SELECT structure_id,visibility FROM annotation_structure_states WHERE run_id=?",
                 (run["run_id"],),
@@ -1271,7 +1282,7 @@ class XRayProject:
         ):
             raise ValueError("Clear existing markers for this structure before marking it Not visible or Absent.")
         run_id=self.ensure_annotation_run(specimen_id,pass_no,source);now=_now()
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             if visibility=="complete":
                 c.execute("DELETE FROM annotation_structure_states WHERE run_id=? AND structure_id=?",(run_id,structure_id))
             else:
@@ -1289,7 +1300,7 @@ class XRayProject:
 
     def assign_annotation_role(self,annotation_id,role_structure_id):
         annotation_id=int(annotation_id);role_structure_id=str(role_structure_id);now=_now()
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             row=c.execute(
                 """SELECT a.run_id,a.structure_id,r.specimen_id
                    FROM annotations a JOIN annotation_runs r ON r.run_id=a.run_id
@@ -1321,7 +1332,7 @@ class XRayProject:
 
     def remove_annotation_role(self,annotation_id,role_structure_id):
         annotation_id=int(annotation_id);role_structure_id=str(role_structure_id);now=_now();specimen_id=None
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             row=c.execute(
                 """SELECT ar.role_id,ar.run_id,r.specimen_id,a.structure_id
                    FROM annotation_roles ar
@@ -1416,7 +1427,7 @@ class XRayProject:
         return archived
 
     def annotation_archives(self,specimen_id):
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row;rows=[dict(row) for row in c.execute(
                 "SELECT * FROM annotation_archives WHERE specimen_id=? ORDER BY archive_id",(str(specimen_id),)
             )]
@@ -1446,7 +1457,7 @@ class XRayProject:
         values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations,unknown_structures=unknown))
         qc="" if status=="verified" else status
         now=_now()
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             for trait in scheme.get("traits",()):
                 ident=trait["id"];text=self._value_text(values.get(ident))
                 c.execute(
@@ -1475,7 +1486,7 @@ class XRayProject:
         if structure_id not in known:raise KeyError(f"Unknown structure in active scheme: {structure_id}")
         x=max(0.0,min(1.0,float(x)));y=max(0.0,min(1.0,float(y)))
         run_id=self.ensure_annotation_run(specimen_id,pass_no,source);now=_now()
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             if replace_single:
                 role=c.execute(
                     "SELECT role_id,annotation_id FROM annotation_roles WHERE run_id=? AND structure_id=?",
@@ -1505,7 +1516,7 @@ class XRayProject:
 
     def move_annotation(self,annotation_id,x,y):
         x=max(0.0,min(1.0,float(x)));y=max(0.0,min(1.0,float(y)));now=_now();specimen_id=None
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             row=c.execute("""SELECT a.run_id,a.structure_id,a.x,a.y,r.specimen_id
                              FROM annotations a JOIN annotation_runs r ON r.run_id=a.run_id
                              WHERE a.annotation_id=?""",(int(annotation_id),)).fetchone()
@@ -1517,7 +1528,7 @@ class XRayProject:
 
     def delete_annotation(self,annotation_id):
         now=_now();specimen_id=None
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             row=c.execute("""SELECT a.run_id,a.structure_id,a.x,a.y,a.sort_order,r.specimen_id
                              FROM annotations a JOIN annotation_runs r ON r.run_id=a.run_id
                              WHERE a.annotation_id=?""",(int(annotation_id),)).fetchone()
@@ -1549,7 +1560,7 @@ class XRayProject:
         if structure_id is not None:
             known={item["id"] for item in self.scheme.get("structures",())}
             if structure_id not in known:raise KeyError(f"Unknown structure in active scheme: {structure_id}")
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             if structure_id is None:
                 annotations=int(c.execute("SELECT COUNT(*) FROM annotations WHERE run_id=?",(run_id,)).fetchone()[0])
                 roles=int(c.execute("SELECT COUNT(*) FROM annotation_roles WHERE run_id=?",(run_id,)).fetchone()[0])
@@ -1594,7 +1605,7 @@ class XRayProject:
             raise ValueError("Before continuing, mark every required category. Missing: "+", ".join(item["name"] for item in missing))
         now=_now()
         states=self.structure_visibility_states(specimen_id,pass_no,source)
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.execute("UPDATE annotation_runs SET status='verified',updated_at=?,verified_at=? WHERE run_id=?",(now,now,run["run_id"]))
             self._annotation_event(c,run["run_id"],"verify",payload={"counts":counts,"structure_visibility":states})
         self.recalculate_trait_results(specimen_id)
@@ -1605,7 +1616,7 @@ class XRayProject:
     def annotation_events(self,specimen_id,pass_no=1,source="human"):
         run=self.annotation_run(specimen_id,pass_no,source,False)
         if run is None:return []
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row;rows=[dict(row) for row in c.execute(
                 "SELECT * FROM annotation_events WHERE run_id=? ORDER BY event_id",(run["run_id"],)
             )]
@@ -1624,7 +1635,7 @@ class XRayProject:
     def structure_repeatability(self,run_id=None):
         """Latest persisted Human repeatability run and both blind-pass progress values."""
         schema_id=self.active_scheme_record()["version_id"]
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             if run_id:
                 row=c.execute("SELECT * FROM xray_structure_repeatability_runs WHERE run_id=?",(str(run_id),)).fetchone()
@@ -1674,7 +1685,7 @@ class XRayProject:
         candidates=[row for row in self.structure_specimens(1) if str(row.get("annotation_status") or "")=="verified"]
         if not candidates:raise ValueError("No human-verified specimens are available for a repeatability sample.")
         count=min(count,len(candidates));selected=random.Random(seed).sample(candidates,count)
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             highest=int(c.execute("SELECT COALESCE(MAX(pass_no),1) FROM annotation_runs WHERE source='human'").fetchone()[0] or 1)
             prior=int(c.execute("SELECT COALESCE(MAX(annotation2_pass_no),1) FROM xray_structure_repeatability_runs").fetchone()[0] or 1)
         highest=max(highest,prior);p1_no=max(2,highest+1);p2_no=p1_no+1
@@ -1688,7 +1699,7 @@ class XRayProject:
             ]
             visibility=self.structure_visibility_states(specimen_id,1,"human")
             payload.append((run_id,specimen_id,position,_json(baseline),_json(visibility)))
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.execute(
                 """INSERT INTO xray_structure_repeatability_runs(
                      run_id,schema_version_id,created_at,status,requested_count,seed,
@@ -1706,7 +1717,7 @@ class XRayProject:
     def retire_structure_repeatability(self,run_id):
         run=self.structure_repeatability(run_id)
         if not run:return False
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.execute(
                 "UPDATE xray_structure_repeatability_runs SET status='retired',completed_at=? WHERE run_id=?",
                 (_now(),str(run_id)),
@@ -1725,7 +1736,7 @@ class XRayProject:
 
     def _update_structure_repeatability_completion(self,specimen_id,pass_no=None):
         specimen_id=str(specimen_id);pass_no=None if pass_no is None else int(pass_no)
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             runs=[dict(row) for row in c.execute(
                 """SELECT r.* FROM xray_structure_repeatability_runs r
@@ -1828,7 +1839,7 @@ class XRayProject:
 
     def annotation_counts_by_structure(self):
         counts={}
-        with sqlite3.connect(self.db_path) as c:
+        with _db_connection(self.db_path) as c:
             for sid,count in c.execute("SELECT structure_id,COUNT(*) FROM annotations GROUP BY structure_id"):counts[sid]=counts.get(sid,0)+int(count)
             for sid,count in c.execute("SELECT structure_id,COUNT(*) FROM annotation_roles GROUP BY structure_id"):counts[sid]=counts.get(sid,0)+int(count)
         return counts

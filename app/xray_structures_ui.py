@@ -541,6 +541,11 @@ class XRayStructureWorkspace:
                 counts[row["structure_id"]]=counts.get(row["structure_id"],0)+1
             states=self.project.structure_visibility_states(self.selected_specimen_id,self.pass_no.get(),"human")
         self._marker_buttons={};self._marker_visibility_buttons={};self._marker_visibility_vars={};shortcuts=_structure_shortcuts(structures)
+        # The marker action carries a 24 px scientific icon. Give the adjacent
+        # status button the same image-height floor so native Windows ttk cannot
+        # render the two controls at visibly different heights.
+        if not getattr(self,"_marker_status_spacer",None):
+            self._marker_status_spacer=tk.PhotoImage(master=self.marker_host,width=1,height=24)
         for structure in _structure_button_order(structures):
             sid=str(structure["id"]);index=structures.index(structure);style=marker_style(settings,structure,index)
             hotkey=shortcuts.get(sid,"");count=counts.get(sid,0);icon=self._marker_button_icon(self.marker_host,structure,style)
@@ -557,7 +562,8 @@ class XRayStructureWorkspace:
             self.tip.bind(button,help_text)
             current=str(states.get(sid) or "complete")
             visibility=ttk.Button(
-                group,text=_VISIBILITY_SYMBOLS.get(current,"✓"),width=2,style="MarkerStatus.TButton",
+                group,text=_VISIBILITY_SYMBOLS.get(current,"✓"),image=self._marker_status_spacer,compound="left",
+                width=2,style="MarkerStatus.TButton",
                 state="normal" if self.selected_specimen_id and not self.current_specimen_excluded else "disabled",
             )
             visibility.pack(side="left",padx=(1,0));self._marker_visibility_buttons[sid]=visibility
