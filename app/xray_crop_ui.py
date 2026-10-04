@@ -418,6 +418,8 @@ class XRayCropWorkspace:
         self.training_parent_choice=tk.StringVar(master=two,value="RTMDet pretrained")
         self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,values=("RTMDet pretrained",),width=22,state="readonly")
         self.training_parent_box.pack(side="left",padx=(4,0))
+        self._training_parent_touched=False
+        self.training_parent_box.bind("<<ComboboxSelected>>",lambda _e:setattr(self,"_training_parent_touched",True))
         self.training_count_label=ttk.Label(model_row,text="Ready: 0",style="Muted.TLabel");self.training_count_label.pack(side="right",padx=(10,0))
         train_actions=ttk.Frame(two);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
         self.train_button=self._button(train_actions,"Train",self.train_model,"Train crop detection and orientation using existing eligible examples.",style="Primary.TButton");self.train_button.pack(side="left")
@@ -532,7 +534,8 @@ class XRayCropWorkspace:
         parent_values=("RTMDet pretrained",)+tuple(item["model_id"] for item in self.project.crop_models())
         current_parent=self.training_parent_choice.get()
         preferred_parent=(model or {}).get("model_id") or "RTMDet pretrained"
-        if current_parent not in parent_values:self.training_parent_choice.set(preferred_parent)
+        if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:
+            self.training_parent_choice.set(preferred_parent)
         self.training_parent_box.configure(values=parent_values)
         self.training_count_label.configure(text=f"Ready: {status['training_plates']} plates · {status['training_specimens']} crops · orientation {status['orientation_training']}")
         self.predict_status_labels["unresolved"].configure(text=f"Unresolved: {status['prediction_candidates']}")
@@ -961,7 +964,7 @@ class XRayCropWorkspace:
                     elif event[0]=="error":
                         self._busy=False;dialog.destroy();messagebox.showerror("Crop training",str(event[1]),parent=self.root);return
                     else:
-                        self._busy=False;dialog.destroy();result=event[1];self.training_parent_choice.set(result["model_id"]);self._refresh_controls();metrics=result.get("metrics") or {}
+                        self._busy=False;dialog.destroy();result=event[1];self._training_parent_touched=False;self.training_parent_choice.set(result["model_id"]);self._refresh_controls();metrics=result.get("metrics") or {}
                         detail=f"Model ready: {result['model_id']}\nTraining plates: {result['training_plates']}\nTraining crops: {result['training_specimens']}"
                         if metrics.get("orientation/enabled"):
                             head=metrics.get("orientation/head_accuracy");bottom=metrics.get("orientation/bottom_accuracy");parts=[]

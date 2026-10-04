@@ -19,8 +19,11 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         queue_center=source("app/ui/queue_center.py")
         self.assertNotIn("self.attention_banner(",crop)
         self.assertNotIn("self.attention_banner(",landmarks)
-        self.assertIn('style="Attention.TFrame"',shell)
-        self.assertIn('text=queue_text,image=self.ui_icon("queues"',shell)
+        self.assertIn('def build_queue_navigation(self,parent):',shell)
+        self.assertIn('text="Queues",image=self.ui_icon("queues"',shell)
+        self.assertNotIn('queue_text=f"Queues (',shell)
+        self.assertIn("self.shell.build_queue_navigation(header)",crop)
+        self.assertIn("self.shell.build_queue_navigation(header)",landmarks)
         self.assertIn('"Open"',queue_center)
         self.assertIn('"Close queue"',queue_center)
 
@@ -65,9 +68,22 @@ class ReleaseUIUnificationTests(unittest.TestCase):
             self.assertIn("Active:",value)
             self.assertIn('text="From"',value)
             self.assertIn("Models…",value)
-        self.assertIn("Verified Crop data",crop)
+        self.assertIn('crop_models=self.context.project.models("crop")',crop)
+        self.assertIn("Bootstrap / first model",crop)
+        self.assertNotIn("Verified Crop data",crop)
         self.assertIn("RTMDet pretrained",xcrop)
         self.assertIn("ImageNet ResNet18",structures)
+
+    def test_core_crop_from_selector_uses_registered_model_lineage(self):
+        crop=source("app/ui/crop_section.py")
+        training=source("app/crop_training.py")
+        storage=source("app/project_storage.py")
+        self.assertIn('crop_models=self.context.project.models("crop")',crop)
+        self.assertIn('parent_default=active_crop.get("model_id")',crop)
+        self.assertIn("parent_model_id=parent_model_id",crop)
+        self.assertIn("def train_project(project,seed=42,ridge=1.0,parent_model_id=None):",training)
+        self.assertIn("lineage_parent=previous if parent_model_id is None",training)
+        self.assertIn("def models(self,kind):",storage)
 
     def test_xray_training_parent_choices_are_real_saved_models_not_decorative_fields(self):
         crop=source("app/xray_crop_ui.py")
@@ -88,16 +104,51 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         banner=structures[structures.index("def _refresh_result_review_banner"):structures.index("def _move_result_review")]
         self.assertNotIn("\\n{item.get('top_reason')",banner)
 
-    def test_queue_center_close_hides_session_navigation_queues(self):
+    def test_queue_center_close_removes_queue_navigation_state(self):
         shell=source("app/ui/shell.py")
-        self.assertIn('closed.add((str(project.root),"landmarks","landmark_ai_review",str(batch_id or "")))',shell)
-        self.assertIn('closed_key in self.__dict__.get("_closed_queue_navigation",set())',shell)
-        self.assertIn('workflow_ids and not workflow_closed',shell)
+        review=source("app/landmark_ai_review.py")
+        self.assertIn("close_review_session(project,batch_id)",shell)
+        self.assertIn('project.set_ui_state("crop_active_batch",{})',shell)
+        self.assertIn('project.set_ui_state("landmark_training_queue_closed"',shell)
+        self.assertIn("def close_review_session(project,batch_id=None):",review)
+        self.assertIn('"complete":True',review)
 
     def test_xray_queue_navigation_uses_shared_nav_button_styles(self):
         structures=source("app/xray_structures_ui.py")
         self.assertGreaterEqual(structures.count('style="Nav.TButton"'),2)
         self.assertIn('style="NavPrimary.TButton"',structures)
+
+    def test_workflow_stage_cards_use_whitespace_not_vertical_divider_bars(self):
+        workflow=source("app/ui/workflow.py")
+        self.assertNotIn("_stage_separators",workflow)
+        self.assertNotIn("sep.grid(row=0,column=column+1",workflow)
+        self.assertIn("padx=(0 if index==0 else 5,0)",workflow)
+
+    def test_xray_specimen_number_means_ordinal_on_current_plate(self):
+        structures=source("app/xray_structures_ui.py")
+        module=source("app/modules/xray_counts.py")
+        context=structures[structures.index("def _set_context"):structures.index("def _refresh_plate_context") if "def _refresh_plate_context" in structures else structures.index("def refresh(",structures.index("def _set_context"))]
+        self.assertIn('int(item.get("ordinal") or 0)',context)
+        self.assertNotIn("structure_workflow_number",context)
+        self.assertIn('tree.heading("row_no",text="#")',module)
+        self.assertIn('tree.heading("locality",text="Sample")',module)
+        self.assertIn('tree.heading("fish",text="Specimen №")',module)
+        self.assertIn("self._refresh_selection_context()",module)
+
+    def test_structure_list_preserves_scroll_when_workspace_refreshes(self):
+        structures=source("app/xray_structures_ui.py")
+        self.assertIn("self.specimen_list.refresh(preserve_scroll=True,reveal=True)",structures)
+        self.assertIn("self.canvas.see(visible,align_top=False)",structures)
+        self.assertIn("self.specimen_list.select(specimen_id,reveal=False)",structures)
+        self.assertIn("self.pass_no.set(1);self.specimen_list.pass_no=1;self.refresh()",structures)
+
+    def test_active_models_are_initial_training_parent_choices(self):
+        landmarks=source("app/ui/landmarks_section.py")
+        xcrop=source("app/xray_crop_ui.py")
+        structures=source("app/xray_structures_ui.py")
+        self.assertIn("chosen=active.get('model_id') if active.get('model_id') in valid",landmarks)
+        self.assertIn('if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:',xcrop)
+        self.assertIn('if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:',structures)
 
     def test_traits_editor_scrolls_and_has_no_dead_appearance_button_reference(self):
         module=source("app/modules/xray_counts.py")

@@ -179,6 +179,7 @@ class LandmarksSection(SectionView):
   ttk.Label(controls,text='Click = place · drag = correct',style="Muted.TLabel").pack(side='right',padx=(6,8))
 
   controls.relayout()
+  self.shell.build_queue_navigation(header)
   batch=tk.IntVar(value=24);prediction=tk.IntVar(value=24)
   guide='Why: Landmarks turns specimen anatomy into comparable point coordinates for morphometric analysis.\n\n1. Human Repeatability\nOptional. Mark the same control images twice, with a break between passes, to estimate your own placement error.\n\n2. Training data\nMark every required point or choose Mark missing. Use Verify & Next to finish each image.\n\n3. Train model\nTrain from all human-verified images. Choose Bootstrap for the first model or a saved model as the parent.\n\n4. Predict & review\nPredict only unresolved images. Yellow images already have complete AI landmark sets and belong in Review AI predictions. Verify & Next confirms each reviewed image. Final data QC is a separate post-verification audit of human-verified landmark sets.'
   dock=self.workflow_dock(panel,help_title='Landmarks — quick guide',help_text=guide);dock.grid(row=2,column=0,sticky='ew',pady=(2,0))
@@ -211,7 +212,7 @@ class LandmarksSection(SectionView):
   try:active=self.context.project.active_model_readonly('landmark') or {}
   except ValueError:
    active={};active_warning='No compatible active model'
-  parents=available_training_parents(self.context.project);saved=self.context.project.get_ui_state('landmark_training_parent_model_id',None);valid={item['model_id'] for item in parents};chosen=saved if saved in valid else active.get('model_id') if active.get('model_id') in valid else None
+  parents=available_training_parents(self.context.project);saved=self.context.project.get_ui_state('landmark_training_parent_model_id',None);valid={item['model_id'] for item in parents};chosen=active.get('model_id') if active.get('model_id') in valid else saved if saved in valid else None
   parent_choice=tk.StringVar(master=panel,value=chosen or 'Bootstrap / first model')
   model_row=ttk.Frame(three);model_row.grid(row=0,column=0,sticky='ew');three.columnconfigure(0,weight=1)
   ttk.Label(model_row,text=active_warning or f"Active: {active.get('model_id','None')}",style='StatusChip.TLabel').pack(side='left')

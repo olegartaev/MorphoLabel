@@ -127,12 +127,13 @@ class PresentationProjectTests(_ProjectFixture,unittest.TestCase):
         self.assertGreaterEqual(dialog_width_for_columns(crop_model_columns,1456,chrome=105),sum(crop_model_columns)+105)
         self.assertLessEqual(dialog_width_for_columns(crop_model_columns,1024,chrome=105),944)
 
-    def test_workflow_dock_equalizes_stage_cards_and_separates_stages(self):
+    def test_workflow_dock_equalizes_stage_cards_without_divider_bars(self):
         source=(Path(__file__).resolve().parents[1]/"app/ui/workflow.py").read_text(encoding="utf-8")
         self.assertIn("target_height=max(card.winfo_reqheight() for card in self._cards)",source)
         self.assertIn("uniform='workflow_stage'",source)
-        self.assertIn("sep.grid(row=0,column=column+1,sticky='ns'",source)
-        self.assertIn("card.grid(row=0,column=column,sticky='nsew')",source)
+        self.assertNotIn("_stage_separators",source)
+        self.assertNotIn("sep.grid(row=0,column=column+1",source)
+        self.assertIn("card.grid(row=0,column=index,sticky='nsew'",source)
 
     def test_saved_attention_queue_uses_the_same_compact_strip_language(self):
         source=(Path(__file__).resolve().parents[1]/"app/ui/section_base.py").read_text(encoding="utf-8")

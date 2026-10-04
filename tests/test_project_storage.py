@@ -32,6 +32,14 @@ class ProjectStorageTests(unittest.TestCase):
   shutil.rmtree(p.cache_root);self.assertEqual(p.load_landmarks(image_id)[3]["x_standardized"],1);(p.cache_root/"developed").mkdir(parents=True);self.assertTrue(p.image_path(image_id).exists())
   moved=self.tmp/"moved";shutil.copytree(self.src,moved);result=p.relink(moved);self.assertEqual(result["matched"],1);self.assertTrue(p.image_path(image_id).exists())
   self.assertRaises(ValueError,p.register_model,"bad","landmark",schema_digest="wrong");self.assertTrue(p.backup().exists())
+ def test_model_list_supports_active_parent_selection(self):
+  p=self.new("models")
+  p.register_model("crop_model_a","crop",active=True)
+  p.register_model("crop_model_b","crop",active=False,parent_model_id="crop_model_a")
+  rows=p.models("crop")
+  self.assertEqual({"crop_model_a","crop_model_b"},{row["model_id"] for row in rows})
+  self.assertEqual("crop_model_a",p.active_model("crop")["model_id"])
+
  def test_legacy_migration_preserves_coordinate_ids(self):
   p=self.new();image_id=self.image_id(p);legacy=self.tmp/"legacy";d=legacy/"work"/"s"/"landmarks";d.mkdir(parents=True);(d/f"{image_id}.json").write_text('{"image_id":"'+image_id+'","points":{"P3":{"landmark_id":"P3","x_standardized":4,"y_standardized":5,"state":"manual"}}}',encoding="utf-8")
   migrate_legacy(p,legacy);row=p.load_landmarks(image_id)[3];self.assertEqual((row["x_standardized"],row["y_standardized"]),(4,5))

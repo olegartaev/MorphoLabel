@@ -96,6 +96,12 @@ def deactivate_review_session(project,batch_id=None):
  session=_session(doc,batch_id) if batch_id else next((item for item in doc.get("sessions",()) if item.get("active") and not item.get("complete")),None)
  if session is None:return None
  session["active"]=False;_save(project,doc);return dict(session)
+def close_review_session(project,batch_id=None):
+ """Destroy an unfinished review queue while keeping prediction/annotation history."""
+ doc=_load(project)
+ session=_session(doc,batch_id) if batch_id else next((item for item in doc.get("sessions",()) if not item.get("complete")),None)
+ if session is None:return None
+ session.update({"active":False,"complete":True,"closed_at":_now()});_save(project,doc);return dict(session)
 
 def review_summary(project,session=None,current_id=None):
  session=session or active_review_session(project)

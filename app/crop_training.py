@@ -130,8 +130,8 @@ def _metrics(pred,target):
  result={"validation_iou":float(np.mean([_iou(p[:4],t[:4]) for p,t in zip(pred,target)])),"boundary_mae_percent":(np.mean(np.abs(pred[:,:4]-target[:,:4]),axis=0)*100).round(4).tolist()}
  if pred.shape[1]>=6 and target.shape[1]>=6:result["rotation_mae_degrees"]=float(np.mean([circular_error_degrees(a,b) for a,b in zip(_angles_from_output(pred),_angles_from_output(target))]))
  return result
-def train(seed=42, ridge=1.0, project=None):
- if project is not None:return train_project(project,seed=seed,ridge=ridge)
+def train(seed=42, ridge=1.0, project=None, parent_model_id=None):
+ if project is not None:return train_project(project,seed=seed,ridge=ridge,parent_model_id=parent_model_id)
  rows=latest_corrections();log("GLOBAL","training_started","START",path=str(CSV),detail=f"training_examples={len(rows)} backend=numpy_ridge")
  if len(rows)<5:
   log("GLOBAL","training_finished","END",path=str(CSV),detail=f"training_examples={len(rows)} validation_iou=NA new_model_activated=False reason=need_at_least_5_unique_corrections")
@@ -147,7 +147,7 @@ def train(seed=42, ridge=1.0, project=None):
  log("GLOBAL","crop_training_candidate_created","END",path=str(directory),detail=f"candidate_model_id={version} previous_active_model_id={current.get('model_id')} training_examples={len(rows)} validation_iou={metrics['validation_iou']:.4f}")
  return {"trained":True,"model_id":version,"metrics":metrics,"new_model_activated":activated,"training_examples":len(rows),"previous_model_id":current.get("model_id")}
 
-def train_project(project,seed=42,ridge=1.0):
+def train_project(project,seed=42,ridge=1.0,parent_model_id=None):
  """Use only canonical human-verified Project records; model artifacts stay in Project."""
  started_total=time.perf_counter();rows_started=time.perf_counter();rows=list(project.crop_training_rows());row_query_s=time.perf_counter()-rows_started;log("GLOBAL","crop_training_dataset","END",path=str(project.path),detail=f"total_crops={project.count('crops')} training_eligible={len(rows)} source=project.sqlite")
  if len(rows)<5:return {"trained":False,"reason":"need_at_least_5_project_verified_crops","training_examples":len(rows)}
@@ -190,7 +190,7 @@ def train_project(project,seed=42,ridge=1.0):
  write_started=time.perf_counter()
  existing=sorted(project.models_root.glob('crop_model_v[0-9][0-9][0-9]'));version=f"crop_model_v{len(existing)+1:03d}";directory=project.models_root/version;directory.mkdir(parents=True,exist_ok=False);np.savez_compressed(directory/'model.npz',weights=weights)
  manifest={"model_id":version,"backend":"numpy_ridge_image_regression","input":"32x24 grayscale","output_schema":{"version":2,"fields":["x1","y1","x2","y2","sin_rotation","cos_rotation"],"rotation_convention":"PIL/CropModel positive counter-clockwise about image centre; normalized [-180,180)"},"training_examples":len(rows),"training_image_ids":[r['image_id'] for r in rows],"train_indices":train_i.tolist(),"validation_indices":val_i.tolist(),"seed":seed,"ridge":ridge,"feature_workers":config['workers'],"metrics":metrics,"created_at":datetime.now(timezone.utc).isoformat()};atomic_json_write(directory/'model_manifest.json',manifest)
- previous=(project.active_model('crop') or {}).get('model_id');image_ids=[r['image_id'] for r in rows];summary=project.crop_training_breakdown(previous,image_ids);all_metrics={**metrics,"training_examples":len(rows),"dataset_summary":summary};project.register_model(version,'crop',path=str(directory.relative_to(project.data_root)).replace('\\','/'),metrics=all_metrics,active=True,parent_model_id=previous);project.record_crop_training_membership(version,image_ids);log("GLOBAL","crop_training_dataset_summary","END",path=str(project.path),detail=" ".join(f"{k}={v}" for k,v in summary.items()));log("GLOBAL","crop_training_candidate_created","END",path=str(directory),detail=f"candidate_model_id={version} previous_active_model_id={previous} training_examples={len(rows)} source=project.sqlite")
+ previous=(project.active_model('crop') or {}).get('model_id');lineage_parent=previous if parent_model_id is None else (str(parent_model_id) or None);image_ids=[r['image_id'] for r in rows];summary=project.crop_training_breakdown(previous,image_ids);all_metrics={**metrics,"training_examples":len(rows),"dataset_summary":summary};project.register_model(version,'crop',path=str(directory.relative_to(project.data_root)).replace('\\','/'),metrics=all_metrics,active=True,parent_model_id=lineage_parent);project.record_crop_training_membership(version,image_ids);log("GLOBAL","crop_training_dataset_summary","END",path=str(project.path),detail=" ".join(f"{k}={v}" for k,v in summary.items()));log("GLOBAL","crop_training_candidate_created","END",path=str(directory),detail=f"candidate_model_id={version} previous_active_model_id={previous} lineage_parent_model_id={lineage_parent} training_examples={len(rows)} source=project.sqlite")
  timings["model_write_register_s"]=time.perf_counter()-write_started;timings["total_s"]=time.perf_counter()-started_total
  return {"trained":True,"model_id":version,"metrics":all_metrics,"training_examples":len(rows),"previous_model_id":previous,"project_model":True,"dataset_summary":summary,"timings":timings,"feature_config":config}
 

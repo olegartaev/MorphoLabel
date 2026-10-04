@@ -28,8 +28,8 @@ should follow only after the demo layout is accepted, using a backup.
 
 - On Windows, standard ttk Windows themes provide the ordinary desktop control chrome; custom blue panel/button skinning is avoided. Semantic warning/review states remain distinct.
 - Shared spacing, typography, active-stage appearance and primary buttons.
-- Workflow cards are vertically compact; commands with different roles are grouped with spacing and vertical separators instead of being scattered across the card.
-- All stages in one wide Workflow row use the same height, set by the tallest compact stage, with a separate vertical divider between stages. Crop, Landmarks and X-ray use the same card geometry.
+- Workflow cards are vertically compact; commands with different roles are grouped inside each stage instead of being scattered across the card.
+- All stages in one wide Workflow row use the same height, set by the tallest compact stage. Stages are separated by whitespace rather than vertical divider bars; Crop, Landmarks and X-ray use the same card geometry.
 - Batch prediction controls start with `Next batch`, use the shared `Predict next batch` action, and keep unresolved/review/verified counters in the common context/status row rather than inside one workflow card.
 - Model provenance is rendered over the working image in the established yellow Landmarks style, using persisted model IDs and event/prediction timestamps only.
 - X-ray context rows use bold field names (`Sample`, `Plate`, `Crop`, `Specimen №`) with normal-weight values; the vertical orientation control uses the same orange as the ventral marker.
@@ -43,18 +43,15 @@ should follow only after the demo layout is accepted, using a backup.
 - Wide windows show workflow cards together. Compact windows show stage tabs;
   controls retain their original commands and variables. Workflow can collapse.
 - Queue navigation is one additive yellow strip immediately above the working image: Previous, confirmation/next, Close queue. Result inspection retains its separate Next without confirmation. Saved queues show Continue without pretending that the current item is active.
-- The top bar exposes one `Queues` browser immediately left of `Menu`; it lists persisted annotation/review queues, opens the saved position, and closes only queue navigation/state while preserving annotations and scientific results.
+- The top bar exposes one `Queues` browser immediately left of `Menu`; it lists persisted annotation/review queues and opens the saved position. Its label does not cache a numeric count, avoiding stale `Queues (n)` badges after a queue is closed.
 - Context rows use one vocabulary: `Sample` plus `Image` for core photographs, and `Sample | Plate | Crop/Specimen №` for X-ray workspaces. Keys are bold; values are normal weight and receive explicit width so long sample names remain readable.
-- X-ray Crop and Structure training now use the same `Active | From` pattern as Landmarks. `From` is a real saved-model selector; the pretrained baseline remains available explicitly.
-- Closing navigation preserves annotation data. Core queue membership remains
-  stored and can be reopened through its workflow action. X-ray queue closing
-  uses its existing UI-state behavior; the new annotation-batch Close clears
-  only `xray_structure_active_batch`.
+- Crop, Landmarks, X-ray Crop and Structure training use the same `Active | From` pattern. The active compatible model is the initial `From` selection. X-ray selectors choose a real saved parent or pretrained baseline; core Crop records the selected lineage parent while retraining its closed-form model from the full verified Crop dataset.
+- `Close queue` removes that queue's navigation state everywhere while preserving scientific annotations, prediction provenance, model history and repeatability records. Landmark training membership remains scientific state and is not deleted; a separate persisted closed-navigation flag prevents it from reappearing until the workflow is explicitly continued. X-ray annotation-batch Close clears `xray_structure_active_batch` and returns the Structures list to the normal main pass.
 - X-ray prediction captions read the actual model seed/detection event time.
   Human edits and verification do not replace the original prediction time.
 - About separates core credit from per-module authors. Credits are presentation
   metadata in `app/ui/module_credits.py`; unknown extension authors are not guessed.
-- Specimen workflow number and ordinal within a plate have distinct labels.
+- Specimen workflow number and ordinal within a plate have distinct meanings: `Specimen №` always means the specimen ordinal on the current plate, while the export table's first `#` column is the project-wide row/workflow index. The current specimen selection is persisted across Crop → Structures → Export, and selecting an Export row updates the context header without moving the list viewport.
 
 Model training/inference implementations, schemas, coordinates, visibility
 states, scientific marker rendering, QC algorithms, result calculations and

@@ -223,7 +223,8 @@ class XRayModuleContractTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]
         source=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         self.assertIn("structure_workflow_number",source)
-        self.assertIn('tree.heading("fish",text="On plate #")',source)
+        self.assertIn('tree.heading("fish",text="Specimen №")',source)
+        self.assertIn('tree.heading("locality",text="Sample")',source)
         self.assertIn('workflow_no=int(row.get("workflow_no") or index)',source)
         self.assertNotIn("Fish №",source)
 
@@ -289,7 +290,8 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertIn('actions,"Export",lambda:self._export_traits(self._trait_export_scope.get()=="verified")',export_section)
         self.assertNotIn("Check results…",export_section)
         self.assertIn('cols=("row_no","locality","plate","fish"',export_section)
-        self.assertIn('tree.heading("row_no",text="Specimen #")',export_section)
+        self.assertIn('tree.heading("row_no",text="#")',export_section)
+        self.assertIn('tree.heading("fish",text="Specimen №")',export_section)
         self.assertIn("_sort_export_tree(tree,value,False)",export_section)
         self.assertIn("def _trait_columns",exporter)
         self.assertNotIn('f"trait:',exporter)

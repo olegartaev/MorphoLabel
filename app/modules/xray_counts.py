@@ -344,9 +344,8 @@ class XRayCountsRuntime:
         except KeyError:return ""
         path=Path(image["relative_path"]);sample=self._sample_name(image["relative_path"])
         if specimen is not None:
-            workflow_no=self.project.structure_workflow_number(specimen["specimen_id"])
-            number=f"#{workflow_no}" if workflow_no else f"plate specimen {int(specimen.get('ordinal') or 0)}"
-            return f"Sample: {sample}  ·  Plate: {path.name}  ·  Specimen: {number}"
+            number=int(specimen.get("ordinal") or 0)
+            return f"Sample: {sample}  ·  Plate: {path.name}  ·  Specimen №: {number}"
         return f"Sample: {sample}  ·  Plate: {path.name}"
 
     def _selection_context_fields(self):
@@ -360,19 +359,23 @@ class XRayCountsRuntime:
         except KeyError:return ()
         path=Path(image["relative_path"]);fields=[("Sample",self._sample_name(image["relative_path"])),("Plate",path.name)]
         if specimen is not None:
-            workflow_no=self.project.structure_workflow_number(specimen["specimen_id"])
-            number=str(workflow_no) if workflow_no else str(int(specimen.get("ordinal") or 0))
-            fields.append(("Specimen №",number))
+            fields.append(("Specimen №",str(int(specimen.get("ordinal") or 0))))
         return tuple(fields)
 
     def _render_selection_context(self,parent):
-        fields=self._selection_context_fields()
-        if not fields:return None
         row=ttk.Frame(parent);row.pack(fill="x",pady=(2,3))
-        for index,(key,value) in enumerate(fields):
+        self._selection_context_values={}
+        for index,key in enumerate(("Sample","Plate","Specimen №")):
             ttk.Label(row,text=f"{key}:",style="ContextKey.TLabel").pack(side="left",padx=(0 if index==0 else 14,0))
-            ttk.Label(row,text=str(value or "—"),style="ContextValue.TLabel").pack(side="left",padx=(4,0))
+            value=ttk.Label(row,text="—",style="ContextValue.TLabel")
+            value.pack(side="left",padx=(4,0));self._selection_context_values[key]=value
+        self._refresh_selection_context()
         return row
+
+    def _refresh_selection_context(self):
+        values={key:str(value or "—") for key,value in self._selection_context_fields()}
+        for key,label in getattr(self,"_selection_context_values",{}).items():
+            label.configure(text=values.get(key,"—"))
 
     def render(self,host):
         self.host=host;parent=host.container
@@ -665,10 +668,10 @@ class XRayCountsRuntime:
         traits=list(scheme["traits"]);cols=("row_no","locality","plate","fish",*(t.get("abbr") or t["id"] for t in traits),"status")
         host=ttk.Frame(parent);host.pack(fill="both",expand=True);host.columnconfigure(0,weight=1);host.rowconfigure(0,weight=1)
         tree=ttk.Treeview(host,columns=cols,show="headings",selectmode="browse",height=16)
-        tree.heading("row_no",text="Specimen #");tree.column("row_no",width=88,anchor="center",stretch=False)
-        tree.heading("locality",text="Locality");tree.column("locality",width=180,anchor="w")
+        tree.heading("row_no",text="#");tree.column("row_no",width=64,anchor="center",stretch=False)
+        tree.heading("locality",text="Sample");tree.column("locality",width=180,anchor="w")
         tree.heading("plate",text="Plate");tree.column("plate",width=220,anchor="w")
-        tree.heading("fish",text="On plate #");tree.column("fish",width=82,anchor="center",stretch=False)
+        tree.heading("fish",text="Specimen №");tree.column("fish",width=90,anchor="center",stretch=False)
         for trait in traits:
             col=trait.get("abbr") or trait["id"];tree.heading(col,text=col);tree.column(col,width=78,anchor="center",stretch=False)
         tree.heading("status",text="Status");tree.column("status",width=90,anchor="center",stretch=False)
@@ -687,7 +690,7 @@ class XRayCountsRuntime:
         def selected(_event=None):
             chosen=tree.selection()
             if not chosen:return
-            specimen=self.project.specimen(chosen[0]);self._set_selection(specimen["image_id"],chosen[0])
+            specimen=self.project.specimen(chosen[0]);self._set_selection(specimen["image_id"],chosen[0]);self._refresh_selection_context()
         tree.bind("<<TreeviewSelect>>",selected)
 
     def _show_result_checks(self):

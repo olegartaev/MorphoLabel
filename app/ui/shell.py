@@ -493,9 +493,7 @@ class ProductionShell(tk.Tk):
         menu.add_command(label="About MorphoLabel...",command=self.show_about)
         button.configure(menu=menu);button.pack(side="right",padx=2)
         self.tip.bind(button,"AI setup, diagnostics, project links and About MorphoLabel.")
-        entries=self._queue_entries()
-        queue_text=f"Queues ({len(entries)})" if entries else "Queues"
-        queues=ttk.Button(row,text=queue_text,image=self.ui_icon("queues",TOPBAR_ICON_SIZE),compound="left",
+        queues=ttk.Button(row,text="Queues",image=self.ui_icon("queues",TOPBAR_ICON_SIZE),compound="left",
                           command=lambda:self._show_queue_center(),style="Stage.TButton")
         queues.pack(side="right",padx=(2,6))
         self.tip.bind(queues,"Open, resume or close saved annotation and review queues.")
@@ -535,16 +533,15 @@ class ProductionShell(tk.Tk):
         elif kind=="crop":
             project.set_ui_state("crop_active_batch",{})
         elif kind=="landmark_ai_review":
-            from app.landmark_ai_review import deactivate_review_session
-            deactivate_review_session(project,batch_id)
-            closed=self.__dict__.setdefault("_closed_queue_navigation",set())
-            closed.add((str(project.root),"landmarks","landmark_ai_review",str(batch_id or "")))
+            from app.landmark_ai_review import close_review_session
+            close_review_session(project,batch_id)
         elif kind=="landmark_suspicious":
             from app.landmark_suspicious_review import clear
             clear(project)
         elif kind=="landmark":
-            closed=self.__dict__.setdefault("_closed_queue_navigation",set())
-            closed.add((str(project.root),"landmarks","landmark",None))
+            from app.landmark_ai_workflow import load_state
+            stage=str((load_state(project) or {}).get("stage") or "")
+            project.set_ui_state("landmark_training_queue_closed",{"stage":stage,"closed":True})
         self.render()
         return True
 
@@ -600,7 +597,8 @@ class ProductionShell(tk.Tk):
         workflow=load_state(project);stage=workflow.get("stage")
         key="initial_image_ids" if stage=="INITIAL_TRAINING" else "improvement_image_ids" if stage=="MODEL_IMPROVEMENT" else None
         workflow_ids=[str(v) for v in workflow.get(key,())] if key else []
-        workflow_closed=(str(project.root),"landmarks","landmark",None) in self.__dict__.get("_closed_queue_navigation",set())
+        closed_state=project.get_ui_state("landmark_training_queue_closed",{}) or {}
+        workflow_closed=bool(closed_state.get("closed") and str(closed_state.get("stage") or "")==str(stage or ""))
         if workflow_ids and not workflow_closed:
             target=str(workflow.get("current_image_id") or workflow_ids[0])
             entries.append({
@@ -619,8 +617,7 @@ class ProductionShell(tk.Tk):
         """Reserve the right-side navigation before flexible descriptive status text."""
         bar=ttk.Frame(self.main,padding=(2,1)); bar.grid(row=0,column=0,sticky="ew");bar.columnconfigure(0,weight=1);self.status_bar=bar
         left=ttk.Frame(bar);left.grid(row=0,column=0,sticky="ew");self.status_left=left
-        navigation=ttk.Frame(bar,style="Attention.TFrame",padding=(6,4));navigation.grid(row=1,column=0,columnspan=2,sticky="ew",pady=(3,0));self.status_navigation=navigation
-        self.status_queue_title=ttk.Label(navigation,text="Review queue",style="AttentionTitle.TLabel");self.status_queue_title.pack(side="left",padx=(0,10))
+        self.status_navigation=None;self.status_queue_title=None;self.status_previous=None;self.status_index=None;self.status_next=None
         self._status_context_full=""
         context_fields=ttk.Frame(left);context_fields.pack(side="left",fill="x",expand=True,padx=(0,7))
         context_fields.columnconfigure(1,weight=1,minsize=180);context_fields.columnconfigure(3,weight=2,minsize=220)
@@ -644,11 +641,67 @@ class ProductionShell(tk.Tk):
         for key,value in self._section_counts().items():
             label=ttk.Label(self.status_count_host,text=f"{display_labels.get(key,key)}: {value}",style="StatusChip.TLabel"); label.pack(side="left",padx=(0,2)); self.status_counts[key]=label
             if key in status_help:self.tip.bind(label,status_help[key])
-        self.status_previous=self.control_button(navigation,"Previous",lambda:self._nav_image(-1),"Show the previous image.",style="Nav.TButton",icon="previous");self.status_previous.pack(side="left")
-        self.status_index=ttk.Label(navigation,text="",padding=(8,0),style="AttentionTitle.TLabel");self.status_index.pack(side="left")
-        self.status_next=self.control_button(navigation,"Next",lambda:self._nav_image(1),"Show the next image. Press Enter when not typing.",style="Nav.TButton",icon="next");self.status_next.pack(side="left")
-        self.control_button(navigation,"Close queue",self.close_queue_navigation,"Leave this queue. Saved annotations, training sets and review history are kept; use the workflow action to reopen it.",icon="close").pack(side="right",padx=(6,0))
         self._update_status()
+
+    def build_queue_navigation(self,parent):
+        """One shared queue strip, mounted immediately above the working image."""
+        navigation=ttk.Frame(parent,style="Attention.TFrame",padding=(6,4))
+        self.status_navigation=navigation
+        self.status_queue_title=ttk.Label(navigation,text="Review queue",style="AttentionTitle.TLabel",anchor="w")
+        self.status_queue_title.pack(side="left",fill="x",expand=True)
+        actions=ttk.Frame(navigation,style="Attention.TFrame");actions.pack(side="right")
+        self.status_previous=self.control_button(actions,"Previous",lambda:self._nav_image(-1),"Show the previous queue item.",style="Nav.TButton",icon="previous")
+        self.status_previous.pack(side="left",padx=(0,3))
+        self.status_index=ttk.Label(actions,text="",padding=(6,0),style="AttentionTitle.TLabel");self.status_index.pack(side="left")
+        self.status_next=self.control_button(actions,"Next",lambda:self._nav_image(1),"Show the next queue item.",style="Nav.TButton",icon="next")
+        self.status_next.pack(side="left",padx=(3,3))
+        self.control_button(
+            actions,"Close queue",self.close_queue_navigation,
+            "Close this queue navigation. Scientific annotations, models and training data are kept.",
+            icon="close",
+        ).pack(side="left",padx=(3,0))
+        self._update_queue_navigation()
+        return navigation
+
+    def _update_queue_navigation(self):
+        navigation=getattr(self,"status_navigation",None)
+        if navigation is None or not navigation.winfo_exists():return
+        batch=self._active_batch_summary()
+        if not self._workflow_navigation_visible(batch):
+            navigation.pack_forget();return
+        navigation.pack(fill="x",pady=(4,0))
+        self.status_index.configure(text=batch.get("text",""))
+        kind=batch.get("kind") if batch else None
+        attention_stage=batch.get("stage") if kind=="landmark_attention" else None
+        queue_titles={
+            "landmark":"Annotation batch",
+            "landmark_ai_review":"AI review",
+            "landmark_suspicious":"QC review",
+            "landmark_attention":"Attention queue",
+            "crop":"Crop batch",
+        }
+        self.status_queue_title.configure(text=queue_titles.get(kind,"Review queue"))
+        landmark_confirm=bool(self.context.section=="landmarks" and (kind in {"landmark","landmark_ai_review","landmark_suspicious"} or (kind=="landmark_attention" and attention_stage=="landmarks")))
+        crop_confirm=bool(self.context.section=="crop" and ((kind=="landmark_attention" and attention_stage=="crop") or (batch and kind!="landmark_attention")))
+        attention_retry=bool(self.context.section=="landmarks" and kind=="landmark_attention" and attention_stage=="prediction")
+        confirm=landmark_confirm or crop_confirm or attention_retry
+        next_text="Retry AI" if attention_retry else "Verify & Next" if landmark_confirm else "Confirm & Next" if crop_confirm else "Next"
+        self.status_next.configure(
+            text=next_text,
+            style="NavPrimary.TButton" if confirm else "Nav.TButton",
+            image=self.ui_icon("verify" if landmark_confirm or crop_confirm else "predict" if attention_retry else "next",CONTROL_ICON_SIZE),
+            compound="left",
+        )
+        if landmark_confirm:
+            source=batch.get("source") if batch else None
+            if kind=="landmark_ai_review":help_text="Verify this reviewed AI landmark set and continue to the next unverified prediction."
+            elif kind=="landmark_suspicious" and source=="Complex QC":help_text="Verify or re-verify this final landmark set and continue to the next Complex QC outlier."
+            elif kind=="landmark_suspicious":help_text="Verify this landmark set after checking the flagged placement and continue."
+            else:help_text="Verify this completed landmark set and continue to the next training image."
+            self.tip.bind(self.status_next,help_text)
+        elif attention_retry:self.tip.bind(self.status_next,"Retry AI landmark prediction for this queued image.")
+        elif crop_confirm:self.tip.bind(self.status_next,"Confirm this Crop and continue this queue.")
+        else:self.tip.bind(self.status_next,"Show the next queue item.")
 
     def _refresh_status_context(self):
         """Context values use the same bold-key / normal-value language as X-ray."""
@@ -719,48 +772,7 @@ class ProductionShell(tk.Tk):
         self._status_context_full=str(name or "No images")
         self.status_context.configure(text=self._status_context_full)
         self.status_locality.configure(text=str(sample or "—"))
-        if hasattr(self,"status_index"):
-            batch=self._active_batch_summary()
-            if self._workflow_navigation_visible(batch):
-                self.status_navigation.grid()
-                self.status_index.configure(text=batch.get('text',""))
-            else:
-                self.status_navigation.grid_remove()
-            kind=batch.get('kind') if batch else None
-            attention_stage=batch.get('stage') if kind=='landmark_attention' else None
-            queue_titles={
-                'landmark':'Annotation batch',
-                'landmark_ai_review':'AI review',
-                'landmark_suspicious':'QC review',
-                'landmark_attention':'Attention queue',
-                'crop':'Crop batch',
-            }
-            self.status_queue_title.configure(text=queue_titles.get(kind,'Review queue'))
-            landmark_confirm=bool(self.context.section=='landmarks' and (kind in {'landmark','landmark_ai_review','landmark_suspicious'} or (kind=='landmark_attention' and attention_stage=='landmarks')))
-            crop_confirm=bool(self.context.section=='crop' and ((kind=='landmark_attention' and attention_stage=='crop') or (batch and kind!='landmark_attention')))
-            attention_retry=bool(self.context.section=='landmarks' and kind=='landmark_attention' and attention_stage=='prediction')
-            confirm=landmark_confirm or crop_confirm or attention_retry
-            next_text='Retry AI' if attention_retry else 'Verify & Next' if landmark_confirm else 'Confirm & Next' if crop_confirm else 'Next'
-            self.status_next.configure(
-                text=next_text,
-                style='NavPrimary.TButton' if confirm else 'Nav.TButton',
-                image=self.ui_icon('verify' if landmark_confirm or crop_confirm else 'predict' if attention_retry else 'next',CONTROL_ICON_SIZE),
-                compound='left',
-            )
-            if landmark_confirm:
-                source=batch.get('source') if batch else None
-                if kind=='landmark_ai_review':
-                    help_text='Verify this reviewed AI landmark set and continue to the next unverified prediction.'
-                elif kind=='landmark_suspicious' and source=='Complex QC':
-                    help_text='Verify or re-verify this final landmark set and continue to the next Complex QC outlier.'
-                elif kind=='landmark_suspicious':
-                    help_text='Verify this landmark set after checking the flagged placement and continue.'
-                else:
-                    help_text='Verify this completed landmark set and continue to the next training image.'
-                self.tip.bind(self.status_next,help_text)
-            elif attention_retry:self.tip.bind(self.status_next,'Retry AI landmark prediction for this queued image.')
-            elif crop_confirm:self.tip.bind(self.status_next,'Confirm this Crop and continue this attention queue.')
-            else:self.tip.bind(self.status_next,'Show the next image. Press Enter when not typing.')
+        self._update_queue_navigation()
         display_labels={"Incomplete":"Unresolved"};counts=self._section_counts()
         for key,label in getattr(self,"status_counts",{}).items():
             label.configure(text=f"{display_labels.get(key,key)}: {counts.get(key,0)}")
@@ -816,13 +828,27 @@ class ProductionShell(tk.Tk):
 
     def close_queue_navigation(self):
         batch=self._active_batch_summary()
-        if batch:
-            closed=self.__dict__.setdefault("_closed_queue_navigation",set())
-            closed.add(self._queue_navigation_key(batch))
-        self.render()
+        if not batch:return False
+        kind=batch.get("kind")
+        if kind=="landmark_attention":
+            return self._close_core_queue("landmark_attention")
+        if kind=="crop":
+            return self._close_core_queue("crop")
+        if kind=="landmark_ai_review":
+            return self._close_core_queue("landmark_ai_review",batch.get("batch_id"))
+        if kind=="landmark_suspicious":
+            return self._close_core_queue("landmark_suspicious")
+        if kind=="landmark":
+            project=self.context.project
+            state=project.get_ui_state("landmark_ai_workflow",{}) or {}
+            stage=str(state.get("stage") or "")
+            project.set_ui_state("landmark_training_queue_closed",{"stage":stage,"closed":True})
+            self.render();return True
+        return False
 
     def resume_queue_navigation(self):
         self.__dict__.pop("_closed_queue_navigation",None)
+        if self.context.project:self.context.project.set_ui_state("landmark_training_queue_closed",{})
 
     def _active_batch_summary(self):
         batch=self._persisted_batch_summary()
@@ -855,10 +881,11 @@ class ProductionShell(tk.Tk):
             review=active_review_session(self.context.project)
             if review and current in review.get('image_ids',()):
                 summary=review_summary(self.context.project,review,current)
-                return {'kind':'landmark_ai_review','text':compact(summary)}
+                return {'kind':'landmark_ai_review','text':compact(summary),'batch_id':review.get('batch_id')}
             from app.landmark_ai_workflow import load_state
             state=load_state(self.context.project);stage=state.get('stage');ids=list(state.get('initial_image_ids' if stage=='INITIAL_TRAINING' else 'improvement_image_ids' if stage=='MODEL_IMPROVEMENT' else '',()))
-            if current in ids:
+            closed=self.context.project.get_ui_state("landmark_training_queue_closed",{}) or {}
+            if current in ids and not (closed.get("closed") and str(closed.get("stage") or "")==str(stage or "")):
                 # Context rows are authoritative on first render and delta-updated per edited image.
                 # Never re-run annotation_status over an active batch during a point gesture.
                 rows={row.get('image_id'):row for row in self.context.rows}
