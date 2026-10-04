@@ -22,7 +22,7 @@ XRAY_DARK="#31485b"
 XRAY_MID="#73899a"
 XRAY_PAPER="#f8fbfd"
 XRAY_FILM="#e6f0f6"
-ACCENT_ORANGE="#e88727"
+ACCENT_ORANGE="#ffb000"  # same ventral-side orange used on the X-ray crop canvas
 
 
 def _ctx(size):

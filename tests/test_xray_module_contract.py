@@ -240,6 +240,7 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertIn('elif name=="trait_setup"',source)
         self.assertIn('elif name=="flip_vertical"',source)
         self.assertIn('fill=ACCENT_ORANGE',source)
+        self.assertIn('ACCENT_ORANGE="#ffb000"',source)
         self.assertNotIn('"flip_vertical":"flip_vertical"',source)
 
     def test_count_to_through_includes_the_reference_element(self):

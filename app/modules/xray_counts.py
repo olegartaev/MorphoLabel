@@ -478,14 +478,15 @@ class XRayCountsRuntime:
         content=ttk.Frame(parent);content.pack(fill="both",expand=True)
         content.columnconfigure(0,weight=1,uniform="project_cards");content.columnconfigure(1,weight=1,uniform="project_cards");content.rowconfigure(2,weight=1)
 
-        project_box=ttk.LabelFrame(content,text="Current project",padding=14,style="ProjectIdentity.TLabelframe",borderwidth=2,relief="groove");project_box.grid(row=0,column=0,sticky="nsew",padx=(4,8),pady=(4,10))
+        # Project identity is intentionally separate from source/schema settings.
+        project_box=ttk.LabelFrame(content,text="Current project",padding=14,style="ProjectIdentity.TLabelframe",borderwidth=2,relief="groove");project_box.grid(row=0,column=0,columnspan=2,sticky="ew",padx=4,pady=(4,12))
         ttk.Label(project_box,text=self.project.name,style="SectionTitle.TLabel").pack(anchor="w")
         ttk.Label(project_box,text=str(self.project.root),style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,8))
         actions=ttk.Frame(project_box);actions.pack(anchor="w")
         self._button(actions,"Open",self._open_project,"Open another X-ray project in this same MorphoLabel window.").pack(side="left")
         self._button(actions,"New project...",self._new_project,"Create another X-ray project.").pack(side="left",padx=(6,0))
 
-        source_box=ttk.LabelFrame(content,text="Source X-rays",padding=10);source_box.grid(row=0,column=1,sticky="nsew",padx=(8,4),pady=(4,10))
+        source_box=ttk.LabelFrame(content,text="Source X-rays",padding=10);source_box.grid(row=1,column=0,sticky="nsew",padx=(4,6),pady=(0,7))
         storage=self.project.storage_summary();policy=self.project.orientation_policy
         ttk.Label(source_box,text=f"{len(self.project.source_images())} indexed images",style="SectionTitle.TLabel").pack(anchor="w")
         storage_text="Self-contained project source" if storage["self_contained"] else "Legacy external source"
@@ -500,7 +501,7 @@ class XRayCountsRuntime:
         if storage["cache_bytes"]:
             self._button(source_actions,"Clear reproducible cache",self._compact_project,"Remove only temporary/reproducible X-ray AI cache files; scientific data and final models are kept.").pack(side="left",padx=(6,0))
 
-        scheme_box=ttk.LabelFrame(content,text="Traits",padding=10);scheme_box.grid(row=1,column=0,columnspan=2,sticky="nsew",pady=(0,7))
+        scheme_box=ttk.LabelFrame(content,text="Trait definition",padding=10);scheme_box.grid(row=1,column=1,sticky="nsew",padx=(6,4),pady=(0,7))
         ttk.Label(scheme_box,text=model["name"],style="SectionTitle.TLabel").pack(anchor="w")
         if model["description"]:ttk.Label(scheme_box,text=model["description"],style="Muted.TLabel",wraplength=1250).pack(anchor="w",pady=(2,0))
         ttk.Label(scheme_box,text=f"{model['trait_count']} traits",style="Muted.TLabel").pack(anchor="w",pady=(2,0))
@@ -508,7 +509,7 @@ class XRayCountsRuntime:
         actions=ttk.Frame(scheme_box);actions.pack(anchor="w",pady=(8,0))
         self._button(actions,"Traits...",self._choose_scheme,"Choose what to measure, how to count it, and which marks are used on the X-ray.",True).pack(side="left")
 
-        traits=ttk.LabelFrame(content,text="Traits",padding=8);traits.grid(row=2,column=0,columnspan=2,sticky="nsew")
+        traits=ttk.LabelFrame(content,text="Traits",padding=8);traits.grid(row=2,column=0,columnspan=2,sticky="nsew",padx=4)
         traits.columnconfigure(0,weight=1);traits.rowconfigure(1,weight=1)
         if not scheme.get("traits"):
             ttk.Label(traits,text="No traits are defined in the active scheme.",style="SectionTitle.TLabel").grid(row=0,column=0,sticky="w")
