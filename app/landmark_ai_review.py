@@ -49,10 +49,10 @@ def supersede_unfinished_reviews(project,reason=None):
 
 def pending_review_session(project):
  doc=_load(project)
- return next((dict(item) for item in doc.get("sessions",()) if not item.get("complete")),None)
+ return next((dict(item) for item in doc.get("sessions",()) if not item.get("complete") and not item.get("closed")),None)
 def active_review_session(project):
  doc=_load(project)
- return next((dict(item) for item in doc.get("sessions",()) if item.get("active") and not item.get("complete")),None)
+ return next((dict(item) for item in doc.get("sessions",()) if item.get("active") and not item.get("complete") and not item.get("closed")),None)
 def _pending_positions(project,ids):
  return [index for index,image_id in enumerate(ids) if not project.landmark_ai_review_ready(image_id)]
 
@@ -69,8 +69,8 @@ def _pending_target(project,ids,current_position,step=1):
  return current_position if current_position in pending else pending[0]
 
 def activate_review_session(project,batch_id=None):
- doc=_load(project);session=_session(doc,batch_id) if batch_id else next((item for item in doc.get("sessions",()) if not item.get("complete")),None)
- if session is None or session.get("complete"):return None
+ doc=_load(project);session=_session(doc,batch_id) if batch_id else next((item for item in doc.get("sessions",()) if not item.get("complete") and not item.get("closed")),None)
+ if session is None or session.get("complete") or session.get("closed"):return None
  for item in doc.get("sessions",()):item["active"]=False
  ids=list(session.get("image_ids",()))
  if not ids:return None
@@ -97,11 +97,11 @@ def deactivate_review_session(project,batch_id=None):
  if session is None:return None
  session["active"]=False;_save(project,doc);return dict(session)
 def close_review_session(project,batch_id=None):
- """Destroy an unfinished review queue while keeping prediction/annotation history."""
+ """Remove an unfinished review queue without falsely marking its review complete."""
  doc=_load(project)
- session=_session(doc,batch_id) if batch_id else next((item for item in doc.get("sessions",()) if not item.get("complete")),None)
+ session=_session(doc,batch_id) if batch_id else next((item for item in doc.get("sessions",()) if not item.get("complete") and not item.get("closed")),None)
  if session is None:return None
- session.update({"active":False,"complete":True,"closed_at":_now()});_save(project,doc);return dict(session)
+ session.update({"active":False,"closed":True,"closed_at":_now()});_save(project,doc);return dict(session)
 
 def review_summary(project,session=None,current_id=None):
  session=session or active_review_session(project)
