@@ -477,11 +477,11 @@ class XRayCountsRuntime:
         content=ttk.Frame(parent);content.pack(fill="both",expand=True)
         content.columnconfigure(0,weight=1,uniform="project_cards");content.columnconfigure(1,weight=1,uniform="project_cards");content.rowconfigure(2,weight=1)
 
-        project_box=ttk.LabelFrame(content,text="Project",padding=10);project_box.grid(row=0,column=0,sticky="nsew",padx=(0,5),pady=(0,7))
+        project_box=ttk.LabelFrame(content,text="Current project",padding=12,style="ProjectIdentity.TLabelframe");project_box.grid(row=0,column=0,sticky="nsew",padx=(0,5),pady=(0,7))
         ttk.Label(project_box,text=self.project.name,style="SectionTitle.TLabel").pack(anchor="w")
         ttk.Label(project_box,text=str(self.project.root),style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,8))
         actions=ttk.Frame(project_box);actions.pack(anchor="w")
-        self._button(actions,"Open another...",self._open_project,"Open another X-ray project in this same MorphoLabel window.").pack(side="left")
+        self._button(actions,"Open",self._open_project,"Open another X-ray project in this same MorphoLabel window.").pack(side="left")
         self._button(actions,"New project...",self._new_project,"Create another X-ray project.").pack(side="left",padx=(6,0))
 
         source_box=ttk.LabelFrame(content,text="Source X-rays",padding=10);source_box.grid(row=0,column=1,sticky="nsew",padx=(5,0),pady=(0,7))
@@ -526,7 +526,7 @@ class XRayCountsRuntime:
             method=METHOD_BY_ID[trait["method"]]
             needed=", ".join(structures[s]["name"] for s in trait.get("structures",()) if s in structures) or "Calculated from other traits"
             table.insert("","end",iid=str(trait["id"]),image=self._icon(table,method["icon"],20),values=(trait.get("abbr") or trait["id"],trait["name"],method["label"],needed),tags=("alternate",) if index%2 else ())
-        table.tag_configure("alternate",background="#f6f8fa")
+        table.tag_configure("alternate",background="#f7f7f7")
         self._tip.bind(table,"Each row shows the biological trait, how it is obtained, and which image annotations it requires.")
         scroll=ttk.Scrollbar(traits,orient="vertical",command=table.yview);table.configure(yscrollcommand=scroll.set)
         table.grid(row=1,column=0,sticky="nsew");scroll.grid(row=1,column=1,sticky="ns")
@@ -589,7 +589,7 @@ class XRayCountsRuntime:
             display.extend("" if values.get(trait["id"]) is None else str(values.get(trait["id"])) for trait in traits)
             status=str(row.get("result_status") or "not_started")
             tree.insert("","end",iid=row["specimen_id"],values=(*display,status),tags=("alternate",) if index%2==0 else ())
-        tree.tag_configure("alternate",background="#f6f8fa")
+        tree.tag_configure("alternate",background="#f7f7f7")
         scroll=ttk.Scrollbar(host,orient="vertical",command=tree.yview);tree.configure(yscrollcommand=scroll.set)
         tree.grid(row=0,column=0,sticky="nsew");scroll.grid(row=0,column=1,sticky="ns")
         if current and tree.exists(current):tree.selection_set(current);tree.focus(current);tree.see(current)
@@ -828,7 +828,7 @@ class ReferenceRelationshipDialog(tk.Toplevel):
 class TraitSchemeDialog(tk.Toplevel):
     """Biologist-facing trait editor: traits, counted elements and reference marks in one window."""
     def __init__(self,parent,scheme,annotation_counts):
-        super().__init__(parent);self.title("Traits");self.transient(parent);self.geometry("1180x800");self.minsize(1000,720)
+        super().__init__(parent);self.title("Traits");self.transient(parent);self.geometry("1320x900");self.minsize(1080,760);self.resizable(True,True)
         self.scheme=deepcopy(normalize_scheme(scheme));self.annotation_counts=dict(annotation_counts or {});self.result=None;self.note="Edited in MorphoLabel"
         self._tip=Tooltip(self);self._editing_trait_id=None;self._preview_image=None;self._images={}
         self.scheme_name=tk.StringVar();self.description=tk.StringVar();self.reference_label=tk.StringVar();self.reference_doi=tk.StringVar();self.reference_note=tk.StringVar()
@@ -837,24 +837,29 @@ class TraitSchemeDialog(tk.Toplevel):
         self.trait_offset=tk.StringVar();self.trait_stop_behavior=tk.StringVar()
         self.calc_left=tk.StringVar();self.calc_operation=tk.StringVar();self.calc_right=tk.StringVar();self.calc_separator=tk.StringVar(value="+")
         self.calc_preview=tk.StringVar();self._derived_choice_lookup={};self._derived_custom_rule=None
-        self._build();self._load_scheme(self.scheme,self.note);self._maximize_window();self.grab_set()
+        self._build();self._load_scheme(self.scheme,self.note);self.after_idle(self._maximize_window);self.grab_set()
 
     def _maximize_window(self):
-        """Open the main Traits workspace maximized so both setup steps are visible."""
+        """Show the complete two-step editor immediately; maximize only when it cannot fit."""
         try:
-            self.state("zoomed")
-            return
-        except tk.TclError:
-            pass
-        try:
-            self.attributes("-zoomed",True)
-            return
-        except tk.TclError:
-            pass
-        try:
-            width=max(1000,int(self.winfo_screenwidth()))
-            height=max(720,int(self.winfo_screenheight())-48)
-            self.geometry(f"{width}x{height}+0+0")
+            self.update_idletasks()
+            screen_w=max(1,int(self.winfo_screenwidth()));screen_h=max(1,int(self.winfo_screenheight()))
+            available_w=max(900,screen_w-64);available_h=max(700,screen_h-96)
+            desired_w=max(1320,int(self.winfo_reqwidth())+24)
+            desired_h=max(900,int(self.winfo_reqheight())+24)
+            if desired_w>available_w or desired_h>available_h:
+                try:
+                    self.state("zoomed")
+                    return
+                except tk.TclError:
+                    try:
+                        self.attributes("-zoomed",True)
+                        return
+                    except tk.TclError:
+                        desired_w,desired_h=available_w,available_h
+            width=min(desired_w,available_w);height=min(desired_h,available_h)
+            x=max(0,(screen_w-width)//2);y=max(0,(screen_h-height)//2)
+            self.geometry(f"{width}x{height}+{x}+{y}")
         except tk.TclError:
             return
 
@@ -884,7 +889,7 @@ class TraitSchemeDialog(tk.Toplevel):
         outer=ttk.Frame(self,padding=12);outer.pack(fill="both",expand=True);outer.columnconfigure(0,weight=1);outer.rowconfigure(5,weight=1)
         heading=ttk.Frame(outer);heading.grid(row=0,column=0,sticky="ew")
         ttk.Label(heading,text="Traits",style="PageTitle.TLabel").pack(side="left")
-        ttk.Label(heading,text="First define what you mark on the X-ray. Then build biological traits from those annotations.",style="PageSubtitle.TLabel").pack(side="left",padx=(10,0),pady=(5,0))
+        ttk.Label(heading,text="First define the anatomical marks. Then define the biological traits calculated from them.",style="PageSubtitle.TLabel").pack(side="left",padx=(10,0),pady=(5,0))
 
         toolbar=ttk.Frame(outer);toolbar.grid(row=1,column=0,sticky="ew",pady=(8,8))
         set_menu=ttk.Menubutton(toolbar,text="Trait set ▾",style="P.TButton");set_menu.pack(side="left")
@@ -913,16 +918,16 @@ class TraitSchemeDialog(tk.Toplevel):
 
         step1=ttk.LabelFrame(outer,padding=10);step1.grid(row=4,column=0,sticky="ew",pady=(0,8));step1.columnconfigure(0,weight=1)
         self._section_header(
-            step1,1,"annotation_setup","Define what you will mark on the X-ray",
-            "Define the elements you count and the reference marks. For each reference, say whether it is one of those elements or a separate anatomical mark."
+            step1,1,"annotation_setup","Define the anatomical marks",
+            "Add the repeated structures you count and the anatomical reference marks that define where counting starts or stops."
         )
         annotations=ttk.Frame(step1);annotations.grid(row=1,column=0,sticky="ew");annotations.columnconfigure(0,weight=1)
         self._build_annotation_lists(annotations)
 
         step2=ttk.LabelFrame(outer,padding=10);step2.grid(row=5,column=0,sticky="nsew");step2.columnconfigure(0,weight=1);step2.rowconfigure(1,weight=1)
         self._section_header(
-            step2,2,"trait_setup","Build biological traits from those annotations",
-            "Select a trait, choose a counting rule, and tell MorphoLabel which elements and start/stop marks from step 1 define its value."
+            step2,2,"trait_setup","Define biological traits",
+            "For each trait, choose what is counted and, when needed, which reference marks limit the count."
         )
         body=ttk.Panedwindow(step2,orient="horizontal");body.grid(row=1,column=0,sticky="nsew")
         left=ttk.LabelFrame(body,text="Traits",padding=8);right=ttk.LabelFrame(body,text="Selected trait",padding=10);body.add(left,weight=2);body.add(right,weight=3)
@@ -947,7 +952,7 @@ class TraitSchemeDialog(tk.Toplevel):
     def _build_annotation_lists(self,parent):
         parent.columnconfigure(0,weight=1);parent.columnconfigure(1,weight=1);parent.rowconfigure(1,weight=1)
         counted=ttk.LabelFrame(parent,text="Elements to count",padding=6);counted.grid(row=0,column=0,rowspan=2,sticky="nsew",padx=(0,4))
-        refs=ttk.LabelFrame(parent,text="Start / stop marks",padding=6);refs.grid(row=0,column=1,rowspan=2,sticky="nsew",padx=(4,0))
+        refs=ttk.LabelFrame(parent,text="Reference marks",padding=6);refs.grid(row=0,column=1,rowspan=2,sticky="nsew",padx=(4,0))
         for frame in (counted,refs):frame.columnconfigure(0,weight=1);frame.rowconfigure(1,weight=1)
 
         ch=ttk.Frame(counted);ch.grid(row=0,column=0,sticky="ew",pady=(0,4))
@@ -963,15 +968,15 @@ class TraitSchemeDialog(tk.Toplevel):
 
         rh=ttk.Frame(refs);rh.grid(row=0,column=0,sticky="ew",pady=(0,4))
         ttk.Label(rh,image=self._icon(rh,"reference_mark",30)).pack(side="left",padx=(0,5))
-        ref_help=ttk.Label(rh,text="Reference marks — relationship is part of the definition",style="Muted.TLabel");ref_help.pack(side="left")
+        ref_help=ttk.Label(rh,text="Anatomical landmarks used as counting boundaries",style="Muted.TLabel");ref_help.pack(side="left")
         self.reference_tree=ttk.Treeview(refs,show="tree",selectmode="browse",height=4);self.reference_tree.grid(row=1,column=0,sticky="nsew")
         ref_actions=ttk.Frame(refs);ref_actions.grid(row=2,column=0,sticky="w",pady=(5,0))
         self._button(ref_actions,"+ Add",lambda:self._add_structure(False),"Add one anatomical boundary that can be used to start or stop counting, for example First caudal vertebra.").pack(side="left")
         self._button(ref_actions,"Rename",lambda:self._rename_structure(False),"Rename the selected reference mark.").pack(side="left",padx=(4,0))
-        self._button(ref_actions,"Relationship…",self._edit_reference_relationship,"Say whether this reference is one of an existing element series or a separate anatomical mark.").pack(side="left",padx=(4,0))
+        self._button(ref_actions,"Relation…",self._edit_reference_relationship,"Specify whether this reference is one member of a counted series or a separate anatomical mark.").pack(side="left",padx=(4,0))
         self._button(ref_actions,"Remove",lambda:self._remove_structure(False),"Remove the selected reference mark if no trait or saved annotation uses it.").pack(side="left",padx=(4,0))
         self.reference_tree.bind("<Double-1>",lambda _e:self._rename_structure(False))
-        self._help("Step 1B. Add a reference and describe its biological relationship. If it is one member of an existing series, MorphoLabel can recognize the series first and then identify the reference within it.",ref_help,self.reference_tree)
+        self._help("Step 1B. Add anatomical reference marks used as counting boundaries. For each mark, indicate whether it is one member of a counted series (for example the first caudal vertebra) or a separate anatomical landmark.",ref_help,self.reference_tree)
 
     def _field_row(self,parent,row,icon_name,label_text,variable,help_text,values=(),readonly=True):
         icon=ttk.Label(parent,image=self._icon(parent,icon_name,22));icon.grid(row=row,column=0,sticky="w",pady=(7,0))

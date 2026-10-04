@@ -26,6 +26,7 @@ from app.human_baseline_ui import HumanBaselineWindow
 from app.gui_crop_debug import log
 from .section_base import SectionView
 from .design import FlowRow
+from .workflow import add_command_separator
 from .landmark_canvas import LandmarkCanvasController
 from .dialogs import center
 from .landmark_display import load_display_settings, save_display_settings, SYMBOL_LABELS, SYMBOL_NAMES, LABEL_LABELS, LABEL_NAMES, HALO_LABELS, HALO_NAMES
@@ -197,12 +198,14 @@ class LandmarksSection(SectionView):
   self.button(one,'Repeat…',self.open_repeat,'Open the two independent blind annotation passes.').grid(row=1,column=0,columnspan=2,sticky='w',pady=(5,0))
 
   two=dock.add_card('2. Training data',icon='landmark_training',help_text='Create or continue the human-annotated image set used for model training.')
-  ttk.Label(two,text='Batch').grid(row=0,column=0,sticky='w')
-  ttk.Spinbox(two,from_=1,to=500,textvariable=batch,width=5).grid(row=0,column=1,sticky='w',padx=4)
-  ttk.Label(two,text='20–30 recommended',style='Muted.TLabel').grid(row=0,column=2,sticky='w')
   batch_info=stage_summary(self.context.project,create_missing=False);batch_state=batch_info['state']
   label='Start first batch' if not batch_state.get('initial_image_ids') else 'Continue batch' if batch_info['stage']=='INITIAL_TRAINING' or (batch_info['stage']=='MODEL_IMPROVEMENT' and batch_info['verified']<batch_info['total']) else 'Add next batch'
-  self.button(two,label,lambda:self.start_training_batch(batch.get()),'Create or continue the persistent landmark training batch.').grid(row=1,column=0,columnspan=3,sticky='w',pady=(5,0))
+  batch_actions=ttk.Frame(two);batch_actions.grid(row=0,column=0,sticky='w')
+  ttk.Label(batch_actions,text='Batch').pack(side='left')
+  ttk.Spinbox(batch_actions,from_=1,to=500,textvariable=batch,width=5).pack(side='left',padx=(4,0))
+  ttk.Label(batch_actions,text='20–30 recommended',style='Muted.TLabel').pack(side='left',padx=(5,0))
+  add_command_separator(batch_actions)
+  self.button(batch_actions,label,lambda:self.start_training_batch(batch.get()),'Create or continue the persistent landmark training batch.').pack(side='left')
 
   three=dock.add_card('3. Train model',icon='landmark_train',help_text='Train a new Landmark model from all human-confirmed examples.')
   active_warning=None
@@ -216,31 +219,32 @@ class LandmarksSection(SectionView):
   parent_box=ttk.Combobox(three,textvariable=parent_choice,values=tuple(item['model_id'] for item in parents) or ('Bootstrap / first model',),width=17,state='readonly')
   parent_box.grid(row=1,column=1,columnspan=2,sticky='ew',padx=(5,0),pady=(4,0));three.columnconfigure(1,weight=1)
   parent_box.bind('<<ComboboxSelected>>',lambda _event:self.context.project.set_ui_state('landmark_training_parent_model_id',None if parent_choice.get()=='Bootstrap / first model' else parent_choice.get()))
-  self.button(three,'Train',lambda:self.preflight(None if parent_choice.get()=='Bootstrap / first model' else parent_choice.get()),'Check then run Landmark model training.',style='Primary.TButton').grid(row=2,column=0,columnspan=2,sticky='w',pady=(5,0))
-  self.button(three,'Models…',lambda:self.shell.show_models('landmark'),'Compare and select saved Landmark models.').grid(row=2,column=2,sticky='e',padx=(5,0),pady=(5,0))
+  train_actions=ttk.Frame(three);train_actions.grid(row=2,column=0,columnspan=3,sticky='w',pady=(4,0))
+  self.button(train_actions,'Train',lambda:self.preflight(None if parent_choice.get()=='Bootstrap / first model' else parent_choice.get()),'Check then run Landmark model training.',style='Primary.TButton').pack(side='left')
+  add_command_separator(train_actions)
+  self.button(train_actions,'Models…',lambda:self.shell.show_models('landmark'),'Compare and select saved Landmark models.').pack(side='left')
 
   four=dock.add_card('4. Predict & review',icon='landmark_apply',help_text='Run AI prediction, review the saved results, then perform final data QC.')
-  batch_row=ttk.Frame(four);batch_row.grid(row=1,column=0,columnspan=3,sticky='w',pady=(5,0))
+  batch_row=ttk.Frame(four);batch_row.grid(row=0,column=0,sticky='w')
   ttk.Label(batch_row,text='Next').pack(side='left')
-  ttk.Spinbox(batch_row,from_=1,to=500,textvariable=prediction,width=5).pack(side='left',padx=4)
-  ttk.Label(batch_row,text='images',style='Muted.TLabel').pack(side='left')
-  predict_actions=ttk.Frame(four);predict_actions.grid(row=2,column=0,columnspan=3,sticky='ew',pady=(5,0))
+  ttk.Spinbox(batch_row,from_=1,to=500,textvariable=prediction,width=5).pack(side='left',padx=(4,0))
+  ttk.Label(batch_row,text='images',style='Muted.TLabel').pack(side='left',padx=(4,0))
+  predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,sticky='w',pady=(4,0))
   prediction_state='normal' if active else 'disabled'
-  predict_actions.columnconfigure(0,weight=1,uniform='prediction_actions');predict_actions.columnconfigure(1,weight=1,uniform='prediction_actions')
-  self.button(predict_actions,'Predict next',lambda:self.predict(False,prediction.get()),'Predict the next empty or previously AI-predicted image. Human-confirmed images are never changed.',state=prediction_state).grid(row=0,column=0,sticky='ew',padx=(0,3))
-  self.button(predict_actions,'Predict all',lambda:self.predict(True,prediction.get()),'Predict all empty and previously AI-predicted images. Human-confirmed images are never changed.',state=prediction_state).grid(row=0,column=1,sticky='ew',padx=(3,0))
-  review_actions=ttk.Frame(four);review_actions.grid(row=3,column=0,columnspan=3,sticky='ew',pady=(5,0))
-  review_actions.columnconfigure(0,weight=1,uniform='review_actions');review_actions.columnconfigure(1,weight=1,uniform='review_actions')
+  self.button(predict_actions,'Predict next',lambda:self.predict(False,prediction.get()),'Predict the next empty or previously AI-predicted image. Human-confirmed images are never changed.',state=prediction_state).pack(side='left')
+  self.button(predict_actions,'Predict all',lambda:self.predict(True,prediction.get()),'Predict all empty and previously AI-predicted images. Human-confirmed images are never changed.',state=prediction_state).pack(side='left',padx=(4,0))
+  review_actions=ttk.Frame(four);review_actions.grid(row=2,column=0,sticky='w',pady=(4,0))
   self.button(
    review_actions,'Review AI predictions',lambda:self.review_worst(prediction.get()),
    'Before verification only: review complete AI landmark predictions that have not yet been human-verified, starting with the highest-risk cases.',
    icon='review_worst',style='ReviewAction.TButton'
-  ).grid(row=0,column=0,sticky='ew',padx=(0,3))
+  ).pack(side='left')
+  add_command_separator(review_actions)
   self.button(
    review_actions,'Final data QC',lambda:open_complex_qc(self),
    'After verification only: audit final human-verified landmark sets for structural, measurement and geometric-morphometric outliers.',
    icon='complex_qc',style='ReviewAction.TButton'
-  ).grid(row=0,column=1,sticky='ew',padx=(3,0))
+  ).pack(side='left')
 
   self._refresh_prediction_info();self.canvas.redraw_cached();self._refresh_landmark_sidebar();self._refresh_action_buttons()
  def _refresh_prediction_info(self):

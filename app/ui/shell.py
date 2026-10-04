@@ -17,6 +17,7 @@ from .tooltips import Tooltip
 from .icons import tk_icon, TOPBAR_ICON_SIZE, CONTROL_ICON_SIZE
 from .dialogs import center, info, install_auto_center
 from .photo_list_panel import PhotoListPanel
+from .design import sidebar_width_for_window, dialog_width_for_columns
 from .landmark_sidebar import LandmarkSidebar
 from .preferences import last_project, remember_project
 from .project_section import ProjectSection
@@ -34,7 +35,7 @@ from app.ai_hardware import get_hardware_profile, format_hardware_profile
 from app.ai_package import export_model_package, import_model_package
 from app.first_run_setup import first_run_setup_required, run_first_run_setup, defer_first_run_setup, ai_setup_complete
 
-BG="#f5f7f8"; ACC="#256d9e"
+BG="#f0f0f0"; ACC="#0067c0"
 
 _SETUP_STAGE_RANGES={
     "AI ENGINE":(3,60,"Step 1 of 4 — Installing AI engine"),
@@ -552,12 +553,11 @@ class ProductionShell(tk.Tk):
         if width < 650 and attempt < 8:
             panes.bind("<Configure>",self._restore_sidebar_on_configure,add="+"); return
         try:
-            minimum=max(280,min(330,int(self.photo_panel.winfo_reqwidth())+12))
-            maximum=max(minimum,min(440,width-600))
-            responsive_default=min(400,max(310,int(width*0.20)))
+            responsive_default=sidebar_width_for_window(width,self.photo_panel.winfo_reqwidth())
+            maximum=max(250,min(480,int(width*.29),max(250,width-560)))
             saved=self.context.project.get_ui_state("workspace_sidebar_sash",None)
             target=responsive_default if saved is None else int(saved)
-            panes.sashpos(0,max(minimum,min(maximum,target)))
+            panes.sashpos(0,max(250,min(maximum,target)))
             panes.bind("<ButtonRelease-1>",self._save_sidebar_sash,add="+")
         except Exception:
             return
@@ -885,13 +885,15 @@ class ProductionShell(tk.Tk):
         if kind=="landmark":return self._show_landmark_models()
         kinds=(kind,) if kind else ("crop","landmark")
         landmark_only=kinds==("landmark",)
-        dialog=tk.Toplevel(self);dialog.title("Models");dialog.transient(self);dialog.geometry("1220x440" if landmark_only else "980x420");dialog.minsize(760 if landmark_only else 660,260)
+        dialog=tk.Toplevel(self);dialog.title("Models");dialog.transient(self)
         frame=ttk.Frame(dialog,padding=12);frame.pack(fill="both",expand=True);frame.rowconfigure(0,weight=1);frame.columnconfigure(0,weight=1)
         columns=("active","model","dataset","split","iou","boundary","rotation") if kinds==("crop",) else ("active","model","parent","dataset","p90","best_epoch","manual_p90","ai_p90","human_ratio","manual_status","created")
         table_frame=ttk.Frame(frame);table_frame.grid(row=0,column=0,sticky="nsew");table_frame.rowconfigure(0,weight=1);table_frame.columnconfigure(0,weight=1)
         table=ttk.Treeview(table_frame,columns=columns,show="headings")
         labels={"active":"Active","model":"Model","dataset":"Dataset N","split":"Train / Val","iou":"Validation IoU","boundary":"Boundary MAE %","rotation":"Rotation MAE °","parent":"Parent","p90":"Validation P90 %","best_epoch":"Best epoch","manual_p90":"Manual P90 %","ai_p90":"AI P90 %","human_ratio":"AI / manual","manual_status":"Interpretation","created":"Created"}
         widths={"active":65,"model":160,"dataset":80,"split":90,"iou":105,"boundary":115,"rotation":115,"parent":125,"p90":105,"best_epoch":80,"manual_p90":95,"ai_p90":85,"human_ratio":90,"manual_status":155,"created":125}
+        model_width=dialog_width_for_columns((widths[col] for col in columns),dialog.winfo_screenwidth(),chrome=105)
+        dialog.geometry(f"{model_width}x{440 if landmark_only else 420}");dialog.minsize(min(model_width,760 if landmark_only else 660),260)
         for col in columns:table.heading(col,text=labels[col]);table.column(col,width=widths[col],anchor="w",stretch=col=="model")
         scroll=ttk.Scrollbar(table_frame,orient="vertical",command=table.yview);table.configure(yscrollcommand=scroll.set);table.grid(row=0,column=0,sticky="nsew");scroll.grid(row=0,column=1,sticky="ns")
         import json

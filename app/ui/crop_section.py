@@ -9,6 +9,7 @@ from app.landmark_attention_queue import active as active_attention_queue, class
 from .section_base import SectionView
 from .crop_canvas import CropCanvasController
 from .dialogs import center
+from .workflow import add_command_separator
 
 
 class CropSection(SectionView):
@@ -30,33 +31,38 @@ class CropSection(SectionView):
 
   training_rows=self.context.project.crop_training_rows()
   one=dock.add_card("1. Training data",icon="crop_training",help_text="Create or continue the human-corrected Crop examples used for model training.")
-  ttk.Label(one,text="Manual corrected examples",style="Muted.TLabel").grid(row=0,column=0,columnspan=3,sticky="w")
-  ttk.Label(one,text="Batch size").grid(row=1,column=0,sticky="w",pady=(5,0))
-  ttk.Spinbox(one,from_=1,to=500,textvariable=batch,width=5).grid(row=1,column=1,sticky="w",padx=4,pady=(5,0))
-  ttk.Label(one,text="Recommended 20–30",style="Muted.TLabel").grid(row=1,column=2,sticky="w",pady=(5,0))
+  ttk.Label(one,text="Manual corrected examples",style="Muted.TLabel").grid(row=0,column=0,sticky="w")
+  batch_actions=ttk.Frame(one);batch_actions.grid(row=1,column=0,sticky="w",pady=(4,0))
+  ttk.Label(batch_actions,text="Batch size").pack(side="left")
+  ttk.Spinbox(batch_actions,from_=1,to=500,textvariable=batch,width=5).pack(side="left",padx=(4,0))
+  ttk.Label(batch_actions,text="20–30 recommended",style="Muted.TLabel").pack(side="left",padx=(5,0))
+  add_command_separator(batch_actions)
   first=not bool(training_rows)
-  self.button(one,"Start first batch" if first else "Add next batch",lambda:self.batch(batch.get()),"Create a persistent set of real images for manual crop correction.").grid(row=2,column=0,columnspan=3,sticky="w",pady=(7,0))
+  self.button(batch_actions,"Start first batch" if first else "Add next batch",lambda:self.batch(batch.get()),"Create a persistent set of real images for manual crop correction.").pack(side="left")
 
   two=dock.add_card("2. Train model",icon="crop_train",help_text="Train a new Crop model from all human-confirmed Crop examples.")
-  ttk.Label(two,text=f"Active: {current_label(self.context.project)}",style="Muted.TLabel").grid(row=0,column=0,columnspan=2,sticky="w")
-  ttk.Label(two,text=f"Train-ready examples: {len(training_rows)}").grid(row=1,column=0,columnspan=2,sticky="w",pady=(4,0))
-  self.button(two,"Train",self.train,"Train the Crop model from all verified examples.",style="Primary.TButton").grid(row=2,column=0,sticky="w",pady=(7,0))
-  self.button(two,"Models…",lambda:self.shell.show_models('crop'),"Compare and select saved Crop model versions.").grid(row=2,column=1,sticky="w",padx=(5,0),pady=(7,0))
+  two.columnconfigure(0,weight=1)
+  ttk.Label(two,text=f"Active: {current_label(self.context.project)}",style="Muted.TLabel").grid(row=0,column=0,sticky="w")
+  ttk.Label(two,text=f"Ready: {len(training_rows)}",style="Muted.TLabel").grid(row=0,column=1,sticky="e",padx=(10,0))
+  train_actions=ttk.Frame(two);train_actions.grid(row=1,column=0,columnspan=2,sticky="w",pady=(4,0))
+  self.button(train_actions,"Train",self.train,"Train the Crop model from all verified examples.",style="Primary.TButton").pack(side="left")
+  add_command_separator(train_actions)
+  self.button(train_actions,"Models…",lambda:self.shell.show_models('crop'),"Compare and select saved Crop model versions.").pack(side="left")
 
   three=dock.add_card("3. Predict & review",icon="crop_apply",help_text="Predict only uncropped images. Pending AI Crop proposals are a separate review state and are not predicted again.")
-  counts=self.context.project.crop_section_counts()
-  ttk.Label(three,text=f"Uncropped {counts.get('Uncropped',0)} · AI review {counts.get('AI pending',0)} · Verified {counts.get('Reviewed',0)}",style="Muted.TLabel").grid(row=0,column=0,columnspan=3,sticky="w")
-  batch_row=ttk.Frame(three);batch_row.grid(row=1,column=0,columnspan=3,sticky="w",pady=(5,0))
+  counts=self.context.project.crop_section_counts();three.columnconfigure(0,weight=1)
+  ttk.Label(three,text=f"Uncropped {counts.get('Uncropped',0)} · AI review {counts.get('AI pending',0)} · Verified {counts.get('Reviewed',0)}",style="Muted.TLabel").grid(row=0,column=0,sticky="w")
+  batch_row=ttk.Frame(three);batch_row.grid(row=0,column=1,sticky="e",padx=(8,0))
   ttk.Label(batch_row,text="Next").pack(side="left")
-  ttk.Spinbox(batch_row,from_=1,to=500,textvariable=prediction,width=5).pack(side="left",padx=4)
-  ttk.Label(batch_row,text="uncropped images",style="Muted.TLabel").pack(side="left")
-  apply_actions=ttk.Frame(three);apply_actions.grid(row=2,column=0,columnspan=3,sticky="w",pady=(7,0))
+  ttk.Spinbox(batch_row,from_=1,to=500,textvariable=prediction,width=5).pack(side="left",padx=(4,0))
+  apply_actions=ttk.Frame(three);apply_actions.grid(row=1,column=0,columnspan=2,sticky="w",pady=(4,0))
   self.button(apply_actions,"Predict next",lambda:self.auto_batch(prediction.get()),"Predict Crop for the next uncropped eligible images.").pack(side="left")
-  self.button(apply_actions,"Predict all uncropped",lambda:self.auto_batch(None),"Predict Crop for every uncropped eligible image. Existing AI proposals are not rerun.").pack(side="left",padx=4)
-  review_actions=ttk.Frame(three);review_actions.grid(row=3,column=0,columnspan=3,sticky="w",pady=(5,0))
+  self.button(apply_actions,"Predict all uncropped",lambda:self.auto_batch(None),"Predict Crop for every uncropped eligible image. Existing AI proposals are not rerun.").pack(side="left",padx=(4,0))
+  review_actions=ttk.Frame(three);review_actions.grid(row=2,column=0,columnspan=2,sticky="w",pady=(4,0))
   self.button(review_actions,"Review AI crops",self.review_worst,"Review pending AI Crop proposals, worst first.").pack(side="left")
   self.button(review_actions,"Review manual crops",self.review_manual,"Re-review crops that were created manually.").pack(side="left",padx=(4,0))
-  self.button(review_actions,"Accept all AI crops",self.accept_all_ai_crops,"Accept every current pending AI Crop exactly as predicted, without recalculating it.").pack(side="left",padx=(4,0))
+  add_command_separator(review_actions)
+  self.button(review_actions,"Accept all AI crops",self.accept_all_ai_crops,"Accept every current pending AI Crop exactly as predicted, without recalculating it.").pack(side="left")
  def refresh(self,image_id=None):
   if image_id is not None:
    # Crop changes can also invalidate/reproject landmarks; refresh the whole

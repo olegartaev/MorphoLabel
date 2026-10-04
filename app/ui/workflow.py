@@ -20,14 +20,14 @@ class WorkflowDock(ttk.Frame):
     commands live for the whole section lifetime, including hidden cards.
     """
     def __init__(self,parent,shell,*,help_factory=None,title='Workflow'):
-        super().__init__(parent,style='WorkflowDock.TFrame',padding=(0,2,0,0))
+        super().__init__(parent,style='WorkflowDock.TFrame',padding=(0,1,0,0))
         self.shell=shell;self._cards=[];self._card_headers=[];self._tabs=[];self._layout_after=None;self._last_columns=None;self._selected_card=0;self._last_selection=None;self._collapsed=False
-        header=ttk.Frame(self,style='WorkflowDock.TFrame');header.grid(row=0,column=0,sticky='ew',pady=(0,2));header.columnconfigure(0,weight=1)
+        header=ttk.Frame(self,style='WorkflowDock.TFrame');header.grid(row=0,column=0,sticky='ew',pady=(0,1));header.columnconfigure(0,weight=1)
         self.toggle=ttk.Button(header,text=title+' ▾',style='Stage.TButton',command=self._toggle)
         self.toggle.grid(row=0,column=0,sticky='w');self._title=title
         shell.tip.bind(self.toggle,'Hide or show workflow controls to make more room for the image.')
         if help_factory is not None:help_factory(header).grid(row=0,column=1,sticky='e')
-        self.tab_host=ttk.Frame(self,style='WorkflowDock.TFrame');self.tab_host.grid(row=1,column=0,sticky='ew',pady=(0,3))
+        self.tab_host=ttk.Frame(self,style='WorkflowDock.TFrame');self.tab_host.grid(row=1,column=0,sticky='ew',pady=(0,2))
         self.cards_host=ttk.Frame(self,style='WorkflowDock.TFrame');self.cards_host.grid(row=2,column=0,sticky='ew')
         self.columnconfigure(0,weight=1);self.bind('<Configure>',self._schedule_layout,add='+')
 
@@ -38,7 +38,7 @@ class WorkflowDock(ttk.Frame):
                 ttk.Label(header,image=self.shell.ui_icon(icon, WORKFLOW_ICON_SIZE)).pack(side='left',padx=(0,6))
             else:ttk.Label(header,text=icon,style='WorkflowIcon.TLabel').pack(side='left',padx=(0,6))
         ttk.Label(header,text=title,style='WorkflowCardTitle.TLabel').pack(side='left')
-        card=ttk.LabelFrame(self.cards_host,labelwidget=header,padding=(7,5),style='WorkflowCard.TLabelframe')
+        card=ttk.LabelFrame(self.cards_host,labelwidget=header,padding=(6,3),style='WorkflowCard.TLabelframe')
         if help_text:self.shell.tip.bind(card,help_text);self.shell.tip.bind(header,help_text)
         index=len(self._cards);self._cards.append(card);self._card_headers.append(header)
         label=title.split('. ',1)[-1]
@@ -89,6 +89,13 @@ class WorkflowDock(ttk.Frame):
                     row=0,column=index,sticky='nsew',padx=(0 if index==0 else 4,0),
                 )
         for index,tab in enumerate(self._tabs):tab.configure(style='StageActive.TButton' if index==self._selected_card else 'Stage.TButton')
+
+
+def add_command_separator(parent, *, padx=7):
+    """Visually separate command groups without adding another boxed panel."""
+    separator=ttk.Separator(parent,orient="vertical")
+    separator.pack(side="left",fill="y",padx=padx,pady=2)
+    return separator
 
 
 def build_help_button(section,parent,title,text):

@@ -5,57 +5,107 @@ No project, annotation, model or queue state is owned by this module.
 from __future__ import annotations
 
 from datetime import datetime
+import sys
 from tkinter import ttk
 
-SURFACE = "#f3f6f9"
+# Neutral fallbacks are used outside Windows.  On Windows, ttk's native theme
+# owns control chrome and colours so MorphoLabel looks like an ordinary desktop
+# application rather than a custom web-like skin.
+SURFACE = "#f0f0f0"
 PAPER = "#ffffff"
-INK = "#253746"
-MUTED = "#586b7a"
-ACCENT = "#246b9b"
-BORDER = "#d6dfe7"
+INK = "#202020"
+MUTED = "#606060"
+ACCENT = "#256d9e"
+BORDER = "#c8c8c8"
 CANVAS = "#202020"
 
 
+def _native_theme(style):
+    themes=set(style.theme_names())
+    if sys.platform.startswith("win"):
+        for candidate in ("vista","xpnative","winnative"):
+            if candidate in themes:
+                style.theme_use(candidate)
+                return candidate
+    if "clam" in themes:
+        style.theme_use("clam")
+        return "clam"
+    return style.theme_use()
+
+
 def apply_styles(root, style):
-    # The native Windows theme ignores several colour maps. Clam makes the
-    # selected stage and primary action legible on Windows as well as Linux.
+    """Apply one compact desktop style without replacing native Windows chrome."""
     from tkinter import font as tkfont
     family="Segoe UI" if "Segoe UI" in tkfont.families(root) else "DejaVu Sans"
     tkfont.nametofont("TkDefaultFont",root=root).configure(family=family,size=9)
-    style.theme_use("clam")
-    style.configure(".", background=SURFACE, foreground=INK, font=(family, 9))
-    style.configure("TFrame", background=SURFACE)
-    style.configure("TLabel", background=SURFACE, foreground=INK)
-    style.configure("TButton", padding=(8, 4), width=0, background=PAPER, bordercolor=BORDER, relief="flat")
-    style.map("TButton", background=[("pressed", "#d9e8f3"), ("active", "#eaf1f6")], foreground=[("disabled", "#8995a0")])
-    for name in ("P.TButton", "Icon.TButton", "Nav.TButton", "ReviewAction.TButton"):
-        style.configure(name, padding=(7, 4), font=(family, 9), background=PAPER, foreground=INK)
-    for name in ("Primary.TButton", "NavPrimary.TButton", "CropNext.TButton", "CropApply.TButton"):
-        style.configure(name, padding=(8, 4), font=(family, 9, "bold"), background="#e1eef7", foreground="#174f75", bordercolor="#9ebdd2")
-        style.map(name, background=[("pressed", "#c4deee"), ("active", "#d2e6f3")], foreground=[("disabled", "#8995a0"), ("!disabled", "#174f75")])
-    style.configure("Stage.TButton", padding=(9, 4), foreground=MUTED, background=SURFACE, bordercolor=SURFACE)
-    style.configure("StageActive.TButton", padding=(9, 4), font=(family, 9, "bold"), foreground="#174f75", background="#dcebf5", bordercolor="#9ebdd2")
-    style.map("StageActive.TButton", background=[("active", "#cce2f0"), ("!disabled", "#dcebf5")], foreground=[("!disabled", "#174f75")])
-    style.configure("Topbar.TFrame", padding=(0, 1))
-    style.configure("Toolbar.TFrame", padding=(4, 3))
-    style.configure("WorkflowDockTitle.TLabel", font=(family, 9, "bold"), foreground=MUTED)
-    style.configure("WorkflowCard.TLabelframe", bordercolor=BORDER, relief="solid", borderwidth=1)
-    style.configure("WorkflowCardTitle.TLabel", font=(family, 9, "bold"), foreground=INK)
-    style.configure("SectionTitle.TLabel", font=(family, 9, "bold"), foreground=INK)
-    style.configure("PageTitle.TLabel", font=(family, 16, "bold"), foreground=INK)
-    style.configure("PageSubtitle.TLabel", font=(family, 10), foreground=MUTED)
-    style.configure("HubTitle.TLabel", font=(family, 24, "bold"), foreground=INK)
-    style.configure("ModuleTitle.TLabel", font=(family, 12, "bold"), foreground=INK)
-    style.configure("Muted.TLabel", foreground=MUTED)
-    style.configure("StatusChip.TLabel", padding=(4, 2), foreground=MUTED)
-    style.configure("Prediction.TLabel", foreground=ACCENT, padding=(4, 2))
-    style.configure("Attention.TFrame", background="#fff2d2")
-    style.configure("AttentionTitle.TLabel", background="#fff2d2", foreground="#694d12", font=(family, 9, "bold"))
-    style.configure("AttentionText.TLabel", background="#fff2d2", foreground=INK)
-    style.configure("AttentionStep.TLabel", background="#fff2d2", foreground="#694d12")
-    style.configure("Treeview", background=PAPER, fieldbackground=PAPER, rowheight=26, bordercolor=BORDER)
-    style.configure("Treeview.Heading", font=(family, 9, "bold"), background="#e8eef3", padding=(5, 5))
-    style.map("Treeview", background=[("selected", "#dcebf5")], foreground=[("selected", "#174f75")])
+    native_windows=_native_theme(style) in {"vista","xpnative","winnative"}
+
+    # Keep standard Windows controls standard.  Custom colours are deliberately
+    # limited to semantic states such as the yellow review queue.
+    style.configure(".",font=(family,9))
+    if not native_windows:
+        style.configure("TFrame",background=SURFACE)
+        style.configure("TLabel",background=SURFACE,foreground=INK)
+        style.configure("TButton",background=SURFACE,foreground=INK)
+        style.configure("Treeview",background=PAPER,fieldbackground=PAPER,foreground=INK)
+        style.configure("Treeview.Heading",background="#e9e9e9",foreground=INK)
+
+    style.configure("TButton",padding=(8,4),width=0)
+    for name in ("P.TButton","Icon.TButton","Nav.TButton","ReviewAction.TButton"):
+        style.configure(name,padding=(8,4),font=(family,9))
+    for name in ("Primary.TButton","NavPrimary.TButton","CropNext.TButton","CropApply.TButton"):
+        style.configure(name,padding=(8,4),font=(family,9,"bold"))
+    style.configure("Marker.TButton",padding=(7,4),font=(family,9))
+    style.configure("MarkerActive.TButton",padding=(7,4),font=(family,9,"bold"))
+    style.configure("MarkerStatus.TMenubutton",padding=(6,8),font=(family,9))
+
+    style.configure("Stage.TButton",padding=(8,4),font=(family,9))
+    style.configure("StageActive.TButton",padding=(8,4),font=(family,9,"bold"))
+    style.configure("Topbar.TFrame",padding=(0,1))
+    style.configure("Toolbar.TFrame",padding=(3,2))
+    style.configure("WorkflowDock.TFrame",padding=0)
+    style.configure("WorkflowDockTitle.TLabel",font=(family,9,"bold"),foreground=MUTED)
+    style.configure("WorkflowCard.TLabelframe",padding=(5,3))
+    style.configure("WorkflowCardTitle.TLabel",font=(family,9,"bold"))
+    style.configure("SectionTitle.TLabel",font=(family,9,"bold"))
+    style.configure("PageTitle.TLabel",font=(family,15,"bold"))
+    style.configure("PageSubtitle.TLabel",font=(family,9),foreground=MUTED)
+    style.configure("HubTitle.TLabel",font=(family,22,"bold"))
+    style.configure("ModuleTitle.TLabel",font=(family,12,"bold"))
+    style.configure("Muted.TLabel",foreground=MUTED)
+    style.configure("StatusChip.TLabel",padding=(2,1),foreground=MUTED)
+    style.configure("Prediction.TLabel",foreground=MUTED,padding=(2,1))
+    style.configure("ProjectIdentity.TLabelframe",borderwidth=2,relief="groove",padding=(4,3))
+    style.configure("ProjectIdentityTitle.TLabel",font=(family,9,"bold"))
+
+    # Queue colour is semantic, not decoration: it must remain visually distinct
+    # from ordinary Previous/Next navigation.
+    style.configure("Attention.TFrame",background="#fff2cc")
+    style.configure("AttentionTitle.TLabel",background="#fff2cc",foreground="#5f4a00",font=(family,9,"bold"))
+    style.configure("AttentionText.TLabel",background="#fff2cc",foreground=INK)
+    style.configure("AttentionStep.TLabel",background="#fff2cc",foreground="#5f4a00")
+
+    style.configure("Treeview",rowheight=24)
+    style.configure("Treeview.Heading",font=(family,9,"bold"),padding=(5,4))
+    if not native_windows:
+        style.map("Treeview",background=[("selected","#d9e8f5")],foreground=[("selected",INK)])
+
+
+def sidebar_width_for_window(total_width: int, requested_width: int=0) -> int:
+    """Readable list width capped near the reviewed ~28% desktop proportion."""
+    width=max(1,int(total_width or 0))
+    available=max(250,width-560)
+    ceiling=max(250,min(480,int(width*.29),available))
+    floor=min(ceiling,max(280,min(350,int(requested_width or 0)+12 if requested_width else 330)))
+    responsive=min(ceiling,max(floor,int(width*.27)))
+    return int(responsive)
+
+
+def dialog_width_for_columns(column_widths, screen_width: int, *, chrome: int=70, margin: int=80) -> int:
+    """Choose a model-list width that exposes all normal columns when the screen permits."""
+    required=sum(max(1,int(value)) for value in column_widths)+max(40,int(chrome))
+    available=max(620,int(screen_width or 0)-max(40,int(margin)))
+    return max(620,min(required,available))
 
 
 def action_icon(text):
@@ -160,13 +210,13 @@ class FlowRow(ttk.Frame):
                 y+=row_height+2;x=0;row_height=0
             if child.winfo_manager()=="pack":child.pack_forget()
             child.place(x=x,y=y,width=requested,height=height)
-            row_height=max(row_height,height);x+=requested+4
-        right_width=sum(child.winfo_reqwidth()+4 for child in right)
+            row_height=max(row_height,height);x+=requested+6
+        right_width=sum(child.winfo_reqwidth()+6 for child in right)
         if right and x and x+right_width>width:y+=row_height+2;row_height=0
         rx=max(0,width-right_width)
         for child in reversed(right):
             if child.winfo_manager()=="pack":child.pack_forget()
             requested=child.winfo_reqwidth();height=child.winfo_reqheight()
-            child.place(x=rx,y=y,width=requested,height=height);rx+=requested+4;row_height=max(row_height,height)
+            child.place(x=rx,y=y,width=requested,height=height);rx+=requested+6;row_height=max(row_height,height)
         wanted=y+row_height+2
         if wanted!=self._row_height:self._row_height=wanted;self.configure(height=max(1,wanted))

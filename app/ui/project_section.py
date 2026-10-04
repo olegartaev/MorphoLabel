@@ -44,11 +44,11 @@ class ProjectSection(SectionView):
   content=ttk.Frame(host);content.pack(fill="both",expand=True)
   content.columnconfigure(0,weight=1,uniform="project_cards");content.columnconfigure(1,weight=1,uniform="project_cards");content.rowconfigure(2,weight=1)
 
-  project_box=ttk.LabelFrame(content,text="Project",padding=10);project_box.grid(row=0,column=0,sticky="nsew",padx=(0,5),pady=(0,7))
+  project_box=ttk.LabelFrame(content,text="Current project",padding=12,style="ProjectIdentity.TLabelframe");project_box.grid(row=0,column=0,sticky="nsew",padx=(0,5),pady=(0,7))
   ttk.Label(project_box,text=str(project.config.get("name",project.root.name)),style="SectionTitle.TLabel").pack(anchor="w")
   ttk.Label(project_box,text=str(project.root),style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,8))
   actions=ttk.Frame(project_box);actions.pack(anchor="w")
-  self.button(actions,"Open another...",self.shell.open_project,"Open another project in this same MorphoLabel window.").pack(side="left")
+  self.button(actions,"Open",self.shell.open_project,"Open another project in this same MorphoLabel window.").pack(side="left")
   self.button(actions,"New project...",self.shell.new_project,"Create another MorphoLabel project.").pack(side="left",padx=(6,0))
 
   source=ttk.LabelFrame(content,text="Source photos",padding=10);source.grid(row=0,column=1,sticky="nsew",padx=(5,0),pady=(0,7))
@@ -90,7 +90,7 @@ class ProjectSection(SectionView):
   columns=("sample","images","calibrated");table=ttk.Treeview(samples,columns=columns,show="headings",selectmode="browse",height=14)
   labels={"sample":"Sample","images":"Images","calibrated":"Calibration"}
   table.column("sample",width=330,stretch=True,anchor="w");table.column("images",width=72,stretch=False,anchor="e");table.column("calibrated",width=96,stretch=False,anchor="center")
-  table.tag_configure("alternate",background="#f6f8fa")
+  table.tag_configure("alternate",background="#f7f7f7")
   state={"column":"sample","descending":False}
   def sort_by(column):
    if state["column"]==column: state["descending"]=not state["descending"]

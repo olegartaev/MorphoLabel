@@ -51,7 +51,8 @@ class ToolbarIconContractTests(unittest.TestCase):
         self.assertIn("'Final data QC'",source)
         self.assertIn("icon='review_worst'",source)
         self.assertIn("icon='complex_qc'",source)
-        self.assertIn("uniform='review_actions'",source)
+        self.assertIn("add_command_separator(review_actions)",source)
+        self.assertIn(").pack(side='left')",source)
         self.assertIn("style='ReviewAction.TButton'",source)
 
     def test_selected_workflow_icons_render_and_sections_use_exact_current_mapping(self):

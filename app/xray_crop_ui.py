@@ -16,8 +16,8 @@ from app.ui.dialogs import center
 from app.ui.icons import CONTROL_ICON_SIZE, WORKFLOW_ICON_SIZE, tk_icon
 from app.ui.photo_list_panel import filtered_photo_indices, photo_search_cache
 from app.ui.tooltips import Tooltip
-from app.ui.design import ElidedLabel, FlowRow, action_icon, prediction_stamp
-from app.ui.workflow import WorkflowDock
+from app.ui.design import ElidedLabel, FlowRow, action_icon, prediction_stamp, sidebar_width_for_window, dialog_width_for_columns
+from app.ui.workflow import WorkflowDock, add_command_separator
 from types import SimpleNamespace
 from .xray_crop import crop_corners, crop_from_geometry, detect_specimens, display_preview
 from .xray_detector import predict_plates, train_detector
@@ -399,29 +399,38 @@ class XRayCropWorkspace:
         workflow=WorkflowDock(main,adapter,help_factory=lambda host:self._button(host,"Help",self._show_help,"Open the X-ray Crop guide."))
         workflow.grid(row=3,column=0,sticky="ew",pady=(2,0));self.workflow_dock=workflow
         one=workflow.add_card("1. Training data",icon="crop_training",help_text="Create human-confirmed crop and orientation examples.")
-        ttk.Label(one,text="Batch").grid(row=0,column=0,sticky="w")
-        ttk.Spinbox(one,from_=1,to=100,textvariable=self.training_batch_size,width=4).grid(row=0,column=1,sticky="w",padx=4)
-        ttk.Label(one,text="6–10 recommended",style="Muted.TLabel").grid(row=0,column=2,sticky="w")
-        self.training_button=self._button(one,"Start first batch",self.start_training_batch,"Prepare diverse plates for manual crop and orientation correction.");self.training_button.grid(row=1,column=0,columnspan=3,sticky="w",pady=(5,0))
+        batch_actions=ttk.Frame(one);batch_actions.grid(row=0,column=0,sticky="w")
+        ttk.Label(batch_actions,text="Batch").pack(side="left")
+        ttk.Spinbox(batch_actions,from_=1,to=100,textvariable=self.training_batch_size,width=4).pack(side="left",padx=(4,0))
+        ttk.Label(batch_actions,text="6–10 recommended",style="Muted.TLabel").pack(side="left",padx=(5,0))
+        add_command_separator(batch_actions)
+        self.training_button=self._button(batch_actions,"Start first batch",self.start_training_batch,"Prepare diverse plates for manual crop and orientation correction.");self.training_button.pack(side="left")
         two=workflow.add_card("2. Train model",icon="crop_train",help_text="Train crop detection and head / ventral orientation from verified examples.")
-        self.model_label=ElidedLabel(two,text="Active: none",style="StatusChip.TLabel",anchor="w");self.model_label.grid(row=0,column=0,columnspan=2,sticky="ew");two.columnconfigure(0,weight=1)
-        self.training_count_label=ttk.Label(two,text="Ready: 0",style="Muted.TLabel");self.training_count_label.grid(row=1,column=0,columnspan=2,sticky="w",pady=(2,0))
-        self.train_button=self._button(two,"Train",self.train_model,"Train crop detection and orientation using existing eligible examples.",style="Primary.TButton");self.train_button.grid(row=2,column=0,sticky="w",pady=(5,0))
-        self.models_button=self._button(two,"Models…",self.manage_models,"Compare and select saved Crop models.");self.models_button.grid(row=2,column=1,sticky="e",padx=(5,0),pady=(5,0))
+        two.columnconfigure(0,weight=1)
+        self.model_label=ElidedLabel(two,text="Active: none",style="StatusChip.TLabel",anchor="w");self.model_label.grid(row=0,column=0,sticky="ew")
+        self.training_count_label=ttk.Label(two,text="Ready: 0",style="Muted.TLabel");self.training_count_label.grid(row=0,column=1,sticky="e",padx=(10,0))
+        train_actions=ttk.Frame(two);train_actions.grid(row=1,column=0,columnspan=2,sticky="w",pady=(4,0))
+        self.train_button=self._button(train_actions,"Train",self.train_model,"Train crop detection and orientation using existing eligible examples.",style="Primary.TButton");self.train_button.pack(side="left")
+        add_command_separator(train_actions)
+        self.models_button=self._button(train_actions,"Models…",self.manage_models,"Compare and select saved Crop models.");self.models_button.pack(side="left")
+
         three=workflow.add_card("3. Predict & review",icon="crop_apply",help_text="Predict eligible plates, then human-review the crops and orientation.")
-        self.predict_count_label=ttk.Label(three,text="",style="Muted.TLabel");self.predict_count_label.grid(row=0,column=0,columnspan=3,sticky="w")
-        batch_row=ttk.Frame(three);batch_row.grid(row=1,column=0,columnspan=3,sticky="ew",pady=(4,0))
-        ttk.Label(batch_row,text="Next").pack(side="left");ttk.Spinbox(batch_row,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=4)
-        self.predict_current_button=self._button(batch_row,"Predict current",self.predict_current_plate,"Predict crops for this eligible unverified plate. Human-reviewed plates are protected.");self.predict_current_button.pack(side="right")
-        predict_actions=ttk.Frame(three);predict_actions.grid(row=2,column=0,columnspan=3,sticky="ew",pady=(5,0))
+        top=ttk.Frame(three);top.grid(row=0,column=0,sticky="ew");top.columnconfigure(0,weight=1)
+        self.predict_count_label=ElidedLabel(top,text="",style="Muted.TLabel",anchor="w");self.predict_count_label.grid(row=0,column=0,sticky="ew")
+        batch_row=ttk.Frame(top);batch_row.grid(row=0,column=1,sticky="e",padx=(8,0))
+        ttk.Label(batch_row,text="Next").pack(side="left");ttk.Spinbox(batch_row,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(4,0))
+        predict_actions=ttk.Frame(three);predict_actions.grid(row=1,column=0,sticky="w",pady=(4,0))
+        self.predict_current_button=self._button(predict_actions,"Predict current",self.predict_current_plate,"Predict crops for this eligible unverified plate. Human-reviewed plates are protected.");self.predict_current_button.pack(side="left")
+        add_command_separator(predict_actions)
         self.predict_next_button=self._button(predict_actions,"Predict next",lambda:self.predict_batch(self.prediction_batch_size.get()),"Predict the next eligible plates.");self.predict_next_button.pack(side="left")
         self.predict_all_button=self._button(predict_actions,"Predict all",lambda:self.predict_batch(None),"Predict every remaining eligible plate.");self.predict_all_button.pack(side="left",padx=(4,0))
-        self.review_button=self._button(three,"Review AI",self.review_ai,"Review model-proposed crops and orientation before human confirmation.",style="ReviewAction.TButton",icon="review_worst");self.review_button.grid(row=3,column=0,columnspan=3,sticky="w",pady=(5,0))
+        review_actions=ttk.Frame(three);review_actions.grid(row=2,column=0,sticky="w",pady=(4,0))
+        self.review_button=self._button(review_actions,"Review AI",self.review_ai,"Review model-proposed crops and orientation before human confirmation.",style="ReviewAction.TButton",icon="review_worst");self.review_button.pack(side="left")
 
     def _set_initial_sash(self,_event=None):
         try:
             if self.panes.winfo_width()<=1 or getattr(self,"_initial_sash_done",False):return
-            width=max(900,self.panes.winfo_width());self.panes.sashpos(0,max(300,min(400,int(width*.21))))
+            width=max(900,self.panes.winfo_width());self.panes.sashpos(0,sidebar_width_for_window(width,self.plate_list.winfo_reqwidth()))
             self._initial_sash_done=True
         except Exception:pass
 
@@ -936,12 +945,14 @@ class XRayCropWorkspace:
         poll()
 
     def manage_models(self):
-        dialog=tk.Toplevel(self.root);dialog.title("X-ray crop models");dialog.transient(self.root);dialog.geometry("900x390")
+        dialog=tk.Toplevel(self.root);dialog.title("X-ray crop models");dialog.transient(self.root)
         frame=ttk.Frame(dialog,padding=12);frame.pack(fill="both",expand=True);frame.columnconfigure(0,weight=1);frame.rowconfigure(1,weight=1)
         ttk.Label(frame,text="Registered models · quality values are shown only when recorded",style="PageSubtitle.TLabel").grid(row=0,column=0,sticky="w",pady=(0,8))
         columns=("model","date","source","training","crop_quality","orientation_quality","active")
         tree=ttk.Treeview(frame,columns=columns,show="headings",selectmode="browse")
         headers=(("model","Model",165),("date","Trained",130),("source","Started from",165),("training","Plates / crops",130),("crop_quality","Crop validation",150),("orientation_quality","Orientation",170),("active","Status",80))
+        model_width=dialog_width_for_columns((item[2] for item in headers),dialog.winfo_screenwidth(),chrome=105)
+        dialog.geometry(f"{model_width}x420");dialog.minsize(min(model_width,920),300)
         for key,label,width in headers:tree.heading(key,text=label);tree.column(key,width=width,anchor="w")
         tree.grid(row=1,column=0,sticky="nsew");scroll=ttk.Scrollbar(frame,orient="vertical",command=tree.yview);scroll.grid(row=1,column=1,sticky="ns");tree.configure(yscrollcommand=scroll.set)
         def refresh():

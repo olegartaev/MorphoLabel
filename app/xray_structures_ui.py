@@ -13,8 +13,8 @@ from PIL import Image, ImageDraw, ImageTk
 
 from app.photo_list import PhotoListCanvas
 from app.ui.icons import CONTROL_ICON_SIZE, WORKFLOW_ICON_SIZE, tk_icon
-from app.ui.design import ElidedLabel, FlowRow, action_icon, structure_prediction_text
-from app.ui.workflow import WorkflowDock
+from app.ui.design import ElidedLabel, FlowRow, action_icon, structure_prediction_text, sidebar_width_for_window, dialog_width_for_columns
+from app.ui.workflow import WorkflowDock, add_command_separator
 from types import SimpleNamespace
 from app.ui.photo_list_panel import DEFAULT_SHOW_EXCLUDED, filtered_photo_indices
 from app.ui.tooltips import Tooltip
@@ -413,28 +413,34 @@ class XRayStructureWorkspace:
         self.repeat_button=self._button(one,"Repeat…",self.open_repeatability,"Open the complete human repeatability workflow.");self.repeat_button.grid(row=1,column=0,columnspan=2,sticky="w",pady=(5,0))
 
         two=workflow.add_card("2. Training data",icon="landmark_training",help_text="Annotation batch: human-verify the main specimen pass for training.")
-        self.batch_summary=ttk.Label(two,text="",style="Muted.TLabel");self.batch_summary.grid(row=0,column=0,columnspan=3,sticky="w")
-        ttk.Label(two,text="Batch").grid(row=1,column=0,sticky="w",pady=(4,0))
-        ttk.Spinbox(two,from_=1,to=500,textvariable=self.batch_size,width=5).grid(row=1,column=1,sticky="w",padx=4,pady=(4,0))
-        self.batch_button=self._button(two,"Start batch",self.start_batch,"Start or continue the existing finite annotation batch.");self.batch_button.grid(row=2,column=0,columnspan=3,sticky="w",pady=(5,0))
+        self.batch_summary=ttk.Label(two,text="",style="Muted.TLabel");self.batch_summary.grid(row=0,column=0,sticky="w")
+        batch_actions=ttk.Frame(two);batch_actions.grid(row=1,column=0,sticky="w",pady=(4,0))
+        ttk.Label(batch_actions,text="Batch").pack(side="left")
+        ttk.Spinbox(batch_actions,from_=1,to=500,textvariable=self.batch_size,width=5).pack(side="left",padx=(4,0))
+        add_command_separator(batch_actions)
+        self.batch_button=self._button(batch_actions,"Start batch",self.start_batch,"Start or continue the existing finite annotation batch.");self.batch_button.pack(side="left")
 
         three=workflow.add_card("3. Train model",icon="landmark_train",help_text="Train from human-verified pass 1. Repeatability passes are excluded.")
         self.training_summary=ttk.Label(three,text="",style="Muted.TLabel");self.training_summary.grid(row=0,column=0,columnspan=2,sticky="w")
-        self.structure_model_label=ElidedLabel(three,text="Active AI: none",style="Muted.TLabel",anchor="w");self.structure_model_label.grid(row=1,column=0,columnspan=2,sticky="ew",pady=(2,0));three.columnconfigure(0,weight=1)
-        self.structure_train_button=self._button(three,"Train",self.train_structure_ai,"Train Structure AI from existing eligible annotations.",style="Primary.TButton");self.structure_train_button.grid(row=2,column=0,sticky="w",pady=(5,0))
-        self._button(three,"Models…",self.manage_structure_models,"Compare and select saved Structure models.").grid(row=2,column=1,sticky="e",padx=(5,0),pady=(5,0))
+        self.structure_model_label=ElidedLabel(three,text="Active AI: none",style="Muted.TLabel",anchor="w");self.structure_model_label.grid(row=1,column=0,columnspan=2,sticky="ew",pady=(1,0));three.columnconfigure(0,weight=1)
+        train_actions=ttk.Frame(three);train_actions.grid(row=2,column=0,columnspan=2,sticky="w",pady=(4,0))
+        self.structure_train_button=self._button(train_actions,"Train",self.train_structure_ai,"Train Structure AI from existing eligible annotations.",style="Primary.TButton");self.structure_train_button.pack(side="left")
+        add_command_separator(train_actions)
+        self._button(train_actions,"Models…",self.manage_structure_models,"Compare and select saved Structure models.").pack(side="left")
 
         four=workflow.add_card("4. Predict & review",icon="landmark_apply",help_text="Predict unverified crops, inspect AI drafts, and check calculated trait values.")
-        batch_row=ttk.Frame(four);batch_row.grid(row=0,column=0,columnspan=2,sticky="ew")
-        ttk.Label(batch_row,text="Next").pack(side="left");ttk.Spinbox(batch_row,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=4)
-        self.predict_current_button=self._button(batch_row,"Predict current",self.predict_current_structure,"Refresh AI suggestions for this specimen using the existing protection and confirmation rules.");self.predict_current_button.pack(side="right")
-        predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,columnspan=2,sticky="ew",pady=(5,0))
+        batch_row=ttk.Frame(four);batch_row.grid(row=0,column=0,sticky="w")
+        ttk.Label(batch_row,text="Next").pack(side="left");ttk.Spinbox(batch_row,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(4,0))
+        predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,sticky="w",pady=(4,0))
+        self.predict_current_button=self._button(predict_actions,"Predict current",self.predict_current_structure,"Refresh AI suggestions for this specimen using the existing protection and confirmation rules.");self.predict_current_button.pack(side="left")
+        add_command_separator(predict_actions)
         self.structure_predict_next_button=self._button(predict_actions,"Predict next",lambda:self.predict_structure_batch(self.prediction_batch_size.get()),"Predict the next eligible specimen crops.");self.structure_predict_next_button.pack(side="left")
         self.structure_predict_all_button=self._button(predict_actions,"Predict all",lambda:self.predict_structure_batch(None),"Predict all eligible unverified crops; preserve verified annotations.");self.structure_predict_all_button.pack(side="left",padx=(4,0))
-        review_actions=ttk.Frame(four);review_actions.grid(row=2,column=0,columnspan=2,sticky="ew",pady=(5,0))
+        review_actions=ttk.Frame(four);review_actions.grid(row=2,column=0,sticky="w",pady=(4,0))
         self.structure_review_button=self._button(review_actions,"Review AI",self.review_structure_ai,"Inspect saved AI drafts before verification.",style="ReviewAction.TButton");self.structure_review_button.pack(side="left")
         self.check_results_button=self._button(review_actions,"Check results…",self.on_check_results,"Review suspicious calculated trait values.",style="ReviewAction.TButton");self.check_results_button.pack(side="left",padx=(4,0))
-        self._button(four,"Next unfinished",self.next_unfinished,"Open the next unfinished specimen.").grid(row=3,column=0,columnspan=2,sticky="w",pady=(5,0))
+        add_command_separator(review_actions)
+        self._button(review_actions,"Next unfinished",self.next_unfinished,"Open the next unfinished specimen.").pack(side="left")
 
     def _show_help(self):
         messagebox.showinfo("Structures — quick guide",
@@ -492,7 +498,7 @@ class XRayStructureWorkspace:
     def _set_initial_sash(self,_event=None):
         try:
             if self.panes.winfo_width()<=1 or getattr(self,"_initial_sash_done",False):return
-            width=max(900,self.panes.winfo_width());self.panes.sashpos(0,max(300,min(400,int(width*.21))))
+            width=max(900,self.panes.winfo_width());self.panes.sashpos(0,sidebar_width_for_window(width,self.specimen_list.winfo_reqwidth()))
             self._initial_sash_done=True
         except Exception:pass
 
@@ -534,10 +540,10 @@ class XRayStructureWorkspace:
             sid=str(structure["id"]);index=structures.index(structure);style=marker_style(settings,structure,index)
             hotkey=shortcuts.get(sid,"");count=counts.get(sid,0);icon=self._marker_button_icon(self.marker_host,structure,style)
             text=f"{hotkey} · {structure['name']}  {count}" if hotkey else f"{structure['name']}  {count}"
-            group=ttk.Frame(self.marker_host,style="WorkflowDock.TFrame");group.pack(side="left",padx=(0,4))
+            group=ttk.Frame(self.marker_host,style="WorkflowDock.TFrame");group.pack(side="left",padx=(0,7))
             button=ttk.Button(
                 group,text=text,image=icon,compound="left",
-                style="Primary.TButton" if sid==self.active_structure_id else "P.TButton",
+                style="MarkerActive.TButton" if sid==self.active_structure_id else "Marker.TButton",
                 state="normal" if self.selected_specimen_id and not self.current_specimen_excluded else "disabled",
                 command=lambda value=sid:self._choose_structure(value),
             )
@@ -546,7 +552,7 @@ class XRayStructureWorkspace:
             self.tip.bind(button,help_text)
             current=str(states.get(sid) or "complete")
             visibility=ttk.Menubutton(
-                group,text=_VISIBILITY_SYMBOLS.get(current,"✓"),width=2,style="P.TButton",
+                group,text=_VISIBILITY_SYMBOLS.get(current,"✓"),width=2,style="MarkerStatus.TMenubutton",
                 state="normal" if self.selected_specimen_id and not self.current_specimen_excluded else "disabled",
             )
             visibility.pack(side="left",padx=(1,0));self._marker_visibility_buttons[sid]=visibility
@@ -1094,18 +1100,21 @@ class XRayStructureWorkspace:
         )
 
     def manage_structure_models(self):
-        dialog=tk.Toplevel(self.root);dialog.title("X-ray structure models");dialog.transient(self.root);dialog.geometry("1020x420")
+        dialog=tk.Toplevel(self.root);dialog.title("X-ray structure models");dialog.transient(self.root)
         frame=ttk.Frame(dialog,padding=12);frame.pack(fill="both",expand=True);frame.columnconfigure(0,weight=1);frame.rowconfigure(1,weight=1)
         ttk.Label(
             frame,text="Portable Structure AI models · import/export contains weights and model metadata, never source X-rays.",
             style="PageSubtitle.TLabel",
         ).grid(row=0,column=0,sticky="w",pady=(0,8))
         columns=("model","date","source","training","quality","active")
-        tree=ttk.Treeview(frame,columns=columns,show="headings",selectmode="browse")
-        for key,title,width in (
+        headers=(
             ("model","Model",205),("date","Created",135),("source","Started from",180),
             ("training","Train / validation",150),("quality","Validation",170),("active","Status",90),
-        ):
+        )
+        model_width=dialog_width_for_columns((item[2] for item in headers),dialog.winfo_screenwidth(),chrome=105)
+        dialog.geometry(f"{model_width}x420");dialog.minsize(min(model_width,900),300)
+        tree=ttk.Treeview(frame,columns=columns,show="headings",selectmode="browse")
+        for key,title,width in headers:
             tree.heading(key,text=title);tree.column(key,width=width,anchor="w",stretch=key in {"model","source","quality"})
         tree.grid(row=1,column=0,sticky="nsew")
         scroll=ttk.Scrollbar(frame,orient="vertical",command=tree.yview);tree.configure(yscrollcommand=scroll.set);scroll.grid(row=1,column=1,sticky="ns")

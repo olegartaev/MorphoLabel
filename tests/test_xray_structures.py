@@ -632,7 +632,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn('self.context_label=ElidedLabel',ui)
         self.assertIn("values['locality']",ui);self.assertIn("values['plate']",ui);self.assertIn("values['specimen']",ui)
         self.assertIn('style="SectionTitle.TLabel"',ui)
-        self.assertIn('width=2,style="P.TButton"',ui)
+        self.assertIn('width=2,style="MarkerStatus.TMenubutton"',ui)
         self.assertNotIn('text="Visibility:"',ui)
         self.assertNotIn("self.visibility_box",ui)
         self.assertNotIn("self.counts_label",ui)

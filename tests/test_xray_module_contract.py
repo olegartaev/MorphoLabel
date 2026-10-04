@@ -59,15 +59,17 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertIn("def _maximize_window",source)
         self.assertIn('self.state("zoomed")',source)
         self.assertIn('self.attributes("-zoomed",True)',source)
-        self.assertIn('self._build();self._load_scheme(self.scheme,self.note);self._maximize_window();self.grab_set()',source)
+        self.assertIn('self._build();self._load_scheme(self.scheme,self.note);self.after_idle(self._maximize_window);self.grab_set()',source)
+        self.assertIn('self.geometry("1320x900")',source)
 
     def test_main_trait_window_is_two_ordered_biological_steps(self):
         source=(Path(__file__).resolve().parents[1]/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         for text in (
-            "First define what you mark on the X-ray. Then build biological traits from those annotations.",
-            "Define what you will mark on the X-ray",
-            "Elements to count","Start / stop marks",
-            "Build biological traits from those annotations",
+            "First define the anatomical marks. Then define the biological traits calculated from them.",
+            "Define the anatomical marks",
+            "Elements to count","Reference marks",
+            "Define biological traits",
+            "Anatomical landmarks used as counting boundaries",
             "Element to count","Stop at","What this rule means",
         ):
             self.assertIn(text,source)

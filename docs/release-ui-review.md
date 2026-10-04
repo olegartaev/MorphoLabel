@@ -26,7 +26,12 @@ should follow only after the demo layout is accepted, using a backup.
 
 ## Presentation changes
 
+- On Windows, standard ttk Windows themes provide the ordinary desktop control chrome; custom blue panel/button skinning is avoided. Semantic warning/review states remain distinct.
 - Shared spacing, typography, active-stage appearance and primary buttons.
+- Workflow cards are vertically compact; commands with different roles are grouped with spacing and vertical separators instead of being scattered across the card.
+- Crop/Structures side lists open wide enough for readable labels while remaining capped near 29% of the workspace, and model-list dialogs expand to expose their normal columns when screen width allows.
+- The current-project block is visually distinct from project settings and uses a concise Open action.
+- The Traits editor opens large enough to expose both biological-definition steps when possible, otherwise maximizes, and uses explicit anatomical/counting language for reference marks.
 - One original drawn icon family; existing scientific marker symbols remain.
 - Common image context, actions, image canvas and workflow organization.
 - Wide windows show workflow cards together. Compact windows show stage tabs;
@@ -61,7 +66,9 @@ Review at normal and compact widths and the Windows display scaling you use:
    assign a reference role, Verify, and inspect model/time caption.
 5. Previous does not confirm. Verify & Next rejects incomplete annotations.
    Close queue removes navigation and keeps annotations.
-6. About identifies core and module authors separately.
+6. Traits opens with both definition steps reachable; the reference-mark wording is biologically clear and no essential controls are clipped.
+7. Model-list windows show all normal columns when the display is wide enough; Crop/Structures side lists are readable without taking over the image canvas.
+8. About identifies core and module authors separately.
 
 Automated presentation tests are in `tests/test_release_ui_presentation.py`.
 Tk layout tests require a display and run against real project APIs. Linux

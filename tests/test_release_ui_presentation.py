@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 from PIL import Image
 
-from app.ui.design import apply_styles, structure_prediction_text, prediction_stamp
+from app.ui.design import apply_styles, structure_prediction_text, prediction_stamp, sidebar_width_for_window, dialog_width_for_columns
 from app.ui.shell import ProductionShell
 from app.xray_crop import crop_from_geometry
 from app.xray_crop_ui import PlateCropEditSession, XRayCropWorkspace
@@ -117,6 +117,14 @@ class PresentationProjectTests(_ProjectFixture,unittest.TestCase):
         self.assertIn("recorded-crop-model",text);self.assertIn("2024-05-06 07:08",text)
         self.assertEqual(before,self.project.db_path.read_bytes())
 
+    def test_release_layout_widths_keep_lists_readable_without_taking_over_the_canvas(self):
+        self.assertEqual(284,sidebar_width_for_window(980,320))
+        self.assertEqual(442,sidebar_width_for_window(1640,320))
+        self.assertLessEqual(sidebar_width_for_window(1920,600),480)
+        crop_model_columns=(165,130,165,130,150,170,80)
+        self.assertGreaterEqual(dialog_width_for_columns(crop_model_columns,1456,chrome=105),sum(crop_model_columns)+105)
+        self.assertLessEqual(dialog_width_for_columns(crop_model_columns,1024,chrome=105),944)
+
     def test_preview_projects_have_real_crop_frames_and_preserve_review_edits(self):
         from tools.design_preview import build_preview_projects
         from app.landmark_frames import crop_frame_record
@@ -167,6 +175,9 @@ class PresentationTkTests(_ProjectFixture,unittest.TestCase):
         for button in workspace._marker_buttons.values():
             # Marker entries are dictionaries containing their button/state widgets.
             self.assert_visible(button["button"] if isinstance(button,dict) else button)
+        for structure_id,button in workspace._marker_buttons.items():
+            visibility=workspace._marker_visibility_buttons[structure_id]
+            self.assertLessEqual(abs(button.winfo_height()-visibility.winfo_height()),4)
         dock=workspace.workflow_dock;self.assertEqual(1,dock._last_columns)
         for index,tab in enumerate(dock._tabs):
             tab.invoke();self.pump()
