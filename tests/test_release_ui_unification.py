@@ -88,6 +88,17 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         banner=structures[structures.index("def _refresh_result_review_banner"):structures.index("def _move_result_review")]
         self.assertNotIn("\\n{item.get('top_reason')",banner)
 
+    def test_queue_center_close_hides_session_navigation_queues(self):
+        shell=source("app/ui/shell.py")
+        self.assertIn('closed.add((str(project.root),"landmarks","landmark_ai_review",str(batch_id or "")))',shell)
+        self.assertIn('closed_key in self.__dict__.get("_closed_queue_navigation",set())',shell)
+        self.assertIn('workflow_ids and not workflow_closed',shell)
+
+    def test_xray_queue_navigation_uses_shared_nav_button_styles(self):
+        structures=source("app/xray_structures_ui.py")
+        self.assertGreaterEqual(structures.count('style="Nav.TButton"'),2)
+        self.assertIn('style="NavPrimary.TButton"',structures)
+
     def test_traits_editor_scrolls_and_has_no_dead_appearance_button_reference(self):
         module=source("app/modules/xray_counts.py")
         self.assertIn("_trait_scroll_canvas",module)

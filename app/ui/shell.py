@@ -537,6 +537,8 @@ class ProductionShell(tk.Tk):
         elif kind=="landmark_ai_review":
             from app.landmark_ai_review import deactivate_review_session
             deactivate_review_session(project,batch_id)
+            closed=self.__dict__.setdefault("_closed_queue_navigation",set())
+            closed.add((str(project.root),"landmarks","landmark_ai_review",str(batch_id or "")))
         elif kind=="landmark_suspicious":
             from app.landmark_suspicious_review import clear
             clear(project)
@@ -572,6 +574,10 @@ class ProductionShell(tk.Tk):
         from app.landmark_ai_review import pending_review_session,review_summary
         review=pending_review_session(project)
         if review:
+            batch_id=str(review.get("batch_id") or "")
+            closed_key=(str(project.root),"landmarks","landmark_ai_review",batch_id)
+            if closed_key in self.__dict__.get("_closed_queue_navigation",set()):review=None
+        if review:
             summary=review_summary(project,review,review.get("current_image_id")) or {}
             batch_id=review.get("batch_id")
             entries.append({
@@ -594,7 +600,8 @@ class ProductionShell(tk.Tk):
         workflow=load_state(project);stage=workflow.get("stage")
         key="initial_image_ids" if stage=="INITIAL_TRAINING" else "improvement_image_ids" if stage=="MODEL_IMPROVEMENT" else None
         workflow_ids=[str(v) for v in workflow.get(key,())] if key else []
-        if workflow_ids:
+        workflow_closed=(str(project.root),"landmarks","landmark",None) in self.__dict__.get("_closed_queue_navigation",set())
+        if workflow_ids and not workflow_closed:
             target=str(workflow.get("current_image_id") or workflow_ids[0])
             entries.append({
                 "title":"Landmark training batch",
