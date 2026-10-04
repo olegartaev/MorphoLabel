@@ -429,7 +429,7 @@ class XRayCropWorkspace:
         ttk.Label(batch_row,text="Next batch").pack(side="left");ttk.Spinbox(batch_row,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(4,0))
         ttk.Label(batch_row,text="plates",style="Muted.TLabel").pack(side="left",padx=(4,0))
         predict_actions=ttk.Frame(three);predict_actions.grid(row=1,column=0,sticky="w",pady=(4,0))
-        self.predict_current_button=self._button(predict_actions,"Predict current",self.predict_current_plate,"Apply Crop AI to the selected plate. Human-reviewed plates stay protected and are never overwritten.");self.predict_current_button.pack(side="left")
+        self.predict_current_button=self._button(predict_actions,"Predict current",self.predict_current_plate,"Apply Crop AI to the selected plate. Human-reviewed plates are protected and are never overwritten.");self.predict_current_button.pack(side="left")
         add_command_separator(predict_actions)
         self.predict_next_button=self._button(predict_actions,"Predict next batch",lambda:self.predict_batch(self.prediction_batch_size.get()),"Predict the next eligible plates.",style="Primary.TButton");self.predict_next_button.pack(side="left")
         self.predict_all_button=self._button(predict_actions,"Predict all",lambda:self.predict_batch(None),"Predict every remaining eligible plate.");self.predict_all_button.pack(side="left",padx=(4,0))

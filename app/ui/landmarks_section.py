@@ -216,7 +216,7 @@ class LandmarksSection(SectionView):
   model_row=ttk.Frame(three);model_row.grid(row=0,column=0,sticky='ew');three.columnconfigure(0,weight=1)
   ttk.Label(model_row,text=active_warning or f"Active: {active.get('model_id','None')}",style='StatusChip.TLabel').pack(side='left')
   add_command_separator(model_row)
-  ttk.Label(model_row,text='From').pack(side='left')
+  ttk.Label(model_row,text="From").pack(side="left")
   parent_box=ttk.Combobox(model_row,textvariable=parent_choice,values=tuple(item['model_id'] for item in parents) or ('Bootstrap / first model',),width=17,state='readonly')
   parent_box.pack(side='left',padx=(4,0))
   parent_box.bind('<<ComboboxSelected>>',lambda _event:self.context.project.set_ui_state('landmark_training_parent_model_id',None if parent_choice.get()=='Bootstrap / first model' else parent_choice.get()))
