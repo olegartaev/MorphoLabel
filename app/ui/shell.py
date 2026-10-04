@@ -17,7 +17,7 @@ from .tooltips import Tooltip
 from .icons import tk_icon, TOPBAR_ICON_SIZE, CONTROL_ICON_SIZE
 from .dialogs import center, info, install_auto_center
 from .photo_list_panel import PhotoListPanel
-from .design import ElidedLabel, build_context_row, sidebar_width_for_window, dialog_width_for_columns
+from .design import build_context_row, sidebar_width_for_window, dialog_width_for_columns
 from .landmark_sidebar import LandmarkSidebar
 from .preferences import last_project, remember_project
 from .project_section import ProjectSection
