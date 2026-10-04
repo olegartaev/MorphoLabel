@@ -102,12 +102,15 @@ def dump_threads(image_id, reason):
  log(image_id, "hang_trace", "START", detail=f"reason={reason}")
  with _IO_LOCK:
   for target in _log_paths():
-   target.parent.mkdir(parents=True, exist_ok=True)
-   _rotate_log(target)
-   with target.open("a", encoding="utf-8") as handle:
-    handle.write(f"\n=== {_stamp()} image_id={image_id} reason={reason} ===\n")
-    faulthandler.dump_traceback(file=handle, all_threads=True)
-    handle.flush()
+   try:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _rotate_log(target)
+    with target.open("a", encoding="utf-8") as handle:
+     handle.write(f"\n=== {_stamp()} image_id={image_id} reason={reason} ===\n")
+     faulthandler.dump_traceback(file=handle, all_threads=True)
+     handle.flush()
+   except OSError:
+    continue
  log(image_id, "hang_trace", "END")
 
 
