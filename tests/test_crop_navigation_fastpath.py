@@ -72,6 +72,24 @@ class CropNavigationFastPathTests(unittest.TestCase):
         controller._cache_lock = threading.Lock()
         return controller
 
+    def test_decoded_crop_cache_survives_section_widget_recreation_for_same_project(self):
+        context=SimpleNamespace(project=SimpleNamespace(root=Path("same-project")))
+        first=object.__new__(CropCanvasController)
+        project_key=str(context.project.root)
+        context._crop_navigation_cache_project=project_key
+        context._crop_navigation_image_cache=OrderedDict()
+        context._crop_navigation_cache_lock=threading.Lock()
+        context._crop_navigation_cache_budget=10_000_000
+        first._image_cache=context._crop_navigation_image_cache;first._cache_lock=context._crop_navigation_cache_lock
+        first._image_cache_budget=context._crop_navigation_cache_budget;first._image_cache_bytes=0
+        row={"image_id":"a","file_size":10,"mtime_ns":20,"source_sha256":"x"}
+        cached=first._cache_put(row,Image.new("RGB",(100,60)),Image.new("RGB",(50,30)))
+        second=object.__new__(CropCanvasController)
+        second._image_cache=context._crop_navigation_image_cache;second._cache_lock=context._crop_navigation_cache_lock
+        second._image_cache_budget=context._crop_navigation_cache_budget
+        second._image_cache_bytes=sum(int(item.get("bytes") or 0) for item in second._image_cache.values())
+        self.assertIs(cached,second._cache_get(row))
+
     def test_decoded_cache_reuses_matching_source_and_invalidates_changed_source(self):
         controller = self._controller()
         row = {"image_id": "a", "file_size": 10, "mtime_ns": 20, "source_sha256": "x"}

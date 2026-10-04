@@ -459,6 +459,9 @@ class ProductionShell(tk.Tk):
         self._status(); self._sidebar(sidebar_host); self._restore_sidebar_sash()
         self.section_host=ttk.Frame(self.main); self.section_host.grid(row=1,column=0,sticky="nsew")
         self._section()
+        if self._align_selected_top_once:
+            self._align_selected_top_once=False
+            self.after_idle(self._align_selected_after_layout)
 
     def _nav(self):
         row=ttk.Frame(self.root,style="Topbar.TFrame"); row.grid(row=0,column=0,sticky="ew",pady=(0,4))
@@ -717,11 +720,6 @@ class ProductionShell(tk.Tk):
             self.photo_panel=PhotoListPanel(parent,self.context,self._selected_image,self.tip,on_exclusion=self._photo_exclusion_changed)
         self.photo_panel.pack(fill="both",expand=True)
         self.photo_panel.refresh()
-        if self._align_selected_top_once:
-            target=getattr(self.photo_panel,"photos",self.photo_panel)
-            sync=getattr(target,"sync_current",None)
-            if sync:sync(reveal=True,align_top=True)
-            self._align_selected_top_once=False
 
     def _restore_sidebar_sash(self, attempt=0):
         panes=getattr(self,"workspace_panes",None)
@@ -778,6 +776,13 @@ class ProductionShell(tk.Tk):
         display_labels={"Incomplete":"Unresolved"};counts=self._section_counts()
         for key,label in getattr(self,"status_counts",{}).items():
             label.configure(text=f"{display_labels.get(key,key)}: {counts.get(key,0)}")
+
+    def _align_selected_after_layout(self):
+        """Apply section-switch alignment only after panes and section geometry have settled."""
+        if not self.winfo_exists():return False
+        try:self.update_idletasks()
+        except tk.TclError:return False
+        return self._sync_photo_panel_current(align_top=True,refresh_rows=False)
 
     def _sync_photo_panel_current(self, *, align_top=False, refresh_rows=True):
         panel=getattr(self,"photo_panel",None)

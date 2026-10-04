@@ -251,6 +251,16 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn("self.project.activate_structure_model(model_id)",structures)
         self.assertIn("structure_schema_digest(self.project.scheme)",structures)
 
+    def test_section_switch_alignment_runs_after_section_layout_is_built(self):
+        shell=source("app/ui/shell.py")
+        sidebar=shell[shell.index("    def _sidebar("):shell.index("    def _restore_sidebar_sash",shell.index("    def _sidebar("))]
+        self.assertNotIn("_align_selected_top_once",sidebar)
+        render=shell[shell.index("    def render(self):"):shell.index("    def _clear(",shell.index("    def render(self):"))]
+        self.assertIn("self._section()",render)
+        self.assertIn("self.after_idle(self._align_selected_after_layout)",render)
+        self.assertLess(render.index("self._section()"),render.index("self.after_idle(self._align_selected_after_layout)"))
+        self.assertIn("update_idletasks()",shell[shell.index("def _align_selected_after_layout"):shell.index("def _sync_photo_panel_current")])
+
     def test_modules_is_visually_separate_and_align_top_has_no_previous_row_peek(self):
         design=source("app/ui/design.py");shell=source("app/ui/shell.py");xray=source("app/modules/xray_counts.py");photo_list=source("app/photo_list.py")
         self.assertIn('style.configure("Modules.TButton"',design)

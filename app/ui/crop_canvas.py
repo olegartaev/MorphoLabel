@@ -52,7 +52,18 @@ def crop_frame_polygon(model):
 
 class CropCanvasController:
  def __init__(self,parent,context,changed):
-  self.parent,self.context,self.changed=parent,context,changed;self.canvas=tk.Canvas(parent,background='#202020',highlightthickness=0);self.canvas.pack(fill='both',expand=True);self.canvas.bind('<Configure>',self._on_configure);self.canvas.bind('<Button-1>',self.down);self.canvas.bind('<B1-Motion>',self.drag);self.canvas.bind('<ButtonRelease-1>',self.up);self.base=self.photo=self.model=None;self.requested_image_id=self.displayed_image_id=None;self.scale=1.;self.offset=(0,0);self.viewport=CropViewport(1.,0.,0.,1,1);self.mode=self.anchor=self.initial=None;self.loading=False;self._load_token=0;self.requested_generation=0;self.requested_request_epoch=0;self.on_image_ready=None;self._poll_job=self._rotation_render_job=None;self._loading_pulse_job=None;self._loading_pulse_step=0;self._closed=False;self._cancel=threading.Event();self._worker=None;self._display_base=None;self._display_source=None;self._display_key=None;self._raster_key=None;self._current_cache_entry=None;self._image_cache=OrderedDict();self._image_cache_bytes=0;self._image_cache_budget=crop_navigation_cache_budget();self._cache_lock=threading.Lock();self._prefetch_thread=None;self.photo_creations=0;self.preview_rotate_source_sizes=[];self.context_message="";self.status_callback=None;self.canvas.bind('<Destroy>',self._destroy,add='+');self.load_current()
+  self.parent,self.context,self.changed=parent,context,changed;self.canvas=tk.Canvas(parent,background='#202020',highlightthickness=0);self.canvas.pack(fill='both',expand=True);self.canvas.bind('<Configure>',self._on_configure);self.canvas.bind('<Button-1>',self.down);self.canvas.bind('<B1-Motion>',self.drag);self.canvas.bind('<ButtonRelease-1>',self.up);self.base=self.photo=self.model=None;self.requested_image_id=self.displayed_image_id=None;self.scale=1.;self.offset=(0,0);self.viewport=CropViewport(1.,0.,0.,1,1);self.mode=self.anchor=self.initial=None;self.loading=False;self._load_token=0;self.requested_generation=0;self.requested_request_epoch=0;self.on_image_ready=None;self._poll_job=self._rotation_render_job=None;self._loading_pulse_job=None;self._loading_pulse_step=0;self._closed=False;self._cancel=threading.Event();self._worker=None;self._display_base=None;self._display_source=None;self._display_key=None;self._raster_key=None;self._current_cache_entry=None
+  project_key=str(getattr(getattr(context,"project",None),"root",""))
+  if getattr(context,"_crop_navigation_cache_project",None)!=project_key:
+   context._crop_navigation_cache_project=project_key
+   context._crop_navigation_image_cache=OrderedDict()
+   context._crop_navigation_cache_lock=threading.Lock()
+   context._crop_navigation_cache_budget=crop_navigation_cache_budget()
+  self._image_cache=context._crop_navigation_image_cache
+  self._cache_lock=context._crop_navigation_cache_lock
+  self._image_cache_budget=int(context._crop_navigation_cache_budget)
+  self._image_cache_bytes=sum(int(item.get("bytes") or 0) for item in self._image_cache.values())
+  self._prefetch_thread=None;self.photo_creations=0;self.preview_rotate_source_sizes=[];self.context_message="";self.status_callback=None;self.canvas.bind('<Destroy>',self._destroy,add='+');self.load_current()
  def _destroy(self,event):
   if event.widget is self.canvas:self._closed=True;self._cancel.set();self._load_token+=1
   if event.widget is self.canvas:
@@ -69,21 +80,22 @@ class CropCanvasController:
    entry=self._image_cache.get(image_id)
    if entry is None:return None
    if entry.get("source_key")!=source_key:
-    self._image_cache_bytes-=int(entry.get("bytes") or 0);self._image_cache.pop(image_id,None);return None
+    self._image_cache.pop(image_id,None);self._image_cache_bytes=sum(int(item.get("bytes") or 0) for item in self._image_cache.values());return None
    self._image_cache.move_to_end(image_id);return entry
  def _cache_put(self,row,base,proxy):
   image_id=str(row.get("image_id") or "")
   if not image_id:return None
   size=_image_bytes(base)+_image_bytes(proxy);entry={"base":base,"proxy":proxy,"source_key":_row_source_key(row),"bytes":size,"display":None,"display_dimensions":None}
   with self._cache_lock:
-   old=self._image_cache.pop(image_id,None)
-   if old:self._image_cache_bytes-=int(old.get("bytes") or 0)
-   self._image_cache[image_id]=entry;self._image_cache_bytes+=size
-   while self._image_cache_bytes>self._image_cache_budget and len(self._image_cache)>1:
+   self._image_cache.pop(image_id,None)
+   self._image_cache[image_id]=entry
+   total=sum(int(item.get("bytes") or 0) for item in self._image_cache.values())
+   while total>self._image_cache_budget and len(self._image_cache)>1:
     old_id,old_entry=self._image_cache.popitem(last=False)
     if old_id==image_id:
      self._image_cache[old_id]=old_entry;break
-    self._image_cache_bytes-=int(old_entry.get("bytes") or 0)
+    total-=int(old_entry.get("bytes") or 0)
+   self._image_cache_bytes=sum(int(item.get("bytes") or 0) for item in self._image_cache.values())
   return entry
  def _crop_state(self,project,image_id,base):
   active=project.get_ui_state("crop_active_batch",{});record=project.crop_record(image_id) or {};proposal=(active.get("proposals",{}) or {}).get(image_id)
