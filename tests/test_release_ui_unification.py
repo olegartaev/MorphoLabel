@@ -111,7 +111,8 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn('project.set_ui_state("crop_active_batch",{})',shell)
         self.assertIn('project.set_ui_state("landmark_training_queue_closed"',shell)
         self.assertIn("def close_review_session(project,batch_id=None):",review)
-        self.assertIn('"complete":True',review)
+        self.assertIn('"closed":True',review)
+        self.assertIn('not item.get("closed")',review)
 
     def test_xray_queue_buttons_are_grouped_right_and_close_reveals_any_remaining_queue(self):
         structures=source("app/xray_structures_ui.py")
