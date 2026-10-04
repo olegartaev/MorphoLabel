@@ -2,14 +2,11 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 import random
 import shutil
 import subprocess
 import tempfile
-
-from PIL import Image
 
 from .ai_delivery import ensure_ai_runtime
 from .ai_hardware import get_hardware_profile, get_inference_config, get_training_config, is_cuda_oom
