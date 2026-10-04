@@ -113,6 +113,14 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn("def close_review_session(project,batch_id=None):",review)
         self.assertIn('"complete":True',review)
 
+    def test_xray_queue_buttons_are_grouped_right_and_close_reveals_any_remaining_queue(self):
+        structures=source("app/xray_structures_ui.py")
+        self.assertIn('review_actions=ttk.Frame(self.review_queue_banner',structures)
+        self.assertIn('review_actions.pack(side="right")',structures)
+        self.assertIn('annotation_actions=ttk.Frame(self.annotation_queue_banner',structures)
+        self.assertIn('annotation_actions.pack(side="right")',structures)
+        self.assertIn('clear_result_review_queue(self.project);self._refresh_workflow()',structures)
+
     def test_xray_queue_navigation_uses_shared_nav_button_styles(self):
         structures=source("app/xray_structures_ui.py")
         self.assertGreaterEqual(structures.count('style="Nav.TButton"'),2)
