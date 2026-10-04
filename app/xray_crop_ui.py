@@ -351,7 +351,7 @@ class XRayCropWorkspace:
 
         header=ttk.Frame(main);header.grid(row=0,column=0,sticky="ew",pady=(0,3));header.columnconfigure(0,weight=1)
         context_fields=ttk.Frame(header);context_fields.grid(row=0,column=0,sticky="ew",padx=6,pady=(1,3));context_fields.columnconfigure(3,weight=1)
-        ttk.Label(context_fields,text="Sample:",style="ContextKey.TLabel").grid(row=0,column=0,sticky="w")
+        ttk.Label(context_fields,text="Locality:",style="ContextKey.TLabel").grid(row=0,column=0,sticky="w")
         self.sample_value=ttk.Label(context_fields,text="—",style="ContextValue.TLabel");self.sample_value.grid(row=0,column=1,sticky="w",padx=(4,14))
         ttk.Label(context_fields,text="Plate:",style="ContextKey.TLabel").grid(row=0,column=2,sticky="w")
         self.context_label=ElidedLabel(context_fields,text="—",style="ContextValue.TLabel",anchor="w");self.context_label.grid(row=0,column=3,sticky="ew",padx=(4,14))
@@ -411,10 +411,15 @@ class XRayCropWorkspace:
         add_command_separator(batch_actions)
         self.training_button=self._button(batch_actions,"Start first batch",self.start_training_batch,"Prepare diverse plates for manual crop and orientation correction.");self.training_button.pack(side="left")
         two=workflow.add_card("2. Train model",icon="crop_train",help_text="Train crop detection and head / ventral orientation from verified examples.")
-        two.columnconfigure(0,weight=1)
-        self.model_label=ElidedLabel(two,text="Active: none",style="StatusChip.TLabel",anchor="w");self.model_label.grid(row=0,column=0,sticky="ew")
-        self.training_count_label=ttk.Label(two,text="Ready: 0",style="Muted.TLabel");self.training_count_label.grid(row=0,column=1,sticky="e",padx=(10,0))
-        train_actions=ttk.Frame(two);train_actions.grid(row=1,column=0,columnspan=2,sticky="w",pady=(4,0))
+        model_row=ttk.Frame(two);model_row.grid(row=0,column=0,sticky="ew");two.columnconfigure(0,weight=1)
+        self.model_label=ElidedLabel(model_row,text="Active: none",style="StatusChip.TLabel",anchor="w",width=23);self.model_label.pack(side="left")
+        add_command_separator(model_row)
+        ttk.Label(model_row,text="From").pack(side="left")
+        self.training_parent_choice=tk.StringVar(master=two,value="RTMDet pretrained")
+        self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,values=("RTMDet pretrained",),width=22,state="readonly")
+        self.training_parent_box.pack(side="left",padx=(4,0))
+        self.training_count_label=ttk.Label(model_row,text="Ready: 0",style="Muted.TLabel");self.training_count_label.pack(side="right",padx=(10,0))
+        train_actions=ttk.Frame(two);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
         self.train_button=self._button(train_actions,"Train",self.train_model,"Train crop detection and orientation using existing eligible examples.",style="Primary.TButton");self.train_button.pack(side="left")
         add_command_separator(train_actions)
         self.models_button=self._button(train_actions,"Models…",self.manage_models,"Compare and select saved Crop models.");self.models_button.pack(side="left")
@@ -424,7 +429,7 @@ class XRayCropWorkspace:
         ttk.Label(batch_row,text="Next batch").pack(side="left");ttk.Spinbox(batch_row,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(4,0))
         ttk.Label(batch_row,text="plates",style="Muted.TLabel").pack(side="left",padx=(4,0))
         predict_actions=ttk.Frame(three);predict_actions.grid(row=1,column=0,sticky="w",pady=(4,0))
-        self.predict_current_button=self._button(predict_actions,"Predict current",self.predict_current_plate,"Predict crops for this eligible unverified plate. Human-reviewed plates are protected.");self.predict_current_button.pack(side="left")
+        self.predict_current_button=self._button(predict_actions,"Predict current",self.predict_current_plate,"Apply Crop AI to the selected plate. Human-reviewed plates stay protected and are never overwritten.");self.predict_current_button.pack(side="left")
         add_command_separator(predict_actions)
         self.predict_next_button=self._button(predict_actions,"Predict next batch",lambda:self.predict_batch(self.prediction_batch_size.get()),"Predict the next eligible plates.",style="Primary.TButton");self.predict_next_button.pack(side="left")
         self.predict_all_button=self._button(predict_actions,"Predict all",lambda:self.predict_batch(None),"Predict every remaining eligible plate.");self.predict_all_button.pack(side="left",padx=(4,0))
@@ -522,7 +527,10 @@ class XRayCropWorkspace:
         status=self.project.crop_workspace_status();model=self.project.active_crop_model()
         self.training_button.configure(text="Start first batch" if not status["training_plates"] else "Add next batch")
         model_metrics=(model or {}).get("metrics") or {};orientation_mark=" · orientation ✓" if model_metrics.get("orientation/enabled") else ""
-        self.model_label.configure(text=f"Active: {(model or {}).get('model_id') or 'none'}{orientation_mark}")
+        active_id=(model or {}).get("model_id") or "none"
+        self.model_label.configure(text=f"Active: {active_id}{orientation_mark}")
+        parent_label=(model or {}).get("model_id") or "RTMDet pretrained"
+        self.training_parent_choice.set(parent_label);self.training_parent_box.configure(values=(parent_label,))
         self.training_count_label.configure(text=f"Ready: {status['training_plates']} plates · {status['training_specimens']} crops · orientation {status['orientation_training']}")
         self.predict_status_labels["unresolved"].configure(text=f"Unresolved: {status['prediction_candidates']}")
         self.predict_status_labels["review"].configure(text=f"Review: {status['ai_pending_plates']}")
@@ -530,15 +538,21 @@ class XRayCropWorkspace:
         next_state="normal" if model and status["prediction_candidates"] else "disabled"
         all_state="normal" if model and status["prediction_candidates"] else "disabled"
         self.predict_next_button.configure(state=next_state);self.predict_all_button.configure(state=all_state)
+        self._refresh_predict_current_state(model)
+        self.review_button.configure(state="normal" if status["ai_pending_plates"] else "disabled")
+        self._refresh_flip_controls();self._refresh_batch_banner();self._update_batch_controls()
+
+    def _refresh_predict_current_state(self,model=None):
+        model=model or self.project.active_crop_model()
         current_ok=False
         if model and self.selected_image_id:
             try:
                 image=self.project.source_image(self.selected_image_id)
-                current_ok=not bool(image.get("excluded")) and not bool(image.get("crop_reviewed"))
-            except KeyError:current_ok=False
+                current_ok=not bool(image.get("excluded"))
+            except KeyError:
+                current_ok=False
         self.predict_current_button.configure(state="normal" if current_ok else "disabled")
-        self.review_button.configure(state="normal" if status["ai_pending_plates"] else "disabled")
-        self._refresh_flip_controls();self._refresh_batch_banner();self._update_batch_controls()
+        return current_ok
 
     def _refresh_batch_banner(self):
         state=self._batch();ids=list(state.get("ids") or [])
@@ -587,7 +601,7 @@ class XRayCropWorkspace:
         self.zoom=1.0;self.pan=None;self.pan_drag=None
         try:preview,_scale,original_size=display_preview(self.project.source_image_path(image_id),1400)
         except Exception as exc:messagebox.showerror("X-ray Crops",str(exc),parent=self.root);return
-        self.preview=preview;self.preview_original_size=original_size;self._photo_key=None;self._set_save_status();self._draw();self._refresh_flip_controls();self._refresh_batch_banner();self._update_batch_controls();self._notify_selection();self._refresh_plate_context()
+        self.preview=preview;self.preview_original_size=original_size;self._photo_key=None;self._set_save_status();self._draw();self._refresh_flip_controls();self._refresh_batch_banner();self._update_batch_controls();self._notify_selection();self._refresh_plate_context();self._refresh_predict_current_state()
 
     def _refresh_plate_context(self):
         if not self.selected_image_id:return

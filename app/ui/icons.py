@@ -10,7 +10,7 @@ BLUE='#246b9b'; RED='#bd4850'; GREEN='#27815c'; YELLOW='#bc872a'
 ICON_NAMES=frozenset({
     'modules','project','crop','landmarks','structures','measurements','export',
     'missing','delete','clear','clear_type','verify','display','exclude','restore','review_worst','complex_qc',
-    'help','models','train','predict','batch_add','predict_current','predict_batch','predict_all','accept_all','previous','next','close','flip_horizontal','flip_vertical',
+    'help','models','queues','train','predict','batch_add','predict_current','predict_batch','predict_all','accept_all','previous','next','close','flip_horizontal','flip_vertical',
     'crop_training','crop_train','crop_apply','landmark_repeat','landmark_training','landmark_train','landmark_apply',
     'measurement_calibrate','measurement_define','measurement_export','export_landmarks','export_measurements',
 })
@@ -120,6 +120,13 @@ def render_icon(name: str, size: int=TOPBAR_ICON_SIZE):
     elif name=='models':
         rect((7,4,27,23),fill=PALE,color=MUTED);rect((4,9,24,28),fill='#f8fbfd')
         for y,n in ((15,12),(20,18),(25,15)):line([(8,y),(n,y)],BLUE,1.8)
+    elif name=='queues':
+        rect((9,4,27,19),fill=PALE,color=MUTED,width=1.2,r=2)
+        rect((6,8,24,23),fill='#f4f8fb',color=MUTED,width=1.2,r=2)
+        rect((3,12,21,27),fill='#ffffff',color=OUTLINE,width=1.5,r=2)
+        dot(8,18,BLUE,1.7);line([(12,18),(18,18)],MUTED,1.4)
+        dot(8,23,GREEN,1.7);line([(12,23),(18,23)],MUTED,1.4)
+        arrow((21,27),(29,27),BLUE,1.8)
     elif name in {'train','crop_train','landmark_train'}:chip()
     elif name=='batch_add':
         batch_stack(BLUE)

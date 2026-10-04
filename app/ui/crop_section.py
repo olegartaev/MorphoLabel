@@ -20,7 +20,6 @@ class CropSection(SectionView):
   actions=ttk.Frame(header,style="Toolbar.TFrame");actions.pack(fill="x")
   self.button(actions,"Apply crop",self.apply_current,"Save this reversible crop and stay on the current image.",style="Primary.TButton",icon="verify").pack(side="left")
   self.crop_qc_label=ttk.Label(actions,text="",style="Muted.TLabel");self.crop_qc_label.pack(side="left",padx=10)
-  self.attention_banner(header,self.shell.open_landmark_attention,stages={"crop"})
 
   self.canvas_frame=ttk.Frame(panel);self.canvas_frame.grid(row=1,column=0,sticky="nsew")
   self.canvas=CropCanvasController(self.canvas_frame,self.context,self.refresh);self.canvas.on_image_ready=self._crop_ready
@@ -42,10 +41,14 @@ class CropSection(SectionView):
   self.button(batch_actions,"Start first batch" if first else "Add next batch",lambda:self.batch(batch.get()),"Create a persistent set of real images for manual crop correction.").pack(side="left")
 
   two=dock.add_card("2. Train model",icon="crop_train",help_text="Train a new Crop model from all human-confirmed Crop examples.")
-  two.columnconfigure(0,weight=1)
-  ttk.Label(two,text=f"Active: {current_label(self.context.project)}",style="Muted.TLabel").grid(row=0,column=0,sticky="w")
-  ttk.Label(two,text=f"Ready: {len(training_rows)}",style="Muted.TLabel").grid(row=0,column=1,sticky="e",padx=(10,0))
-  train_actions=ttk.Frame(two);train_actions.grid(row=1,column=0,columnspan=2,sticky="w",pady=(4,0))
+  model_row=ttk.Frame(two);model_row.grid(row=0,column=0,sticky="ew");two.columnconfigure(0,weight=1)
+  ttk.Label(model_row,text=f"Active: {current_label(self.context.project)}",style="StatusChip.TLabel").pack(side="left")
+  add_command_separator(model_row)
+  ttk.Label(model_row,text="From").pack(side="left")
+  source_choice=tk.StringVar(master=panel,value="Verified Crop data")
+  ttk.Combobox(model_row,textvariable=source_choice,values=("Verified Crop data",),width=18,state="readonly").pack(side="left",padx=(4,0))
+  ttk.Label(model_row,text=f"Ready: {len(training_rows)}",style="Muted.TLabel").pack(side="right",padx=(10,0))
+  train_actions=ttk.Frame(two);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
   self.button(train_actions,"Train",self.train,"Train the Crop model from all verified examples.",style="Primary.TButton").pack(side="left")
   add_command_separator(train_actions)
   self.button(train_actions,"Models…",lambda:self.shell.show_models('crop'),"Compare and select saved Crop model versions.").pack(side="left")

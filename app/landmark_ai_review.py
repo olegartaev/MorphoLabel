@@ -91,6 +91,12 @@ def activate_review_session(project,batch_id=None):
   position=target
  session["active"]=True;session["current_position"]=position;session["current_image_id"]=ids[position]
  _save(project,doc);return dict(session)
+def deactivate_review_session(project,batch_id=None):
+ doc=_load(project)
+ session=_session(doc,batch_id) if batch_id else next((item for item in doc.get("sessions",()) if item.get("active") and not item.get("complete")),None)
+ if session is None:return None
+ session["active"]=False;_save(project,doc);return dict(session)
+
 def review_summary(project,session=None,current_id=None):
  session=session or active_review_session(project)
  if not session:return None

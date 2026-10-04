@@ -417,10 +417,10 @@ class XRayStructureWorkspace:
         adapter=SimpleNamespace(ui_icon=lambda name,size:self._icon(main,name,size),tip=self.tip)
         workflow=WorkflowDock(main,adapter,help_factory=lambda host:self._button(host,"Help",self._show_help,"Open the Structures guide."))
         workflow.grid(row=5,column=0,sticky="ew",pady=(2,0));self.workflow_dock=workflow
-        one=workflow.add_card("1. Repeatability",icon="landmark_repeat",help_text="Measure the same control specimens twice in independent annotation passes.")
+        one=workflow.add_card("1. Human Repeatability",icon="landmark_repeat",help_text="Measure the same control specimens twice in independent annotation passes.")
         self.repeat_pool_label=ttk.Label(one,text="",style="Muted.TLabel");self.repeat_pool_label.grid(row=0,column=0,sticky="w")
         self.repeat_pass_label=ttk.Label(one,text="",style="Muted.TLabel");self.repeat_pass_label.grid(row=0,column=1,sticky="e",padx=(8,0));one.columnconfigure(1,weight=1)
-        self.repeat_button=self._button(one,"Repeat…",self.open_repeatability,"Open the complete human repeatability workflow.");self.repeat_button.grid(row=1,column=0,columnspan=2,sticky="w",pady=(5,0))
+        self.repeat_button=self._button(one,"Human Repeatability…",self.open_repeatability,"Open the complete human repeatability workflow.");self.repeat_button.grid(row=1,column=0,columnspan=2,sticky="w",pady=(5,0))
 
         two=workflow.add_card("2. Training data",icon="landmark_training",help_text="Annotation batch: human-verify the main specimen pass for training.")
         self.batch_summary=ttk.Label(two,text="",style="Muted.TLabel");self.batch_summary.grid(row=0,column=0,sticky="w")
@@ -430,11 +430,15 @@ class XRayStructureWorkspace:
         add_command_separator(batch_actions)
         self.batch_button=self._button(batch_actions,"Start batch",self.start_batch,"Start or continue the existing finite annotation batch.");self.batch_button.pack(side="left")
 
-        three=workflow.add_card("3. Train model",icon="landmark_train",help_text="Train from human-verified pass 1. Repeatability passes are excluded.")
+        three=workflow.add_card("3. Train model",icon="landmark_train",help_text="Train from human-verified pass 1. Human Repeatability passes are excluded.")
         model_row=ttk.Frame(three);model_row.grid(row=0,column=0,sticky="ew");three.columnconfigure(0,weight=1)
-        self.training_summary=ttk.Label(model_row,text="",style="Muted.TLabel");self.training_summary.pack(side="left")
+        self.structure_model_label=ElidedLabel(model_row,text="Active: none",style="StatusChip.TLabel",anchor="w",width=24);self.structure_model_label.pack(side="left")
         add_command_separator(model_row)
-        self.structure_model_label=ElidedLabel(model_row,text="Active AI: none",style="Muted.TLabel",anchor="w");self.structure_model_label.pack(side="left",fill="x",expand=True)
+        ttk.Label(model_row,text="From").pack(side="left")
+        self.training_parent_choice=tk.StringVar(master=three,value="ImageNet ResNet18")
+        self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,values=("ImageNet ResNet18",),width=22,state="readonly")
+        self.training_parent_box.pack(side="left",padx=(4,0))
+        self.training_summary=ttk.Label(model_row,text="",style="Muted.TLabel");self.training_summary.pack(side="right",padx=(10,0))
         train_actions=ttk.Frame(three);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
         self.structure_train_button=self._button(train_actions,"Train",self.train_structure_ai,"Train Structure AI from existing eligible annotations.",style="Primary.TButton");self.structure_train_button.pack(side="left")
         add_command_separator(train_actions)
@@ -459,7 +463,23 @@ class XRayStructureWorkspace:
             "Place markers on the selected specimen. Click to place; drag to correct; Delete removes a selected marker.\n\n"
             "Use marker visibility to record partial, absent or invisible structures. Right-click a counted marker to assign a compatible reference role.\n\n"
             "Verify specimen confirms the current annotation. In an annotation batch, Verify & Next also advances. Close queue leaves all saved annotations intact.\n\n"
-            "Repeatability uses separate annotation passes. Train uses the existing eligible main annotations; Review AI opens the saved drafts. Check results reviews calculated trait values.",parent=self.root)
+            "Human Repeatability uses separate annotation passes. Train uses the existing eligible main annotations; Review AI opens the saved drafts. Check results reviews calculated trait values.",parent=self.root)
+
+    def continue_annotation_queue(self):
+        state=self.project.get_ui_state("xray_structure_active_batch",{}) or {}
+        ids=[str(value) for value in state.get("ids") or ()]
+        if not ids:return False
+        pass_no=max(1,int(state.get("pass_no") or 1));position=max(0,min(len(ids)-1,int(state.get("position") or 0)))
+        self.pass_no.set(pass_no);self.specimen_list.pass_no=pass_no
+        self._load_specimen(ids[position]);self._refresh_workflow();return True
+
+    def continue_result_review_queue(self):
+        state=result_review_queue(self.project)
+        if not state:return False
+        items=list(state.get("items") or ());position=max(0,min(len(items)-1,int(state.get("position") or 0)))
+        specimen_id=str(items[position].get("specimen_id") or "")
+        if not specimen_id:return False
+        self.pass_no.set(1);self.specimen_list.pass_no=1;self._load_specimen(specimen_id);self._refresh_workflow();return True
 
     def _close_annotation_batch(self):
         self.project.set_ui_state("xray_structure_active_batch",{})
@@ -752,8 +772,11 @@ class XRayStructureWorkspace:
             self.repeat_pass_label.configure(text="A1 — · A2 —")
         self.repeat_button.configure(state="normal" if p1["verified"] else "disabled")
         model=self.project.active_structure_model();candidates=len(self.project.structure_prediction_candidate_ids());review=len(self.project.structure_ai_review_ids())
-        self.training_summary.configure(text=f"{p1['verified']} human-verified")
-        self.structure_model_label.configure(text=f"Active AI: {(model or {}).get('model_id') or 'none'}")
+        self.training_summary.configure(text=f"Ready: {p1['verified']} human-verified")
+        active_id=(model or {}).get("model_id") or "none"
+        self.structure_model_label.configure(text=f"Active: {active_id}")
+        parent_label=(model or {}).get("model_id") or "ImageNet ResNet18"
+        self.training_parent_choice.set(parent_label);self.training_parent_box.configure(values=(parent_label,))
         state="normal" if model and self.pass_no.get()==1 else "disabled"
         self.structure_predict_next_button.configure(state=state);self.structure_predict_all_button.configure(state=state)
         self.structure_review_button.configure(state="normal" if review else "disabled")

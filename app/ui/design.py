@@ -114,6 +114,7 @@ def action_icon(text):
     """One visual meaning per action; explicit caller icons take priority."""
     label=str(text).strip().casefold().replace("…", "").rstrip(".")
     if label in {"help", "quick guide"}: return "help"
+    if label.startswith("queues"): return "queues"
     if label.startswith("models"): return "models"
     if label.startswith("calibrate"): return "measurement_calibrate"
     if label.startswith("measurement definitions"): return "measurement_define"
@@ -170,7 +171,8 @@ class ElidedLabel(ttk.Label):
     """Shrink long non-critical context without displacing neighbouring actions."""
     def __init__(self, parent, **kwargs):
         self.full_text=str(kwargs.pop("text", ""))
-        super().__init__(parent, text=self.full_text, width=1, **kwargs)
+        requested_width=kwargs.pop("width",1)
+        super().__init__(parent, text=self.full_text, width=requested_width, **kwargs)
         self.bind("<Configure>", self._fit, add="+")
 
     def configure(self, cnf=None, **kwargs):

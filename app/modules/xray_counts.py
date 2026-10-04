@@ -15,7 +15,7 @@ from app.ui.icons import TOPBAR_ICON_SIZE,tk_icon
 from app.xray_icons import XRAY_ICON_SIZE,TRAIT_ICON_SIZE,tk_xray_icon,tk_rule_preview
 from app.xray_project import XRayProject
 from app.xray_result_qc import build_result_qc
-from app.xray_result_qc import start_result_review_queue
+from app.xray_result_qc import start_result_review_queue,result_review_queue,clear_result_review_queue
 from app.xray_trait_export import export_trait_rows
 from app.xray_crop_ui import XRayCropWorkspace
 from app.xray_structures_ui import XRayStructureWorkspace
@@ -349,6 +349,31 @@ class XRayCountsRuntime:
             return f"Locality: {sample}  ·  Plate: {path.name}  ·  Specimen: {number}"
         return f"Locality: {sample}  ·  Plate: {path.name}"
 
+    def _selection_context_fields(self):
+        selection=self._selection();specimen_id=selection.get("specimen_id");image_id=selection.get("image_id")
+        specimen=None
+        if specimen_id:
+            try:specimen=self.project.specimen(specimen_id);image_id=specimen["image_id"]
+            except KeyError:specimen=None
+        if not image_id:return ()
+        try:image=self.project.source_image(image_id)
+        except KeyError:return ()
+        path=Path(image["relative_path"]);fields=[("Locality",self._sample_name(image["relative_path"])),("Plate",path.name)]
+        if specimen is not None:
+            workflow_no=self.project.structure_workflow_number(specimen["specimen_id"])
+            number=str(workflow_no) if workflow_no else str(int(specimen.get("ordinal") or 0))
+            fields.append(("Specimen №",number))
+        return tuple(fields)
+
+    def _render_selection_context(self,parent):
+        fields=self._selection_context_fields()
+        if not fields:return None
+        row=ttk.Frame(parent);row.pack(fill="x",pady=(2,3))
+        for index,(key,value) in enumerate(fields):
+            ttk.Label(row,text=f"{key}:",style="ContextKey.TLabel").pack(side="left",padx=(0 if index==0 else 14,0))
+            ttk.Label(row,text=str(value or "—"),style="ContextValue.TLabel").pack(side="left",padx=(4,0))
+        return row
+
     def render(self,host):
         self.host=host;parent=host.container
         for child in parent.winfo_children():child.destroy()
@@ -421,7 +446,8 @@ class XRayCountsRuntime:
     def _header(self,parent):
         nav=ttk.Frame(parent,style="Topbar.TFrame");nav.pack(fill="x",pady=(0,4))
         home=ttk.Button(nav,text="Modules",image=self._core_icon(nav,"modules"),compound="left",command=self._show_module_hub,style="Stage.TButton")
-        home.pack(side="left",padx=(0,8));self._tip.bind(home,"Return to the MorphoLabel module hub.")
+        home.pack(side="left",padx=(0,5));self._tip.bind(home,"Return to the MorphoLabel module hub.")
+        ttk.Separator(nav,orient="vertical").pack(side="left",fill="y",padx=(0,9),pady=5)
         for key,label,icon in STAGES:
             active=self.stage==key
             b=ttk.Button(nav,text=label,image=self._icon(nav,icon,TOPBAR_ICON_SIZE),compound="left",style="StageActive.TButton" if active else "Stage.TButton",command=lambda k=key:self._select(k))
@@ -429,6 +455,70 @@ class XRayCountsRuntime:
             b.pack(side="left",padx=(0,3));self._tip.bind(b,f"Open the {label} section.")
         standard_menu=getattr(self.host,"build_standard_menu",None)
         if callable(standard_menu):standard_menu(nav)
+
+    def queue_entries(self):
+        if self.project is None:return ()
+        entries=[]
+        crop=self.project.get_ui_state("xray_crop_active_batch",{}) or {}
+        crop_ids=[str(value) for value in crop.get("ids") or ()]
+        if crop_ids:
+            pos=max(0,min(len(crop_ids)-1,int(crop.get("position") or 0)))
+            label={"prediction_review":"AI Crop review","training":"Crop training batch","manual_review":"Manual Crop review"}.get(str(crop.get("batch_type") or ""),"Crop queue")
+            entries.append({
+                "title":label,
+                "detail":f"{pos+1} / {len(crop_ids)} plates",
+                "open":self._open_crop_queue,
+                "close":self._close_crop_queue,
+            })
+        structure=self.project.get_ui_state("xray_structure_active_batch",{}) or {}
+        structure_ids=[str(value) for value in structure.get("ids") or ()]
+        if structure_ids:
+            pos=max(0,min(len(structure_ids)-1,int(structure.get("position") or 0)))
+            pass_no=max(1,int(structure.get("pass_no") or 1))
+            title="Human Repeatability" if pass_no>1 else "Structure annotation batch"
+            entries.append({
+                "title":title,
+                "detail":f"{pos+1} / {len(structure_ids)} specimens",
+                "open":self._open_structure_queue,
+                "close":self._close_structure_queue,
+            })
+        review=result_review_queue(self.project)
+        if review:
+            items=list(review.get("items") or ());pos=max(0,min(len(items)-1,int(review.get("position") or 0)))
+            entries.append({
+                "title":"Results review",
+                "detail":f"{pos+1} / {len(items)} specimens",
+                "open":self._open_result_queue,
+                "close":self._close_result_queue,
+            })
+        return tuple(entries)
+
+    def _open_crop_queue(self):
+        self.stage="crops";self._rerender()
+        handler=getattr(self._workspace,"continue_batch",None)
+        return bool(handler and handler())
+
+    def _close_crop_queue(self):
+        if self.project:self.project.set_ui_state("xray_crop_active_batch",{})
+        self._rerender();return True
+
+    def _open_structure_queue(self):
+        self.stage="structures";self._rerender()
+        handler=getattr(self._workspace,"continue_annotation_queue",None)
+        return bool(handler and handler())
+
+    def _close_structure_queue(self):
+        if self.project:self.project.set_ui_state("xray_structure_active_batch",{})
+        self._rerender();return True
+
+    def _open_result_queue(self):
+        self.stage="structures";self._rerender()
+        handler=getattr(self._workspace,"continue_result_review_queue",None)
+        return bool(handler and handler())
+
+    def _close_result_queue(self):
+        if self.project:clear_result_review_queue(self.project)
+        self._rerender();return True
 
     def _show_module_hub(self):
         flush=getattr(self._workspace,"flush_pending_edits",None)
@@ -567,8 +657,7 @@ class XRayCountsRuntime:
             actions,"Export",lambda:self._export_traits(self._trait_export_scope.get()=="verified"),
             "Export trait values using the selected scope. Verified only is the safer default for scientific output.",True,
         ).pack(side="left")
-        context=self._selection_context()
-        if context:ttk.Label(parent,text=context,style="SectionTitle.TLabel").pack(anchor="w",pady=(2,3))
+        self._render_selection_context(parent)
         ttk.Label(parent,text="Review trait values. Choose the specimens to include, then export the table.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(0,8))
         scheme=self.project.scheme
         if not scheme.get("traits"):
@@ -890,7 +979,22 @@ class TraitSchemeDialog(tk.Toplevel):
         self._help(subtitle,icon,number_label,title_label,subtitle_label)
 
     def _build(self):
-        outer=ttk.Frame(self,padding=12);outer.pack(fill="both",expand=True);outer.columnconfigure(0,weight=1);outer.rowconfigure(5,weight=1)
+        shell=ttk.Frame(self);shell.pack(fill="both",expand=True)
+        frame_bg=ttk.Style(self).lookup("TFrame","background") or "#f0f0f0"
+        self._trait_scroll_canvas=tk.Canvas(shell,highlightthickness=0,borderwidth=0,background=frame_bg)
+        scroll=ttk.Scrollbar(shell,orient="vertical",command=self._trait_scroll_canvas.yview)
+        self._trait_scroll_canvas.configure(yscrollcommand=scroll.set)
+        self._trait_scroll_canvas.pack(side="left",fill="both",expand=True);scroll.pack(side="right",fill="y")
+        outer=ttk.Frame(self._trait_scroll_canvas,padding=12);outer.columnconfigure(0,weight=1);outer.rowconfigure(5,weight=1)
+        self._trait_scroll_window=self._trait_scroll_canvas.create_window((0,0),window=outer,anchor="nw")
+        def sync_scrollregion(_event=None):
+            self._trait_scroll_canvas.configure(scrollregion=self._trait_scroll_canvas.bbox("all"))
+        def fit_width(event):
+            self._trait_scroll_canvas.itemconfigure(self._trait_scroll_window,width=max(1,event.width))
+            sync_scrollregion()
+        outer.bind("<Configure>",sync_scrollregion,add="+")
+        self._trait_scroll_canvas.bind("<Configure>",fit_width,add="+")
+        self.bind("<MouseWheel>",lambda event:self._trait_scroll_canvas.yview_scroll(-1 if event.delta>0 else 1,"units"),add="+")
         heading=ttk.Frame(outer);heading.grid(row=0,column=0,sticky="ew")
         ttk.Label(heading,text="Traits",style="PageTitle.TLabel").pack(side="left")
         ttk.Label(heading,text="First define the anatomical marks. Then define the biological traits calculated from them.",style="PageSubtitle.TLabel").pack(side="left",padx=(10,0),pady=(5,0))
@@ -1133,7 +1237,7 @@ class TraitSchemeDialog(tk.Toplevel):
         candidate["structures"].append(item);_renumber_default_structure_hotkeys(candidate)
         try:self.scheme=normalize_scheme(candidate)
         except Exception as exc:messagebox.showerror(title,str(exc),parent=self);return
-        self._refresh_annotation_lists(item["id"]);self._refresh_rule_preview();self.appearance_button.state(["!disabled"])
+        self._refresh_annotation_lists(item["id"]);self._refresh_rule_preview()
 
     def _edit_reference_relationship(self):
         ident=self._selected_structure_id(False)
@@ -1183,7 +1287,6 @@ class TraitSchemeDialog(tk.Toplevel):
         if traits:
             first=traits[0]["id"];self.trait_tree.selection_set(first);self.trait_tree.focus(first);self._load_trait(first)
         else:self._new_trait()
-        self.appearance_button.state(["!disabled"] if self.scheme.get("structures") else ["disabled"])
 
     def _refresh_trait_tree(self,select_id=None):
         self.trait_tree.delete(*self.trait_tree.get_children())

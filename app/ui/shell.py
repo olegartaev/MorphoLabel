@@ -26,6 +26,7 @@ from .landmarks_section import LandmarksSection
 from .measurements_section import MeasurementsSection
 from .export_section import ExportSection
 from .module_hub import ModuleHub
+from .queue_center import show_queue_center
 from app.extensions.api import ModuleHost
 from app.extensions.builtins import module_registry
 from app.extensions.internal_runtime import create_internal_runtime
@@ -456,7 +457,8 @@ class ProductionShell(tk.Tk):
     def _nav(self):
         row=ttk.Frame(self.root,style="Topbar.TFrame"); row.grid(row=0,column=0,sticky="ew",pady=(0,4))
         home=ttk.Button(row,text="Modules",image=self.ui_icon("modules",TOPBAR_ICON_SIZE),compound="left",command=self.show_module_hub,style="Stage.TButton")
-        home.pack(side="left",padx=(0,8));self.tip.bind(home,"Return to the MorphoLabel module hub.")
+        home.pack(side="left",padx=(0,5));self.tip.bind(home,"Return to the MorphoLabel module hub.")
+        ttk.Separator(row,orient="vertical").pack(side="left",fill="y",padx=(0,9),pady=5)
         sections=visible_sections(self.context.crop_enabled()) if self.context.project else visible_sections(True)
         for spec in sections:
             active=spec.key == self.context.section
@@ -491,6 +493,116 @@ class ProductionShell(tk.Tk):
         menu.add_command(label="About MorphoLabel...",command=self.show_about)
         button.configure(menu=menu);button.pack(side="right",padx=2)
         self.tip.bind(button,"AI setup, diagnostics, project links and About MorphoLabel.")
+        entries=self._queue_entries()
+        queue_text=f"Queues ({len(entries)})" if entries else "Queues"
+        queues=ttk.Button(row,text=queue_text,image=self.ui_icon("queues",TOPBAR_ICON_SIZE),compound="left",
+                          command=lambda:self._show_queue_center(),style="Stage.TButton")
+        queues.pack(side="right",padx=(2,6))
+        self.tip.bind(queues,"Open, resume or close saved annotation and review queues.")
+
+    def _show_queue_center(self):
+        return show_queue_center(self,self._queue_entries(),self.control_button)
+
+    def _queue_entries(self):
+        provider=getattr(getattr(self,"_active_module_runtime",None),"queue_entries",None)
+        if callable(provider):
+            return tuple(provider() or ())
+        if self.module_key=="landmarks":
+            return tuple(self._landmark_queue_entries())
+        return ()
+
+    def _open_core_saved_queue(self,section,image_id):
+        if not self.context.project:return False
+        self.resume_queue_navigation()
+        if image_id and not self.context.select_image(str(image_id)):return False
+        self.context.section=str(section)
+        self._align_selected_top_once=True
+        self.render()
+        return True
+
+    def _open_landmark_ai_review_queue(self,batch_id):
+        from app.landmark_ai_review import activate_review_session
+        session=activate_review_session(self.context.project,batch_id)
+        if not session:return False
+        return self._open_core_saved_queue("landmarks",session.get("current_image_id"))
+
+    def _close_core_queue(self,kind,batch_id=None):
+        project=self.context.project
+        if not project:return False
+        if kind=="landmark_attention":
+            from app.landmark_attention_queue import clear
+            clear(project)
+        elif kind=="crop":
+            project.set_ui_state("crop_active_batch",{})
+        elif kind=="landmark_ai_review":
+            from app.landmark_ai_review import deactivate_review_session
+            deactivate_review_session(project,batch_id)
+        elif kind=="landmark_suspicious":
+            from app.landmark_suspicious_review import clear
+            clear(project)
+        elif kind=="landmark":
+            closed=self.__dict__.setdefault("_closed_queue_navigation",set())
+            closed.add((str(project.root),"landmarks","landmark",None))
+        self.render()
+        return True
+
+    def _landmark_queue_entries(self):
+        project=self.context.project
+        if not project:return ()
+        entries=[]
+        from app.landmark_attention_queue import display_summary as attention_summary,banner_copy
+        attention=attention_summary(project)
+        if attention:
+            copy=banner_copy(attention);issue=dict(attention)
+            entries.append({
+                "title":"Attention queue",
+                "detail":f"{copy['title']} · {attention.get('remaining',0)} remaining",
+                "open":lambda item=issue:self.open_landmark_attention(item),
+                "close":lambda:self._close_core_queue("landmark_attention"),
+            })
+        state=project.get_ui_state("crop_active_batch",{}) or {};ids=[str(v) for v in state.get("ids") or ()]
+        if ids:
+            pos=max(0,min(len(ids)-1,int(state.get("position",0) or 0)));target=ids[pos]
+            entries.append({
+                "title":"Crop batch",
+                "detail":f"{pos+1} / {len(ids)} · saved Crop navigation",
+                "open":lambda image_id=target:self._open_core_saved_queue("crop",image_id),
+                "close":lambda:self._close_core_queue("crop"),
+            })
+        from app.landmark_ai_review import pending_review_session,review_summary
+        review=pending_review_session(project)
+        if review:
+            summary=review_summary(project,review,review.get("current_image_id")) or {}
+            batch_id=review.get("batch_id")
+            entries.append({
+                "title":"AI review",
+                "detail":f"{summary.get('remaining',len(review.get('image_ids') or ())) } remaining",
+                "open":lambda ident=batch_id:self._open_landmark_ai_review_queue(ident),
+                "close":lambda ident=batch_id:self._close_core_queue("landmark_ai_review",ident),
+            })
+        from app.landmark_suspicious_review import summary as suspicious_summary
+        suspicious=suspicious_summary(project)
+        if suspicious:
+            target=str(suspicious.get("image_id") or "")
+            entries.append({
+                "title":"Final data QC",
+                "detail":f"{suspicious.get('position',0)} / {suspicious.get('total',0)}",
+                "open":lambda image_id=target:self._open_core_saved_queue("landmarks",image_id),
+                "close":lambda:self._close_core_queue("landmark_suspicious"),
+            })
+        from app.landmark_ai_workflow import load_state
+        workflow=load_state(project);stage=workflow.get("stage")
+        key="initial_image_ids" if stage=="INITIAL_TRAINING" else "improvement_image_ids" if stage=="MODEL_IMPROVEMENT" else None
+        workflow_ids=[str(v) for v in workflow.get(key,())] if key else []
+        if workflow_ids:
+            target=str(workflow.get("current_image_id") or workflow_ids[0])
+            entries.append({
+                "title":"Landmark training batch",
+                "detail":f"{len(workflow_ids)} images · {stage.replace('_',' ').title()}",
+                "open":lambda image_id=target:self._open_core_saved_queue("landmarks",image_id),
+                "close":lambda:self._close_core_queue("landmark"),
+            })
+        return entries
 
     @staticmethod
     def _workflow_navigation_visible(batch):
@@ -505,7 +617,7 @@ class ProductionShell(tk.Tk):
         self._status_context_full=""
         context_fields=ttk.Frame(left);context_fields.pack(side="left",fill="x",expand=True,padx=(0,7))
         ttk.Label(context_fields,text="Locality:",style="ContextKey.TLabel").pack(side="left")
-        self.status_locality=ElidedLabel(context_fields,text="—",style="ContextValue.TLabel",anchor="w");self.status_locality.pack(side="left",padx=(4,14))
+        self.status_locality=ElidedLabel(context_fields,text="—",style="ContextValue.TLabel",anchor="w",width=24);self.status_locality.pack(side="left",padx=(4,14))
         ttk.Label(context_fields,text="Image:",style="ContextKey.TLabel").pack(side="left")
         self.status_context=ElidedLabel(context_fields,text="No images",style="ContextValue.TLabel",anchor="w");self.status_context.pack(side="left",fill="x",expand=True,padx=(4,0))
         self.status_count_host=ttk.Frame(left);self.status_count_host.pack(side="right")
@@ -952,7 +1064,7 @@ class ProductionShell(tk.Tk):
                 if selected==item["model_id"]:table.selection_set(iid)
         populate()
         if landmark_only:
-            ttk.Label(frame,text="Manual P90: your repeat-placement error. AI P90: model error on the same images. AI/manual 1.00× ≈ your repeatability. Validation P90 uses each model's own split. Lower is better.",style="Muted.TLabel",wraplength=1120).grid(row=1,column=0,sticky="w",pady=(7,0))
+            ttk.Label(frame,text="Human P90: your repeat-placement error. AI P90: model error on the same images. AI/Human 1.00× ≈ your Human Repeatability. Validation P90 uses each model's own split. Lower is better.",style="Muted.TLabel",wraplength=1120).grid(row=1,column=0,sticky="w",pady=(7,0))
         actions=ttk.Frame(frame);actions.grid(row=2 if landmark_only else 1,column=0,sticky="ew",pady=(8,0))
         if kinds==("crop",):
             use=self.control_button(actions,"Use selected",lambda:None,"Use this saved model for new Crop predictions.")
@@ -986,7 +1098,7 @@ class ProductionShell(tk.Tk):
                 if not model_id:return
                 human_state=repeatability_report_state(self.context.project);human_report=human_state.get("report")
                 if human_report is None:
-                    messagebox.showinfo("Compare with manual",human_state.get("message") or "Complete Human repeatability first to compare AI with manual placement.",parent=dialog);populate();return
+                    messagebox.showinfo("Compare with manual",human_state.get("message") or "Complete Human Repeatability first to compare AI with human placement.",parent=dialog);populate();return
                 issue=repeatability_reference_frame_issue(self.context.project,human_report["run_id"],reference_pass=1)
                 if issue:
                     text=repeatability_reference_frame_issue_message(issue)
@@ -1005,7 +1117,7 @@ class ProductionShell(tk.Tk):
                     if view is not None and hasattr(view,"open_repeat"):
                         self.after_idle(view.open_repeat)
                     else:
-                        messagebox.showinfo("Repair Human repeatability",f"Image {result['position']}/{result['total']} reset.\nID: {result['image_id']}\n\nOpen Landmarks → Repeat... and complete Annotation 1 and Annotation 2 for this one image.",parent=self)
+                        messagebox.showinfo("Repair Human repeatability",f"Image {result['position']}/{result['total']} reset.\nID: {result['image_id']}\n\nOpen Landmarks → Human repeatability... and complete Annotation 1 and Annotation 2 for this one image.",parent=self)
                     return
                 image_ids=tuple(map(str,human_report.get("image_ids",())))
                 human_p90=((human_report.get("human") or {}).get("aggregate") or {}).get("p90_error_percent")
@@ -1030,7 +1142,7 @@ class ProductionShell(tk.Tk):
                 self._run_background_task("Compare with manual","Preparing same-image comparison…",worker,done)
             set_button=self.control_button(actions,"Set active",set_active,"Use the selected compatible finalized Landmark model for prediction.")
             set_button.pack(side="left")
-            compare_button=self.control_button(actions,"Compare with manual",compare_manual,"Compare the selected model with your Human repeatability on the exact same images.")
+            compare_button=self.control_button(actions,"Compare with manual",compare_manual,"Compare the selected model with your Human Repeatability on the exact same images.")
             compare_button.pack(side="left",padx=(6,0))
         self.control_button(actions,"Close",dialog.destroy,"Close this model list.").pack(side="right")
         if kinds==("crop",): use.pack(side="right",padx=(0,8))
@@ -1046,7 +1158,7 @@ class ProductionShell(tk.Tk):
         ttk.Label(header,text="Landmark models",style="PageTitle.TLabel").pack(anchor="w")
         ttk.Label(
             header,
-            text="Choose the model used for prediction. Accuracy details compares any saved model with your own blind repeatability on the same images.",
+            text="Choose the model used for prediction. Accuracy details compares any saved model with your own Human Repeatability on the same images.",
             style="PageSubtitle.TLabel",wraplength=960,justify="left",
         ).pack(anchor="w",pady=(2,10))
 
@@ -1138,7 +1250,7 @@ class ProductionShell(tk.Tk):
         actions=ttk.Frame(outer);actions.grid(row=4,column=0,sticky="ew",pady=(12,0))
         set_button=self.control_button(actions,"Set active",set_active,"Use the selected saved model for future Landmark predictions.",style="Primary.TButton")
         set_button.pack(side="left")
-        accuracy_button=self.control_button(actions,"Accuracy details…",accuracy,"Compare manual repeatability with AI landmark placement on the same images, including a GM-only view.")
+        accuracy_button=self.control_button(actions,"Accuracy details…",accuracy,"Compare Human Repeatability with AI landmark placement on the same images, including a GM-only view.")
         accuracy_button.configure(image=self.ui_icon("landmark_repeat",CONTROL_ICON_SIZE),compound="left")
         accuracy_button.pack(side="left",padx=(7,0))
         self.control_button(actions,"Close",dialog.destroy,"Close this model list.").pack(side="right")

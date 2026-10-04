@@ -163,7 +163,6 @@ class LandmarksSection(SectionView):
 
   header=ttk.Frame(panel);header.grid(row=0,column=0,sticky="ew",pady=(0,4))
   controls=FlowRow(header,style="Toolbar.TFrame");controls.pack(fill="x")
-  self.attention_banner(header,self.shell.open_landmark_attention,stages={"prediction","landmarks"})
   self.canvas_frame=ttk.Frame(panel);self.canvas_frame.grid(row=1,column=0,sticky="nsew")
   # The image canvas must consume only the space left after the workflow dock.
   # A packed Tk Canvas otherwise propagates its requested height upward and can
@@ -181,7 +180,7 @@ class LandmarksSection(SectionView):
 
   controls.relayout()
   batch=tk.IntVar(value=24);prediction=tk.IntVar(value=24)
-  guide='Why: Landmarks turns specimen anatomy into comparable point coordinates for morphometric analysis.\n\n1. Repeatability\nOptional. Mark the same control images twice, with a break between passes, to estimate your own placement error.\n\n2. Training data\nMark every required point or choose Mark missing. Use Verify & Next to finish each image.\n\n3. Train model\nTrain from all human-verified images. Choose Bootstrap for the first model or a saved model as the parent.\n\n4. Predict & review\nPredict only unresolved images. Yellow images already have complete AI landmark sets and belong in Review AI predictions. Verify & Next confirms each reviewed image. Final data QC is a separate post-verification audit of human-verified landmark sets.'
+  guide='Why: Landmarks turns specimen anatomy into comparable point coordinates for morphometric analysis.\n\n1. Human Repeatability\nOptional. Mark the same control images twice, with a break between passes, to estimate your own placement error.\n\n2. Training data\nMark every required point or choose Mark missing. Use Verify & Next to finish each image.\n\n3. Train model\nTrain from all human-verified images. Choose Bootstrap for the first model or a saved model as the parent.\n\n4. Predict & review\nPredict only unresolved images. Yellow images already have complete AI landmark sets and belong in Review AI predictions. Verify & Next confirms each reviewed image. Final data QC is a separate post-verification audit of human-verified landmark sets.'
   dock=self.workflow_dock(panel,help_title='Landmarks — quick guide',help_text=guide);dock.grid(row=2,column=0,sticky='ew',pady=(2,0))
 
   repeat_run=current_run(self.context.project)
@@ -191,11 +190,11 @@ class LandmarksSection(SectionView):
    repeat_total=int(repeat_run.get('actual_count',len(repeat_run.get('image_ids',()))));p1=pass_progress(self.context.project,repeat_run,1);p2=pass_progress(self.context.project,repeat_run,2);repeat_label=f'Run images: {repeat_total}'
   else:
    repeat_total=len(available_control_image_ids(self.context.project));p1={'completed':0,'total':0};p2={'completed':0,'total':0};repeat_label=f'Eligible images: {repeat_total}'
-  one=dock.add_card('1. Repeatability',icon='landmark_repeat',help_text='Estimate your placement error from two independent annotations of the same images.')
+  one=dock.add_card('1. Human Repeatability',icon='landmark_repeat',help_text='Estimate your placement error from two independent annotations of the same images.')
   self.repeat_pool_label=ttk.Label(one,text=repeat_label.replace('Run images: ','').replace('Eligible images: ','')+' images',style='Muted.TLabel');self.repeat_pool_label.grid(row=0,column=0,sticky='w')
   self.repeat_pass_label=ttk.Label(one,text=f"P1 {p1['completed']}/{p1['total']} · P2 {p2['completed']}/{p2['total']}",style='Muted.TLabel');self.repeat_pass_label.grid(row=0,column=1,sticky='e',padx=(8,0))
   one.columnconfigure(1,weight=1)
-  self.button(one,'Repeat…',self.open_repeat,'Open the two independent blind annotation passes.').grid(row=1,column=0,columnspan=2,sticky='w',pady=(5,0))
+  self.button(one,'Human Repeatability…',self.open_repeat,'Open the two independent blind annotation passes.').grid(row=1,column=0,columnspan=2,sticky='w',pady=(5,0))
 
   two=dock.add_card('2. Training data',icon='landmark_training',help_text='Create or continue the human-annotated image set used for model training.')
   batch_info=stage_summary(self.context.project,create_missing=False);batch_state=batch_info['state']
@@ -736,7 +735,7 @@ class LandmarksSection(SectionView):
    row=self.context.current()
    try:add_control_image(self.context.project,row['image_id']);refresh()
    except (KeyError,ValueError) as exc:messagebox.showwarning('Control Set',str(exc),parent=dialog)
-  self.button(frame,'Add current image',add,'Add this image to the persistent Control Set.').pack(fill='x',pady=(8,2));self.button(frame,'Edit repeat annotations...',self.open_repeat,'Open the two-pass blinded repeatability workflow.').pack(fill='x',pady=2);self.button(frame,'Close',dialog.destroy,'Close this window.').pack(fill='x',pady=(8,0));refresh();center(self.shell,dialog)
+  self.button(frame,'Add current image',add,'Add this image to the persistent Control Set.').pack(fill='x',pady=(8,2));self.button(frame,'Human repeatability...',self.open_repeat,'Open the two-pass blinded Human Repeatability workflow.').pack(fill='x',pady=2);self.button(frame,'Close',dialog.destroy,'Close this window.').pack(fill='x',pady=(8,0));refresh();center(self.shell,dialog)
  def _accept_current_batch_landmarks(self,image_id):
   """Accept one completed finite-batch landmark result without a global recount."""
   self.context.project.mark_checked(image_id)
