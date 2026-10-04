@@ -16,6 +16,9 @@ from app.ui.dialogs import center
 from app.ui.icons import CONTROL_ICON_SIZE, WORKFLOW_ICON_SIZE, tk_icon
 from app.ui.photo_list_panel import filtered_photo_indices, photo_search_cache
 from app.ui.tooltips import Tooltip
+from app.ui.design import ElidedLabel, FlowRow, action_icon, prediction_stamp
+from app.ui.workflow import WorkflowDock
+from types import SimpleNamespace
 from .xray_crop import crop_corners, crop_from_geometry, detect_specimens, display_preview
 from .xray_detector import predict_plates, train_detector
 from .xray_icons import tk_xray_icon
@@ -146,8 +149,8 @@ class XRayPlateListPanel(ttk.Frame):
         search=ttk.Frame(self,padding=(0,0,0,4));search.pack(fill="x");search.columnconfigure(0,weight=1);search.columnconfigure(1,weight=1)
         ttk.Label(search,text="Sample",style="Muted.TLabel").grid(row=0,column=0,sticky="w")
         ttk.Label(search,text="Plate",style="Muted.TLabel").grid(row=0,column=1,sticky="w",padx=(6,0))
-        self.sample_entry=ttk.Entry(search,textvariable=self.sample_query);self.sample_entry.grid(row=1,column=0,sticky="ew",pady=(2,0))
-        self.image_entry=ttk.Entry(search,textvariable=self.image_query);self.image_entry.grid(row=1,column=1,sticky="ew",padx=(6,0),pady=(2,0))
+        self.sample_entry=ttk.Entry(search,textvariable=self.sample_query,width=12);self.sample_entry.grid(row=1,column=0,sticky="ew",pady=(2,0))
+        self.image_entry=ttk.Entry(search,textvariable=self.image_query,width=12);self.image_entry.grid(row=1,column=1,sticky="ew",padx=(6,0),pady=(2,0))
         tooltip.bind(self.sample_entry,"Find X-rays by source subfolder / sample.")
         tooltip.bind(self.image_entry,"Find an X-ray by filename.")
 
@@ -157,7 +160,8 @@ class XRayPlateListPanel(ttk.Frame):
             square=tk.Canvas(states,width=13,height=13,highlightthickness=0,bd=0)
             square.create_rectangle(2,2,10,10,fill="white",outline=color,width=3);square.pack(side="left")
             ttk.Label(states,text=text,style="Muted.TLabel").pack(side="left",padx=(0,7))
-        show=ttk.Checkbutton(states,text="Show excluded",variable=self.show_excluded);show.pack(side="right")
+        options=ttk.Frame(legend);options.pack(fill="x",pady=(2,0))
+        show=ttk.Checkbutton(options,text="Show excluded",variable=self.show_excluded);show.pack(side="left")
         tooltip.bind(show,"Include excluded X-rays in the list.")
 
         list_host=ttk.Frame(self);list_host.pack(fill="both",expand=True)
@@ -312,6 +316,7 @@ class XRayCropWorkspace:
     def selected_specimen_id(self):return self.session.selected_id
 
     def _button(self,parent,text,command,help_text="",style=None,icon=None):
+        icon=icon or action_icon(text)
         image=self._icon(parent,icon,CONTROL_ICON_SIZE) if icon else ""
         button=ttk.Button(parent,text=text,command=command,style=style or "P.TButton",image=image,compound="left" if icon else "none")
         if help_text:self._tip.bind(button,help_text)
@@ -334,73 +339,49 @@ class XRayCropWorkspace:
     def _build(self):
         outer=ttk.Frame(self.parent,padding=(0,0));outer.pack(fill="both",expand=True)
         panes=ttk.Panedwindow(outer,orient="horizontal");panes.pack(fill="both",expand=True)
-        sidebar_host=ttk.Frame(panes);main=ttk.Frame(panes)
+        sidebar_host=ttk.Frame(panes,width=320,height=400);sidebar_host.pack_propagate(False);main=ttk.Frame(panes)
+        main.grid_propagate(False)
         panes.add(sidebar_host,weight=0);panes.add(main,weight=1)
         self.panes=panes;main.columnconfigure(0,weight=1);main.rowconfigure(2,weight=1)
 
         self.plate_list=XRayPlateListPanel(sidebar_host,self.project,self._list_selected,self._tip,self._source_exclusion_changed)
         self.plate_list.pack(fill="both",expand=True)
+        panes.bind("<Configure>",self._set_initial_sash,add="+")
         self.root.after_idle(lambda:self._set_initial_sash())
 
-        header=ttk.Frame(main);header.grid(row=0,column=0,sticky="ew",pady=(0,4));header.columnconfigure(0,weight=1)
-        actions=ttk.Frame(header,style="Toolbar.TFrame");actions.grid(row=0,column=0,sticky="ew");actions.columnconfigure(1,weight=1)
-        self.left_actions=ttk.Frame(actions,style="Toolbar.TFrame");self.left_actions.grid(row=0,column=0,sticky="w")
-        self.orientation_actions=ttk.Frame(self.left_actions,style="Toolbar.TFrame");self.orientation_actions.pack(side="left")
-        self.flip_h_button=self._tool_icon_button(
-            self.orientation_actions,"flip_horizontal",self.flip_selected_horizontal,
-            "Flip left ↔ right. Use when the head is on the wrong side.",
-        );self.flip_h_button.pack(side="left")
-        self.flip_v_button=self._tool_icon_button(
-            self.orientation_actions,"flip_vertical",self.flip_selected_vertical,
-            "Flip top ↕ bottom. Use when the ventral side is on the wrong side.",
-        );self.flip_v_button.pack(side="left",padx=(2,0))
-        self.selection_separator=ttk.Separator(self.left_actions,orient="vertical")
-        self.selection_separator.pack(side="left",fill="y",padx=7,pady=2)
-        self.crop_actions=ttk.Frame(self.left_actions,style="Toolbar.TFrame");self.crop_actions.pack(side="left")
-        self.delete_crop_button=self._tool_icon_button(
-            self.crop_actions,"delete_crop",self.delete_selected,
-            "Delete the selected crop only.",
-        );self.delete_crop_button.pack(side="left")
-        self.clear_plate_button=self._tool_icon_button(
-            self.crop_actions,"clear_crops",self.clear_plate_crops,
-            "Clear all crops on this plate.",
-        );self.clear_plate_button.pack(side="left",padx=(2,0))
-        self.instruction=ttk.Label(
-            actions,text="Wheel = zoom · right-drag = pan · blue = head · orange = ventral side",
-            style="Muted.TLabel",anchor="center",
-        );self.instruction.grid(row=0,column=1,sticky="ew",padx=10)
+        header=ttk.Frame(main);header.grid(row=0,column=0,sticky="ew",pady=(0,3));header.columnconfigure(0,weight=1)
+        self.context_label=ElidedLabel(header,text="No plate selected",style="SectionTitle.TLabel",anchor="w")
+        self.context_label.grid(row=0,column=0,sticky="ew",padx=6,pady=(1,3))
+        self._tip.bind(self.context_label,lambda:self.context_label.full_text)
+        actions=FlowRow(header,style="Toolbar.TFrame");actions.grid(row=1,column=0,sticky="ew");self.actions=actions
+        self.left_actions=actions
+        ttk.Label(actions,text="Crop actions:",style="SectionTitle.TLabel").pack(side="left",padx=(0,6))
+        self.crop_actions=ttk.Frame(actions);self.crop_actions.pack(side="left")
+        self.delete_crop_button=self._button(self.crop_actions,"Delete",self.delete_selected,"Delete the selected crop only.",icon="delete");self.delete_crop_button.pack(side="left",padx=2)
+        self.clear_plate_button=self._button(self.crop_actions,"Clear all…",self.clear_plate_crops,"Clear all crops on this plate.",icon="clear");self.clear_plate_button.pack(side="left",padx=2)
+        self.selection_separator=ttk.Separator(actions,orient="vertical");self.selection_separator.pack(side="left",fill="y",padx=(6,4),pady=3)
+        self.orientation_actions=ttk.Frame(actions);self.orientation_actions.pack(side="left")
+        self.flip_h_button=self._button(self.orientation_actions,"Flip ↔",self.flip_selected_horizontal,"Flip the selected crop left to right.",icon="flip_horizontal");self.flip_h_button.pack(side="left",padx=2)
+        self.flip_v_button=self._button(self.orientation_actions,"Flip ↕",self.flip_selected_vertical,"Flip the selected crop top to bottom.",icon="flip_vertical");self.flip_v_button.pack(side="left",padx=2)
+        self.apply_group=ttk.Frame(actions);self.apply_group.pack(side="right")
+        self.apply_host=ttk.Frame(self.apply_group);self.apply_host.pack(side="right")
+        self.save_status=ttk.Label(self.apply_host,text="",style="Muted.TLabel");self.save_status.pack(side="left",padx=(0,6))
+        self.apply_button=self._button(self.apply_host,"Apply crops",self.apply_current,"Accept the specimen crops on this plate and stay on it.",style="CropApply.TButton",icon="verify");self.apply_button.pack(side="left")
+        actions.relayout()
+        self.instruction=ElidedLabel(header,text="Drag = edit · wheel = zoom · right-drag = pan · blue = head · orange = ventral",style="Muted.TLabel")
+        self.instruction.grid(row=2,column=0,sticky="ew",padx=6,pady=(2,0))
 
-        self.apply_group=ttk.Frame(actions,style="Toolbar.TFrame");self.apply_group.grid(row=0,column=2,sticky="e")
-        ttk.Style(self.root).configure("CropApply.TButton",padding=(14,9),font=("Segoe UI",10,"bold"))
-        self.apply_host=ttk.Frame(self.apply_group,style="Toolbar.TFrame");self.apply_host.pack(side="right")
-        self.save_status=ttk.Label(self.apply_host,text="",style="Muted.TLabel");self.save_status.pack(side="left",padx=(0,8))
-        self.apply_button=self._button(
-            self.apply_host,"Apply crop",self.apply_current,
-            "Accept the current specimen crops as human-reviewed and keep this plate open.",style="CropApply.TButton",icon="verify",
-        );self.apply_button.pack(side="left")
-
-        self.batch_actions=ttk.Frame(actions,style="Toolbar.TFrame")
-        self.status_previous=self._button(self.batch_actions,"‹ Previous",lambda:self._move_batch(-1),"Show the previous plate in this finite batch.",style="Nav.TButton")
-        self.status_previous.pack(side="left")
-        self.batch_status=ttk.Label(self.batch_actions,text="",padding=(8,0),font=("Segoe UI",9,"bold"));self.batch_status.pack(side="left")
-        self.confirm_button=self._button(
-            self.batch_actions,"Confirm & Next ›",self.confirm_plate_next,
-            "Apply these crops, mark this whole plate human-verified, and continue.",style="NavPrimary.TButton",icon="verify",
-        );self.confirm_button.pack(side="left")
-
-        self.queue_banner=ttk.Frame(main,style="Attention.TFrame",padding=(10,6))
-        self.queue_banner_title=ttk.Label(self.queue_banner,text="",style="AttentionTitle.TLabel")
-        self.queue_banner_title.pack(side="left")
-        self.queue_banner_text=ttk.Label(self.queue_banner,text="",style="AttentionText.TLabel")
-        self.queue_banner_text.pack(side="left",padx=(8,0))
-        self._button(
-            self.queue_banner,"×",self.dismiss_batch,
-            "End this Crop review queue. Saved crops, predictions and provenance are not changed.",
-        ).pack(side="right",padx=(6,0))
-        self._button(
-            self.queue_banner,"Continue",self.continue_batch,
-            "Continue the saved Crop review queue from its current position.",style="Primary.TButton",
-        ).pack(side="right",padx=(12,0))
+        self.queue_banner=ttk.Frame(main,style="Attention.TFrame",padding=(6,4));self.queue_banner.columnconfigure(0,weight=1)
+        description=ttk.Frame(self.queue_banner,style="Attention.TFrame");description.grid(row=0,column=0,sticky="ew");description.columnconfigure(0,weight=1)
+        self.queue_banner_title=ElidedLabel(description,text="",style="AttentionTitle.TLabel",anchor="w");self.queue_banner_title.grid(row=0,column=0,sticky="ew")
+        self.queue_banner_text=ttk.Label(description,text="",style="AttentionText.TLabel");self.queue_banner_text.grid(row=1,column=0,sticky="w")
+        self.batch_actions=ttk.Frame(self.queue_banner,style="Attention.TFrame")
+        self.status_previous=self._button(self.batch_actions,"Previous",lambda:self._move_batch(-1),"Previous plate in this finite batch.",style="Nav.TButton",icon="previous");self.status_previous.pack(side="left")
+        self.batch_status=ttk.Label(self.batch_actions,text="",style="AttentionTitle.TLabel",padding=(4,0));self.batch_status.pack(side="left")
+        self.confirm_button=self._button(self.batch_actions,"Confirm & Next",self.confirm_plate_next,"Apply the crops, confirm this plate, and continue.",style="NavPrimary.TButton",icon="verify");self.confirm_button.pack(side="left")
+        self.continue_queue_button=self._button(self.queue_banner,"Continue",self.continue_batch,"Continue this saved Crop queue.",style="Primary.TButton")
+        self.continue_queue_button.grid(row=0,column=1,rowspan=2,sticky="e",padx=(6,2))
+        self._button(self.queue_banner,"Close queue",self.dismiss_batch,"Close this Crop queue; keep saved crops, predictions and provenance.",icon="close").grid(row=0,column=2,rowspan=2,sticky="e",padx=(4,0))
 
         canvas_frame=ttk.Frame(main);canvas_frame.grid(row=2,column=0,sticky="nsew");canvas_frame.pack_propagate(False)
         self.canvas=tk.Canvas(canvas_frame,background="#202020",highlightthickness=0,cursor="crosshair",takefocus=True)
@@ -414,53 +395,34 @@ class XRayCropWorkspace:
             self.canvas.bind(f"<ButtonRelease-{button}>",self._pan_end)
         self.canvas.bind("<Delete>",self.delete_selected);self.canvas.bind("<BackSpace>",self.delete_selected)
 
-        workflow=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(0,1,0,0));workflow.grid(row=3,column=0,sticky="ew",pady=(2,0))
-        workflow.columnconfigure(0,weight=1)
-        wh=ttk.Frame(workflow,style="WorkflowDock.TFrame");wh.grid(row=0,column=0,sticky="ew",pady=(0,1));wh.columnconfigure(0,weight=1)
-        ttk.Label(wh,text="Workflow",style="WorkflowDockTitle.TLabel").grid(row=0,column=0,sticky="w")
-        self._button(wh,"Help",self._show_help,"Open a short X-ray Crop guide.").grid(row=0,column=1,sticky="e")
-        cards=ttk.Frame(workflow,style="WorkflowDock.TFrame");cards.grid(row=1,column=0,sticky="ew")
-        for column in range(3):cards.columnconfigure(column,weight=1,uniform="workflow")
+        adapter=SimpleNamespace(ui_icon=lambda name,size:self._icon(main,name,size),tip=self._tip)
+        workflow=WorkflowDock(main,adapter,help_factory=lambda host:self._button(host,"Help",self._show_help,"Open the X-ray Crop guide."))
+        workflow.grid(row=3,column=0,sticky="ew",pady=(2,0));self.workflow_dock=workflow
+        one=workflow.add_card("1. Training data",icon="crop_training",help_text="Create human-confirmed crop and orientation examples.")
+        ttk.Label(one,text="Batch").grid(row=0,column=0,sticky="w")
+        ttk.Spinbox(one,from_=1,to=100,textvariable=self.training_batch_size,width=4).grid(row=0,column=1,sticky="w",padx=4)
+        ttk.Label(one,text="6–10 recommended",style="Muted.TLabel").grid(row=0,column=2,sticky="w")
+        self.training_button=self._button(one,"Start first batch",self.start_training_batch,"Prepare diverse plates for manual crop and orientation correction.");self.training_button.grid(row=1,column=0,columnspan=3,sticky="w",pady=(5,0))
+        two=workflow.add_card("2. Train model",icon="crop_train",help_text="Train crop detection and head / ventral orientation from verified examples.")
+        self.model_label=ElidedLabel(two,text="Active: none",style="StatusChip.TLabel",anchor="w");self.model_label.grid(row=0,column=0,columnspan=2,sticky="ew");two.columnconfigure(0,weight=1)
+        self.training_count_label=ttk.Label(two,text="Ready: 0",style="Muted.TLabel");self.training_count_label.grid(row=1,column=0,columnspan=2,sticky="w",pady=(2,0))
+        self.train_button=self._button(two,"Train",self.train_model,"Train crop detection and orientation using existing eligible examples.",style="Primary.TButton");self.train_button.grid(row=2,column=0,sticky="w",pady=(5,0))
+        self.models_button=self._button(two,"Models…",self.manage_models,"Compare and select saved Crop models.");self.models_button.grid(row=2,column=1,sticky="e",padx=(5,0),pady=(5,0))
+        three=workflow.add_card("3. Predict & review",icon="crop_apply",help_text="Predict eligible plates, then human-review the crops and orientation.")
+        self.predict_count_label=ttk.Label(three,text="",style="Muted.TLabel");self.predict_count_label.grid(row=0,column=0,columnspan=3,sticky="w")
+        batch_row=ttk.Frame(three);batch_row.grid(row=1,column=0,columnspan=3,sticky="ew",pady=(4,0))
+        ttk.Label(batch_row,text="Next").pack(side="left");ttk.Spinbox(batch_row,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=4)
+        self.predict_current_button=self._button(batch_row,"Predict current",self.predict_current_plate,"Predict crops for this eligible unverified plate. Human-reviewed plates are protected.");self.predict_current_button.pack(side="right")
+        predict_actions=ttk.Frame(three);predict_actions.grid(row=2,column=0,columnspan=3,sticky="ew",pady=(5,0))
+        self.predict_next_button=self._button(predict_actions,"Predict next",lambda:self.predict_batch(self.prediction_batch_size.get()),"Predict the next eligible plates.");self.predict_next_button.pack(side="left")
+        self.predict_all_button=self._button(predict_actions,"Predict all",lambda:self.predict_batch(None),"Predict every remaining eligible plate.");self.predict_all_button.pack(side="left",padx=(4,0))
+        self.review_button=self._button(three,"Review AI",self.review_ai,"Review model-proposed crops and orientation before human confirmation.",style="ReviewAction.TButton",icon="review_worst");self.review_button.grid(row=3,column=0,columnspan=3,sticky="w",pady=(5,0))
 
-        one=self._workflow_card(cards,0,"1. Training batch","crop_training","Create human-confirmed crop and orientation examples.")
-        row=ttk.Frame(one);row.grid(row=0,column=0,sticky="ew");row.columnconfigure(4,weight=1)
-        ttk.Label(row,text="Batch").grid(row=0,column=0,sticky="w")
-        ttk.Spinbox(row,from_=1,to=100,textvariable=self.training_batch_size,width=4).grid(row=0,column=1,sticky="w",padx=(4,3))
-        ttk.Label(row,text="6–10",style="Muted.TLabel").grid(row=0,column=2,sticky="w")
-        self.training_button=self._button(row,"Start first batch",self.start_training_batch,"Prepare diverse plates for manual crop and orientation correction.")
-        self.training_button.grid(row=0,column=3,sticky="e",padx=(8,0))
-
-        two=self._workflow_card(cards,1,"2. Train","crop_train","Train crop detection plus head / ventral orientation from verified examples.")
-        self.model_label=ttk.Label(two,text="Active: none",style="StatusChip.TLabel",anchor="w");self.model_label.grid(row=0,column=0,columnspan=2,sticky="ew")
-        self.training_count_label=ttk.Label(two,text="Ready: 0 plates · 0 crops · orientation 0",style="Muted.TLabel");self.training_count_label.grid(row=1,column=0,columnspan=2,sticky="w",pady=(2,0))
-        train_actions=ttk.Frame(two);train_actions.grid(row=2,column=0,columnspan=2,sticky="ew",pady=(4,0));train_actions.columnconfigure(0,weight=1)
-        self.train_button=self._button(train_actions,"Train Crop AI",self.train_model,"Train crop detection and, when enough verified examples exist, head / ventral orientation.",style="Primary.TButton")
-        self.train_button.grid(row=0,column=0,sticky="w")
-        self.models_button=self._button(train_actions,"Models…",self.manage_models,"View quality, activate a previous model, or safely remove a model.")
-        self.models_button.grid(row=0,column=1,sticky="e",padx=(6,0))
-
-        three=self._workflow_card(cards,2,"3. Predict & review","crop_apply","Predict only eligible plates; human-confirmed crops are never overwritten.")
-        self.predict_count_label=ttk.Label(three,text="",style="Muted.TLabel");self.predict_count_label.grid(row=0,column=0,columnspan=5,sticky="w")
-        predict_actions=ttk.Frame(three);predict_actions.grid(row=1,column=0,columnspan=5,sticky="ew",pady=(4,0))
-        self.predict_current_button=self._button(
-            predict_actions,"Predict current",self.predict_current_plate,
-            "Apply the active Crop AI model to the currently selected X-ray plate. Human-reviewed plates are protected.",
-        )
-        self.predict_current_button.pack(side="left")
-        ttk.Label(predict_actions,text="Next").pack(side="left",padx=(10,0))
-        ttk.Spinbox(predict_actions,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(4,6))
-        self.predict_next_button=self._button(predict_actions,"Predict next",lambda:self.predict_batch(self.prediction_batch_size.get()),"Predict the next eligible X-rays.")
-        self.predict_next_button.pack(side="left")
-        self.predict_all_button=self._button(predict_actions,"Predict all",lambda:self.predict_batch(None),"Predict every remaining eligible X-ray.")
-        self.predict_all_button.pack(side="left",padx=(4,0))
-        self.review_button=self._button(
-            predict_actions,"Review",self.review_ai,
-            "Review model-proposed crops and orientation before human confirmation.",style="ReviewAction.TButton",icon="review_worst",
-        );self.review_button.pack(side="right")
-
-    def _set_initial_sash(self):
+    def _set_initial_sash(self,_event=None):
         try:
+            if self.panes.winfo_width()<=1 or getattr(self,"_initial_sash_done",False):return
             width=max(900,self.panes.winfo_width());self.panes.sashpos(0,max(300,min(400,int(width*.21))))
+            self._initial_sash_done=True
         except Exception:pass
 
     def _workflow_card(self,parent,column,title,icon,help_text):
@@ -568,7 +530,7 @@ class XRayCropWorkspace:
         position=max(0,min(len(ids)-1,int(state.get("position",0) or 0)))
         label="AI review" if state.get("batch_type")=="prediction_review" else "Training batch"
         self.queue_banner_title.configure(text=f"{label} · {position+1}/{len(ids)}")
-        self.queue_banner_text.configure(text="Saved review queue")
+        self.queue_banner_text.configure(text="Confirm each plate" if self._active_batch() else "Saved queue · Continue to resume")
         self.queue_banner.grid(row=1,column=0,sticky="ew",pady=(0,4))
 
     def _refresh_flip_controls(self):
@@ -591,15 +553,14 @@ class XRayCropWorkspace:
         active=self._active_batch()
         if active is None:
             self.batch_actions.grid_forget()
-            if not self.apply_group.winfo_manager():self.apply_group.grid(row=0,column=2,sticky="e")
-            self.instruction.grid()
+            self.continue_queue_button.grid()
+            self.apply_group._flow_hidden=False;self.actions.relayout()
             return
-        self.apply_group.grid_forget();self.instruction.grid()
-        self.batch_actions.grid(row=0,column=2,sticky="e")
+        self.apply_group._flow_hidden=True;self.actions.relayout();self.continue_queue_button.grid_remove()
+        self.batch_actions.grid(row=0,column=1,rowspan=2,sticky="e")
         ids=list(active.get("ids") or []);pos=max(0,min(len(ids)-1,int(active.get("position",0) or 0)))
         self.status_previous.configure(state="normal" if pos>0 else "disabled")
-        label="AI review" if active.get("batch_type")=="prediction_review" else "Training"
-        self.batch_status.configure(text=f"{pos+1}/{len(ids)} · {label}")
+        self.batch_status.configure(text="")
 
     def _load_plate(self,image_id):
         items=self.project.specimens(image_id)
@@ -609,12 +570,26 @@ class XRayCropWorkspace:
         self.zoom=1.0;self.pan=None;self.pan_drag=None
         try:preview,_scale,original_size=display_preview(self.project.source_image_path(image_id),1400)
         except Exception as exc:messagebox.showerror("X-ray Crops",str(exc),parent=self.root);return
-        self.preview=preview;self.preview_original_size=original_size;self._photo_key=None;self._set_save_status();self._draw();self._refresh_flip_controls();self._refresh_batch_banner();self._update_batch_controls();self._notify_selection()
+        self.preview=preview;self.preview_original_size=original_size;self._photo_key=None;self._set_save_status();self._draw();self._refresh_flip_controls();self._refresh_batch_banner();self._update_batch_controls();self._notify_selection();self._refresh_plate_context()
+
+    def _refresh_plate_context(self):
+        if not self.selected_image_id:return
+        image=self.project.source_image(self.selected_image_id);path=Path(image["relative_path"])
+        text=f"{self.plate_list._sample(image['relative_path'])} · {path.name}"
+        models={}
+        for item in self.session.active_items():
+            if str(item.get("specimen_id") or "").startswith("draft:"):continue
+            for event in reversed(self.project.crop_events(item["specimen_id"])):
+                if event.get("action")=="detect" and (event.get("payload") or {}).get("model_id"):
+                    model=(event.get("payload") or {})["model_id"]
+                    models[model]=max(models.get(model,""),str(event.get("created_at") or ""));break
+        if models:text+=" · "+"; ".join(prediction_stamp(model,when) for model,when in sorted(models.items()))
+        self.context_label.configure(text=text)
 
     def _clear_canvas(self):
         self.canvas.delete("all");self.preview=self.photo=None;self._photo_key=None;self.selected_image_id=None;self.session.load(())
         self.zoom=1.0;self.pan=None;self.pan_drag=None
-        self._set_save_status();self._update_batch_controls()
+        self._set_save_status();self._update_batch_controls();self.context_label.configure(text="No plate selected")
 
     def _set_save_status(self,text=None):
         if text is None:text="Unsaved changes" if self.session.dirty else ""

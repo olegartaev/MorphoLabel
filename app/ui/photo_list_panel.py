@@ -35,8 +35,8 @@ class PhotoListPanel(ttk.Frame):
   search=ttk.Frame(self,padding=(0,0,0,4));search.pack(fill='x');search.columnconfigure(0,weight=1);search.columnconfigure(1,weight=1)
   ttk.Label(search,text='Sample',style='Muted.TLabel').grid(row=0,column=0,sticky='w')
   ttk.Label(search,text='Specimen',style='Muted.TLabel').grid(row=0,column=1,sticky='w',padx=(6,0))
-  self.locality_entry=ttk.Entry(search,textvariable=self.locality_query);self.locality_entry.grid(row=1,column=0,sticky='ew',pady=(2,0))
-  self.image_entry=ttk.Entry(search,textvariable=self.image_query);self.image_entry.grid(row=1,column=1,sticky='ew',padx=(6,0),pady=(2,0))
+  self.locality_entry=ttk.Entry(search,textvariable=self.locality_query,width=12);self.locality_entry.grid(row=1,column=0,sticky='ew',pady=(2,0))
+  self.image_entry=ttk.Entry(search,textvariable=self.image_query,width=12);self.image_entry.grid(row=1,column=1,sticky='ew',padx=(6,0),pady=(2,0))
   tooltip.bind(self.locality_entry,'Find images in a sample.');tooltip.bind(self.image_entry,'Find an image by its filename.')
   self._build_legend()
   list_host=ttk.Frame(self);list_host.pack(fill='both',expand=True);self.canvas=PhotoListCanvas(list_host,height=24,bg='white');self.scrollbar=ttk.Scrollbar(list_host,orient='vertical',command=self.canvas.yview);self.canvas.configure(yscrollcommand=self.scrollbar.set);self.canvas.pack(side='left',fill='both',expand=True);self.scrollbar.pack(side='right',fill='y');self.canvas.bind('<<ListboxSelect>>',self._selected);self.visible_indices=[];self._cache=()
@@ -55,7 +55,8 @@ class PhotoListPanel(ttk.Frame):
   ttk.Label(meta,text=' crop applied',style='Muted.TLabel').pack(side='left',padx=(0,7))
   ttk.Label(meta,text='×').pack(side='left')
   ttk.Label(meta,text=' excluded',style='Muted.TLabel').pack(side='left')
-  show=ttk.Checkbutton(meta,text='Show excluded',variable=self.show_excluded);show.pack(side='right');self.tooltip.bind(show,'Include excluded images in the list.')
+  options=ttk.Frame(legend);options.pack(fill='x',pady=(2,0))
+  show=ttk.Checkbutton(options,text='Show excluded',variable=self.show_excluded);show.pack(side='left');self.tooltip.bind(show,'Include excluded images in the list.')
 
   states=ttk.Frame(legend);states.pack(fill='x',pady=(2,0))
   for color,text in (('#d93025',' unresolved'),('#e6a700',' review'),('#188038',' verified')):

@@ -25,7 +25,7 @@ from app.xray_schema import (
 )
 
 STAGES=(
-    ("project","Project","xray_project"),("crops","Crops","xray_crops"),
+    ("project","Project","xray_project"),("crops","Crop","xray_crops"),
     ("structures","Structures","xray_structures"),("export","Export","xray_export"),
 )
 
@@ -359,6 +359,9 @@ class XRayCountsRuntime:
         if key not in self._images:self._images[key]=tk_xray_icon(master,name,size)
         return self._images[key]
     def _button(self,parent,text,command,help_text="",primary=False,image=None):
+        from app.ui.design import action_icon
+        icon=action_icon(text)
+        image=image or (self._core_icon(parent,icon,28) if icon else "")
         b=ttk.Button(parent,text=text,command=command,style="Primary.TButton" if primary else "P.TButton",image=image,compound="left")
         if help_text:self._tip.bind(b,help_text)
         return b
@@ -420,7 +423,7 @@ class XRayCountsRuntime:
         home.pack(side="left",padx=(0,8));self._tip.bind(home,"Return to the MorphoLabel module hub.")
         for key,label,icon in STAGES:
             active=self.stage==key
-            b=ttk.Button(nav,text=("● "+label) if active else label,image=self._icon(nav,icon,TOPBAR_ICON_SIZE),compound="left",style="StageActive.TButton" if active else "Stage.TButton",command=lambda k=key:self._select(k))
+            b=ttk.Button(nav,text=label,image=self._icon(nav,icon,TOPBAR_ICON_SIZE),compound="left",style="StageActive.TButton" if active else "Stage.TButton",command=lambda k=key:self._select(k))
             if self.project is None and key!="project":b.state(["disabled"])
             b.pack(side="left",padx=(0,3));self._tip.bind(b,f"Open the {label} section.")
         standard_menu=getattr(self.host,"build_standard_menu",None)
@@ -564,17 +567,17 @@ class XRayCountsRuntime:
         ).pack(side="left")
         context=self._selection_context()
         if context:ttk.Label(parent,text=context,style="SectionTitle.TLabel").pack(anchor="w",pady=(2,3))
-        ttk.Label(parent,text="Preview calculated trait values and export a complete table or verified specimens only.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(0,8))
+        ttk.Label(parent,text="Review trait values. Choose the specimens to include, then export the table.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(0,8))
         scheme=self.project.scheme
         if not scheme.get("traits"):
             self._empty_scheme_state(parent,"No traits to calculate","Open a trait set or create traits in Project first.");return
         traits=list(scheme["traits"]);cols=("row_no","locality","plate","fish",*(t.get("abbr") or t["id"] for t in traits),"status")
         host=ttk.Frame(parent);host.pack(fill="both",expand=True);host.columnconfigure(0,weight=1);host.rowconfigure(0,weight=1)
         tree=ttk.Treeview(host,columns=cols,show="headings",selectmode="browse",height=16)
-        tree.heading("row_no",text="#");tree.column("row_no",width=46,anchor="center",stretch=False)
+        tree.heading("row_no",text="Specimen #");tree.column("row_no",width=88,anchor="center",stretch=False)
         tree.heading("locality",text="Locality");tree.column("locality",width=180,anchor="w")
         tree.heading("plate",text="Plate");tree.column("plate",width=220,anchor="w")
-        tree.heading("fish",text="Plate №");tree.column("fish",width=62,anchor="center",stretch=False)
+        tree.heading("fish",text="On plate #");tree.column("fish",width=82,anchor="center",stretch=False)
         for trait in traits:
             col=trait.get("abbr") or trait["id"];tree.heading(col,text=col);tree.column(col,width=78,anchor="center",stretch=False)
         tree.heading("status",text="Status");tree.column("status",width=90,anchor="center",stretch=False)

@@ -25,6 +25,7 @@ from app.human_baseline import start_or_continue_run, current_run, previous_runs
 from app.human_baseline_ui import HumanBaselineWindow
 from app.gui_crop_debug import log
 from .section_base import SectionView
+from .design import FlowRow
 from .landmark_canvas import LandmarkCanvasController
 from .dialogs import center
 from .landmark_display import load_display_settings, save_display_settings, SYMBOL_LABELS, SYMBOL_NAMES, LABEL_LABELS, LABEL_NAMES, HALO_LABELS, HALO_NAMES
@@ -160,7 +161,7 @@ class LandmarksSection(SectionView):
   panel=self.frame(padding=(6,4));panel.pack(fill="both",expand=True);panel.rowconfigure(1,weight=1);panel.columnconfigure(0,weight=1)
 
   header=ttk.Frame(panel);header.grid(row=0,column=0,sticky="ew",pady=(0,4))
-  controls=ttk.Frame(header,style="Toolbar.TFrame");controls.pack(fill="x")
+  controls=FlowRow(header,style="Toolbar.TFrame");controls.pack(fill="x")
   self.attention_banner(header,self.shell.open_landmark_attention,stages={"prediction","landmarks"})
   self.canvas_frame=ttk.Frame(panel);self.canvas_frame.grid(row=1,column=0,sticky="nsew")
   # The image canvas must consume only the space left after the workflow dock.
@@ -177,6 +178,7 @@ class LandmarksSection(SectionView):
   self.button(controls,'Display…',self.open_display_settings,'Change landmark colours, marker size and marker style.',icon='display').pack(side='right',padx=(8,2))
   ttk.Label(controls,text='Click = place · drag = correct',style="Muted.TLabel").pack(side='right',padx=(6,8))
 
+  controls.relayout()
   batch=tk.IntVar(value=24);prediction=tk.IntVar(value=24)
   guide='Why: Landmarks turns specimen anatomy into comparable point coordinates for morphometric analysis.\n\n1. Repeatability\nOptional. Mark the same control images twice, with a break between passes, to estimate your own placement error.\n\n2. Training data\nMark every required point or choose Mark missing. Use Verify & Next to finish each image.\n\n3. Train model\nTrain from all human-verified images. Choose Bootstrap for the first model or a saved model as the parent.\n\n4. Predict & review\nPredict only unresolved images. Yellow images already have complete AI landmark sets and belong in Review AI predictions. Verify & Next confirms each reviewed image. Final data QC is a separate post-verification audit of human-verified landmark sets.'
   dock=self.workflow_dock(panel,help_title='Landmarks — quick guide',help_text=guide);dock.grid(row=2,column=0,sticky='ew',pady=(2,0))
@@ -829,6 +831,7 @@ class LandmarksSection(SectionView):
 
  def enter_landmark_review_session(self,batch_id=None):
   """One explicit production transition; never rely on a list-selection event."""
+  getattr(self.shell,'resume_queue_navigation',lambda:None)()
   session=activate_review_session(self.context.project,batch_id)
   if session is None:
    messagebox.showinfo('Prediction review','No unfinished prediction review is available.',parent=self.shell);return False
@@ -909,6 +912,7 @@ class LandmarksSection(SectionView):
   state_doc['current_image_id']=ids[target];state_doc['current_position']=target
   save_state(self.context.project,state_doc);self._sync_photo_selection();self.shell._selected_image(False);return True
  def review_worst(self,count=24):
+  getattr(self.shell,'resume_queue_navigation',lambda:None)()
   if active_attention_queue(self.context.project):
    self.shell.open_landmark_attention();return
   try:count=max(1,int(count))
@@ -1000,6 +1004,7 @@ class LandmarksSection(SectionView):
   poll()
  def start_training_batch(self,count):
   """Open/create a finite Landmark batch without blocking Tk on catalogue selection."""
+  getattr(self.shell,'resume_queue_navigation',lambda:None)()
   total_rows=len(self.context.rows);requested=int(count)
   def worker(progress):
    progress('Checking landmark workflow…')

@@ -602,8 +602,10 @@ class ProductionWorkflowGapTests(unittest.TestCase):
 
  def test_active_section_has_theme_independent_visual_marker(self):
   source=(Path(__file__).parents[1]/'app'/'ui'/'shell.py').read_text(encoding='utf8')
-  self.assertIn('("● "+spec.label) if active else spec.label',source)
-  self.assertIn('relief="sunken"',source)
+  self.assertIn('style="StageActive.TButton" if active else "Stage.TButton"',source)
+  design=(Path(__file__).parents[1]/'app/ui/design.py').read_text(encoding='utf8')
+  self.assertIn('style.theme_use("clam")',design)
+  self.assertIn('bordercolor="#9ebdd2"',design)
 
  def test_existing_standardized_crop_is_usable_without_source_or_developed_cache(self):
   from app.landmark_frames import crop_frame_record,restore_standardized_frame

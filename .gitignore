@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.design-preview/
 
 # Python environments and local tooling
 .venv/

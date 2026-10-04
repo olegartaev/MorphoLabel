@@ -37,6 +37,9 @@ class SectionView:
         from tkinter import ttk
         project=getattr(self.context,"project",None)
         model=_attention_banner_model(project,stages)
+        if model:
+            key=(str(project.root),self.context.section,"landmark_attention","Prediction attention")
+            if key in self.shell.__dict__.get("_closed_queue_navigation",set()):model=None
         if not model:
             self._attention_banner_state=None
             return None
@@ -59,7 +62,7 @@ class SectionView:
                 project.set_ui_state("attention_banner_dismissed_generation_id",generation)
             self._attention_banner_state=None
             box.destroy()
-        self.button(box,"×",dismiss,"Hide this reminder. The review queue stays saved.").pack(side="right",padx=(6,0))
+        self.button(box,"Hide reminder",dismiss,"Hide this reminder. The review queue stays saved.",icon="close").pack(side="right",padx=(6,0))
         self.button(box,"Continue",command,"Open the saved review queue. Nothing is verified automatically.",style="Primary.TButton").pack(side="right",padx=(12,0))
         return box
 

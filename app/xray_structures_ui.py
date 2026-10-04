@@ -12,7 +12,10 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageTk
 
 from app.photo_list import PhotoListCanvas
-from app.ui.icons import CONTROL_ICON_SIZE, tk_icon
+from app.ui.icons import CONTROL_ICON_SIZE, WORKFLOW_ICON_SIZE, tk_icon
+from app.ui.design import ElidedLabel, FlowRow, action_icon, structure_prediction_text
+from app.ui.workflow import WorkflowDock
+from types import SimpleNamespace
 from app.ui.photo_list_panel import DEFAULT_SHOW_EXCLUDED, filtered_photo_indices
 from app.ui.tooltips import Tooltip
 from .xray_crop import oriented_crop
@@ -134,8 +137,8 @@ class XRaySpecimenListPanel(ttk.Frame):
         search=ttk.Frame(self,padding=(0,0,0,4));search.pack(fill="x");search.columnconfigure(0,weight=1);search.columnconfigure(1,weight=1)
         ttk.Label(search,text="Sample",style="Muted.TLabel").grid(row=0,column=0,sticky="w")
         ttk.Label(search,text="Specimen",style="Muted.TLabel").grid(row=0,column=1,sticky="w",padx=(6,0))
-        self.sample_entry=ttk.Entry(search,textvariable=self.sample_query);self.sample_entry.grid(row=1,column=0,sticky="ew",pady=(2,0))
-        self.specimen_entry=ttk.Entry(search,textvariable=self.specimen_query);self.specimen_entry.grid(row=1,column=1,sticky="ew",padx=(6,0),pady=(2,0))
+        self.sample_entry=ttk.Entry(search,textvariable=self.sample_query,width=12);self.sample_entry.grid(row=1,column=0,sticky="ew",pady=(2,0))
+        self.specimen_entry=ttk.Entry(search,textvariable=self.specimen_query,width=12);self.specimen_entry.grid(row=1,column=1,sticky="ew",padx=(6,0),pady=(2,0))
         tooltip.bind(self.sample_entry,"Find specimens by locality / source subfolder.")
         tooltip.bind(self.specimen_entry,"Find a specimen by plate filename or specimen label.")
 
@@ -144,9 +147,9 @@ class XRaySpecimenListPanel(ttk.Frame):
             square=tk.Canvas(legend,width=13,height=13,highlightthickness=0,bd=0)
             square.create_rectangle(2,2,10,10,fill="white",outline=color,width=3);square.pack(side="left")
             ttk.Label(legend,text=text,style="Muted.TLabel").pack(side="left",padx=(0,7))
-        ttk.Label(legend,text="×",style="Muted.TLabel").pack(side="left")
-        ttk.Label(legend,text=" excluded",style="Muted.TLabel").pack(side="left",padx=(0,7))
-        show=ttk.Checkbutton(legend,text="Show excluded",variable=self.show_excluded);show.pack(side="right")
+        options=ttk.Frame(self);options.pack(fill="x",pady=(0,3))
+        show=ttk.Checkbutton(options,text="Show excluded",variable=self.show_excluded);show.pack(side="left")
+        ttk.Label(options,text="× excluded",style="Muted.TLabel").pack(side="right")
         tooltip.bind(show,"Show excluded specimens so they can be inspected or restored.")
 
         host=ttk.Frame(self);host.pack(fill="both",expand=True)
@@ -200,7 +203,7 @@ class XRaySpecimenListPanel(ttk.Frame):
         tip="Excluded specimen — scientific data kept; use Restore below." if excluded else ("Verified structures" if status=="verified" else "Crop changed — annotate this specimen again" if status.startswith("stale") else "Saved draft — review required" if status else "Not started")
         return {
             "number":str(int(row.get("workflow_no") or index+1)),"cal":"","has_crop":True,"excluded":excluded,
-            "text":f"{row['sample_id']} | {path.name} | plate №{int(row.get('ordinal') or 0)}",
+            "text":f"{row['sample_id']} | {path.name} | specimen {int(row.get('ordinal') or 0)}",
             "status":row["status_color"],"tooltip":tip,"review_warning":False,
         }
 
@@ -290,9 +293,9 @@ class XRayStructureWorkspace:
         self._key_bind_id=None
         self._build();self._bind_keys();self.refresh()
 
-    def _icon(self,master,name):
-        key=("core",name,CONTROL_ICON_SIZE)
-        if key not in self._icons:self._icons[key]=tk_icon(master,name,CONTROL_ICON_SIZE)
+    def _icon(self,master,name,size=CONTROL_ICON_SIZE):
+        key=("core",name,size)
+        if key not in self._icons:self._icons[key]=tk_icon(master,name,size)
         return self._icons[key]
 
     def _xray_icon(self,master,name):
@@ -327,70 +330,63 @@ class XRayStructureWorkspace:
         icon=ImageTk.PhotoImage(image.resize((int(size),int(size)),Image.Resampling.LANCZOS),master=master)
         self._icons[key]=icon;return icon
 
+    def _button(self,parent,text,command,help_text="",icon=None,style="P.TButton"):
+        icon=icon or action_icon(text)
+        button=ttk.Button(parent,text=text,command=command,style=style,
+                          image=self._icon(parent,icon) if icon else "",compound="left")
+        if help_text:self.tip.bind(button,help_text)
+        return button
+
     def _build(self):
-        outer=ttk.Frame(self.parent,padding=(0,0));outer.pack(fill="both",expand=True);self.outer=outer
+        outer=ttk.Frame(self.parent);outer.pack(fill="both",expand=True);self.outer=outer
         outer.bind("<Destroy>",self._destroy,add="+")
         panes=ttk.Panedwindow(outer,orient="horizontal");panes.pack(fill="both",expand=True)
-        left=ttk.Frame(panes);main=ttk.Frame(panes);panes.add(left,weight=0);panes.add(main,weight=1);self.panes=panes
-        main.columnconfigure(0,weight=1);main.rowconfigure(2,weight=1)
-
+        left=ttk.Frame(panes,width=320,height=400);left.pack_propagate(False);main=ttk.Frame(panes);panes.add(left,weight=0);panes.add(main,weight=1);self.panes=panes
+        main.grid_propagate(False)
+        main.columnconfigure(0,weight=1);main.rowconfigure(3,weight=1)
         self.specimen_list=XRaySpecimenListPanel(left,self.project,self._list_selected,self.tip,self._specimen_exclusion_changed);self.specimen_list.pack(fill="both",expand=True)
+        panes.bind("<Configure>",self._set_initial_sash,add="+")
         self.root.after_idle(self._set_initial_sash)
 
-        self.review_queue_banner=ttk.Frame(main,style="Attention.TFrame",padding=(9,5))
-        self.review_queue_banner.grid(row=0,column=0,sticky="ew",pady=(0,3))
-        self.review_queue_label=ttk.Label(self.review_queue_banner,text="",style="AttentionTitle.TLabel",justify="left",wraplength=760)
-        self.review_queue_label.pack(side="left",fill="x",expand=True)
-        ttk.Button(self.review_queue_banner,text="‹ Previous",command=lambda:self._move_result_review(-1)).pack(side="left",padx=(6,2))
-        ttk.Button(self.review_queue_banner,text="Next ›",command=lambda:self._move_result_review(1),style="Primary.TButton").pack(side="left",padx=2)
-        ttk.Button(self.review_queue_banner,text="×",command=self._close_result_review,width=3).pack(side="left",padx=(2,0))
-        header=ttk.Frame(main,style="Toolbar.TFrame");header.grid(row=1,column=0,sticky="ew",pady=(0,4));header.columnconfigure(0,weight=1)
-        meta=ttk.Frame(header,style="Toolbar.TFrame");meta.grid(row=0,column=0,sticky="w",padx=(2,8))
-        self._context_values={}
-        for column,(key,title) in enumerate((("locality","Locality:"),("plate","Plate:"),("specimen","Specimen:"))):
-            offset=column*3
-            ttk.Label(meta,text=title,style="SectionTitle.TLabel").grid(row=0,column=offset,sticky="w")
-            value=ttk.Label(meta,text="—",anchor="w");value.grid(row=0,column=offset+1,sticky="w",padx=(4,8))
-            self._context_values[key]=value
-            if column<2:ttk.Label(meta,text="·",style="Muted.TLabel").grid(row=0,column=offset+2,sticky="w",padx=(0,8))
-        status_host=ttk.Frame(header,style="Toolbar.TFrame");status_host.grid(row=0,column=1,sticky="e",padx=(6,4))
+        context=ttk.Frame(main,padding=(6,2));context.grid(row=0,column=0,sticky="ew");context.columnconfigure(0,weight=1)
+        self.context_label=ElidedLabel(context,text="No specimen selected",style="SectionTitle.TLabel",anchor="w")
+        self.context_label.grid(row=0,column=0,sticky="ew",padx=(0,8))
+        self.tip.bind(self.context_label,lambda:self.context_label.full_text)
+        status_host=ttk.Frame(context);status_host.grid(row=0,column=1,sticky="e")
         self.summary_labels={}
         for key,title in (("verified","Verified"),("draft","Draft"),("unstarted","Not started")):
             label=ttk.Label(status_host,text=f"{title}: 0",style="StatusChip.TLabel")
             label.pack(side="left",padx=(0,2));self.summary_labels[key]=label
         self.save_label=ttk.Label(status_host,text="Current: Not started",style="StatusChip.TLabel");self.save_label.pack(side="left",padx=(3,0))
-        nav=ttk.Frame(header,style="Toolbar.TFrame");nav.grid(row=0,column=2,sticky="e")
-        tools=ttk.Frame(nav,style="Toolbar.TFrame");tools.grid(row=0,column=0,sticky="e")
-        self.clear_type_button=ttk.Menubutton(
-            tools,text="Clear type…",image=self._xray_icon(tools,"clear_marker_set"),compound="left",style="P.TButton",
-        )
-        self.clear_type_button.pack(side="left",padx=(0,2));self.tip.bind(self.clear_type_button,"Clear one marker type.")
-        self.clear_all_button=ttk.Button(
-            tools,text="Clear all markers",image=self._xray_icon(tools,"clear_all_markers"),compound="left",
-            style="P.TButton",command=self.clear_all_markers,
-        )
-        self.clear_all_button.pack(side="left",padx=2);self.tip.bind(self.clear_all_button,"Clear all markers.")
-        self.display_button=ttk.Button(
-            tools,text="Display…",image=self._icon(tools,"display"),compound="left",style="P.TButton",command=self.open_display_settings,
-        )
-        self.display_button.pack(side="left",padx=(2,2));self.tip.bind(self.display_button,"Marker display.")
-        self.check_results_button=ttk.Button(
-            tools,text="Check results…",style="P.TButton",command=self.on_check_results,
-        )
-        self.check_results_button.pack(side="left",padx=(2,4))
-        self.tip.bind(self.check_results_button,"Rank suspicious calculated results worst first and start a navigable manual review queue.")
-        self.predict_current_button=ttk.Button(
-            tools,text="Predict current",image=self._xray_icon(tools,"xray_structures"),compound="left",
-            style="P.TButton",command=self.predict_current_structure,
-        )
-        self.predict_current_button.pack(side="left",padx=(2,2))
-        self.tip.bind(self.predict_current_button,"Place or refresh AI suggestions on this current specimen, including repeatability passes. Correct the suggestions by hand; only Apply makes the result human-verified.")
-        self.apply_separator=ttk.Separator(nav,orient="vertical");self.apply_separator.grid(row=0,column=1,sticky="ns",padx=7,pady=2)
-        self.apply_button=ttk.Button(nav,text="Apply",image=self._xray_icon(nav,"structure_apply"),compound="left",style="NavPrimary.TButton",command=self.verify_current)
-        self.apply_button.grid(row=0,column=2,sticky="e")
-        self.tip.bind(self.apply_button,"Verify without moving.")
 
-        canvas_host=ttk.Frame(main);canvas_host.grid(row=2,column=0,sticky="nsew");canvas_host.pack_propagate(False)
+        header=FlowRow(main,style="Toolbar.TFrame");header.grid(row=1,column=0,sticky="ew",pady=(0,3))
+        ttk.Label(header,text="Marker actions:",style="SectionTitle.TLabel").pack(side="left",padx=(0,6))
+        self.clear_type_button=ttk.Menubutton(header,text="Clear type…",image=self._icon(header,"clear_type"),compound="left",style="P.TButton")
+        self.clear_type_button.pack(side="left",padx=2);self.tip.bind(self.clear_type_button,"Clear one marker type on this specimen.")
+        self.clear_all_button=self._button(header,"Clear all…",self.clear_all_markers,"Clear all markers on this specimen.",icon="clear");self.clear_all_button.pack(side="left",padx=2)
+        self.apply_separator=ttk.Separator(header,orient="vertical");self.apply_separator.pack(side="left",fill="y",padx=(6,4),pady=3)
+        self.apply_button=self._button(header,"Verify specimen",self.verify_current,"Confirm this marker set after human review. In result review, this also advances the existing review queue.",icon="verify")
+        self.apply_button.pack(side="left",padx=2)
+        self.display_button=self._button(header,"Display…",self.open_display_settings,"Marker colors, shapes, size and labels.",icon="display")
+        self.display_button.pack(side="right",padx=(8,2))
+
+        header.relayout()
+        self.queue_host=ttk.Frame(main);self.queue_host.grid(row=2,column=0,sticky="ew",pady=(0,3))
+        self.review_queue_banner=ttk.Frame(self.queue_host,style="Attention.TFrame",padding=(6,4))
+        self.review_queue_label=ElidedLabel(self.review_queue_banner,text="",style="AttentionTitle.TLabel",anchor="w")
+        self.review_queue_label.pack(side="left",fill="x",expand=True)
+        self.tip.bind(self.review_queue_label,lambda:self.review_queue_label.full_text)
+        self._button(self.review_queue_banner,"Previous",lambda:self._move_result_review(-1),"Previous result in this review queue.",icon="previous").pack(side="left",padx=(6,2))
+        self._button(self.review_queue_banner,"Next",lambda:self._move_result_review(1),"Inspect the next result without verifying this one.",icon="next").pack(side="left",padx=2)
+        self._button(self.review_queue_banner,"Close queue",self._close_result_review,"Close this result review queue; all saved annotations and results are kept.",icon="close").pack(side="right",padx=(4,0))
+        self.annotation_queue_banner=ttk.Frame(self.queue_host,style="Attention.TFrame",padding=(6,4))
+        self.annotation_queue_label=ElidedLabel(self.annotation_queue_banner,text="",style="AttentionTitle.TLabel",anchor="w")
+        self.annotation_queue_label.pack(side="left",fill="x",expand=True)
+        self._button(self.annotation_queue_banner,"Previous",lambda:self._navigate(-1),"Previous specimen in this annotation batch.",icon="previous").pack(side="left",padx=(6,2))
+        self._button(self.annotation_queue_banner,"Verify & Next",self.verify_next,"Verify this marker set and move to the next specimen in this batch.",icon="verify",style="NavPrimary.TButton").pack(side="left",padx=2)
+        self._button(self.annotation_queue_banner,"Close queue",self._close_annotation_batch,"Close navigation through this batch; keep all saved annotations and repeatability passes.",icon="close").pack(side="right",padx=(4,0))
+
+        canvas_host=ttk.Frame(main);canvas_host.grid(row=3,column=0,sticky="nsew");canvas_host.pack_propagate(False)
         self.canvas=tk.Canvas(canvas_host,background="#202020",highlightthickness=0,takefocus=True,cursor="crosshair");self.canvas.pack(fill="both",expand=True)
         for event,handler in (
             ("<Configure>",lambda _e:self._draw()),
@@ -400,56 +396,62 @@ class XRayStructureWorkspace:
             ("<MouseWheel>",self._wheel),
         ):self.canvas.bind(event,handler)
         self.canvas.bind("<Delete>",self.delete_selected);self.canvas.bind("<BackSpace>",self.delete_selected)
+        self.prediction_label=ElidedLabel(context,text="",style="Prediction.TLabel",anchor="w")
+        self.prediction_label.grid(row=1,column=0,columnspan=2,sticky="ew")
+        self.tip.bind(self.prediction_label,lambda:self.prediction_label.full_text)
 
-        marker_dock=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(6,4));marker_dock.grid(row=3,column=0,sticky="ew",pady=(4,0));marker_dock.columnconfigure(1,weight=1)
+        marker_dock=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(6,3));marker_dock.grid(row=4,column=0,sticky="ew",pady=(2,0));marker_dock.columnconfigure(1,weight=1)
         ttk.Label(marker_dock,text="Markers:",style="SectionTitle.TLabel").grid(row=0,column=0,sticky="w",padx=(0,6))
-        self.marker_host=ttk.Frame(marker_dock,style="WorkflowDock.TFrame");self.marker_host.grid(row=0,column=1,sticky="ew")
+        self.marker_host=FlowRow(marker_dock,style="WorkflowDock.TFrame");self.marker_host.grid(row=0,column=1,sticky="ew")
 
-        workflow=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(0,4,0,0));workflow.grid(row=4,column=0,sticky="ew")
-        workflow.columnconfigure(0,weight=1);workflow.columnconfigure(1,weight=1);workflow.columnconfigure(2,weight=1)
-        one=self._workflow_card(workflow,0,"1. Annotation batch","Work through a finite saved set with batch-only previous / next controls.")
-        self.batch_summary=ttk.Label(one,text="",style="Muted.TLabel");self.batch_summary.grid(row=0,column=0,columnspan=3,sticky="w")
-        ttk.Label(one,text="Batch").grid(row=1,column=0,sticky="w",pady=(4,0))
-        ttk.Spinbox(one,from_=1,to=500,textvariable=self.batch_size,width=5).grid(row=1,column=1,sticky="w",padx=4,pady=(4,0))
-        self.batch_button=ttk.Button(one,text="Start batch",command=self.start_batch);self.batch_button.grid(row=2,column=0,columnspan=3,sticky="w",pady=(5,0))
+        adapter=SimpleNamespace(ui_icon=lambda name,size:self._icon(main,name,size),tip=self.tip)
+        workflow=WorkflowDock(main,adapter,help_factory=lambda host:self._button(host,"Help",self._show_help,"Open the Structures guide."))
+        workflow.grid(row=5,column=0,sticky="ew",pady=(2,0));self.workflow_dock=workflow
+        one=workflow.add_card("1. Repeatability",icon="landmark_repeat",help_text="Measure the same control specimens twice in independent annotation passes.")
+        self.repeat_pool_label=ttk.Label(one,text="",style="Muted.TLabel");self.repeat_pool_label.grid(row=0,column=0,sticky="w")
+        self.repeat_pass_label=ttk.Label(one,text="",style="Muted.TLabel");self.repeat_pass_label.grid(row=0,column=1,sticky="e",padx=(8,0));one.columnconfigure(1,weight=1)
+        self.repeat_button=self._button(one,"Repeat…",self.open_repeatability,"Open the complete human repeatability workflow.");self.repeat_button.grid(row=1,column=0,columnspan=2,sticky="w",pady=(5,0))
 
-        two=self._workflow_card(
-            workflow,1,"2. Repeatability",
-            "Measure a random control sample twice without seeing the other annotation. Repeat… opens the complete workflow.",
-        )
-        self.repeat_pool_label=ttk.Label(two,text="",style="Muted.TLabel");self.repeat_pool_label.grid(row=0,column=0,sticky="w")
-        self.repeat_pass_label=ttk.Label(two,text="",style="Muted.TLabel");self.repeat_pass_label.grid(row=0,column=1,sticky="e",padx=(8,0))
-        two.columnconfigure(1,weight=1)
-        self.repeat_button=ttk.Button(two,text="Repeat…",command=self.open_repeatability)
-        self.repeat_button.grid(row=1,column=0,columnspan=2,sticky="w",pady=(5,0))
+        two=workflow.add_card("2. Training data",icon="landmark_training",help_text="Annotation batch: human-verify the main specimen pass for training.")
+        self.batch_summary=ttk.Label(two,text="",style="Muted.TLabel");self.batch_summary.grid(row=0,column=0,columnspan=3,sticky="w")
+        ttk.Label(two,text="Batch").grid(row=1,column=0,sticky="w",pady=(4,0))
+        ttk.Spinbox(two,from_=1,to=500,textvariable=self.batch_size,width=5).grid(row=1,column=1,sticky="w",padx=4,pady=(4,0))
+        self.batch_button=self._button(two,"Start batch",self.start_batch,"Start or continue the existing finite annotation batch.");self.batch_button.grid(row=2,column=0,columnspan=3,sticky="w",pady=(5,0))
 
-        three=self._workflow_card(
-            workflow,2,"3. Training data",
-            "Train only from the main human-verified pass 1. Human repeatability passes are never training data; the same specimen may still contribute its separate main pass 1 annotation. AI output always returns as a draft for human review.",
-        )
-        self.training_summary=ttk.Label(three,text="",style="Muted.TLabel");self.training_summary.grid(row=0,column=0,columnspan=4,sticky="w")
-        self.structure_model_label=ttk.Label(three,text="Active AI: none",style="Muted.TLabel");self.structure_model_label.grid(row=1,column=0,columnspan=4,sticky="w",pady=(1,0))
-        train_actions=ttk.Frame(three);train_actions.grid(row=2,column=0,columnspan=4,sticky="ew",pady=(5,0))
-        self.structure_train_button=ttk.Button(train_actions,text="Train Structure AI",command=self.train_structure_ai)
-        self.structure_train_button.pack(side="left")
-        ttk.Button(train_actions,text="Models…",command=self.manage_structure_models).pack(side="left",padx=(5,0))
-        predict_actions=ttk.Frame(three);predict_actions.grid(row=3,column=0,columnspan=4,sticky="ew",pady=(5,0))
-        ttk.Label(predict_actions,text="Next").pack(side="left")
-        ttk.Spinbox(predict_actions,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=(3,5))
-        self.structure_predict_next_button=ttk.Button(predict_actions,text="Predict next",command=lambda:self.predict_structure_batch(self.prediction_batch_size.get()))
-        self.structure_predict_next_button.pack(side="left")
-        self.structure_predict_all_button=ttk.Button(predict_actions,text="Predict all",command=lambda:self.predict_structure_batch(None))
-        self.structure_predict_all_button.pack(side="left",padx=(4,0))
-        self.tip.bind(self.structure_predict_all_button,"Predict every confirmed specimen crop that is not human-verified. Existing unverified drafts may be refreshed; verified annotations are never overwritten.")
-        review_actions=ttk.Frame(three);review_actions.grid(row=4,column=0,columnspan=4,sticky="ew",pady=(5,0))
-        self.structure_review_button=ttk.Button(review_actions,text="Review AI",command=self.review_structure_ai)
-        self.structure_review_button.pack(side="left")
-        ttk.Button(review_actions,text="Next unfinished",command=self.next_unfinished).pack(side="left",padx=(5,0))
+        three=workflow.add_card("3. Train model",icon="landmark_train",help_text="Train from human-verified pass 1. Repeatability passes are excluded.")
+        self.training_summary=ttk.Label(three,text="",style="Muted.TLabel");self.training_summary.grid(row=0,column=0,columnspan=2,sticky="w")
+        self.structure_model_label=ElidedLabel(three,text="Active AI: none",style="Muted.TLabel",anchor="w");self.structure_model_label.grid(row=1,column=0,columnspan=2,sticky="ew",pady=(2,0));three.columnconfigure(0,weight=1)
+        self.structure_train_button=self._button(three,"Train",self.train_structure_ai,"Train Structure AI from existing eligible annotations.",style="Primary.TButton");self.structure_train_button.grid(row=2,column=0,sticky="w",pady=(5,0))
+        self._button(three,"Models…",self.manage_structure_models,"Compare and select saved Structure models.").grid(row=2,column=1,sticky="e",padx=(5,0),pady=(5,0))
 
-    def _workflow_card(self,parent,column,title,help_text):
-        label=ttk.Frame(parent);ttk.Label(label,text=title,style="WorkflowCardTitle.TLabel").pack(side="left")
-        card=ttk.LabelFrame(parent,labelwidget=label,padding=(7,5),style="WorkflowCard.TLabelframe")
-        card.grid(row=0,column=column,sticky="nsew",padx=(0 if column==0 else 4,0));self.tip.bind(card,help_text);return card
+        four=workflow.add_card("4. Predict & review",icon="landmark_apply",help_text="Predict unverified crops, inspect AI drafts, and check calculated trait values.")
+        batch_row=ttk.Frame(four);batch_row.grid(row=0,column=0,columnspan=2,sticky="ew")
+        ttk.Label(batch_row,text="Next").pack(side="left");ttk.Spinbox(batch_row,from_=1,to=500,textvariable=self.prediction_batch_size,width=4).pack(side="left",padx=4)
+        self.predict_current_button=self._button(batch_row,"Predict current",self.predict_current_structure,"Refresh AI suggestions for this specimen using the existing protection and confirmation rules.");self.predict_current_button.pack(side="right")
+        predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,columnspan=2,sticky="ew",pady=(5,0))
+        self.structure_predict_next_button=self._button(predict_actions,"Predict next",lambda:self.predict_structure_batch(self.prediction_batch_size.get()),"Predict the next eligible specimen crops.");self.structure_predict_next_button.pack(side="left")
+        self.structure_predict_all_button=self._button(predict_actions,"Predict all",lambda:self.predict_structure_batch(None),"Predict all eligible unverified crops; preserve verified annotations.");self.structure_predict_all_button.pack(side="left",padx=(4,0))
+        review_actions=ttk.Frame(four);review_actions.grid(row=2,column=0,columnspan=2,sticky="ew",pady=(5,0))
+        self.structure_review_button=self._button(review_actions,"Review AI",self.review_structure_ai,"Inspect saved AI drafts before verification.",style="ReviewAction.TButton");self.structure_review_button.pack(side="left")
+        self.check_results_button=self._button(review_actions,"Check results…",self.on_check_results,"Review suspicious calculated trait values.",style="ReviewAction.TButton");self.check_results_button.pack(side="left",padx=(4,0))
+        self._button(four,"Next unfinished",self.next_unfinished,"Open the next unfinished specimen.").grid(row=3,column=0,columnspan=2,sticky="w",pady=(5,0))
+
+    def _show_help(self):
+        messagebox.showinfo("Structures — quick guide",
+            "Place markers on the selected specimen. Click to place; drag to correct; Delete removes a selected marker.\n\n"
+            "Use marker visibility to record partial, absent or invisible structures. Right-click a counted marker to assign a compatible reference role.\n\n"
+            "Verify specimen confirms the current annotation. In an annotation batch, Verify & Next also advances. Close queue leaves all saved annotations intact.\n\n"
+            "Repeatability uses separate annotation passes. Train uses the existing eligible main annotations; Review AI opens the saved drafts. Check results reviews calculated trait values.",parent=self.root)
+
+    def _close_annotation_batch(self):
+        self.project.set_ui_state("xray_structure_active_batch",{})
+        self._refresh_workflow()
+
+    def _refresh_prediction_info(self):
+        text=structure_prediction_text(self.project,self.selected_specimen_id,self.pass_no.get())
+        self.prediction_label.configure(text=text)
+        if text:self.prediction_label.grid()
+        else:self.prediction_label.grid_remove()
 
     def _bind_keys(self):
         self._key_bind_id=self.root.bind("<KeyPress>",self._key_pressed,add="+")
@@ -487,9 +489,11 @@ class XRayStructureWorkspace:
             if structure:
                 self._choose_structure(structure["id"]);return "break"
 
-    def _set_initial_sash(self):
+    def _set_initial_sash(self,_event=None):
         try:
+            if self.panes.winfo_width()<=1 or getattr(self,"_initial_sash_done",False):return
             width=max(900,self.panes.winfo_width());self.panes.sashpos(0,max(300,min(400,int(width*.21))))
+            self._initial_sash_done=True
         except Exception:pass
 
     def _sample(self,relative_path):return XRaySpecimenListPanel._sample(relative_path)
@@ -504,7 +508,8 @@ class XRayStructureWorkspace:
                 "plate":path.name,
                 "specimen":f"#{workflow_no}" if workflow_no else f"plate №{int(item.get('ordinal') or 0)}",
             }
-        for key,label in self._context_values.items():label.configure(text=values[key])
+        text=f"{values['locality']} · {values['plate']} · Specimen {values['specimen']}"
+        self.context_label.configure(text=text)
 
     def _notify_selection(self):
         if not self.selected_specimen_id:return
@@ -564,6 +569,7 @@ class XRayStructureWorkspace:
             )
         if not structures:ttk.Label(self.marker_host,text="No structures configured",style="Muted.TLabel").pack(side="left")
         self._refresh_clear_menu(structures,settings,counts)
+        self.marker_host.relayout()
 
     def _refresh_clear_menu(self,structures,settings,counts):
         menu=tk.Menu(self.clear_type_button,tearoff=False);self._clear_menu_icons=[]
@@ -650,7 +656,7 @@ class XRayStructureWorkspace:
             messagebox.showerror("Structures",f"Could not open specimen crop:\n{exc}",parent=self.root);self.crop_image=None
         self.annotations=self.project.annotations(specimen_id,self.pass_no.get());self.roles=self.project.annotation_roles(specimen_id,self.pass_no.get())
         self.zoom=1.0;self.pan=None;self.pan_drag=None;self._raster_key=None;self._image_item=None;self.photo=None;self.canvas.delete("all")
-        self.specimen_list.select(specimen_id,reveal=False);self._build_marker_buttons();self._update_counts();self._refresh_summary();self._draw();self._notify_selection();self.canvas.focus_set()
+        self.specimen_list.select(specimen_id,reveal=False);self._build_marker_buttons();self._update_counts();self._refresh_summary();self._refresh_workflow();self._refresh_prediction_info();self._draw();self._notify_selection();self.canvas.focus_set()
 
     def _clear(self):
         self.selected_specimen_id="";self.crop_image=self.photo=None;self.annotations=[];self.roles=[];self.current_specimen_excluded=False
@@ -659,7 +665,8 @@ class XRayStructureWorkspace:
             try:
                 image=self.project.source_image(self.preferred_image_id);path=Path(image["relative_path"])
                 values={"locality":self._sample(image["relative_path"]),"plate":path.name,"specimen":"—"}
-                for key,label in self._context_values.items():label.configure(text=values[key])
+                text=f"{values['locality']} · {values['plate']} · No confirmed specimen"
+                self.context_label.configure(text=text)
             except Exception:self._set_context(None)
             self.canvas.create_text(
                 18,18,anchor="nw",fill="white",
@@ -667,7 +674,7 @@ class XRayStructureWorkspace:
                 font=("Segoe UI",10,"bold"),
             )
         else:self._set_context(None)
-        self._build_marker_buttons();self._update_counts()
+        self._build_marker_buttons();self._update_counts();self._refresh_prediction_info()
 
     def _refresh_summary(self):
         summary=self.project.annotation_summary(self.pass_no.get())
@@ -681,7 +688,7 @@ class XRayStructureWorkspace:
     def _refresh_result_review_banner(self):
         value=result_review_queue(self.project)
         if value is None:
-            self.review_queue_banner.grid_remove();return
+            self.review_queue_banner.pack_forget();return
         items=value["items"];position=int(value["position"]);item=items[position]
         priority="High priority" if item.get("severity")=="high" else "Review"
         checks=int(item.get("issue_count") or 0)
@@ -689,7 +696,7 @@ class XRayStructureWorkspace:
         self.review_queue_label.configure(
             text=f"Result review · {position+1} / {len(items)} · {priority} · {checks} check{'s' if checks!=1 else ''} · specimen #{workflow_no or '?'} · {item['sample']} · {item['plate']}\n{item.get('top_reason') or 'Inspect this specimen and verify when the markers are correct.'}"
         )
-        self.review_queue_banner.grid()
+        self.review_queue_banner.pack(fill="x")
 
     def _move_result_review(self,step):
         value,_finished=move_result_review_queue(self.project,step)
@@ -717,11 +724,19 @@ class XRayStructureWorkspace:
             self.repeat_pass_label.configure(text="A1 — · A2 —")
         self.repeat_button.configure(state="normal" if p1["verified"] else "disabled")
         model=self.project.active_structure_model();candidates=len(self.project.structure_prediction_candidate_ids());review=len(self.project.structure_ai_review_ids())
-        self.training_summary.configure(text=f"{p1['verified']} human-verified · {candidates} ready for AI · {review} to review")
+        self.training_summary.configure(text=f"{p1['verified']} human-verified")
         self.structure_model_label.configure(text=f"Active AI: {(model or {}).get('model_id') or 'none'}")
         state="normal" if model and self.pass_no.get()==1 else "disabled"
         self.structure_predict_next_button.configure(state=state);self.structure_predict_all_button.configure(state=state)
         self.structure_review_button.configure(state="normal" if review else "disabled")
+        current=self.selected_specimen_id;ids=list(batch.get("ids") or ())
+        result_queue=result_review_queue(self.project)
+        if ids and current in ids and result_queue is None:
+            pos=ids.index(current)+1
+            self.annotation_queue_label.configure(text=f"Annotation batch · {pos} / {len(ids)}")
+            self.annotation_queue_banner.pack(fill="x")
+        else:self.annotation_queue_banner.pack_forget()
+
 
     def _update_counts(self):
         counts={}
@@ -808,7 +823,7 @@ class XRayStructureWorkspace:
 
     def _after_edit(self,text="Saved · draft"):
         self.annotations=self.project.annotations(self.selected_specimen_id,self.pass_no.get());self.roles=self.project.annotation_roles(self.selected_specimen_id,self.pass_no.get())
-        self.save_label.configure(text=text);self.specimen_list.refresh(preserve_scroll=True);self._build_marker_buttons();self._update_counts();self._refresh_summary();self._refresh_workflow();self._draw_overlays();self.on_changed()
+        self.save_label.configure(text=text);self.specimen_list.refresh(preserve_scroll=True);self._build_marker_buttons();self._update_counts();self._refresh_summary();self._refresh_workflow();self._draw_overlays();self._refresh_prediction_info();self.on_changed()
 
     def _canvas_down(self,event):
         if self.crop_image is None or not self.selected_specimen_id or self.current_specimen_excluded:return

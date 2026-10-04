@@ -561,7 +561,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         for text in (
-            "Apply","Sample","Specimen","Locality:","Plate:","Specimen:",
+            "Verify specimen","Sample","Specimen","context_label",
             "PhotoListCanvas","status_shape=\"square\"","Annotation batch","Repeatability","Training data",
             "delete_selected","clear_marker_category","clear_all_markers","clear_type_button",
             "move_annotation","replace_single","_wheel","_pan_motion","_key_pressed","_structure_button_order",
@@ -569,8 +569,8 @@ class XRayStructureUIContractTests(unittest.TestCase):
             self.assertIn(text,ui)
         self.assertNotIn("Fish №",ui)
         self.assertNotIn("Manual pass",ui)
-        self.assertNotIn("Verify & Next",ui)
-        self.assertNotIn("Marker actions:",ui)
+        self.assertIn("Verify & Next",ui)
+        self.assertIn("Marker actions:",ui)
         self.assertIn("XRayStructureWorkspace(",module)
         self.assertIn("initial_specimen_id=selection.get(\"specimen_id\")",module)
         self.assertIn("on_selection=self._set_selection",module)
@@ -592,20 +592,20 @@ class XRayStructureUIContractTests(unittest.TestCase):
         qc=(root/"app/xray_result_qc.py").read_text(encoding="utf-8")
         export_section=module[module.index("    def _render_results"):module.index("    def _show_result_checks")]
         self.assertNotIn("Check results…",export_section)
-        self.assertIn('text="Check results…"',ui)
+        self.assertIn('"Check results…",self.on_check_results',ui)
         self.assertIn("build_result_qc(self.project)",module)
         self.assertIn("start_result_review_queue(self.project",module)
         for text in ("modified_z","series_spacing","sample_outlier","detached_reference","repeat_count","repeat_position"):
             self.assertIn(text,qc)
 
-    def test_structure_toolbar_has_no_previous_next_buttons_and_apply_stays_separate(self):
+    def test_navigation_is_in_queue_strip_and_verification_stays_separate(self):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         self.assertNotIn("self.previous_button=ttk.Button",ui)
         self.assertNotIn("self.next_button=ttk.Button",ui)
         self.assertNotIn("self.batch_nav=ttk.Frame",ui)
         self.assertIn("self.apply_separator=ttk.Separator",ui)
-        self.assertIn("command=self.verify_current",ui)
+        self.assertIn('"Verify specimen",self.verify_current',ui)
         self.assertIn("def _navigate(self,step):",ui)
         self.assertIn("def verify_next(self):",ui)
         self.assertIn("if not batch or self.selected_specimen_id not in batch.get(\"ids\",()):return",ui)
@@ -629,7 +629,8 @@ class XRayStructureUIContractTests(unittest.TestCase):
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         for text in ('"Complete"','"Partial"','"Not visible"','"Absent"',"_VISIBILITY_SYMBOLS","_marker_visibility_buttons","StatusChip.TLabel"):
             self.assertIn(text,ui)
-        self.assertIn('(("locality","Locality:"),("plate","Plate:"),("specimen","Specimen:"))',ui)
+        self.assertIn('self.context_label=ElidedLabel',ui)
+        self.assertIn("values['locality']",ui);self.assertIn("values['plate']",ui);self.assertIn("values['specimen']",ui)
         self.assertIn('style="SectionTitle.TLabel"',ui)
         self.assertIn('width=2,style="P.TButton"',ui)
         self.assertNotIn('text="Visibility:"',ui)
@@ -637,11 +638,11 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertNotIn("self.counts_label",ui)
         self.assertNotIn("self.summary_label=ttk.Label",ui)
 
-    def test_structure_toolbar_keeps_current_layout_and_restores_original_marker_display(self):
+    def test_structure_toolbar_uses_shared_actions_and_preserves_scientific_marker_display(self):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         display=(root/"app/xray_structure_display.py").read_text(encoding="utf-8")
-        for text in ('text="Clear type…"', 'text="Clear all markers"', 'text="Display…"', 'text="Apply"', 'text="Markers:"'):
+        for text in ('text="Clear type…"', '"Clear all…",self.clear_all_markers', '"Display…",self.open_display_settings', '"Verify specimen",self.verify_current', 'text="Markers:"'):
             self.assertIn(text,ui)
         self.assertIn("self.apply_separator=ttk.Separator",ui)
         self.assertIn('self.active_structure_id=_first_structure_id(self.project.scheme.get("structures",()))',ui)
@@ -702,7 +703,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertNotIn(".save(",ui)
         self.assertIn("draw_xray_marker",ui)
         self.assertIn('self.canvas.move(f"annotation:{self._drag_annotation}"',ui)
-        self.assertIn("| plate №{int(row.get('ordinal') or 0)}",ui)
+        self.assertIn("| specimen {int(row.get('ordinal') or 0)}",ui)
         self.assertIn('"number":str(int(row.get("workflow_no") or index+1))',ui)
         self.assertNotIn('text="Delete"',ui)
         self.assertNotIn("Wheel = zoom · right-drag = pan",ui)

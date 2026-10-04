@@ -82,39 +82,8 @@ class ProductionShell(tk.Tk):
         self._ui_icons={}
         install_auto_center(self)
         self.style=ttk.Style(self)
-        # A deliberately small design system: quiet surfaces, one accent and
-        # consistent hierarchy.  Section code should use these styles instead
-        # of inventing local colours/sizes.
-        self.style.configure("P.TButton", padding=(10,7))
-        self.style.configure("Icon.TButton", padding=(7,4), font=("Segoe UI",9))
-        self.style.configure("Primary.TButton", padding=(10,6), font=("Segoe UI",9,"bold"))
-        self.style.configure("ReviewAction.TButton", padding=(8,5), font=("Segoe UI",9,"bold"))
-        self.style.configure("CropNext.TButton", padding=(10,7), font=("Segoe UI",9,"bold"), foreground="black")
-        self.style.map("CropNext.TButton", foreground=[("disabled","black"),("!disabled","black")])
-        self.style.configure("Stage.TButton", padding=(10,5), font=("Segoe UI",9), foreground="#27313a")
-        self.style.configure("StageActive.TButton", padding=(12,6), font=("Segoe UI",9,"bold"), foreground=ACC, background="#d9edf9", relief="sunken", borderwidth=2)
-        self.style.map("StageActive.TButton", foreground=[("!disabled",ACC)], background=[("active","#c8e4f5"),("!disabled","#d9edf9")])
-        self.style.configure("Topbar.TFrame", padding=(0,1))
-        self.style.configure("Toolbar.TFrame", padding=(8,5))
-        self.style.configure("WorkflowDock.TFrame")
-        self.style.configure("WorkflowDockTitle.TLabel", font=("Segoe UI",9,"bold"), foreground="#58636d")
-        self.style.configure("WorkflowCard.TLabelframe", padding=(1,1))
-        self.style.configure("WorkflowCardTitle.TLabel", font=("Segoe UI",9,"bold"), foreground="#27313a")
-        self.style.configure("WorkflowIcon.TLabel", font=("Segoe UI Emoji",11))
-        self.style.configure("WorkflowCheck.TLabel", font=("Segoe UI Symbol",12,"bold"), foreground="#188038")
-        self.style.configure("Nav.TButton", padding=(12,6), font=("Segoe UI",9,"bold"))
-        self.style.configure("NavPrimary.TButton", padding=(12,6), font=("Segoe UI",9,"bold"))
-        self.style.configure("SectionTitle.TLabel", font=("Segoe UI",9,"bold"), foreground="#27313a")
-        self.style.configure("PageTitle.TLabel", font=("Segoe UI",16,"bold"), foreground="#20272d")
-        self.style.configure("PageSubtitle.TLabel", font=("Segoe UI",10), foreground="#66727d")
-        self.style.configure("HubTitle.TLabel", font=("Segoe UI",24,"bold"), foreground="#20272d")
-        self.style.configure("ModuleTitle.TLabel", font=("Segoe UI",12,"bold"), foreground="#27313a")
-        self.style.configure("Muted.TLabel", foreground="#66727d")
-        self.style.configure("StatusChip.TLabel", padding=(5,2), foreground="#39434c")
-        self.style.configure("Attention.TFrame", background="#fff4cf")
-        self.style.configure("AttentionStep.TLabel", background="#fff4cf", foreground="#805b00", font=("Segoe UI",8,"bold"))
-        self.style.configure("AttentionTitle.TLabel", background="#fff4cf", foreground="#5f4300", font=("Segoe UI",10,"bold"))
-        self.style.configure("AttentionText.TLabel", background="#fff4cf", foreground="#39434c", font=("Segoe UI",9))
+        from .design import apply_styles
+        apply_styles(self,self.style)
         self.root=ttk.Frame(self,padding=(8,6)); self.root.pack(fill="both",expand=True)
         self.tip=Tooltip(self); self.photo_panel=None; self._selection_token=0; self._align_selected_top_once=False; self.bind("<Return>", self._enter_next)
         requested_label=(str(requested_project.root) if requested_project is not None else str(remembered_path or "none"))
@@ -370,7 +339,9 @@ class ProductionShell(tk.Tk):
         return self._ui_icons[key]
 
     def control_button(self,parent,text,command,help_text,primary=False,enabled=True,icon=None,icon_size=CONTROL_ICON_SIZE,**kwargs):
-        style=kwargs.pop("style","P.TButton" if primary else ("Icon.TButton" if icon else "TButton"))
+        from .design import action_icon
+        icon=icon or action_icon(text)
+        style=kwargs.pop("style","Primary.TButton" if primary else "P.TButton")
         state=kwargs.pop("state","normal" if enabled else "disabled")
         if icon:
             kwargs.setdefault("image",self.ui_icon(icon,icon_size))
@@ -488,7 +459,7 @@ class ProductionShell(tk.Tk):
         sections=visible_sections(self.context.crop_enabled()) if self.context.project else visible_sections(True)
         for spec in sections:
             active=spec.key == self.context.section
-            button=ttk.Button(row,text=("● "+spec.label) if active else spec.label,image=self.ui_icon(spec.key,TOPBAR_ICON_SIZE),compound="left",command=lambda key=spec.key:self.select(key),style="StageActive.TButton" if active else "Stage.TButton",state="normal" if self.context.project or spec.key=="project" else "disabled")
+            button=ttk.Button(row,text=spec.label,image=self.ui_icon(spec.key,TOPBAR_ICON_SIZE),compound="left",command=lambda key=spec.key:self.select(key),style="StageActive.TButton" if active else "Stage.TButton",state="normal" if self.context.project or spec.key=="project" else "disabled")
             button.pack(side="left",padx=(0,3)); self.tip.bind(button,f"Open the {spec.label} section.")
         self._menus(row)
 
@@ -528,7 +499,8 @@ class ProductionShell(tk.Tk):
         """Reserve the right-side navigation before flexible descriptive status text."""
         bar=ttk.Frame(self.main,padding=(2,1)); bar.grid(row=0,column=0,sticky="ew");bar.columnconfigure(0,weight=1);self.status_bar=bar
         left=ttk.Frame(bar);left.grid(row=0,column=0,sticky="ew");left.columnconfigure(0,weight=1);self.status_left=left
-        navigation=ttk.Frame(bar);navigation.grid(row=0,column=1,sticky="e");self.status_navigation=navigation
+        navigation=ttk.Frame(bar,style="Attention.TFrame",padding=(6,4));navigation.grid(row=1,column=0,columnspan=2,sticky="ew",pady=(3,0));self.status_navigation=navigation
+        ttk.Label(navigation,text="Review queue",style="AttentionTitle.TLabel").pack(side="left",padx=(0,10))
         self._status_context_full=""
         self.status_context=ttk.Label(left,text="",style="SectionTitle.TLabel",anchor="w",width=1);self.status_context.pack(side="left",fill="x",expand=True,padx=(0,7));self.status_context.bind("<Configure>",lambda _event:self._refresh_status_context(),add="+")
         self.status_count_host=ttk.Frame(left);self.status_count_host.pack(side="right")
@@ -545,9 +517,10 @@ class ProductionShell(tk.Tk):
         for key,value in self._section_counts().items():
             label=ttk.Label(self.status_count_host,text=f"{display_labels.get(key,key)}: {value}",style="StatusChip.TLabel"); label.pack(side="left",padx=(0,2)); self.status_counts[key]=label
             if key in status_help:self.tip.bind(label,status_help[key])
-        self.status_previous=self.control_button(navigation,"‹ Previous",lambda:self._nav_image(-1),"Show the previous image.",style="Nav.TButton",width=16);self.status_previous.pack(side="left")
-        self.status_index=ttk.Label(navigation,text="",padding=(8,0),font=("Segoe UI",9,"bold"));self.status_index.pack(side="left")
-        self.status_next=self.control_button(navigation,"Next ›",lambda:self._nav_image(1),"Show the next image. Press Enter when not typing.",style="Nav.TButton",width=16);self.status_next.pack(side="left")
+        self.status_previous=self.control_button(navigation,"Previous",lambda:self._nav_image(-1),"Show the previous image.",style="Nav.TButton",icon="previous");self.status_previous.pack(side="left")
+        self.status_index=ttk.Label(navigation,text="",padding=(8,0),style="AttentionTitle.TLabel");self.status_index.pack(side="left")
+        self.status_next=self.control_button(navigation,"Next",lambda:self._nav_image(1),"Show the next image. Press Enter when not typing.",style="Nav.TButton",icon="next");self.status_next.pack(side="left")
+        self.control_button(navigation,"Close queue",self.close_queue_navigation,"Leave this queue. Saved annotations, training sets and review history are kept; use the workflow action to reopen it.",icon="close").pack(side="right",padx=(6,0))
         self._update_status()
 
     def _refresh_status_context(self):
@@ -636,12 +609,12 @@ class ProductionShell(tk.Tk):
             crop_confirm=bool(self.context.section=='crop' and ((kind=='landmark_attention' and attention_stage=='crop') or (batch and kind!='landmark_attention')))
             attention_retry=bool(self.context.section=='landmarks' and kind=='landmark_attention' and attention_stage=='prediction')
             confirm=landmark_confirm or crop_confirm or attention_retry
-            next_text='Retry AI ›' if attention_retry else 'Verify & Next ›' if landmark_confirm else 'Confirm & Next ›' if crop_confirm else 'Next ›'
+            next_text='Retry AI' if attention_retry else 'Verify & Next' if landmark_confirm else 'Confirm & Next' if crop_confirm else 'Next'
             self.status_next.configure(
                 text=next_text,
                 style='NavPrimary.TButton' if confirm else 'Nav.TButton',
-                image=self.ui_icon('verify',CONTROL_ICON_SIZE) if landmark_confirm else '',
-                compound='left' if landmark_confirm else 'none',
+                image=self.ui_icon('verify' if landmark_confirm or crop_confirm else 'predict' if attention_retry else 'next',CONTROL_ICON_SIZE),
+                compound='left',
             )
             if landmark_confirm:
                 source=batch.get('source') if batch else None
@@ -672,6 +645,7 @@ class ProductionShell(tk.Tk):
 
     def open_landmark_attention(self, issue=None):
         """Open one persisted attention item without rebuilding the whole workspace."""
+        self.__dict__.pop("_closed_queue_navigation",None)
         if not self.context.project:return False
         if issue is None:
             from app.landmark_attention_queue import current as current_attention
@@ -706,7 +680,25 @@ class ProductionShell(tk.Tk):
         self.after_idle(show_reason)
         return True
 
+    def _queue_navigation_key(self,batch):
+        return (str(self.context.project.root),self.context.section,batch.get("kind"),batch.get("source"))
+
+    def close_queue_navigation(self):
+        batch=self._active_batch_summary()
+        if batch:
+            closed=self.__dict__.setdefault("_closed_queue_navigation",set())
+            closed.add(self._queue_navigation_key(batch))
+        self.render()
+
+    def resume_queue_navigation(self):
+        self.__dict__.pop("_closed_queue_navigation",None)
+
     def _active_batch_summary(self):
+        batch=self._persisted_batch_summary()
+        if batch and self._queue_navigation_key(batch) in self.__dict__.get("_closed_queue_navigation",set()):return None
+        return batch
+
+    def _persisted_batch_summary(self):
         """Finite batch position from persisted IDs only; never the catalogue index."""
         if not self.context.project:return None
         from .batch_status import position_and_remaining,compact
@@ -1271,23 +1263,36 @@ class ProductionShell(tk.Tk):
             return None
 
     def show_about(self):
-        dialog=tk.Toplevel(self);dialog.transient(self);dialog.resizable(False,False);apply_window_identity(dialog,short=True)
+        from .module_credits import module_credit_rows
+        dialog=tk.Toplevel(self);dialog.title("About MorphoLabel");dialog.transient(self);dialog.resizable(False,False);apply_window_identity(dialog,short=True)
         frame=ttk.Frame(dialog,padding=20);frame.pack(fill="both",expand=True)
+        brand=ttk.Frame(frame);brand.pack(fill="x")
         logo=icon_image(dialog);dialog._morpholabel_about_icon=logo
-        ttk.Label(frame,image=logo).grid(row=0,column=0,sticky="n",padx=(0,18))
-        content=ttk.Frame(frame);content.grid(row=0,column=1,sticky="w")
+        ttk.Label(brand,image=logo).pack(side="left",anchor="n",padx=(0,18))
+        content=ttk.Frame(brand);content.pack(side="left",fill="x",expand=True)
         ttk.Label(content,text=APP_NAME,style="PageTitle.TLabel").pack(anchor="w")
-        ttk.Label(content,text=f"{APP_FULL_NAME}\nv{APP_VERSION} · {APP_STATUS}",style="PageSubtitle.TLabel",justify="left").pack(anchor="w",pady=(2,12))
+        ttk.Label(content,text=f"v{APP_VERSION} · {APP_STATUS}",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,8))
         ttk.Label(content,text="Open-source software for scalable and reproducible extraction of morphological data from biological images.",wraplength=500,justify="left").pack(anchor="w")
-        ttk.Separator(content,orient="horizontal").pack(fill="x",pady=(14,12))
-        ttk.Label(content,text=f"{COPYRIGHT}\n{CONTACT_EMAIL}\nDeveloped with the assistance of OpenAI Codex.",justify="left").pack(anchor="w")
-        ttk.Label(content,text=f"License: {LICENSE_NAME}",style="SectionTitle.TLabel").pack(anchor="w",pady=(14,3))
-        ttk.Label(content,text="Redistributed derivative works must retain the Apache-2.0 license and applicable NOTICE attribution.",style="Muted.TLabel",justify="left",wraplength=500).pack(anchor="w")
-        ttk.Label(content,text="For scientific software or models substantially based on MorphoLabel, please identify MorphoLabel as the source and cite it.",style="Muted.TLabel",justify="left",wraplength=500).pack(anchor="w",pady=(4,0))
-        link=ttk.Label(content,text=PUBLIC_REPOSITORY,foreground=ACC,cursor="hand2");link.pack(anchor="w",pady=(12,0))
+        ttk.Label(content,text="MorphoLabel combines annotation, human review and quality control into a structured workflow for large image datasets.",wraplength=500,justify="left",style="Muted.TLabel").pack(anchor="w",pady=(5,0))
+        ttk.Separator(frame,orient="horizontal").pack(fill="x",pady=(14,10))
+        ttk.Label(frame,text="Core application",style="SectionTitle.TLabel").pack(anchor="w")
+        ttk.Label(frame,text="Concept, scientific workflow and development: Oleg Artaev.").pack(anchor="w",pady=(3,0))
+        ttk.Label(frame,text="Developed with the assistance of OpenAI Codex.",style="Muted.TLabel").pack(anchor="w",pady=(2,10))
+        ttk.Label(frame,text="Modules and authors",style="SectionTitle.TLabel").pack(anchor="w")
+        credits=ttk.Frame(frame);credits.pack(fill="x",pady=(4,8));credits.columnconfigure(0,weight=1)
+        for index,(name,author,scope) in enumerate(module_credit_rows(self.module_registry)):
+            ttk.Label(credits,text=name).grid(row=index*2,column=0,sticky="w",padx=(0,16),pady=(4,0))
+            ttk.Label(credits,text=author,style="SectionTitle.TLabel").grid(row=index*2,column=1,sticky="w",pady=(4,0))
+            ttk.Label(credits,text=scope,style="Muted.TLabel",wraplength=580).grid(row=index*2+1,column=0,columnspan=2,sticky="w")
+        ttk.Separator(frame,orient="horizontal").pack(fill="x",pady=(4,8))
+        ttk.Label(frame,text=f"{COPYRIGHT} · {LICENSE_NAME}",style="Muted.TLabel").pack(anchor="w")
+        ttk.Label(frame,text="Redistributed derivative works must retain the Apache-2.0 license and applicable NOTICE attribution.",style="Muted.TLabel",justify="left",wraplength=620).pack(anchor="w",pady=(3,0))
+        ttk.Label(frame,text="For scientific software or models substantially based on MorphoLabel, please identify MorphoLabel as the source and cite it.",style="Muted.TLabel",justify="left",wraplength=620).pack(anchor="w",pady=(3,0))
+        ttk.Label(frame,text=CONTACT_EMAIL).pack(anchor="w",pady=(8,0))
+        link=ttk.Label(frame,text=PUBLIC_REPOSITORY,foreground=ACC,cursor="hand2");link.pack(anchor="w",pady=(2,0))
         link.bind("<Button-1>",lambda _e:webbrowser.open(PUBLIC_REPOSITORY))
-        actions=ttk.Frame(frame);actions.grid(row=1,column=0,columnspan=2,sticky="e",pady=(18,0))
-        self.control_button(actions,"Close",dialog.destroy,"Close About MorphoLabel.").pack(side="left")
+        actions=ttk.Frame(frame);actions.pack(fill="x",pady=(12,0))
+        self.control_button(actions,"Close",dialog.destroy,"Close About MorphoLabel.").pack(side="right")
         center(self,dialog)
 
     def show_hardware(self):

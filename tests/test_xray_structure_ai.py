@@ -466,7 +466,7 @@ class XRayStructureAIContractTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         for text in (
-            "Train Structure AI","Models…","Predict next","Predict all","Review AI",
+            '"Train",self.train_structure_ai',"Models…","Predict next","Predict all","Review AI",
             "human-verified pass 1",
         ):
             self.assertIn(text,ui)

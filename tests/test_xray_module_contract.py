@@ -211,7 +211,7 @@ class XRayModuleContractTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]
         source=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         self.assertIn("structure_workflow_number",source)
-        self.assertIn('tree.heading("fish",text="Plate №")',source)
+        self.assertIn('tree.heading("fish",text="On plate #")',source)
         self.assertIn('workflow_no=int(row.get("workflow_no") or index)',source)
         self.assertNotIn("Fish №",source)
 
@@ -267,7 +267,7 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertIn('actions,"Export",lambda:self._export_traits(self._trait_export_scope.get()=="verified")',export_section)
         self.assertNotIn("Check results…",export_section)
         self.assertIn('cols=("row_no","locality","plate","fish"',export_section)
-        self.assertIn('tree.heading("row_no",text="#")',export_section)
+        self.assertIn('tree.heading("row_no",text="Specimen #")',export_section)
         self.assertIn("_sort_export_tree(tree,value,False)",export_section)
         self.assertIn("def _trait_columns",exporter)
         self.assertNotIn('f"trait:',exporter)
@@ -296,12 +296,13 @@ class XRayModuleContractTests(unittest.TestCase):
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         qc=(root/"app/xray_result_qc.py").read_text(encoding="utf-8")
         self.assertIn("start_result_review_queue(self.project",module)
-        workflow=ui[ui.index('workflow=ttk.Frame(main'):ui.index('    def _workflow_card',ui.index('workflow=ttk.Frame(main'))]
+        workflow=ui[ui.index('workflow=WorkflowDock(main'):ui.index('    def _show_help',ui.index('workflow=WorkflowDock(main'))]
         self.assertNotIn('"4. Export"',workflow)
         self.assertNotIn('"Open Export"',workflow)
-        self.assertIn('text="Check results…"',ui)
-        self.assertIn('self.review_queue_banner=ttk.Frame(main,style="Attention.TFrame"',ui)
-        self.assertIn('text="‹ Previous"',ui);self.assertIn('text="Next ›"',ui);self.assertIn("_close_result_review",ui)
+        self.assertIn('"Check results…",self.on_check_results',ui)
+        self.assertIn('self.review_queue_banner=ttk.Frame(self.queue_host,style="Attention.TFrame"',ui)
+        self.assertIn('"Previous",lambda:self._move_result_review(-1)',ui)
+        self.assertIn('"Next",lambda:self._move_result_review(1)',ui);self.assertIn("_close_result_review",ui)
         self.assertIn('key=lambda row:(-row["score"]',qc)
         self.assertIn("evidence_bonus",qc)
 

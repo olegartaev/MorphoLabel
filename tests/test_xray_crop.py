@@ -146,9 +146,9 @@ class XRayCropViewportContractTests(unittest.TestCase):
 
     def test_crop_workspace_has_landmarks_style_zoom_pan_and_two_icon_flips(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
-        for text in ('"<MouseWheel>"',"def _wheel(","def _pan_start(","def _pan_motion(","flip_horizontal","flip_vertical","Flip left ↔ right. Use when the head is on the wrong side.","Flip top ↕ bottom. Use when the ventral side is on the wrong side.","#26e6b3","#159cff","#ffb000"):
+        for text in ('"<MouseWheel>"',"def _wheel(","def _pan_start(","def _pan_motion(","flip_horizontal","flip_vertical","Flip the selected crop left to right.","Flip the selected crop top to bottom.","#26e6b3","#159cff","#ffb000"):
             self.assertIn(text,source)
-        self.assertIn('"clear_crops",self.clear_plate_crops',source)
+        self.assertIn('"Clear all…",self.clear_plate_crops',source)
         self.assertNotIn("rotate_180",source);self.assertNotIn("turn180",source)
 
 

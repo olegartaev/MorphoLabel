@@ -84,6 +84,7 @@ class Tooltip:
   self.job=None
   try:
    if not w.winfo_exists():return
+   if callable(text):text=text()
    self.window=tk.Toplevel(self.root);self.window.overrideredirect(True);self.window.attributes("-topmost",True)
    ttk.Label(self.window,text=text,background="#fffff2",padding=(7,4),wraplength=280).pack()
    place_popup(

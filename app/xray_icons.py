@@ -7,7 +7,7 @@ stages are recognisable at a glance.
 from __future__ import annotations
 
 from PIL import Image, ImageDraw, ImageFont, ImageTk
-from app.ui.icons import OUTLINE, MUTED, PALE, PALE_BLUE, BLUE, GREEN, RED, YELLOW
+from app.ui.icons import OUTLINE, MUTED, PALE, PALE_BLUE, BLUE, GREEN, RED, YELLOW, render_icon
 
 XRAY_ICON_SIZE=26
 TRAIT_ICON_SIZE=20
@@ -216,6 +216,15 @@ def render_rule_preview(method_id,side="before",object_label="Vertebrae",referen
     return im.resize((width,height),Image.Resampling.LANCZOS)
 
 def render_xray_icon(name,size=XRAY_ICON_SIZE):
+    common={
+        "xray_project":"project", "xray_crops":"crop", "xray_structures":"structures",
+        "xray_export":"export", "xray_results":"measurement_export",
+        "flip_horizontal":"flip_horizontal", "flip_vertical":"flip_vertical",
+        "delete_crop":"delete", "clear_crops":"clear", "structure_apply":"verify",
+        "structure_previous":"previous", "structure_next":"next",
+        "clear_marker_set":"clear_type", "clear_all_markers":"clear",
+    }
+    if name in common:return render_icon(common[name],size)
     if name not in XRAY_ICON_NAMES:raise KeyError(name)
     im,d,p,w=_ctx(size)
 
