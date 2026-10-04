@@ -630,8 +630,10 @@ class XRayStructureUIContractTests(unittest.TestCase):
         for text in ('"Complete"','"Partial"','"Not visible"','"Absent"',"_VISIBILITY_SYMBOLS","_marker_visibility_buttons","StatusChip.TLabel"):
             self.assertIn(text,ui)
         self.assertIn('self.context_label=ElidedLabel',ui)
-        self.assertIn("values['locality']",ui);self.assertIn("values['plate']",ui);self.assertIn("values['specimen']",ui)
-        self.assertIn('style="SectionTitle.TLabel"',ui)
+        self.assertIn('self.locality_value.configure(text=values["locality"])',ui)
+        self.assertIn('self.context_label.configure(text=values["plate"])',ui)
+        self.assertIn('self.specimen_value.configure(text=values["specimen"])',ui)
+        self.assertIn('style="ContextKey.TLabel"',ui)
         self.assertIn('width=2,style="MarkerStatus.TMenubutton"',ui)
         self.assertNotIn('text="Visibility:"',ui)
         self.assertNotIn("self.visibility_box",ui)

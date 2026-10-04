@@ -55,14 +55,14 @@ class CropSection(SectionView):
   batch_row=ttk.Frame(three);batch_row.grid(row=0,column=1,sticky="e",padx=(8,0))
   ttk.Label(batch_row,text="Next").pack(side="left")
   ttk.Spinbox(batch_row,from_=1,to=500,textvariable=prediction,width=5).pack(side="left",padx=(4,0))
-  apply_actions=ttk.Frame(three);apply_actions.grid(row=1,column=0,columnspan=2,sticky="w",pady=(4,0))
+  apply_actions=ttk.Frame(three);apply_actions.grid(row=1,column=0,columnspan=2,sticky="w",pady=(3,0))
   self.button(apply_actions,"Predict next",lambda:self.auto_batch(prediction.get()),"Predict Crop for the next uncropped eligible images.").pack(side="left")
-  self.button(apply_actions,"Predict all uncropped",lambda:self.auto_batch(None),"Predict Crop for every uncropped eligible image. Existing AI proposals are not rerun.").pack(side="left",padx=(4,0))
-  review_actions=ttk.Frame(three);review_actions.grid(row=2,column=0,columnspan=2,sticky="w",pady=(4,0))
-  self.button(review_actions,"Review AI crops",self.review_worst,"Review pending AI Crop proposals, worst first.").pack(side="left")
-  self.button(review_actions,"Review manual crops",self.review_manual,"Re-review crops that were created manually.").pack(side="left",padx=(4,0))
-  add_command_separator(review_actions)
-  self.button(review_actions,"Accept all AI crops",self.accept_all_ai_crops,"Accept every current pending AI Crop exactly as predicted, without recalculating it.").pack(side="left")
+  self.button(apply_actions,"Predict all",lambda:self.auto_batch(None),"Predict Crop for every uncropped eligible image. Existing AI proposals are not rerun.").pack(side="left",padx=(4,0))
+  add_command_separator(apply_actions)
+  self.button(apply_actions,"Review AI",self.review_worst,"Review pending AI Crop proposals, worst first.").pack(side="left")
+  self.button(apply_actions,"Review manual",self.review_manual,"Re-review crops that were created manually.").pack(side="left",padx=(4,0))
+  add_command_separator(apply_actions)
+  self.button(apply_actions,"Accept all AI",self.accept_all_ai_crops,"Accept every current pending AI Crop exactly as predicted, without recalculating it.").pack(side="left")
  def refresh(self,image_id=None):
   if image_id is not None:
    # Crop changes can also invalidate/reproject landmarks; refresh the whole

@@ -7,7 +7,7 @@ from app.modules.xray_counts import (
     _derived_rule_from_builder, _derived_trait_choices, _reference_relation_text,
     _renumber_default_structure_hotkeys, _scheme_display_model, _sort_export_tree,
 )
-from app.xray_icons import XRAY_ICON_NAMES, render_rule_preview, render_xray_icon
+from app.xray_icons import XRAY_ICON_NAMES, _count_to_indices, render_rule_preview, render_xray_icon
 
 
 class XRayOrientationAndStorageContractTests(unittest.TestCase):
@@ -59,7 +59,8 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertIn("def _maximize_window",source)
         self.assertIn('self.state("zoomed")',source)
         self.assertIn('self.attributes("-zoomed",True)',source)
-        self.assertIn('self._build();self._load_scheme(self.scheme,self.note);self.after_idle(self._maximize_window);self.grab_set()',source)
+        self.assertIn('self._build();self._load_scheme(self.scheme,self.note);self.after(60,self._maximize_window);self.grab_set()',source)
+        self.assertIn('if sys.platform.startswith("win"):',source)
         self.assertIn('self.geometry("1320x900")',source)
 
     def test_main_trait_window_is_two_ordered_biological_steps(self):
@@ -232,10 +233,19 @@ class XRayModuleContractTests(unittest.TestCase):
         source=(Path(__file__).resolve().parents[1]/"app/xray_icons.py").read_text(encoding="utf-8")
         self.assertIn("Large lateral fish skeleton silhouette for the Crops stage.",source)
         self.assertIn("_fish_skeleton_icon(d,p);_crop_brackets",source)
+        self.assertIn('if name=="xray":',source);self.assertIn("_fish_skeleton_icon(d,p)",source)
         self.assertIn('elif name=="counted_element"',source)
         self.assertIn('elif name=="reference_mark"',source)
         self.assertIn('elif name=="annotation_setup"',source)
         self.assertIn('elif name=="trait_setup"',source)
+        self.assertIn('elif name=="flip_vertical"',source)
+        self.assertIn('fill=ACCENT_ORANGE',source)
+        self.assertNotIn('"flip_vertical":"flip_vertical"',source)
+
+    def test_count_to_through_includes_the_reference_element(self):
+        self.assertEqual({0,1,2},_count_to_indices("before",3,5))
+        self.assertEqual({0,1,2,3},_count_to_indices("through",3,5))
+        self.assertEqual({3,4},_count_to_indices("from",3,5))
 
     def test_counting_rule_preview_supports_two_reference_marks(self):
         for method in ("count","count_to","count_between","derived"):

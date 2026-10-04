@@ -11,6 +11,7 @@ from app.crop_quality import assess_crop
 from app.crop_training_batch import prepare_crop_training_images
 from app.crop_workflow import apply_reviewed_crop, reviewed_crop_change
 from app.ai_hardware import persisted_hardware_profile
+from app.ui.design import prediction_stamp
 
 
 @dataclass(frozen=True)
@@ -33,9 +34,26 @@ def _image_bytes(image):
 def _row_source_key(row):
  return (row.get("file_size"),row.get("mtime_ns"),row.get("source_sha256"))
 
+def _rotate_about_center(x,y,cx,cy,degrees):
+ theta=math.radians(float(degrees));dx=float(x)-float(cx);dy=float(y)-float(cy);c=math.cos(theta);sn=math.sin(theta)
+ return (dx*c-dy*sn+float(cx),dx*sn+dy*c+float(cy))
+
+def crop_model_to_source(model,x,y):
+ """Map a point in the persisted rotated-image crop frame back onto the original image."""
+ return _rotate_about_center(x,y,model.width/2,model.height/2,-float(model.angle))
+
+def crop_source_to_model(model,x,y):
+ """Inverse of crop_model_to_source; persistence still receives the established model frame."""
+ return _rotate_about_center(x,y,model.width/2,model.height/2,float(model.angle))
+
+def crop_frame_polygon(model):
+ return tuple(crop_model_to_source(model,x,y) for x,y in (
+  (model.left,model.top),(model.right,model.top),(model.right,model.bottom),(model.left,model.bottom)
+ ))
+
 class CropCanvasController:
  def __init__(self,parent,context,changed):
-  self.parent,self.context,self.changed=parent,context,changed;self.canvas=tk.Canvas(parent,background='#202020',highlightthickness=0);self.canvas.pack(fill='both',expand=True);self.canvas.bind('<Configure>',self._on_configure);self.canvas.bind('<Button-1>',self.down);self.canvas.bind('<B1-Motion>',self.drag);self.canvas.bind('<ButtonRelease-1>',self.up);self.base=self.photo=self.model=None;self.requested_image_id=self.displayed_image_id=None;self.scale=1.;self.offset=(0,0);self.viewport=CropViewport(1.,0.,0.,1,1);self.mode=self.anchor=self.initial=None;self.loading=False;self._load_token=0;self.requested_generation=0;self.requested_request_epoch=0;self.on_image_ready=None;self._poll_job=self._rotation_render_job=None;self._loading_pulse_job=None;self._loading_pulse_step=0;self._closed=False;self._cancel=threading.Event();self._worker=None;self._display_base=None;self._display_source=None;self._display_key=None;self._raster_key=None;self._current_cache_entry=None;self._image_cache=OrderedDict();self._image_cache_bytes=0;self._image_cache_budget=crop_navigation_cache_budget();self._cache_lock=threading.Lock();self._prefetch_thread=None;self.photo_creations=0;self.preview_rotate_source_sizes=[];self.canvas.bind('<Destroy>',self._destroy,add='+');self.load_current()
+  self.parent,self.context,self.changed=parent,context,changed;self.canvas=tk.Canvas(parent,background='#202020',highlightthickness=0);self.canvas.pack(fill='both',expand=True);self.canvas.bind('<Configure>',self._on_configure);self.canvas.bind('<Button-1>',self.down);self.canvas.bind('<B1-Motion>',self.drag);self.canvas.bind('<ButtonRelease-1>',self.up);self.base=self.photo=self.model=None;self.requested_image_id=self.displayed_image_id=None;self.scale=1.;self.offset=(0,0);self.viewport=CropViewport(1.,0.,0.,1,1);self.mode=self.anchor=self.initial=None;self.loading=False;self._load_token=0;self.requested_generation=0;self.requested_request_epoch=0;self.on_image_ready=None;self._poll_job=self._rotation_render_job=None;self._loading_pulse_job=None;self._loading_pulse_step=0;self._closed=False;self._cancel=threading.Event();self._worker=None;self._display_base=None;self._display_source=None;self._display_key=None;self._raster_key=None;self._current_cache_entry=None;self._image_cache=OrderedDict();self._image_cache_bytes=0;self._image_cache_budget=crop_navigation_cache_budget();self._cache_lock=threading.Lock();self._prefetch_thread=None;self.photo_creations=0;self.preview_rotate_source_sizes=[];self.context_message="";self.canvas.bind('<Destroy>',self._destroy,add='+');self.load_current()
  def _destroy(self,event):
   if event.widget is self.canvas:self._closed=True;self._cancel.set();self._load_token+=1
   if event.widget is self.canvas:
@@ -74,7 +92,8 @@ class CropCanvasController:
  def _activate_loaded(self,row,entry,bounds,angle,token):
   image_id=str(row["image_id"])
   if self._closed or token!=self._load_token or image_id!=self.requested_image_id or image_id!=((self.context.current() or {}).get("image_id")):return False
-  self.loading=False;self._stop_loading_pulse();self.canvas.delete('crop_loading_status');self.base=entry["base"];self._display_source=entry.get("proxy");self._current_cache_entry=entry;self.displayed_image_id=image_id;self.model=CropModel(self.base.width,self.base.height,*bounds,angle).clamp();self._display_base=None;self._display_key=None;self._raster_key=None;self.render()
+  self.loading=False;self._stop_loading_pulse();self.canvas.delete('crop_loading_status');self.base=entry["base"];self._display_source=entry.get("proxy");self._current_cache_entry=entry;self.displayed_image_id=image_id;self.model=CropModel(self.base.width,self.base.height,*bounds,angle).clamp();self._display_base=None;self._display_key=None;self._raster_key=None
+  record=self.context.project.crop_record(image_id) or {};self.context_message=prediction_stamp(record.get("model_id"),record.get("prediction_at")) if record.get("model_id") else "";self.render()
   callback=self.on_image_ready
   if callback and self.ready_for(image_id) and token==self.requested_generation:
    self.canvas.after_idle(lambda: callback(image_id,token,getattr(self,'requested_request_epoch',0)) if token==self.requested_generation and self.ready_for(image_id) else None)
@@ -121,7 +140,7 @@ class CropCanvasController:
    except tk.TclError:pass
    self._poll_job=None
   if request_epoch is not None:self.requested_request_epoch=request_epoch
-  self.requested_image_id=(row or {}).get('image_id');self.displayed_image_id=None;self.base=self.model=self.photo=self._display_base=None;self._display_source=None;self._current_cache_entry=None;self._display_key=self._raster_key=None;self.mode=self.anchor=self.initial=None
+  self.requested_image_id=(row or {}).get('image_id');self.displayed_image_id=None;self.base=self.model=self.photo=self._display_base=None;self._display_source=None;self._current_cache_entry=None;self._display_key=self._raster_key=None;self.mode=self.anchor=self.initial=None;self.context_message=""
   if not row:return
   project=self.context.project;row=dict(row);image_id=row['image_id'];cached=self._cache_get(row)
   if cached is not None:
@@ -166,25 +185,38 @@ class CropCanvasController:
    if entry is not None:entry["display"]=self._display_base;entry["display_dimensions"]=dimensions
   self._display_key=key;self._raster_key=None
  def _render_raster(self,resample=Image.Resampling.BICUBIC):
-  self._ensure_display_base();key=(self._display_key,round(self.model.angle,6),resample);items=self.canvas.find_withtag('image')
+  self._ensure_display_base();key=(self._display_key,resample);items=self.canvas.find_withtag('image')
   if key!=self._raster_key or not items:
-   # Drag preview deliberately rotates only the display-sized copy, never self.base.
-   self.preview_rotate_source_sizes.append(self._display_base.size);shown=self._display_base.rotate(self.model.angle,resample=resample,expand=False,fillcolor=(255,255,255));self.photo=ImageTk.PhotoImage(shown,master=self.canvas);self.photo_creations+=1;self._raster_key=key
+   # Keep the biological image fixed while the persisted crop frame rotates above it.
+   shown=self._display_base;self.photo=ImageTk.PhotoImage(shown,master=self.canvas);self.photo_creations+=1;self._raster_key=key
    if items:self.canvas.itemconfigure(items[0],image=self.photo)
    else:self.canvas.create_image(*self.offset,anchor='nw',image=self.photo,tags='image')
   # Raster pixels may be cached, but placement is never cached.
   items=self.canvas.find_withtag('image')
   if items:self.canvas.coords(items[0],*self.offset)
+ def _screen_source(self,x,y):
+  ox,oy=self.offset;return ox+float(x)*self.scale,oy+float(y)*self.scale
  def _draw_overlay(self,qc=True):
-  self.canvas.delete('crop_overlay');ox,oy=self.offset;l,t,r,b=[v*self.scale for v in (self.model.left,self.model.top,self.model.right,self.model.bottom)];l+=ox;r+=ox;t+=oy;b+=oy;self.canvas.create_rectangle(l,t,r,b,outline='#35d07f',width=2,tags='crop_overlay')
-  for x,y in ((l,t),(r,t),(l,b),(r,b)):self.canvas.create_rectangle(x-5,y-5,x+5,y+5,fill='#35d07f',outline='#fff',tags='crop_overlay')
-  cx=(l+r)/2;hy=t-35;self.canvas.create_line(cx,t,cx,hy,fill='#ffcc00',width=2,tags='crop_overlay');self.canvas.create_oval(cx-7,hy-7,cx+7,hy+7,fill='#ffcc00',outline='#fff',tags='crop_overlay');self.canvas.create_text(l,t-9,anchor='sw',fill='#ffcc00',text=f'rotation {self.model.angle:.1f}°',tags='crop_overlay')
+  self.canvas.delete('crop_overlay')
+  source_corners=crop_frame_polygon(self.model);screen=[self._screen_source(x,y) for x,y in source_corners]
+  flat=[value for point in screen for value in point];self.canvas.create_polygon(*flat,outline='#35d07f',fill='',width=2,tags='crop_overlay')
+  for x,y in screen:self.canvas.create_rectangle(x-5,y-5,x+5,y+5,fill='#35d07f',outline='#fff',tags='crop_overlay')
+  qcx=(self.model.left+self.model.right)/2;qtop=self.model.top;qhy=self.model.top-35/self.scale
+  tcx,tcy=self._screen_source(*crop_model_to_source(self.model,qcx,qtop));hx,hy=self._screen_source(*crop_model_to_source(self.model,qcx,qhy))
+  self.canvas.create_line(tcx,tcy,hx,hy,fill='#ffcc00',width=2,tags='crop_overlay');self.canvas.create_oval(hx-7,hy-7,hx+7,hy+7,fill='#ffcc00',outline='#fff',tags='crop_overlay')
+  label_x,label_y=screen[0];self.canvas.create_text(label_x,label_y-9,anchor='sw',fill='#ffcc00',text=f'rotation {self.model.angle:.1f}°',tags='crop_overlay')
+  message_y=12
+  if self.context_message:
+   self.canvas.create_text(13,message_y+1,anchor='nw',fill='#202020',text=self.context_message,font=('Segoe UI',10,'bold'),tags='crop_overlay')
+   self.canvas.create_text(12,message_y,anchor='nw',fill='#ffdf80',text=self.context_message,font=('Segoe UI',10,'bold'),tags='crop_overlay');message_y+=23
   if qc:
-   quality=assess_crop((self.model.left,self.model.top,self.model.right,self.model.bottom),self.base.width,self.base.height);self.canvas.create_text(12,12,anchor='nw',fill='white',text=f'Drag crop edges or inside to move. Crop QC: {quality.level.upper()} — {quality.reasons[0]}',tags='crop_overlay')
+   quality=assess_crop((self.model.left,self.model.top,self.model.right,self.model.bottom),self.base.width,self.base.height);self.canvas.create_text(12,message_y,anchor='nw',fill='white',text=f'Drag crop frame or handles. Crop QC: {quality.level.upper()} — {quality.reasons[0]}',tags='crop_overlay')
  def render(self,qc=True,resample=Image.Resampling.BICUBIC):
   if not self.base or not self.model:return
   self._fit();self._render_raster(resample);self._draw_overlay(qc=qc)
- def _point(self,x,y):ox,oy=self.offset;return ((x-ox)/self.scale,(y-oy)/self.scale)
+ def _source_point(self,x,y):ox,oy=self.offset;return ((x-ox)/self.scale,(y-oy)/self.scale)
+ def _point(self,x,y):
+  sx,sy=self._source_point(x,y);return crop_source_to_model(self.model,sx,sy)
  def _hit(self,x,y):
   l,t,r,b=self.model.left,self.model.top,self.model.right,self.model.bottom;tol=12/self.scale;cx=(l+r)/2;hy=t-35/self.scale
   if (x-cx)**2+(y-hy)**2<tol**2:return 'rotate'
@@ -201,14 +233,18 @@ class CropCanvasController:
   if self._rotation_render_job is None:self._rotation_render_job=self.canvas.after_idle(self._render_rotation_preview)
  def _render_rotation_preview(self):
   self._rotation_render_job=None
-  if self.mode=='rotate' and self.ready_for(self.displayed_image_id):self.render(qc=False,resample=Image.Resampling.BILINEAR)
+  if self.mode=='rotate' and self.ready_for(self.displayed_image_id):self._draw_overlay(qc=False)
  def drag(self,event):
   if not self.mode or not self.ready_for(self.displayed_image_id):return
   x,y=self._point(event.x,event.y);ax,ay=self.anchor
   if self.mode=='move':
    self.model.left,self.model.top,self.model.right,self.model.bottom=self.initial[:4];self.model.move(x-ax,y-ay)
   elif self.mode=='rotate':
-   cx,cy=self.model.center;self.model.angle=math.degrees(math.atan2(y-cy,x-cx))+90;self._raster_key=None;self._draw_overlay(qc=False);self._schedule_rotation_preview();return
+   sx,sy=self._source_point(event.x,event.y);icx,icy=self.model.width/2,self.model.height/2
+   qx=(self.model.left+self.model.right)/2;qy=self.model.top-35/self.scale
+   qangle=math.atan2(qy-icy,qx-icx);pangle=math.atan2(sy-icy,sx-icx)
+   angle=math.degrees(qangle-pangle);self.model.angle=((angle+180)%360)-180
+   self._draw_overlay(qc=False);self._schedule_rotation_preview();return
   else:self.model.set_edge(self.mode,x,y)
   self._draw_overlay(qc=False)
  def up(self,_event):
@@ -217,8 +253,7 @@ class CropCanvasController:
    try:self.canvas.after_cancel(self._rotation_render_job)
    except tk.TclError:pass
    self._rotation_render_job=None
-  if rotating:self._raster_key=None;self.render(qc=True,resample=Image.Resampling.BICUBIC)
-  else:self._draw_overlay(qc=True)
+  self._draw_overlay(qc=True)
  def reset(self):
   if self.base:self.model=CropModel(self.base.width,self.base.height,0,0,self.base.width,self.base.height,0);self._raster_key=None;self.render()
  def apply(self):

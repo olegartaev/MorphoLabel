@@ -251,6 +251,14 @@ class MorphoLabelUIContractTests(unittest.TestCase):
                 self.assertNotIn(f"from {name} import", text, path.name)
                 self.assertNotIn(f"import {name}", text, path.name)
 
+    def test_module_cards_share_one_layout_and_xray_uses_anatomical_icon(self):
+        root=Path(__file__).parents[1]
+        hub=(root/"app"/"ui"/"module_hub.py").read_text(encoding="utf-8")
+        self.assertIn('uniform="module_cards"',hub)
+        self.assertIn('sticky="nsew"',hub)
+        self.assertIn('tk_xray_icon(header,"xray",WORKFLOW_ICON_SIZE)',hub)
+        self.assertIn('recent=f"Last project:',hub)
+
     def test_user_facing_core_files_no_longer_brand_the_app_as_simm(self):
         root=Path(__file__).parents[1]
         for relative in (

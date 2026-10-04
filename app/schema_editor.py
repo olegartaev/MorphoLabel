@@ -24,7 +24,7 @@ class SchemaEditor(tk.Toplevel):
   for c,h,w,st in (("id","#",45,False),("role","Morphometry",190,False),("abbr","Abbr",100,False),("name","Name",400,True)):
    self.table.heading(c,text=h);self.table.column(c,width=w,minwidth=w,stretch=st,anchor="w")
   scroll=ttk.Scrollbar(frame,orient="vertical",command=self.table.yview);self.table.configure(yscrollcommand=scroll.set);self.table.pack(side="left",fill="both",expand=True);scroll.pack(side="right",fill="y")
-  self.table.bind("<Double-1>",self.edit_cell);self.table.bind("<ButtonPress-1>",self.drag_start);self.table.bind("<B1-Motion>",self.drag_motion);self.table.bind("<ButtonRelease-1>",self.drag_end);self.table.bind("<MouseWheel>",lambda e:self.close_editor())
+  self.table.bind("<Double-1>",self.edit_cell);self.table.bind("<ButtonPress-1>",self.table_press);self.table.bind("<B1-Motion>",self.drag_motion);self.table.bind("<ButtonRelease-1>",self.drag_end);self.table.bind("<MouseWheel>",lambda e:self.close_editor())
   controls=ttk.Frame(self,padding=5);controls.pack(fill="x")
   for text,cmd in (("+ Add landmark",self.add_row),("Delete",self.delete_row),("↑",lambda:self.move(-1)),("↓",lambda:self.move(1))):ttk.Button(controls,text=text,command=cmd).pack(side="left",padx=2)
   self.protocol("WM_DELETE_WINDOW",self.close);self.new_schema() if self.path is None else self.load_path(self.path)
@@ -82,17 +82,32 @@ class SchemaEditor(tk.Toplevel):
   try:w.destroy()
   except tk.TclError:pass
   self._editor=None;self._editor_row=None;self._editor_key=None
+ def _set_role(self,index,rowid,code):
+  if code not in ROLE_CODES:return
+  self.rows[index]["role"]=code;self.dirty=True;self.redraw();self.table.selection_set(rowid);self.table.focus(rowid)
+ def table_press(self,event):
+  self.close_editor()
+  rowid=self.table.identify_row(event.y);col=self.table.identify_column(event.x)
+  if rowid and col=="#2":
+   i=self.table.index(rowid);self.table.selection_set(rowid);self.table.focus(rowid)
+   menu=tk.Menu(self,tearoff=False);current=self.rows[i]["role"]
+   for code,label in ROLE_NAMES.items():
+    menu.add_command(label=("✓  " if code==current else "    ")+label,command=lambda value=code:self._set_role(i,rowid,value))
+   self._role_menu=menu
+   try:menu.tk_popup(event.x_root,event.y_root)
+   finally:menu.grab_release()
+   return "break"
+  self.drag_start(event)
  def edit_cell(self,event):
   self.close_editor()
   rowid=self.table.identify_row(event.y);col=self.table.identify_column(event.x)
-  if not rowid or col=="#1":return
-  i=self.table.index(rowid);key={"#2":"role","#3":"abbr","#4":"name"}.get(col)
+  if not rowid or col in {"#1","#2"}:return
+  i=self.table.index(rowid);key={"#3":"abbr","#4":"name"}.get(col)
   if not key:return
-  bbox=self.table.bbox(rowid,col);var=tk.StringVar(value=self.rows[i][key]);w=ttk.Combobox(self.table,textvariable=var,values=tuple(ROLE_NAMES.values()),state="readonly") if key=="role" else ttk.Entry(self.table,textvariable=var)
+  bbox=self.table.bbox(rowid,col);var=tk.StringVar(value=self.rows[i][key]);w=ttk.Entry(self.table,textvariable=var)
   w.place(x=bbox[0],y=bbox[1],width=bbox[2],height=bbox[3]);w.focus_set();self._editor=w;self._editor_row=i;self._editor_key=key
   def finish(_=None):
-   self.rows[i][key]=ROLE_FROM_NAME.get(var.get(),"BT") if key=="role" else var.get()
-   self.dirty=True;self.close_editor(False);self.redraw();self.table.selection_set(rowid)
+   self.rows[i][key]=var.get();self.dirty=True;self.close_editor(False);self.redraw();self.table.selection_set(rowid)
   def cancel(_=None):self.close_editor(False);self.redraw()
   w.bind("<Return>",finish);w.bind("<FocusOut>",finish);w.bind("<Escape>",cancel)
  def drag_start(self,event):self._drag_row=self.table.identify_row(event.y)

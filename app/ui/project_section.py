@@ -44,14 +44,14 @@ class ProjectSection(SectionView):
   content=ttk.Frame(host);content.pack(fill="both",expand=True)
   content.columnconfigure(0,weight=1,uniform="project_cards");content.columnconfigure(1,weight=1,uniform="project_cards");content.rowconfigure(2,weight=1)
 
-  project_box=ttk.LabelFrame(content,text="Current project",padding=12,style="ProjectIdentity.TLabelframe");project_box.grid(row=0,column=0,sticky="nsew",padx=(0,5),pady=(0,7))
+  project_box=ttk.LabelFrame(content,text="Current project",padding=14,style="ProjectIdentity.TLabelframe",borderwidth=2,relief="groove");project_box.grid(row=0,column=0,sticky="nsew",padx=(4,8),pady=(4,10))
   ttk.Label(project_box,text=str(project.config.get("name",project.root.name)),style="SectionTitle.TLabel").pack(anchor="w")
   ttk.Label(project_box,text=str(project.root),style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,8))
   actions=ttk.Frame(project_box);actions.pack(anchor="w")
   self.button(actions,"Open",self.shell.open_project,"Open another project in this same MorphoLabel window.").pack(side="left")
   self.button(actions,"New project...",self.shell.new_project,"Create another MorphoLabel project.").pack(side="left",padx=(6,0))
 
-  source=ttk.LabelFrame(content,text="Source photos",padding=10);source.grid(row=0,column=1,sticky="nsew",padx=(5,0),pady=(0,7))
+  source=ttk.LabelFrame(content,text="Source photos",padding=10);source.grid(row=0,column=1,sticky="nsew",padx=(8,4),pady=(4,10))
   ttk.Label(source,text="Photo folder",style="SectionTitle.TLabel").pack(anchor="w")
   ttk.Label(source,text=str(project.source_root),style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,8))
   actions=ttk.Frame(source);actions.pack(anchor="w")

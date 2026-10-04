@@ -349,8 +349,13 @@ class XRayStructureWorkspace:
         self.root.after_idle(self._set_initial_sash)
 
         context=ttk.Frame(main,padding=(6,2));context.grid(row=0,column=0,sticky="ew");context.columnconfigure(0,weight=1)
-        self.context_label=ElidedLabel(context,text="No specimen selected",style="SectionTitle.TLabel",anchor="w")
-        self.context_label.grid(row=0,column=0,sticky="ew",padx=(0,8))
+        context_fields=ttk.Frame(context);context_fields.grid(row=0,column=0,sticky="ew",padx=(0,8));context_fields.columnconfigure(3,weight=1)
+        ttk.Label(context_fields,text="Locality:",style="ContextKey.TLabel").grid(row=0,column=0,sticky="w")
+        self.locality_value=ttk.Label(context_fields,text="—",style="ContextValue.TLabel");self.locality_value.grid(row=0,column=1,sticky="w",padx=(4,14))
+        ttk.Label(context_fields,text="Plate:",style="ContextKey.TLabel").grid(row=0,column=2,sticky="w")
+        self.context_label=ElidedLabel(context_fields,text="—",style="ContextValue.TLabel",anchor="w");self.context_label.grid(row=0,column=3,sticky="ew",padx=(4,14))
+        ttk.Label(context_fields,text="Specimen №:",style="ContextKey.TLabel").grid(row=0,column=4,sticky="w")
+        self.specimen_value=ttk.Label(context_fields,text="—",style="ContextValue.TLabel");self.specimen_value.grid(row=0,column=5,sticky="w",padx=(4,0))
         self.tip.bind(self.context_label,lambda:self.context_label.full_text)
         status_host=ttk.Frame(context);status_host.grid(row=0,column=1,sticky="e")
         self.summary_labels={}
@@ -397,7 +402,7 @@ class XRayStructureWorkspace:
         ):self.canvas.bind(event,handler)
         self.canvas.bind("<Delete>",self.delete_selected);self.canvas.bind("<BackSpace>",self.delete_selected)
         self.prediction_label=ElidedLabel(context,text="",style="Prediction.TLabel",anchor="w")
-        self.prediction_label.grid(row=1,column=0,columnspan=2,sticky="ew")
+        self.prediction_text=""
         self.tip.bind(self.prediction_label,lambda:self.prediction_label.full_text)
 
         marker_dock=ttk.Frame(main,style="WorkflowDock.TFrame",padding=(6,3));marker_dock.grid(row=4,column=0,sticky="ew",pady=(2,0));marker_dock.columnconfigure(1,weight=1)
@@ -421,9 +426,11 @@ class XRayStructureWorkspace:
         self.batch_button=self._button(batch_actions,"Start batch",self.start_batch,"Start or continue the existing finite annotation batch.");self.batch_button.pack(side="left")
 
         three=workflow.add_card("3. Train model",icon="landmark_train",help_text="Train from human-verified pass 1. Repeatability passes are excluded.")
-        self.training_summary=ttk.Label(three,text="",style="Muted.TLabel");self.training_summary.grid(row=0,column=0,columnspan=2,sticky="w")
-        self.structure_model_label=ElidedLabel(three,text="Active AI: none",style="Muted.TLabel",anchor="w");self.structure_model_label.grid(row=1,column=0,columnspan=2,sticky="ew",pady=(1,0));three.columnconfigure(0,weight=1)
-        train_actions=ttk.Frame(three);train_actions.grid(row=2,column=0,columnspan=2,sticky="w",pady=(4,0))
+        model_row=ttk.Frame(three);model_row.grid(row=0,column=0,sticky="ew");three.columnconfigure(0,weight=1)
+        self.training_summary=ttk.Label(model_row,text="",style="Muted.TLabel");self.training_summary.pack(side="left")
+        add_command_separator(model_row)
+        self.structure_model_label=ElidedLabel(model_row,text="Active AI: none",style="Muted.TLabel",anchor="w");self.structure_model_label.pack(side="left",fill="x",expand=True)
+        train_actions=ttk.Frame(three);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
         self.structure_train_button=self._button(train_actions,"Train",self.train_structure_ai,"Train Structure AI from existing eligible annotations.",style="Primary.TButton");self.structure_train_button.pack(side="left")
         add_command_separator(train_actions)
         self._button(train_actions,"Models…",self.manage_structure_models,"Compare and select saved Structure models.").pack(side="left")
@@ -436,11 +443,11 @@ class XRayStructureWorkspace:
         add_command_separator(predict_actions)
         self.structure_predict_next_button=self._button(predict_actions,"Predict next",lambda:self.predict_structure_batch(self.prediction_batch_size.get()),"Predict the next eligible specimen crops.");self.structure_predict_next_button.pack(side="left")
         self.structure_predict_all_button=self._button(predict_actions,"Predict all",lambda:self.predict_structure_batch(None),"Predict all eligible unverified crops; preserve verified annotations.");self.structure_predict_all_button.pack(side="left",padx=(4,0))
-        review_actions=ttk.Frame(four);review_actions.grid(row=2,column=0,sticky="w",pady=(4,0))
-        self.structure_review_button=self._button(review_actions,"Review AI",self.review_structure_ai,"Inspect saved AI drafts before verification.",style="ReviewAction.TButton");self.structure_review_button.pack(side="left")
-        self.check_results_button=self._button(review_actions,"Check results…",self.on_check_results,"Review suspicious calculated trait values.",style="ReviewAction.TButton");self.check_results_button.pack(side="left",padx=(4,0))
-        add_command_separator(review_actions)
-        self._button(review_actions,"Next unfinished",self.next_unfinished,"Open the next unfinished specimen.").pack(side="left")
+        add_command_separator(predict_actions)
+        self.structure_review_button=self._button(predict_actions,"Review AI",self.review_structure_ai,"Inspect saved AI drafts before verification.",style="ReviewAction.TButton");self.structure_review_button.pack(side="left")
+        self.check_results_button=self._button(predict_actions,"Check results…",self.on_check_results,"Review suspicious calculated trait values.",style="ReviewAction.TButton");self.check_results_button.pack(side="left",padx=(4,0))
+        add_command_separator(predict_actions)
+        self._button(predict_actions,"Next unfinished",self.next_unfinished,"Open the next unfinished specimen.").pack(side="left")
 
     def _show_help(self):
         messagebox.showinfo("Structures — quick guide",
@@ -454,10 +461,9 @@ class XRayStructureWorkspace:
         self._refresh_workflow()
 
     def _refresh_prediction_info(self):
-        text=structure_prediction_text(self.project,self.selected_specimen_id,self.pass_no.get())
-        self.prediction_label.configure(text=text)
-        if text:self.prediction_label.grid()
-        else:self.prediction_label.grid_remove()
+        self.prediction_text=structure_prediction_text(self.project,self.selected_specimen_id,self.pass_no.get())
+        self.prediction_label.configure(text=self.prediction_text)
+        if self.crop_image is not None:self._draw_overlays()
 
     def _bind_keys(self):
         self._key_bind_id=self.root.bind("<KeyPress>",self._key_pressed,add="+")
@@ -512,10 +518,9 @@ class XRayStructureWorkspace:
             values={
                 "locality":self._sample(image["relative_path"]),
                 "plate":path.name,
-                "specimen":f"#{workflow_no}" if workflow_no else f"plate №{int(item.get('ordinal') or 0)}",
+                "specimen":str(workflow_no) if workflow_no else f"plate {int(item.get('ordinal') or 0)}",
             }
-        text=f"{values['locality']} · {values['plate']} · Specimen {values['specimen']}"
-        self.context_label.configure(text=text)
+        self.locality_value.configure(text=values["locality"]);self.context_label.configure(text=values["plate"]);self.specimen_value.configure(text=values["specimen"])
 
     def _notify_selection(self):
         if not self.selected_specimen_id:return
@@ -812,13 +817,19 @@ class XRayStructureWorkspace:
                     if role_pair is None:continue
                     role_index,role_structure=role_pair;role_colors.append(role_color(settings,role_structure,role_index))
                 draw_xray_role_badges(self.canvas,sx,sy,colors=role_colors,size=style["size"],tags=(f"annotation:{row['annotation_id']}",))
+        message_y=12
+        if self.prediction_text:
+            self.canvas.create_text(13,message_y+1,anchor="nw",text=self.prediction_text,fill="#202020",font=("Segoe UI",10,"bold"),tags=("structure_hint","prediction_shadow"))
+            self.canvas.create_text(12,message_y,anchor="nw",text=self.prediction_text,fill="#ffdf80",font=("Segoe UI",10,"bold"),tags=("structure_hint","prediction"))
+            message_y+=23
         if self.selected_annotation_id:
             attached=roles_by_annotation.get(int(self.selected_annotation_id),())
             role_names=[by_id[role["structure_id"]][1]["name"] for role in attached if role["structure_id"] in by_id]
             hint="Drag = move · Delete = remove"
             if role_names:hint+=" · also: "+", ".join(role_names)
         else:hint="Choose marker · click = place · right-click point = role"
-        self.canvas.create_text(12,12,anchor="nw",text=hint,fill="white",font=("Segoe UI",9,"bold"),tags=("structure_hint",))
+        self.canvas.create_text(13,message_y+1,anchor="nw",text=hint,fill="#202020",font=("Segoe UI",9,"bold"),tags=("structure_hint","hint_shadow"))
+        self.canvas.create_text(12,message_y,anchor="nw",text=hint,fill="white",font=("Segoe UI",9,"bold"),tags=("structure_hint","hint"))
 
     def _nearest(self,event):
         size=int(self.display_settings.get("size",DEFAULT_SIZE));best=None;limit=max(14,size+8)

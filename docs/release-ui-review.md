@@ -29,6 +29,10 @@ should follow only after the demo layout is accepted, using a backup.
 - On Windows, standard ttk Windows themes provide the ordinary desktop control chrome; custom blue panel/button skinning is avoided. Semantic warning/review states remain distinct.
 - Shared spacing, typography, active-stage appearance and primary buttons.
 - Workflow cards are vertically compact; commands with different roles are grouped with spacing and vertical separators instead of being scattered across the card.
+- Workflow cards no longer stretch short stages to the height of the tallest card; each stage is capped at roughly two compact control rows in the reviewed modules.
+- Model provenance is rendered over the working image in the established yellow Landmarks style, using persisted model IDs and event/prediction timestamps only.
+- X-ray context rows use bold field names (`Sample`, `Plate`, `Crop`, `Specimen №`) with normal-weight values; the vertical orientation control uses the same orange as the ventral marker.
+- Core Crop keeps the source image visually fixed while its editable crop frame rotates; the persisted rotation/crop transform is unchanged and regression-tested against `Transform.original_to_standardized`.
 - Crop/Structures side lists open wide enough for readable labels while remaining capped near 29% of the workspace, and model-list dialogs expand to expose their normal columns when screen width allows.
 - The current-project block is visually distinct from project settings and uses a concise Open action.
 - The Traits editor opens large enough to expose both biological-definition steps when possible, otherwise maximizes, and uses explicit anatomical/counting language for reference marks.

@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 import ast
 import re
+import sys
 import tkinter as tk
 from tkinter import filedialog,messagebox,simpledialog,ttk
 import webbrowser
@@ -477,14 +478,14 @@ class XRayCountsRuntime:
         content=ttk.Frame(parent);content.pack(fill="both",expand=True)
         content.columnconfigure(0,weight=1,uniform="project_cards");content.columnconfigure(1,weight=1,uniform="project_cards");content.rowconfigure(2,weight=1)
 
-        project_box=ttk.LabelFrame(content,text="Current project",padding=12,style="ProjectIdentity.TLabelframe");project_box.grid(row=0,column=0,sticky="nsew",padx=(0,5),pady=(0,7))
+        project_box=ttk.LabelFrame(content,text="Current project",padding=14,style="ProjectIdentity.TLabelframe",borderwidth=2,relief="groove");project_box.grid(row=0,column=0,sticky="nsew",padx=(4,8),pady=(4,10))
         ttk.Label(project_box,text=self.project.name,style="SectionTitle.TLabel").pack(anchor="w")
         ttk.Label(project_box,text=str(self.project.root),style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,8))
         actions=ttk.Frame(project_box);actions.pack(anchor="w")
         self._button(actions,"Open",self._open_project,"Open another X-ray project in this same MorphoLabel window.").pack(side="left")
         self._button(actions,"New project...",self._new_project,"Create another X-ray project.").pack(side="left",padx=(6,0))
 
-        source_box=ttk.LabelFrame(content,text="Source X-rays",padding=10);source_box.grid(row=0,column=1,sticky="nsew",padx=(5,0),pady=(0,7))
+        source_box=ttk.LabelFrame(content,text="Source X-rays",padding=10);source_box.grid(row=0,column=1,sticky="nsew",padx=(8,4),pady=(4,10))
         storage=self.project.storage_summary();policy=self.project.orientation_policy
         ttk.Label(source_box,text=f"{len(self.project.source_images())} indexed images",style="SectionTitle.TLabel").pack(anchor="w")
         storage_text="Self-contained project source" if storage["self_contained"] else "Legacy external source"
@@ -837,26 +838,28 @@ class TraitSchemeDialog(tk.Toplevel):
         self.trait_offset=tk.StringVar();self.trait_stop_behavior=tk.StringVar()
         self.calc_left=tk.StringVar();self.calc_operation=tk.StringVar();self.calc_right=tk.StringVar();self.calc_separator=tk.StringVar(value="+")
         self.calc_preview=tk.StringVar();self._derived_choice_lookup={};self._derived_custom_rule=None
-        self._build();self._load_scheme(self.scheme,self.note);self.after_idle(self._maximize_window);self.grab_set()
+        self._build();self._load_scheme(self.scheme,self.note);self.after(60,self._maximize_window);self.grab_set()
 
     def _maximize_window(self):
-        """Show the complete two-step editor immediately; maximize only when it cannot fit."""
+        """Make both trait-definition steps visible on the first real Windows paint."""
         try:
             self.update_idletasks()
-            screen_w=max(1,int(self.winfo_screenwidth()));screen_h=max(1,int(self.winfo_screenheight()))
-            available_w=max(900,screen_w-64);available_h=max(700,screen_h-96)
-            desired_w=max(1320,int(self.winfo_reqwidth())+24)
-            desired_h=max(900,int(self.winfo_reqheight())+24)
-            if desired_w>available_w or desired_h>available_h:
+            if sys.platform.startswith("win"):
                 try:
                     self.state("zoomed")
+                    self.lift()
                     return
                 except tk.TclError:
-                    try:
-                        self.attributes("-zoomed",True)
-                        return
-                    except tk.TclError:
-                        desired_w,desired_h=available_w,available_h
+                    pass
+            screen_w=max(1,int(self.winfo_screenwidth()));screen_h=max(1,int(self.winfo_screenheight()))
+            available_w=max(900,screen_w-64);available_h=max(700,screen_h-96)
+            desired_w=max(1320,int(self.winfo_reqwidth())+24);desired_h=max(900,int(self.winfo_reqheight())+24)
+            if desired_w>available_w or desired_h>available_h:
+                try:
+                    self.attributes("-zoomed",True)
+                    return
+                except tk.TclError:
+                    desired_w,desired_h=available_w,available_h
             width=min(desired_w,available_w);height=min(desired_h,available_h)
             x=max(0,(screen_w-width)//2);y=max(0,(screen_h-height)//2)
             self.geometry(f"{width}x{height}+{x}+{y}")

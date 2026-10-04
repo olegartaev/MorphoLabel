@@ -47,11 +47,11 @@ class ToolbarIconContractTests(unittest.TestCase):
 
     def test_review_actions_have_distinct_icons_and_equal_layout(self):
         source=open("app/ui/landmarks_section.py",encoding="utf-8").read()
-        self.assertIn("'Review AI predictions'",source)
+        self.assertIn("'Review AI'",source)
         self.assertIn("'Final data QC'",source)
         self.assertIn("icon='review_worst'",source)
         self.assertIn("icon='complex_qc'",source)
-        self.assertIn("add_command_separator(review_actions)",source)
+        self.assertGreaterEqual(source.count("add_command_separator(predict_actions)"),2)
         self.assertIn(").pack(side='left')",source)
         self.assertIn("style='ReviewAction.TButton'",source)
 

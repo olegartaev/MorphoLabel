@@ -57,7 +57,7 @@ def apply_styles(root, style):
         style.configure(name,padding=(8,4),font=(family,9,"bold"))
     style.configure("Marker.TButton",padding=(7,4),font=(family,9))
     style.configure("MarkerActive.TButton",padding=(7,4),font=(family,9,"bold"))
-    style.configure("MarkerStatus.TMenubutton",padding=(6,8),font=(family,9))
+    style.configure("MarkerStatus.TMenubutton",padding=(6,4),font=(family,9))
 
     style.configure("Stage.TButton",padding=(8,4),font=(family,9))
     style.configure("StageActive.TButton",padding=(8,4),font=(family,9,"bold"))
@@ -75,8 +75,10 @@ def apply_styles(root, style):
     style.configure("Muted.TLabel",foreground=MUTED)
     style.configure("StatusChip.TLabel",padding=(2,1),foreground=MUTED)
     style.configure("Prediction.TLabel",foreground=MUTED,padding=(2,1))
-    style.configure("ProjectIdentity.TLabelframe",borderwidth=2,relief="groove",padding=(4,3))
+    style.configure("ProjectIdentity.TLabelframe",borderwidth=2,relief="groove",padding=(8,6))
     style.configure("ProjectIdentityTitle.TLabel",font=(family,9,"bold"))
+    style.configure("ContextKey.TLabel",font=(family,9,"bold"))
+    style.configure("ContextValue.TLabel",font=(family,9))
 
     # Queue colour is semantic, not decoration: it must remain visually distinct
     # from ordinary Previous/Next navigation.

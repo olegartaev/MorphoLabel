@@ -317,7 +317,7 @@ class XRayCropWorkspace:
 
     def _button(self,parent,text,command,help_text="",style=None,icon=None):
         icon=icon or action_icon(text)
-        image=self._icon(parent,icon,CONTROL_ICON_SIZE) if icon else ""
+        image=(self._xray_icon(parent,icon,CONTROL_ICON_SIZE) if icon in {"flip_horizontal","flip_vertical"} else self._icon(parent,icon,CONTROL_ICON_SIZE)) if icon else ""
         button=ttk.Button(parent,text=text,command=command,style=style or "P.TButton",image=image,compound="left" if icon else "none")
         if help_text:self._tip.bind(button,help_text)
         return button
@@ -350,9 +350,14 @@ class XRayCropWorkspace:
         self.root.after_idle(lambda:self._set_initial_sash())
 
         header=ttk.Frame(main);header.grid(row=0,column=0,sticky="ew",pady=(0,3));header.columnconfigure(0,weight=1)
-        self.context_label=ElidedLabel(header,text="No plate selected",style="SectionTitle.TLabel",anchor="w")
-        self.context_label.grid(row=0,column=0,sticky="ew",padx=6,pady=(1,3))
-        self._tip.bind(self.context_label,lambda:self.context_label.full_text)
+        context_fields=ttk.Frame(header);context_fields.grid(row=0,column=0,sticky="ew",padx=6,pady=(1,3));context_fields.columnconfigure(3,weight=1)
+        ttk.Label(context_fields,text="Sample:",style="ContextKey.TLabel").grid(row=0,column=0,sticky="w")
+        self.sample_value=ttk.Label(context_fields,text="—",style="ContextValue.TLabel");self.sample_value.grid(row=0,column=1,sticky="w",padx=(4,14))
+        ttk.Label(context_fields,text="Plate:",style="ContextKey.TLabel").grid(row=0,column=2,sticky="w")
+        self.context_label=ElidedLabel(context_fields,text="—",style="ContextValue.TLabel",anchor="w");self.context_label.grid(row=0,column=3,sticky="ew",padx=(4,14))
+        ttk.Label(context_fields,text="Crop:",style="ContextKey.TLabel").grid(row=0,column=4,sticky="w")
+        self.crop_value=ttk.Label(context_fields,text="—",style="ContextValue.TLabel");self.crop_value.grid(row=0,column=5,sticky="w",padx=(4,0))
+        self._tip.bind(self.context_label,lambda:self.context_label.full_text);self.prediction_text=""
         actions=FlowRow(header,style="Toolbar.TFrame");actions.grid(row=1,column=0,sticky="ew");self.actions=actions
         self.left_actions=actions
         ttk.Label(actions,text="Crop actions:",style="SectionTitle.TLabel").pack(side="left",padx=(0,6))
@@ -424,8 +429,8 @@ class XRayCropWorkspace:
         add_command_separator(predict_actions)
         self.predict_next_button=self._button(predict_actions,"Predict next",lambda:self.predict_batch(self.prediction_batch_size.get()),"Predict the next eligible plates.");self.predict_next_button.pack(side="left")
         self.predict_all_button=self._button(predict_actions,"Predict all",lambda:self.predict_batch(None),"Predict every remaining eligible plate.");self.predict_all_button.pack(side="left",padx=(4,0))
-        review_actions=ttk.Frame(three);review_actions.grid(row=2,column=0,sticky="w",pady=(4,0))
-        self.review_button=self._button(review_actions,"Review AI",self.review_ai,"Review model-proposed crops and orientation before human confirmation.",style="ReviewAction.TButton",icon="review_worst");self.review_button.pack(side="left")
+        add_command_separator(predict_actions)
+        self.review_button=self._button(predict_actions,"Review AI",self.review_ai,"Review model-proposed crops and orientation before human confirmation.",style="ReviewAction.TButton",icon="review_worst");self.review_button.pack(side="left")
 
     def _set_initial_sash(self,_event=None):
         try:
@@ -584,7 +589,9 @@ class XRayCropWorkspace:
     def _refresh_plate_context(self):
         if not self.selected_image_id:return
         image=self.project.source_image(self.selected_image_id);path=Path(image["relative_path"])
-        text=f"{self.plate_list._sample(image['relative_path'])} · {path.name}"
+        self.sample_value.configure(text=self.plate_list._sample(image["relative_path"]))
+        self.context_label.configure(text=path.name)
+        selected=self.session.item();self.crop_value.configure(text=str(selected.get("ordinal") or "—") if selected else "—")
         models={}
         for item in self.session.active_items():
             if str(item.get("specimen_id") or "").startswith("draft:"):continue
@@ -592,13 +599,13 @@ class XRayCropWorkspace:
                 if event.get("action")=="detect" and (event.get("payload") or {}).get("model_id"):
                     model=(event.get("payload") or {})["model_id"]
                     models[model]=max(models.get(model,""),str(event.get("created_at") or ""));break
-        if models:text+=" · "+"; ".join(prediction_stamp(model,when) for model,when in sorted(models.items()))
-        self.context_label.configure(text=text)
+        self.prediction_text="; ".join(prediction_stamp(model,when) for model,when in sorted(models.items()))
+        self._draw()
 
     def _clear_canvas(self):
         self.canvas.delete("all");self.preview=self.photo=None;self._photo_key=None;self.selected_image_id=None;self.session.load(())
         self.zoom=1.0;self.pan=None;self.pan_drag=None
-        self._set_save_status();self._update_batch_controls();self.context_label.configure(text="No plate selected")
+        self._set_save_status();self._update_batch_controls();self.sample_value.configure(text="—");self.context_label.configure(text="—");self.crop_value.configure(text="—");self.prediction_text=""
 
     def _set_save_status(self,text=None):
         if text is None:text="Unsaved changes" if self.session.dirty else ""
@@ -683,9 +690,14 @@ class XRayCropWorkspace:
             pts=[]
             for x,y in self._drawing_crop.get("corners") or ():pts.extend(self._screen(x,y))
             if len(pts)==8:self.canvas.create_polygon(*pts,outline="#35d07f",fill="",width=2,dash=(5,3),tags="crop")
+        message_y=12
+        if self.prediction_text:
+            self.canvas.create_text(13,message_y+1,anchor="nw",fill="#202020",text=self.prediction_text,font=("Segoe UI",10,"bold"),tags="crop_prediction_shadow")
+            self.canvas.create_text(12,message_y,anchor="nw",fill="#ffdf80",text=self.prediction_text,font=("Segoe UI",10,"bold"),tags="crop_prediction")
+            message_y+=23
         hint="Selected crop · Delete removes it · blue triangle = head · amber stripe = ventral side" if self.session.selected_id else "Drag empty space to draw a new crop · blue triangle = head · amber stripe = ventral side · click a crop to edit"
-        self.canvas.create_text(12,12,anchor="nw",fill="#071521",text=hint,tags="crop_hint_shadow")
-        self.canvas.create_text(11,11,anchor="nw",fill="white",text=hint,tags="crop_hint")
+        self.canvas.create_text(13,message_y+1,anchor="nw",fill="#071521",text=hint,tags="crop_hint_shadow")
+        self.canvas.create_text(12,message_y,anchor="nw",fill="white",text=hint,tags="crop_hint")
 
     def _draw_crop_frame(self,corners,color,selected=False):
         """Rounded double-stroke boundary: clear on X-rays without a pile of corner bars."""

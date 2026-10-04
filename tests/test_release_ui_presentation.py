@@ -109,12 +109,14 @@ class PresentationProjectTests(_ProjectFixture,unittest.TestCase):
             db.execute("UPDATE crop_events SET created_at=? WHERE specimen_id=? AND action='detect'",("2024-05-06T07:08:00",self.ids[0]))
         workspace=SimpleNamespace(project=self.project,selected_image_id=specimen["image_id"],
             plate_list=SimpleNamespace(_sample=lambda path:"Sample"),
-            session=PlateCropEditSession(self.project.specimens(specimen["image_id"])),context_label=Mock())
+            session=PlateCropEditSession(self.project.specimens(specimen["image_id"])),context_label=Mock(),
+            sample_value=Mock(),crop_value=Mock(),prediction_text="",_draw=Mock())
         before=self.project.db_path.read_bytes()
         with patch.object(self.project,"active_crop_model",side_effect=AssertionError("active model is not provenance")):
             XRayCropWorkspace._refresh_plate_context(workspace)
-        text=workspace.context_label.configure.call_args.kwargs["text"]
-        self.assertIn("recorded-crop-model",text);self.assertIn("2024-05-06 07:08",text)
+        self.assertIn("recorded-crop-model",workspace.prediction_text);self.assertIn("2024-05-06 07:08",workspace.prediction_text)
+        self.assertEqual("Sample",workspace.sample_value.configure.call_args.kwargs["text"])
+        self.assertTrue(workspace._draw.called)
         self.assertEqual(before,self.project.db_path.read_bytes())
 
     def test_release_layout_widths_keep_lists_readable_without_taking_over_the_canvas(self):

@@ -214,12 +214,14 @@ class LandmarksSection(SectionView):
    active={};active_warning='No compatible active model'
   parents=available_training_parents(self.context.project);saved=self.context.project.get_ui_state('landmark_training_parent_model_id',None);valid={item['model_id'] for item in parents};chosen=saved if saved in valid else active.get('model_id') if active.get('model_id') in valid else None
   parent_choice=tk.StringVar(master=panel,value=chosen or 'Bootstrap / first model')
-  ttk.Label(three,text=active_warning or f"Active: {active.get('model_id','None')}",style='StatusChip.TLabel',anchor='w').grid(row=0,column=0,columnspan=3,sticky='ew')
-  ttk.Label(three,text='From').grid(row=1,column=0,sticky='w',pady=(4,0))
-  parent_box=ttk.Combobox(three,textvariable=parent_choice,values=tuple(item['model_id'] for item in parents) or ('Bootstrap / first model',),width=17,state='readonly')
-  parent_box.grid(row=1,column=1,columnspan=2,sticky='ew',padx=(5,0),pady=(4,0));three.columnconfigure(1,weight=1)
+  model_row=ttk.Frame(three);model_row.grid(row=0,column=0,sticky='ew');three.columnconfigure(0,weight=1)
+  ttk.Label(model_row,text=active_warning or f"Active: {active.get('model_id','None')}",style='StatusChip.TLabel').pack(side='left')
+  add_command_separator(model_row)
+  ttk.Label(model_row,text='From').pack(side='left')
+  parent_box=ttk.Combobox(model_row,textvariable=parent_choice,values=tuple(item['model_id'] for item in parents) or ('Bootstrap / first model',),width=17,state='readonly')
+  parent_box.pack(side='left',padx=(4,0))
   parent_box.bind('<<ComboboxSelected>>',lambda _event:self.context.project.set_ui_state('landmark_training_parent_model_id',None if parent_choice.get()=='Bootstrap / first model' else parent_choice.get()))
-  train_actions=ttk.Frame(three);train_actions.grid(row=2,column=0,columnspan=3,sticky='w',pady=(4,0))
+  train_actions=ttk.Frame(three);train_actions.grid(row=1,column=0,sticky='w',pady=(3,0))
   self.button(train_actions,'Train',lambda:self.preflight(None if parent_choice.get()=='Bootstrap / first model' else parent_choice.get()),'Check then run Landmark model training.',style='Primary.TButton').pack(side='left')
   add_command_separator(train_actions)
   self.button(train_actions,'Models…',lambda:self.shell.show_models('landmark'),'Compare and select saved Landmark models.').pack(side='left')
@@ -229,19 +231,19 @@ class LandmarksSection(SectionView):
   ttk.Label(batch_row,text='Next').pack(side='left')
   ttk.Spinbox(batch_row,from_=1,to=500,textvariable=prediction,width=5).pack(side='left',padx=(4,0))
   ttk.Label(batch_row,text='images',style='Muted.TLabel').pack(side='left',padx=(4,0))
-  predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,sticky='w',pady=(4,0))
+  predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,sticky='w',pady=(3,0))
   prediction_state='normal' if active else 'disabled'
   self.button(predict_actions,'Predict next',lambda:self.predict(False,prediction.get()),'Predict the next empty or previously AI-predicted image. Human-confirmed images are never changed.',state=prediction_state).pack(side='left')
   self.button(predict_actions,'Predict all',lambda:self.predict(True,prediction.get()),'Predict all empty and previously AI-predicted images. Human-confirmed images are never changed.',state=prediction_state).pack(side='left',padx=(4,0))
-  review_actions=ttk.Frame(four);review_actions.grid(row=2,column=0,sticky='w',pady=(4,0))
+  add_command_separator(predict_actions)
   self.button(
-   review_actions,'Review AI predictions',lambda:self.review_worst(prediction.get()),
+   predict_actions,'Review AI',lambda:self.review_worst(prediction.get()),
    'Before verification only: review complete AI landmark predictions that have not yet been human-verified, starting with the highest-risk cases.',
    icon='review_worst',style='ReviewAction.TButton'
   ).pack(side='left')
-  add_command_separator(review_actions)
+  add_command_separator(predict_actions)
   self.button(
-   review_actions,'Final data QC',lambda:open_complex_qc(self),
+   predict_actions,'Final data QC',lambda:open_complex_qc(self),
    'After verification only: audit final human-verified landmark sets for structural, measurement and geometric-morphometric outliers.',
    icon='complex_qc',style='ReviewAction.TButton'
   ).pack(side='left')

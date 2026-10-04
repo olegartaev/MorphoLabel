@@ -151,6 +151,14 @@ def _preview_vertebra(d,cx,cy,scale=1.0,kind="caudal",outline=XRAY_DARK,body_fil
         d.line([(cx-6*s,cy+6*s),(cx-13*s,cy+25*s)],fill=outline,width=w)
         d.line([(cx+2*s,cy+7*s),(cx-3*s,cy+28*s)],fill=outline,width=max(1,int(1.5*s)))
 
+def _count_to_indices(side,ref_index,total):
+    """Indices contributing to a count-to trait; through includes the reference element."""
+    side=str(side or "before")
+    if side=="from":return set(range(ref_index,total))
+    if side=="through":return set(range(ref_index+1))
+    return set(range(ref_index))
+
+
 def render_rule_preview(method_id,side="before",object_label="Vertebrae",reference_label="Reference",reference_label2="Second reference",size=(430,150)):
     """Large explanatory counting-rule illustration built from anatomical vertebra silhouettes."""
     width,height=(int(size[0]),int(size[1]));aa=2
@@ -168,7 +176,7 @@ def render_rule_preview(method_id,side="before",object_label="Vertebrae",referen
 
     xs=[58,132,206,280,354];cy=78;ref_index=3
     counted=set(range(len(xs)))
-    if method_id=="count_to":counted=set(range(ref_index)) if side!="from" else set(range(ref_index,len(xs)))
+    if method_id=="count_to":counted=_count_to_indices(side,ref_index,len(xs))
     elif method_id=="count_between":counted={1,2,3}
     elif method_id=="position":counted={2}
     elif method_id in {"presence","distance","angle"}:counted={2}
@@ -219,7 +227,6 @@ def render_xray_icon(name,size=XRAY_ICON_SIZE):
     common={
         "xray_project":"project", "xray_crops":"crop", "xray_structures":"structures",
         "xray_export":"export", "xray_results":"measurement_export",
-        "flip_horizontal":"flip_horizontal", "flip_vertical":"flip_vertical",
         "delete_crop":"delete", "clear_crops":"clear", "structure_apply":"verify",
         "structure_previous":"previous", "structure_next":"next",
         "clear_marker_set":"clear_type", "clear_all_markers":"clear",
@@ -230,7 +237,8 @@ def render_xray_icon(name,size=XRAY_ICON_SIZE):
 
     # Main workflow icons: different silhouette + shared visual language.
     if name=="xray":
-        _film(d,p);_vertebra(d,p,16,16,.84,XRAY_DARK)
+        # Module identity: an immediately readable lateral fish skeleton, not an electronics-like symbol.
+        _fish_skeleton_icon(d,p)
     elif name=="xray_project":
         _folder(d,p);_vertebra(d,p,20.0,18.0,.62,XRAY_DARK)
     elif name=="xray_crops":

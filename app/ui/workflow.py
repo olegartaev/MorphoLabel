@@ -35,10 +35,10 @@ class WorkflowDock(ttk.Frame):
         header=ttk.Frame(self.cards_host)
         if icon:
             if icon in ICON_NAMES:
-                ttk.Label(header,image=self.shell.ui_icon(icon, WORKFLOW_ICON_SIZE)).pack(side='left',padx=(0,6))
+                ttk.Label(header,image=self.shell.ui_icon(icon, max(26,WORKFLOW_ICON_SIZE-4))).pack(side='left',padx=(0,5))
             else:ttk.Label(header,text=icon,style='WorkflowIcon.TLabel').pack(side='left',padx=(0,6))
         ttk.Label(header,text=title,style='WorkflowCardTitle.TLabel').pack(side='left')
-        card=ttk.LabelFrame(self.cards_host,labelwidget=header,padding=(6,3),style='WorkflowCard.TLabelframe')
+        card=ttk.LabelFrame(self.cards_host,labelwidget=header,padding=(5,2),style='WorkflowCard.TLabelframe')
         if help_text:self.shell.tip.bind(card,help_text);self.shell.tip.bind(header,help_text)
         index=len(self._cards);self._cards.append(card);self._card_headers.append(header)
         label=title.split('. ',1)[-1]
@@ -81,17 +81,17 @@ class WorkflowDock(ttk.Frame):
         for index in range(len(self._cards)):self.cards_host.columnconfigure(index,weight=0,uniform='',minsize=0)
         if compact:
             self.cards_host.columnconfigure(0,weight=1)
-            self._cards[self._selected_card].grid(row=0,column=0,sticky='ew')
+            self._cards[self._selected_card].grid(row=0,column=0,sticky='new')
         else:
             for column in range(columns):self.cards_host.columnconfigure(column,weight=1,uniform='',minsize=self._cards[column].winfo_reqwidth())
             for index,card in enumerate(self._cards):
                 card.grid(
-                    row=0,column=index,sticky='nsew',padx=(0 if index==0 else 4,0),
+                    row=0,column=index,sticky='new',padx=(0 if index==0 else 4,0),
                 )
         for index,tab in enumerate(self._tabs):tab.configure(style='StageActive.TButton' if index==self._selected_card else 'Stage.TButton')
 
 
-def add_command_separator(parent, *, padx=7):
+def add_command_separator(parent, *, padx=6):
     """Visually separate command groups without adding another boxed panel."""
     separator=ttk.Separator(parent,orient="vertical")
     separator.pack(side="left",fill="y",padx=padx,pady=2)
