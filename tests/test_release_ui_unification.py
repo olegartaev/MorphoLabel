@@ -7,6 +7,7 @@ from unittest.mock import patch
 from app.ui import preferences
 from app.ui.module_credits import module_credit_rows
 from app.ui.landmarks_section import _landmark_toolbar_state
+from app.ui.design import model_selector_width
 
 from app.ui.icons import TOPBAR_ICON_SIZE, render_icon
 
@@ -45,13 +46,22 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         structures=source("app/xray_structures_ui.py")
         module=source("app/modules/xray_counts.py")
         design=source("app/ui/design.py")
-        self.assertIn('build_context_row(left,("Sample","Image"))',shell)
+        self.assertIn('build_context_row(left,("Sample","Specimen"))',shell)
         self.assertIn('build_context_row(header,("Sample","Plate","Specimen №"))',crop)
         self.assertIn('build_context_row(context,("Sample","Plate","Specimen №"))',structures)
         self.assertIn('build_context_row(parent,("Sample","Plate","Specimen №"))',module)
         self.assertIn('ttk.Label(row,text=f"{key}:",style="ContextKey.TLabel")',design)
         self.assertIn('ttk.Label(row,text="—",style="ContextValue.TLabel"',design)
         self.assertNotIn('status_locality=ElidedLabel',shell)
+
+    def test_model_selectors_expand_for_saved_model_ids_and_crop_qc_sentence_is_not_rendered(self):
+        design=source("app/ui/design.py");crop=source("app/ui/crop_section.py")
+        landmarks=source("app/ui/landmarks_section.py");xcrop=source("app/xray_crop_ui.py");structures=source("app/xray_structures_ui.py")
+        self.assertIn("def model_selector_width(values, minimum=20, maximum=48):",design)
+        self.assertEqual(36,model_selector_width(("xray_structure_model_v006_20261004",)))
+        for section in (crop,landmarks,xcrop,structures):self.assertIn("model_selector_width(",section)
+        self.assertNotIn("crop_qc_label",crop)
+        self.assertNotIn("status_callback=lambda text",crop)
 
     def test_human_repeatability_is_named_explicitly_in_both_annotation_workflows(self):
         landmarks=source("app/ui/landmarks_section.py")

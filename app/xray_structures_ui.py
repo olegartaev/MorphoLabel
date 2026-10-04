@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageTk
 
 from app.photo_list import PhotoListCanvas
 from app.ui.icons import CONTROL_ICON_SIZE, WORKFLOW_ICON_SIZE, tk_icon
-from app.ui.design import ElidedLabel, FlowRow, action_icon, build_context_row, structure_prediction_text, sidebar_width_for_window, dialog_width_for_columns
+from app.ui.design import ElidedLabel, FlowRow, action_icon, build_context_row, model_selector_width, structure_prediction_text, sidebar_width_for_window, dialog_width_for_columns
 from app.ui.workflow import WorkflowDock, add_command_separator
 from types import SimpleNamespace
 from app.ui.photo_list_panel import DEFAULT_SHOW_EXCLUDED, filtered_photo_indices
@@ -432,7 +432,7 @@ class XRayStructureWorkspace:
         add_command_separator(model_row)
         ttk.Label(model_row,text="From").pack(side="left")
         self.training_parent_choice=tk.StringVar(master=three,value="ImageNet ResNet18")
-        self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,values=("ImageNet ResNet18",),width=22,state="readonly")
+        self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,values=("ImageNet ResNet18",),width=model_selector_width(("ImageNet ResNet18",),minimum=22),state="readonly")
         self.training_parent_box.pack(side="left",padx=(4,0))
         self._training_parent_touched=False
         self.training_parent_box.bind("<<ComboboxSelected>>",lambda _e:setattr(self,"_training_parent_touched",True))
@@ -448,7 +448,7 @@ class XRayStructureWorkspace:
         add_command_separator(batch_row)
         ttk.Label(batch_row,text="Model").pack(side="left")
         self.prediction_model_choice=tk.StringVar(master=four,value="")
-        self.prediction_model_box=ttk.Combobox(batch_row,textvariable=self.prediction_model_choice,width=21,state="disabled")
+        self.prediction_model_box=ttk.Combobox(batch_row,textvariable=self.prediction_model_choice,width=model_selector_width((),minimum=22),state="disabled")
         self.prediction_model_box.pack(side="left",padx=(4,0));self.prediction_model_box.bind("<<ComboboxSelected>>",self._activate_prediction_model)
         self.tip.bind(self.prediction_model_box,"Active Structure AI model used by all prediction actions. Choosing a model makes it active immediately.")
         predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,sticky="w",pady=(4,0))
@@ -792,14 +792,14 @@ class XRayStructureWorkspace:
         structure_models=tuple(self.project.structure_models())
         prediction_values=tuple(item["model_id"] for item in structure_models if str(item.get("schema_digest") or "")==current_digest)
         compatible_active=bool(model and str(model.get("schema_digest") or "")==current_digest)
-        self.prediction_model_box.configure(values=prediction_values,state="readonly" if prediction_values else "disabled")
+        self.prediction_model_box.configure(values=prediction_values,width=model_selector_width(prediction_values,minimum=22),state="readonly" if prediction_values else "disabled")
         self.prediction_model_choice.set(active_id if compatible_active else "")
         parent_values=("ImageNet ResNet18",)+tuple(item["model_id"] for item in structure_models)
         current_parent=self.training_parent_choice.get()
         preferred_parent=(model or {}).get("model_id") or "ImageNet ResNet18"
         if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:
             self.training_parent_choice.set(preferred_parent)
-        self.training_parent_box.configure(values=parent_values)
+        self.training_parent_box.configure(values=parent_values,width=model_selector_width(parent_values,minimum=22))
         state="normal" if compatible_active and self.pass_no.get()==1 else "disabled"
         self.structure_predict_next_button.configure(state=state);self.structure_predict_all_button.configure(state=state)
         self.structure_review_button.configure(state="normal" if review else "disabled")

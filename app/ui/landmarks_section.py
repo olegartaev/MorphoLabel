@@ -25,7 +25,7 @@ from app.human_baseline import start_or_continue_run, current_run, previous_runs
 from app.human_baseline_ui import HumanBaselineWindow
 from app.gui_crop_debug import log
 from .section_base import SectionView
-from .design import FlowRow
+from .design import FlowRow, model_selector_width
 from .workflow import add_command_separator
 from .landmark_canvas import LandmarkCanvasController
 from .dialogs import center
@@ -218,7 +218,8 @@ class LandmarksSection(SectionView):
   self.active_model_label=ttk.Label(model_row,text=active_warning or f"Active: {active.get('model_id','None')}",style='StatusChip.TLabel');self.active_model_label.pack(side='left')
   add_command_separator(model_row)
   ttk.Label(model_row,text="From").pack(side="left")
-  parent_box=ttk.Combobox(model_row,textvariable=parent_choice,values=tuple(item['model_id'] for item in parents) or ('Bootstrap / first model',),width=17,state='readonly')
+  parent_values=tuple(item['model_id'] for item in parents) or ('Bootstrap / first model',)
+  parent_box=ttk.Combobox(model_row,textvariable=parent_choice,values=parent_values,width=model_selector_width(parent_values),state='readonly')
   parent_box.pack(side='left',padx=(4,0))
   parent_box.bind('<<ComboboxSelected>>',lambda _event:self.context.project.set_ui_state('landmark_training_parent_model_id',None if parent_choice.get()=='Bootstrap / first model' else parent_choice.get()))
   train_actions=ttk.Frame(three);train_actions.grid(row=1,column=0,sticky='w',pady=(3,0))
@@ -235,7 +236,7 @@ class LandmarksSection(SectionView):
   ttk.Label(batch_row,text='Model').pack(side='left')
   prediction_models=tuple(item['model_id'] for item in parents)
   self.prediction_model_choice=tk.StringVar(master=four,value=active.get('model_id',''))
-  self.prediction_model_box=ttk.Combobox(batch_row,textvariable=self.prediction_model_choice,values=prediction_models,width=20,state='readonly' if prediction_models else 'disabled')
+  self.prediction_model_box=ttk.Combobox(batch_row,textvariable=self.prediction_model_choice,values=prediction_models,width=model_selector_width(prediction_models),state='readonly' if prediction_models else 'disabled')
   self.prediction_model_box.pack(side='left',padx=(4,0));self.prediction_model_box.bind('<<ComboboxSelected>>',self._activate_prediction_model)
   self.shell.tip.bind(self.prediction_model_box,'Active Landmark model used by Predict current, Predict next batch and Predict all. Choosing a model makes it active immediately.')
   predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,sticky='w',pady=(3,0))

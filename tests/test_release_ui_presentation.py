@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 from PIL import Image
 
-from app.ui.design import apply_styles, structure_prediction_text, prediction_stamp, sidebar_width_for_window, dialog_width_for_columns
+from app.ui.design import apply_styles, structure_prediction_text, prediction_stamp, sidebar_width_for_window, dialog_width_for_columns, model_selector_width
 from app.ui.shell import ProductionShell
 from app.ui.tooltips import Tooltip
 from app.xray_crop import crop_from_geometry
@@ -127,6 +127,11 @@ class PresentationProjectTests(_ProjectFixture,unittest.TestCase):
         crop_model_columns=(165,130,165,130,150,170,80)
         self.assertGreaterEqual(dialog_width_for_columns(crop_model_columns,1456,chrome=105),sum(crop_model_columns)+105)
         self.assertLessEqual(dialog_width_for_columns(crop_model_columns,1024,chrome=105),944)
+
+    def test_model_selector_width_keeps_long_release_model_ids_readable(self):
+        self.assertEqual(20,model_selector_width(("v006",)))
+        self.assertEqual(36,model_selector_width(("xray_structure_model_v006_20261004",)))
+        self.assertEqual(48,model_selector_width(("x"*80,)))
 
     def test_workflow_dock_uses_real_tabs_with_one_open_stage(self):
         source=(Path(__file__).resolve().parents[1]/"app/ui/workflow.py").read_text(encoding="utf-8")

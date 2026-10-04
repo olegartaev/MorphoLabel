@@ -9,6 +9,7 @@ from app.landmark_attention_queue import active as active_attention_queue, class
 from .section_base import SectionView
 from .crop_canvas import CropCanvasController
 from .dialogs import center
+from .design import model_selector_width
 from .workflow import add_command_separator
 
 
@@ -19,12 +20,10 @@ class CropSection(SectionView):
   header=ttk.Frame(panel);header.grid(row=0,column=0,sticky="ew",pady=(0,4))
   actions=ttk.Frame(header,style="Toolbar.TFrame");actions.pack(fill="x")
   self.button(actions,"Apply crop",self.apply_current,"Save this reversible crop and stay on the current image.",style="Primary.TButton",icon="verify").pack(side="left")
-  self.crop_qc_label=ttk.Label(actions,text="",style="Muted.TLabel");self.crop_qc_label.pack(side="left",padx=10)
   self.shell.build_queue_navigation(header)
 
   self.canvas_frame=ttk.Frame(panel);self.canvas_frame.grid(row=1,column=0,sticky="nsew")
   self.canvas=CropCanvasController(self.canvas_frame,self.context,self.refresh);self.canvas.on_image_ready=self._crop_ready
-  self.canvas.status_callback=lambda text:self.crop_qc_label.configure(text=text)
 
   batch=tk.IntVar(value=24);prediction=tk.IntVar(value=24)
   guide="Why: Crop reduces irrelevant differences in framing and rotation before downstream analysis.\n\n1. Adjust the crop\nMove or resize the frame. Use the yellow handle when rotation is needed. Apply crop saves the current image.\n\n2. Training batch\nCorrect a batch manually and use Confirm & Next for each image.\n\n3. Train\nTrain from all human-confirmed crops.\n\n4. Predict and review\nPredict only uncropped images, then review and confirm pending AI Crop proposals."
@@ -52,7 +51,7 @@ class CropSection(SectionView):
   parent_values=crop_model_ids+("Bootstrap / first model",)
   parent_default=active_crop.get("model_id") if active_crop.get("model_id") in crop_model_ids else "Bootstrap / first model"
   source_choice=tk.StringVar(master=panel,value=parent_default)
-  source_box=ttk.Combobox(model_row,textvariable=source_choice,values=parent_values,width=18,state="readonly");source_box.pack(side="left",padx=(4,0))
+  source_box=ttk.Combobox(model_row,textvariable=source_choice,values=parent_values,width=model_selector_width(parent_values),state="readonly");source_box.pack(side="left",padx=(4,0))
   self.shell.tip.bind(source_box,"Lineage parent recorded for this fully retrained Crop model. The training data are always all current human-verified Crop examples.")
   ttk.Label(model_row,text=f"Ready: {len(training_rows)}",style="Muted.TLabel").pack(side="right",padx=(10,0))
   train_actions=ttk.Frame(two);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
@@ -68,7 +67,7 @@ class CropSection(SectionView):
   add_command_separator(batch_row)
   ttk.Label(batch_row,text="Model").pack(side="left")
   self.prediction_model_choice=tk.StringVar(master=three,value=active_crop.get("model_id") or "")
-  self.prediction_model_box=ttk.Combobox(batch_row,textvariable=self.prediction_model_choice,values=crop_model_ids,width=20,state="readonly" if crop_model_ids else "disabled")
+  self.prediction_model_box=ttk.Combobox(batch_row,textvariable=self.prediction_model_choice,values=crop_model_ids,width=model_selector_width(crop_model_ids),state="readonly" if crop_model_ids else "disabled")
   self.prediction_model_box.pack(side="left",padx=(4,0));self.prediction_model_box.bind("<<ComboboxSelected>>",self._activate_prediction_model)
   self.shell.tip.bind(self.prediction_model_box,"Active Crop model used by Predict next batch and Predict all. Choosing a model makes it active immediately.")
   apply_actions=ttk.Frame(three);apply_actions.grid(row=1,column=0,sticky="w",pady=(3,0))

@@ -30,6 +30,13 @@ def build_context_row(parent,fields):
     return row,values
 
 
+def model_selector_width(values, minimum=20, maximum=48):
+    """Character width for model selectors; keep saved model IDs readable without changing row height."""
+    labels=[str(value or "") for value in tuple(values or ())]
+    longest=max((len(value) for value in labels),default=0)+2
+    return max(int(minimum),min(int(maximum),longest))
+
+
 def _native_theme(style):
     themes=set(style.theme_names())
     if sys.platform.startswith("win"):

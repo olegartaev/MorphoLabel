@@ -16,7 +16,7 @@ from app.ui.dialogs import center
 from app.ui.icons import CONTROL_ICON_SIZE, WORKFLOW_ICON_SIZE, tk_icon
 from app.ui.photo_list_panel import filtered_photo_indices, photo_search_cache
 from app.ui.tooltips import Tooltip
-from app.ui.design import ElidedLabel, FlowRow, action_icon, build_context_row, prediction_stamp, sidebar_width_for_window, dialog_width_for_columns
+from app.ui.design import ElidedLabel, FlowRow, action_icon, build_context_row, model_selector_width, prediction_stamp, sidebar_width_for_window, dialog_width_for_columns
 from app.ui.workflow import WorkflowDock, add_command_separator
 from types import SimpleNamespace
 from .xray_crop import crop_corners, crop_from_geometry, detect_specimens, display_preview
@@ -411,7 +411,7 @@ class XRayCropWorkspace:
         add_command_separator(model_row)
         ttk.Label(model_row,text="From").pack(side="left")
         self.training_parent_choice=tk.StringVar(master=two,value="RTMDet pretrained")
-        self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,values=("RTMDet pretrained",),width=22,state="readonly")
+        self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,values=("RTMDet pretrained",),width=model_selector_width(("RTMDet pretrained",),minimum=22),state="readonly")
         self.training_parent_box.pack(side="left",padx=(4,0))
         self._training_parent_touched=False
         self.training_parent_box.bind("<<ComboboxSelected>>",lambda _e:setattr(self,"_training_parent_touched",True))
@@ -428,7 +428,7 @@ class XRayCropWorkspace:
         add_command_separator(batch_row)
         ttk.Label(batch_row,text="Model").pack(side="left")
         self.prediction_model_choice=tk.StringVar(master=three,value="")
-        self.prediction_model_box=ttk.Combobox(batch_row,textvariable=self.prediction_model_choice,width=21,state="disabled")
+        self.prediction_model_box=ttk.Combobox(batch_row,textvariable=self.prediction_model_choice,width=model_selector_width((),minimum=22),state="disabled")
         self.prediction_model_box.pack(side="left",padx=(4,0));self.prediction_model_box.bind("<<ComboboxSelected>>",self._activate_prediction_model)
         self._tip.bind(self.prediction_model_box,"Active Crop AI model used by all prediction actions. Choosing a model makes it active immediately.")
         predict_actions=ttk.Frame(three);predict_actions.grid(row=1,column=0,sticky="w",pady=(4,0))
@@ -533,14 +533,14 @@ class XRayCropWorkspace:
         active_id=(model or {}).get("model_id") or "none"
         self.model_label.configure(text=f"Active: {active_id}{orientation_mark}")
         prediction_values=tuple(item["model_id"] for item in self.project.crop_models())
-        self.prediction_model_box.configure(values=prediction_values,state="readonly" if prediction_values else "disabled")
+        self.prediction_model_box.configure(values=prediction_values,width=model_selector_width(prediction_values,minimum=22),state="readonly" if prediction_values else "disabled")
         self.prediction_model_choice.set(active_id if model else "")
         parent_values=("RTMDet pretrained",)+prediction_values
         current_parent=self.training_parent_choice.get()
         preferred_parent=(model or {}).get("model_id") or "RTMDet pretrained"
         if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:
             self.training_parent_choice.set(preferred_parent)
-        self.training_parent_box.configure(values=parent_values)
+        self.training_parent_box.configure(values=parent_values,width=model_selector_width(parent_values,minimum=22))
         self.training_count_label.configure(text=f"Ready: {status['training_plates']} plates · {status['training_specimens']} crops · orientation {status['orientation_training']}")
         self.predict_status_labels["unresolved"].configure(text=f"Unresolved: {status['prediction_candidates']}")
         self.predict_status_labels["review"].configure(text=f"Review: {status['ai_pending_plates']}")

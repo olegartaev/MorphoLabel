@@ -627,8 +627,8 @@ class ProductionShell(tk.Tk):
         left=ttk.Frame(bar);left.grid(row=0,column=0,sticky="ew");self.status_left=left
         self.status_navigation=None;self.status_queue_title=None;self.status_previous=None;self.status_index=None;self.status_next=None
         self._status_context_full=""
-        context_fields,context_values=build_context_row(left,("Sample","Image"));context_fields.pack(side="left",padx=(0,7))
-        self.status_locality=context_values["Sample"];self.status_context=context_values["Image"];self.status_context.configure(text="No images")
+        context_fields,context_values=build_context_row(left,("Sample","Specimen"));context_fields.pack(side="left",padx=(0,7))
+        self.status_locality=context_values["Sample"];self.status_context=context_values["Specimen"];self.status_context.configure(text="No images")
         self.status_count_host=ttk.Frame(left);self.status_count_host.pack(side="right")
         self.status_counts={}
         status_help={
