@@ -127,13 +127,13 @@ class PresentationProjectTests(_ProjectFixture,unittest.TestCase):
         self.assertGreaterEqual(dialog_width_for_columns(crop_model_columns,1456,chrome=105),sum(crop_model_columns)+105)
         self.assertLessEqual(dialog_width_for_columns(crop_model_columns,1024,chrome=105),944)
 
-    def test_workflow_dock_equalizes_stage_cards_without_divider_bars(self):
+    def test_workflow_dock_uses_real_tabs_with_one_open_stage(self):
         source=(Path(__file__).resolve().parents[1]/"app/ui/workflow.py").read_text(encoding="utf-8")
-        self.assertIn("target_height=max(card.winfo_reqheight() for card in self._cards)",source)
-        self.assertIn("uniform='workflow_stage'",source)
-        self.assertNotIn("_stage_separators",source)
-        self.assertNotIn("sep.grid(row=0,column=column+1",source)
-        self.assertIn("card.grid(row=0,column=index,sticky='nsew'",source)
+        self.assertIn("ttk.Notebook(self,style='Workflow.TNotebook')",source)
+        self.assertIn("self.notebook.add(card,**options)",source)
+        self.assertIn("self.notebook.select(self._cards[self._selected_card])",source)
+        separator=source[source.index("def add_command_separator"):source.index("def build_help_button")]
+        self.assertNotIn("ttk.Separator",separator)
 
     def test_saved_attention_queue_uses_the_same_compact_strip_language(self):
         source=(Path(__file__).resolve().parents[1]/"app/ui/section_base.py").read_text(encoding="utf-8")
@@ -195,11 +195,11 @@ class PresentationTkTests(_ProjectFixture,unittest.TestCase):
         for structure_id,button in workspace._marker_buttons.items():
             visibility=workspace._marker_visibility_buttons[structure_id]
             self.assertLessEqual(abs(button.winfo_height()-visibility.winfo_height()),4)
-        dock=workspace.workflow_dock;self.assertEqual(1,dock._last_columns)
-        for index,tab in enumerate(dock._tabs):
-            tab.invoke();self.pump()
+        dock=workspace.workflow_dock
+        for index,_tab in enumerate(dock._tabs):
+            dock._select_card(index);self.pump()
             self.assertTrue(dock._cards[index].winfo_viewable())
-            self.assertEqual(1,sum(bool(card.winfo_viewable()) for card in dock._cards))
+            self.assertEqual(index,dock.notebook.index("current"))
         self.assertGreater(workspace.canvas.winfo_height(),120)
         dock._toggle();self.pump();self.assertGreater(workspace.canvas.winfo_height(),300)
 

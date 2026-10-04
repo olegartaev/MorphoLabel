@@ -570,6 +570,8 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertNotIn("Fish №",ui)
         self.assertNotIn("Manual pass",ui)
         self.assertIn("Verify & Next",ui)
+        self.assertNotIn('"Next unfinished"',ui)
+        self.assertIn('self.apply_button.configure(text="Verified ✓" if verified else "Verify specimen",state=state)',ui)
         self.assertIn("Marker actions:",ui)
         self.assertIn("XRayStructureWorkspace(",module)
         self.assertIn("initial_specimen_id=selection.get(\"specimen_id\")",module)

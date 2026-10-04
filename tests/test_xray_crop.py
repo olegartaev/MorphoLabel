@@ -163,6 +163,8 @@ class XRayCropViewportContractTests(unittest.TestCase):
         self.assertIn('next_state="normal" if model and status["prediction_candidates"] else "disabled"',source)
         self.assertIn('self.apply_separator=ttk.Separator',source)
         self.assertIn('self.apply_group.pack(side="left")',source)
+        self.assertIn('text="Specimen №:",style="ContextKey.TLabel"',source)
+        self.assertIn("def _current_apply_needed(self):",source)
 
     def test_crop_queue_is_one_additive_strip_above_image(self):
         source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")

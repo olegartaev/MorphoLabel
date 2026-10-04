@@ -1,5 +1,11 @@
+import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from app.ui import preferences
+from app.ui.module_credits import module_credit_rows
 
 from app.ui.icons import TOPBAR_ICON_SIZE, render_icon
 
@@ -42,7 +48,7 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn('columnconfigure(1,weight=1,minsize=180)',shell)
         self.assertIn('text="Sample:",style="ContextKey.TLabel"',crop)
         self.assertIn('text="Plate:",style="ContextKey.TLabel"',crop)
-        self.assertIn('text="Crop:",style="ContextKey.TLabel"',crop)
+        self.assertIn('text="Specimen №:",style="ContextKey.TLabel"',crop)
         self.assertIn('text="Sample:",style="ContextKey.TLabel"',structures)
         self.assertIn('text="Specimen №:",style="ContextKey.TLabel"',structures)
         self.assertIn('style="ContextKey.TLabel"',module)
@@ -128,11 +134,73 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertGreaterEqual(structures.count('style="Nav.TButton"'),2)
         self.assertIn('style="NavPrimary.TButton"',structures)
 
-    def test_workflow_stage_cards_use_whitespace_not_vertical_divider_bars(self):
+    def test_workflow_uses_real_icon_tabs_without_vertical_divider_bars(self):
         workflow=source("app/ui/workflow.py")
-        self.assertNotIn("_stage_separators",workflow)
-        self.assertNotIn("sep.grid(row=0,column=column+1",workflow)
-        self.assertIn("padx=(0 if index==0 else 5,0)",workflow)
+        self.assertIn("ttk.Notebook(self,style='Workflow.TNotebook')",workflow)
+        self.assertIn("self.notebook.add(card,**options)",workflow)
+        self.assertIn("options['image']=image",workflow)
+        separator=workflow[workflow.index("def add_command_separator"):workflow.index("def build_help_button")]
+        self.assertNotIn("ttk.Separator",separator)
+
+    def test_verify_apply_and_predict_current_button_contracts(self):
+        landmarks=source("app/ui/landmarks_section.py")
+        crop=source("app/xray_crop_ui.py")
+        structures=source("app/xray_structures_ui.py")
+        self.assertIn("self.predict_current_button=self.button(",landmarks)
+        self.assertIn("def predict_current(self):",landmarks)
+        self.assertIn("state='normal' if active and eligible else 'disabled'",landmarks)
+        self.assertIn("def _current_apply_needed(self):",crop)
+        self.assertIn('button.configure(state="normal" if needed else "disabled")',crop)
+        self.assertIn('self.apply_button.configure(text="Verified ✓" if verified else "Verify specimen",state=state)',structures)
+        self.assertNotIn('"Next unfinished"',structures)
+
+    def test_xray_last_project_preference_is_separate_and_runtime_restores_it(self):
+        with tempfile.TemporaryDirectory() as root:
+            state=Path(root)/"state";core=Path(root)/"core";xray=Path(root)/"xray";core.mkdir();xray.mkdir()
+            with patch.object(preferences,"app_state_dir",return_value=state):
+                self.assertTrue(preferences.remember_project(core))
+                self.assertTrue(preferences.remember_xray_project(xray))
+                self.assertEqual(core.resolve(),preferences.last_project())
+                self.assertEqual(xray.resolve(),preferences.last_xray_project())
+        module=source("app/modules/xray_counts.py")
+        self.assertIn("self._restore_last_project()",module)
+        self.assertIn("remember_xray_project(self.project.root)",module)
+
+    def test_about_ai_rows_follow_the_active_xray_model(self):
+        class Registry:
+            def available(self):
+                return (
+                    SimpleNamespace(module_id="landmarks",display_name="Landmarks",source="builtin",description=""),
+                    SimpleNamespace(module_id="xray_counts",display_name="X-ray Traits",source="builtin",description=""),
+                )
+        class Project:
+            def __init__(self):self.crop_id="crop-v1";self.structure_id="structures-v1"
+            def active_crop_model(self):
+                return {"model_id":self.crop_id,"metrics":{"backend":"rtmdet_tiny_mmdet_3_2","orientation/backend":"mobilenet_v3_small_imagenet_transfer_v1"}}
+            def active_structure_model(self):
+                return {"model_id":self.structure_id,"backend":"resnet18_heatmap_v1","metrics":{}}
+        project=Project()
+        shell=SimpleNamespace(
+            module_key="xray_counts",_active_module_runtime=SimpleNamespace(project=project),
+            context=SimpleNamespace(project=None),
+        )
+        first={name:ai for name,_author,_scope,ai in module_credit_rows(Registry(),shell)}
+        self.assertIn("RTMDet-tiny",first["X-ray Traits"])
+        self.assertIn("MobileNetV3-Small",first["X-ray Traits"])
+        self.assertIn("ResNet-18 heatmap",first["X-ray Traits"])
+        self.assertIn("crop-v1",first["X-ray Traits"]);self.assertIn("structures-v1",first["X-ray Traits"])
+        project.crop_id="crop-v2";project.structure_id="structures-v2"
+        second={name:ai for name,_author,_scope,ai in module_credit_rows(Registry(),shell)}
+        self.assertIn("crop-v2",second["X-ray Traits"]);self.assertNotIn("crop-v1",second["X-ray Traits"])
+        self.assertIn("structures-v2",second["X-ray Traits"]);self.assertNotIn("structures-v1",second["X-ray Traits"])
+
+    def test_about_design_keeps_author_subdued_and_each_module_self_contained(self):
+        about=source("app/ui/shell.py")
+        credits=source("app/ui/module_credits.py")
+        self.assertIn("module_box=ttk.LabelFrame(credits,text=name",about)
+        self.assertIn('text=f"Author: {author}",style="Muted.TLabel"',about)
+        for text in ("RTMPose-M","RTMDet-tiny","MobileNetV3-Small","ResNet-18 heatmap","NumPy ridge image regression"):
+            self.assertIn(text,credits)
 
     def test_xray_specimen_number_means_ordinal_on_current_plate(self):
         structures=source("app/xray_structures_ui.py")
