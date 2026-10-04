@@ -10,5 +10,10 @@ def create_internal_runtime(spec, shell):
         runtime = spec.factory()
         if not isinstance(runtime, LandmarksRuntime):
             raise TypeError("built-in landmarks factory did not return LandmarksRuntime")
-        return runtime._bind_core(shell._render_landmarks_workspace, shell._open_landmarks_workspace)
+        return runtime._bind_core(
+            shell._render_landmarks_workspace,
+            shell._open_landmarks_workspace,
+            shell._landmark_queue_entries,
+            shell.show_model_transfer,
+        )
     return None
