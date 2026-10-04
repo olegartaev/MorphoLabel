@@ -94,9 +94,16 @@ def prepare_training_dataset(project,model_id,seed=42,workspace_root=None):
         "train_plates":len(groups["train"]["images"]),"val_plates":len(groups["val"]["images"]),
     }
 
-def train_detector(project,seed=42,epochs=80,progress=None):
+def train_detector(project,seed=42,epochs=80,progress=None,parent_model_id=None):
     project.compact_disposable_ai_artifacts()
-    model_id=project.next_crop_model_id();parent=project.active_crop_model();directory=project.models_root/model_id
+    if parent_model_id is None:
+        parent=project.active_crop_model()
+    elif not str(parent_model_id):
+        parent=None
+    else:
+        parent=next((item for item in project.crop_models() if item["model_id"]==str(parent_model_id)),None)
+        if parent is None:raise KeyError(f"Unknown X-ray Crop parent model: {parent_model_id}")
+    model_id=project.next_crop_model_id();directory=project.models_root/model_id
     performance=detector_performance_settings();hardware_settings=performance["hardware"];settings=performance["training"]
     runtime,_=ensure_ai_runtime(project=project,progress=progress)
     parent_checkpoint=(str(project.root/parent["path"]) if parent else RTMDET_TINY_COCO_URL)

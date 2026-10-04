@@ -351,7 +351,7 @@ class XRayCropWorkspace:
 
         header=ttk.Frame(main);header.grid(row=0,column=0,sticky="ew",pady=(0,3));header.columnconfigure(0,weight=1)
         context_fields=ttk.Frame(header);context_fields.grid(row=0,column=0,sticky="ew",padx=6,pady=(1,3));context_fields.columnconfigure(3,weight=1)
-        ttk.Label(context_fields,text="Locality:",style="ContextKey.TLabel").grid(row=0,column=0,sticky="w")
+        ttk.Label(context_fields,text="Sample:",style="ContextKey.TLabel").grid(row=0,column=0,sticky="w")
         self.sample_value=ttk.Label(context_fields,text="—",style="ContextValue.TLabel");self.sample_value.grid(row=0,column=1,sticky="w",padx=(4,14))
         ttk.Label(context_fields,text="Plate:",style="ContextKey.TLabel").grid(row=0,column=2,sticky="w")
         self.context_label=ElidedLabel(context_fields,text="—",style="ContextValue.TLabel",anchor="w");self.context_label.grid(row=0,column=3,sticky="ew",padx=(4,14))
@@ -529,8 +529,11 @@ class XRayCropWorkspace:
         model_metrics=(model or {}).get("metrics") or {};orientation_mark=" · orientation ✓" if model_metrics.get("orientation/enabled") else ""
         active_id=(model or {}).get("model_id") or "none"
         self.model_label.configure(text=f"Active: {active_id}{orientation_mark}")
-        parent_label=(model or {}).get("model_id") or "RTMDet pretrained"
-        self.training_parent_choice.set(parent_label);self.training_parent_box.configure(values=(parent_label,))
+        parent_values=("RTMDet pretrained",)+tuple(item["model_id"] for item in self.project.crop_models())
+        current_parent=self.training_parent_choice.get()
+        preferred_parent=(model or {}).get("model_id") or "RTMDet pretrained"
+        if current_parent not in parent_values:self.training_parent_choice.set(preferred_parent)
+        self.training_parent_box.configure(values=parent_values)
         self.training_count_label.configure(text=f"Ready: {status['training_plates']} plates · {status['training_specimens']} crops · orientation {status['orientation_training']}")
         self.predict_status_labels["unresolved"].configure(text=f"Unresolved: {status['prediction_candidates']}")
         self.predict_status_labels["review"].configure(text=f"Review: {status['ai_pending_plates']}")
@@ -944,8 +947,10 @@ class XRayCropWorkspace:
         frame=ttk.Frame(dialog,padding=14);frame.pack();label=ttk.Label(frame,text="Training X-ray crop model…");label.pack(anchor="w")
         bar=ttk.Progressbar(frame,mode="indeterminate");bar.pack(fill="x",pady=(8,0));bar.start();center(self.root,dialog)
         def progress(stage,detail):events.put(("stage",stage,detail))
+        selected_parent=self.training_parent_choice.get()
+        parent_model_id="" if selected_parent=="RTMDet pretrained" else selected_parent
         def worker():
-            try:events.put(("done",train_detector(self.project,progress=progress)))
+            try:events.put(("done",train_detector(self.project,progress=progress,parent_model_id=parent_model_id)))
             except Exception as exc:events.put(("error",exc))
         threading.Thread(target=worker,daemon=True,name="xray-detector-training").start()
         def poll():
@@ -956,7 +961,7 @@ class XRayCropWorkspace:
                     elif event[0]=="error":
                         self._busy=False;dialog.destroy();messagebox.showerror("Crop training",str(event[1]),parent=self.root);return
                     else:
-                        self._busy=False;dialog.destroy();result=event[1];self._refresh_controls();metrics=result.get("metrics") or {}
+                        self._busy=False;dialog.destroy();result=event[1];self.training_parent_choice.set(result["model_id"]);self._refresh_controls();metrics=result.get("metrics") or {}
                         detail=f"Model ready: {result['model_id']}\nTraining plates: {result['training_plates']}\nTraining crops: {result['training_specimens']}"
                         if metrics.get("orientation/enabled"):
                             head=metrics.get("orientation/head_accuracy");bottom=metrics.get("orientation/bottom_accuracy");parts=[]

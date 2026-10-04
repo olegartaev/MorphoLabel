@@ -34,13 +34,13 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         crop=source("app/xray_crop_ui.py")
         structures=source("app/xray_structures_ui.py")
         module=source("app/modules/xray_counts.py")
-        self.assertIn('text="Locality:",style="ContextKey.TLabel"',shell)
+        self.assertIn('text="Sample:",style="ContextKey.TLabel"',shell)
         self.assertIn('status_locality=ElidedLabel',shell)
-        self.assertIn('width=24',shell)
-        self.assertIn('text="Locality:",style="ContextKey.TLabel"',crop)
+        self.assertIn('columnconfigure(1,weight=1,minsize=180)',shell)
+        self.assertIn('text="Sample:",style="ContextKey.TLabel"',crop)
         self.assertIn('text="Plate:",style="ContextKey.TLabel"',crop)
         self.assertIn('text="Crop:",style="ContextKey.TLabel"',crop)
-        self.assertIn('text="Locality:",style="ContextKey.TLabel"',structures)
+        self.assertIn('text="Sample:",style="ContextKey.TLabel"',structures)
         self.assertIn('text="Specimen №:",style="ContextKey.TLabel"',structures)
         self.assertIn('style="ContextKey.TLabel"',module)
         self.assertIn('style="ContextValue.TLabel"',module)
@@ -68,6 +68,25 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn("Verified Crop data",crop)
         self.assertIn("RTMDet pretrained",xcrop)
         self.assertIn("ImageNet ResNet18",structures)
+
+    def test_xray_training_parent_choices_are_real_saved_models_not_decorative_fields(self):
+        crop=source("app/xray_crop_ui.py")
+        structures=source("app/xray_structures_ui.py")
+        detector=source("app/xray_detector.py")
+        structure_ai=source("app/xray_structure_ai.py")
+        self.assertIn('parent_values=("RTMDet pretrained",)+tuple(item["model_id"] for item in self.project.crop_models())',crop)
+        self.assertIn('parent_values=("ImageNet ResNet18",)+tuple(item["model_id"] for item in self.project.structure_models())',structures)
+        self.assertIn("parent_model_id=parent_model_id",crop)
+        self.assertIn("parent_model_id=parent_model_id",structures)
+        self.assertIn("def train_detector(project,seed=42,epochs=80,progress=None,parent_model_id=None):",detector)
+        self.assertIn("def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None):",structure_ai)
+
+    def test_structures_never_stacks_two_yellow_queue_banners(self):
+        structures=source("app/xray_structures_ui.py")
+        self.assertIn("if ids and current in ids and result_queue is None:",structures)
+        self.assertIn("detail=item.get(\"top_reason\")",structures)
+        banner=structures[structures.index("def _refresh_result_review_banner"):structures.index("def _move_result_review")]
+        self.assertNotIn("\\n{item.get('top_reason')",banner)
 
     def test_traits_editor_scrolls_and_has_no_dead_appearance_button_reference(self):
         module=source("app/modules/xray_counts.py")

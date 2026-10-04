@@ -355,7 +355,7 @@ class XRayStructureWorkspace:
 
         context=ttk.Frame(main,padding=(6,2));context.grid(row=0,column=0,sticky="ew");context.columnconfigure(0,weight=1)
         context_fields=ttk.Frame(context);context_fields.grid(row=0,column=0,sticky="ew",padx=(0,8));context_fields.columnconfigure(3,weight=1)
-        ttk.Label(context_fields,text="Locality:",style="ContextKey.TLabel").grid(row=0,column=0,sticky="w")
+        ttk.Label(context_fields,text="Sample:",style="ContextKey.TLabel").grid(row=0,column=0,sticky="w")
         self.locality_value=ttk.Label(context_fields,text="—",style="ContextValue.TLabel");self.locality_value.grid(row=0,column=1,sticky="w",padx=(4,14))
         ttk.Label(context_fields,text="Plate:",style="ContextKey.TLabel").grid(row=0,column=2,sticky="w")
         self.context_label=ElidedLabel(context_fields,text="—",style="ContextValue.TLabel",anchor="w");self.context_label.grid(row=0,column=3,sticky="ew",padx=(4,14))
@@ -741,9 +741,11 @@ class XRayStructureWorkspace:
         priority="High priority" if item.get("severity")=="high" else "Review"
         checks=int(item.get("issue_count") or 0)
         workflow_no=self.project.structure_workflow_number(item["specimen_id"])
+        detail=item.get("top_reason") or "Inspect this specimen and verify when the markers are correct."
         self.review_queue_label.configure(
-            text=f"Result review · {position+1} / {len(items)} · {priority} · {checks} check{'s' if checks!=1 else ''} · specimen #{workflow_no or '?'} · {item['sample']} · {item['plate']}\n{item.get('top_reason') or 'Inspect this specimen and verify when the markers are correct.'}"
+            text=f"Result review · {position+1} / {len(items)} · {priority} · {checks} check{'s' if checks!=1 else ''} · specimen #{workflow_no or '?'} · {item['sample']} · {item['plate']}"
         )
+        self.tip.bind(self.review_queue_label,lambda value=str(detail):value)
         self.review_queue_banner.pack(fill="x")
 
     def _move_result_review(self,step):
@@ -775,8 +777,11 @@ class XRayStructureWorkspace:
         self.training_summary.configure(text=f"Ready: {p1['verified']} human-verified")
         active_id=(model or {}).get("model_id") or "none"
         self.structure_model_label.configure(text=f"Active: {active_id}")
-        parent_label=(model or {}).get("model_id") or "ImageNet ResNet18"
-        self.training_parent_choice.set(parent_label);self.training_parent_box.configure(values=(parent_label,))
+        parent_values=("ImageNet ResNet18",)+tuple(item["model_id"] for item in self.project.structure_models())
+        current_parent=self.training_parent_choice.get()
+        preferred_parent=(model or {}).get("model_id") or "ImageNet ResNet18"
+        if current_parent not in parent_values:self.training_parent_choice.set(preferred_parent)
+        self.training_parent_box.configure(values=parent_values)
         state="normal" if model and self.pass_no.get()==1 else "disabled"
         self.structure_predict_next_button.configure(state=state);self.structure_predict_all_button.configure(state=state)
         self.structure_review_button.configure(state="normal" if review else "disabled")
@@ -1072,8 +1077,10 @@ class XRayStructureWorkspace:
         dialog,label,bar=self._structure_ai_dialog("Train Structure AI","Preparing verified X-ray structures…",None)
         def progress(stage,detail):
             events.put(("progress",str(stage),str(detail)))
+        selected_parent=self.training_parent_choice.get()
+        parent_model_id="" if selected_parent=="ImageNet ResNet18" else selected_parent
         def worker():
-            try:events.put(("done",train_structure_model(self.project,progress=progress)))
+            try:events.put(("done",train_structure_model(self.project,progress=progress,parent_model_id=parent_model_id)))
             except Exception as exc:events.put(("error",exc))
         threading.Thread(target=worker,daemon=True,name="xray-structure-training").start()
         def poll():
@@ -1091,7 +1098,7 @@ class XRayStructureWorkspace:
                         self._busy=False
                         try:bar.stop();dialog.destroy()
                         except tk.TclError:pass
-                        result=event[1];metrics=result.get("metrics") or {}
+                        result=event[1];self.training_parent_choice.set(result["model_id"]);metrics=result.get("metrics") or {}
                         quality=metrics.get("structure/macro_f1")
                         detail=(
                             f"Model ready: {result['model_id']}\n"

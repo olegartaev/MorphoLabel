@@ -254,10 +254,17 @@ def prepare_structure_training_dataset(project, workspace_root, seed=42):
     }
 
 
-def train_structure_model(project, seed=42, epochs=60, progress=None):
+def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None):
     runtime, _ = ensure_ai_runtime(project=project, progress=progress)
     model_id = project.next_structure_model_id()
-    parent = project.active_structure_model()
+    if parent_model_id is None:
+        parent = project.active_structure_model()
+    elif not str(parent_model_id):
+        parent = None
+    else:
+        parent = next((item for item in project.structure_models() if item["model_id"]==str(parent_model_id)),None)
+        if parent is None:
+            raise XRayStructureAIError(f"Unknown Structure AI parent model: {parent_model_id}")
     schema_digest = structure_schema_digest(project.scheme)
     if parent and str(parent.get("schema_digest") or "") != schema_digest:
         raise XRayStructureAIError("The active structure model is incompatible with the current X-ray structure scheme.")

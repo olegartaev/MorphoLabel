@@ -266,7 +266,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
     def test_core_context_and_queue_share_xray_visual_language(self):
         root=Path(__file__).parents[1]
         shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
-        self.assertIn('text="Locality:",style="ContextKey.TLabel"',shell)
+        self.assertIn('text="Sample:",style="ContextKey.TLabel"',shell)
         self.assertIn('text="Image:",style="ContextKey.TLabel"',shell)
         self.assertIn("self.status_queue_title",shell)
         self.assertIn("'landmark':'Annotation batch'",shell)

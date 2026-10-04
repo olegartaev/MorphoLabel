@@ -457,7 +457,7 @@ class ProductionShell(tk.Tk):
     def _nav(self):
         row=ttk.Frame(self.root,style="Topbar.TFrame"); row.grid(row=0,column=0,sticky="ew",pady=(0,4))
         home=ttk.Button(row,text="Modules",image=self.ui_icon("modules",TOPBAR_ICON_SIZE),compound="left",command=self.show_module_hub,style="Stage.TButton")
-        home.pack(side="left",padx=(0,5));self.tip.bind(home,"Return to the MorphoLabel module hub.")
+        home.pack(side="left",padx=(6,5));self.tip.bind(home,"Return to the MorphoLabel module hub.")
         ttk.Separator(row,orient="vertical").pack(side="left",fill="y",padx=(0,9),pady=5)
         sections=visible_sections(self.context.crop_enabled()) if self.context.project else visible_sections(True)
         for spec in sections:
@@ -616,10 +616,13 @@ class ProductionShell(tk.Tk):
         self.status_queue_title=ttk.Label(navigation,text="Review queue",style="AttentionTitle.TLabel");self.status_queue_title.pack(side="left",padx=(0,10))
         self._status_context_full=""
         context_fields=ttk.Frame(left);context_fields.pack(side="left",fill="x",expand=True,padx=(0,7))
-        ttk.Label(context_fields,text="Locality:",style="ContextKey.TLabel").pack(side="left")
-        self.status_locality=ElidedLabel(context_fields,text="—",style="ContextValue.TLabel",anchor="w",width=24);self.status_locality.pack(side="left",padx=(4,14))
-        ttk.Label(context_fields,text="Image:",style="ContextKey.TLabel").pack(side="left")
-        self.status_context=ElidedLabel(context_fields,text="No images",style="ContextValue.TLabel",anchor="w");self.status_context.pack(side="left",fill="x",expand=True,padx=(4,0))
+        context_fields.columnconfigure(1,weight=1,minsize=180);context_fields.columnconfigure(3,weight=2,minsize=220)
+        ttk.Label(context_fields,text="Sample:",style="ContextKey.TLabel").grid(row=0,column=0,sticky="w")
+        self.status_locality=ElidedLabel(context_fields,text="—",style="ContextValue.TLabel",anchor="w")
+        self.status_locality.grid(row=0,column=1,sticky="ew",padx=(4,14))
+        ttk.Label(context_fields,text="Image:",style="ContextKey.TLabel").grid(row=0,column=2,sticky="w")
+        self.status_context=ElidedLabel(context_fields,text="No images",style="ContextValue.TLabel",anchor="w")
+        self.status_context.grid(row=0,column=3,sticky="ew",padx=(4,0))
         self.status_count_host=ttk.Frame(left);self.status_count_host.pack(side="right")
         self.status_counts={}
         status_help={

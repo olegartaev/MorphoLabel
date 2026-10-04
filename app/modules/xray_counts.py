@@ -346,8 +346,8 @@ class XRayCountsRuntime:
         if specimen is not None:
             workflow_no=self.project.structure_workflow_number(specimen["specimen_id"])
             number=f"#{workflow_no}" if workflow_no else f"plate specimen {int(specimen.get('ordinal') or 0)}"
-            return f"Locality: {sample}  ·  Plate: {path.name}  ·  Specimen: {number}"
-        return f"Locality: {sample}  ·  Plate: {path.name}"
+            return f"Sample: {sample}  ·  Plate: {path.name}  ·  Specimen: {number}"
+        return f"Sample: {sample}  ·  Plate: {path.name}"
 
     def _selection_context_fields(self):
         selection=self._selection();specimen_id=selection.get("specimen_id");image_id=selection.get("image_id")
@@ -358,7 +358,7 @@ class XRayCountsRuntime:
         if not image_id:return ()
         try:image=self.project.source_image(image_id)
         except KeyError:return ()
-        path=Path(image["relative_path"]);fields=[("Locality",self._sample_name(image["relative_path"])),("Plate",path.name)]
+        path=Path(image["relative_path"]);fields=[("Sample",self._sample_name(image["relative_path"])),("Plate",path.name)]
         if specimen is not None:
             workflow_no=self.project.structure_workflow_number(specimen["specimen_id"])
             number=str(workflow_no) if workflow_no else str(int(specimen.get("ordinal") or 0))
@@ -446,7 +446,7 @@ class XRayCountsRuntime:
     def _header(self,parent):
         nav=ttk.Frame(parent,style="Topbar.TFrame");nav.pack(fill="x",pady=(0,4))
         home=ttk.Button(nav,text="Modules",image=self._core_icon(nav,"modules"),compound="left",command=self._show_module_hub,style="Stage.TButton")
-        home.pack(side="left",padx=(0,5));self._tip.bind(home,"Return to the MorphoLabel module hub.")
+        home.pack(side="left",padx=(6,5));self._tip.bind(home,"Return to the MorphoLabel module hub.")
         ttk.Separator(nav,orient="vertical").pack(side="left",fill="y",padx=(0,9),pady=5)
         for key,label,icon in STAGES:
             active=self.stage==key
