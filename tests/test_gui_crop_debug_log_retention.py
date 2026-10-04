@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from app.gui_crop_debug import _append, _rotate_log, log
+from app.gui_crop_debug import _append, _rotate_log, dump_threads, log
 
 
 class DiagnosticLogRetentionTests(unittest.TestCase):
@@ -27,6 +27,14 @@ class DiagnosticLogRetentionTests(unittest.TestCase):
              patch("app.gui_crop_debug._rotate_log",return_value=False):
             self.assertFalse(_append("diagnostic\n"))
             log("TEST","permission","PASS")
+
+    def test_thread_dump_permission_denied_is_non_fatal(self):
+        denied=MagicMock()
+        denied.parent=MagicMock()
+        denied.open.side_effect=PermissionError(13,"denied")
+        with patch("app.gui_crop_debug._log_paths",return_value=(denied,)), \
+             patch("app.gui_crop_debug._rotate_log",return_value=False):
+            dump_threads("TEST","permission")
 
     def test_unwritable_primary_sink_falls_through_to_secondary_sink(self):
         primary=MagicMock();secondary=MagicMock()
