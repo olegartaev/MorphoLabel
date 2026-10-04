@@ -37,6 +37,10 @@ class CropAutoWorkflowTests(unittest.TestCase):
   batch=p.crop_batch_counts([i])
   self.assertEqual({"Reviewed":0,"Remaining":1,"Train ready":1,"Total":1},batch)
 
+ def test_crop_batch_train_ready_never_counts_excluded_batch_members(self):
+  p,i=self.make();p.save_reviewed_crop(i,crop([10,10,90,90]));p.exclude_image(i,"test exclusion")
+  self.assertEqual({"Reviewed":0,"Remaining":0,"Train ready":0,"Total":0},p.crop_batch_counts([i]))
+
  def test_unprovable_landmark_frame_is_archived_and_not_trainable(self):
   p,i=self.make();p.save_landmark(i,1,12,13,'manual','manual');p.mark_checked(i)
   result=p.save_reviewed_crop(i,crop([10,10,90,90]))

@@ -840,7 +840,6 @@ ON CONFLICT(image_id) DO UPDATE SET verified_at=excluded.verified_at""",(image_i
   return tuple(r[0] for r in rows)
  def crop_counts(self):
   """Canonical Crop-only status counts; explicit review history is distinct from legacy training eligibility."""
-  verified_provenance=('manual','ai_accepted','ai_corrected')
   with self.transaction() as c:
    total=c.execute("SELECT COUNT(*) FROM images WHERE COALESCE(active,1)=1 AND COALESCE(excluded,0)=0").fetchone()[0]
    reviewed=c.execute("""SELECT COUNT(*)
@@ -901,8 +900,8 @@ WHERE o.image_id IN ({marks})
   AND cr.provenance IN ('manual','ai_accepted','ai_corrected')
   AND cr.crop_json IS NOT NULL AND cr.crop_json!='null'""",ids)}
   present={r['image_id']:r for r in rows};eligible=[ident for ident in ids if ident in present and not present[ident]['excluded']]
-  reviewed=sum(i in explicit for i in eligible)
-  return {"Reviewed":reviewed,"Remaining":max(0,len(eligible)-reviewed),"Train ready":len(train),"Total":len(eligible)}
+  eligible_set=set(eligible);reviewed=sum(i in explicit for i in eligible)
+  return {"Reviewed":reviewed,"Remaining":max(0,len(eligible)-reviewed),"Train ready":len(train & eligible_set),"Total":len(eligible)}
  def landmark_counts(self):
   """Human-readable Landmark workspace counts; categories intentionally overlap."""
   from .landmark_dataset import training_ready_image_ids, v2_human_final_eligible_image_ids
