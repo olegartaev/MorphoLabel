@@ -12,7 +12,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageTk
 
 from app.photo_list import PhotoListCanvas
-from app.ui.icons import CONTROL_ICON_SIZE, WORKFLOW_ICON_SIZE, tk_icon
+from app.ui.icons import CONTROL_ICON_SIZE, tk_icon
 from app.ui.design import ElidedLabel, FlowRow, action_icon, build_context_row, model_selector_width, structure_prediction_text, sidebar_width_for_window, dialog_width_for_columns
 from app.ui.workflow import WorkflowDock, add_command_separator
 from types import SimpleNamespace
