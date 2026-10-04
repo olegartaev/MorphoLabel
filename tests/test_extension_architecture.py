@@ -111,6 +111,29 @@ class ExtensionArchitectureTests(unittest.TestCase):
         self.assertTrue(callable(runtime.render))
         self.assertTrue(callable(runtime.close))
 
+    def test_builtin_landmarks_runtime_owns_core_queue_and_model_actions(self):
+        from app.modules.landmarks import LandmarksRuntime
+        events=[]
+        host=SimpleNamespace(project=None)
+        runtime=LandmarksRuntime()._bind_core(
+            lambda:events.append("render"),
+            lambda:events.append("open"),
+            lambda:({"title":"saved queue"},),
+            lambda:events.append("models"),
+        )
+        runtime.render(host)
+        self.assertEqual(["render"],events)
+        self.assertEqual(({"title":"saved queue"},),runtime.queue_entries())
+        entries=runtime.standard_menu_entries()
+        self.assertEqual("AI model transfer...",entries[0]["label"])
+        self.assertEqual("disabled",entries[0]["state"])
+        host.project=object()
+        entries=runtime.standard_menu_entries()
+        self.assertEqual("normal",entries[0]["state"])
+        entries[0]["command"]()
+        self.assertEqual(["render","models"],events)
+        runtime.close()
+
     def test_deterministic_order_and_duplicate_module(self):
         registry = ModuleRegistry()
         registry.register(fake_module("z", 2))
@@ -241,6 +264,8 @@ class ExtensionArchitectureTests(unittest.TestCase):
         self.assertIn("spec.factory()", shell)
         self.assertNotIn('if module_id == "landmarks"', shell)
         self.assertNotIn('if module_id != "landmarks"', shell)
+        self.assertNotIn('if self.module_key=="landmarks"', shell)
+        self.assertNotIn('label="AI model transfer..."', shell)
         public_api=(root/"app/extensions/api.py").read_text(encoding="utf-8")
         self.assertNotIn("_render_core",public_api)
         self.assertNotIn("_open_core",public_api)
