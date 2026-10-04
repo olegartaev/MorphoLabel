@@ -480,7 +480,6 @@ class ProductionShell(tk.Tk):
         menu.add_command(label="AI",state="disabled")
         menu.add_command(label="Set up AI support...",command=self._show_first_run_setup)
         menu.add_command(label="Hardware status...",command=self.show_hardware)
-        menu.add_command(label="AI model transfer...",command=self.show_model_transfer,state="normal" if self.context.project else "disabled")
         provider=getattr(getattr(self,"_active_module_runtime",None),"standard_menu_entries",None)
         if callable(provider):
             entries=tuple(provider() or ())
@@ -514,8 +513,6 @@ class ProductionShell(tk.Tk):
         provider=getattr(getattr(self,"_active_module_runtime",None),"queue_entries",None)
         if callable(provider):
             return tuple(provider() or ())
-        if self.module_key=="landmarks":
-            return tuple(self._landmark_queue_entries())
         return ()
 
     def _open_core_saved_queue(self,section,image_id):
