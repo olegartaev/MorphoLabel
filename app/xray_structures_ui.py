@@ -1193,7 +1193,7 @@ class XRayStructureWorkspace:
             if not model_id:return
             try:self.project.activate_structure_model(model_id)
             except Exception as exc:messagebox.showerror("X-ray structure models",str(exc),parent=dialog);return
-            reload(model_id);self._refresh_workflow()
+            self._training_parent_touched=False;reload(model_id);self._refresh_workflow()
         def export_model():
             model_id=selected()
             if not model_id:

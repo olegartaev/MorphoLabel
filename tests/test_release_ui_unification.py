@@ -149,6 +149,8 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn("chosen=active.get('model_id') if active.get('model_id') in valid",landmarks)
         self.assertIn('if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:',xcrop)
         self.assertIn('if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:',structures)
+        self.assertIn("self._training_parent_touched=False;refresh();self._refresh_controls()",xcrop)
+        self.assertIn("self._training_parent_touched=False;reload(model_id);self._refresh_workflow()",structures)
 
     def test_traits_editor_scrolls_and_has_no_dead_appearance_button_reference(self):
         module=source("app/modules/xray_counts.py")

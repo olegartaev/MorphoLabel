@@ -1013,7 +1013,7 @@ class XRayCropWorkspace:
             if not model_id:return
             try:self.project.activate_crop_model(model_id)
             except Exception as exc:messagebox.showerror("X-ray models",str(exc),parent=dialog);return
-            refresh();self._refresh_controls()
+            self._training_parent_touched=False;refresh();self._refresh_controls()
         def delete():
             model_id=selected_model()
             if not model_id:return
