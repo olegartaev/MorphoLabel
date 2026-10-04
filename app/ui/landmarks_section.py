@@ -49,6 +49,25 @@ def _confirm_complex_qc_image(project,image_id):
  project.mark_checked(image_id)
  return project.annotation_status(image_id)
 
+def _current_prediction_allowed(project,row):
+ """Fast current-only eligibility for the Predict current button.
+
+ The button state must never scan the whole catalogue. Batch eligibility is
+ still resolved by _prediction_candidate_ids only when a batch prediction is
+ actually requested.
+ """
+ row=row or {};image_id=str(row.get('image_id') or '')
+ if not image_id or row.get('excluded') or project.landmark_prediction_locked(image_id):return False
+ points=project.load_landmarks(image_id)
+ if not points:return True
+ status_reader=getattr(project,'annotation_status',None)
+ if status_reader is not None and not status_reader(image_id).get('complete'):return True
+ return any(
+  point.get('provenance')=='machine' or point.get('model_id') is not None or point.get('prediction_run_id') is not None
+  for point in points.values()
+ )
+
+
 def _format_percent(value,digits=2):
  if value is None:return 'not available'
  return f"{float(value):.{int(digits)}f}%"
@@ -244,7 +263,7 @@ class LandmarksSection(SectionView):
   self.predict_current_button=self.button(
    predict_actions,'Predict current',self.predict_current,
    'Apply the active Landmark model only to the current eligible image. Human-verified images are protected.',
-   state='normal' if active and str((self.context.current() or {}).get('image_id') or '') in set(_prediction_candidate_ids(self.context.project,self.context.rows)) else 'disabled',
+   state='normal' if active and _current_prediction_allowed(self.context.project,self.context.current()) else 'disabled',
    icon='predict'
   );self.predict_current_button.pack(side='left')
   self.predict_next_button=self.button(predict_actions,'Predict next batch',lambda:self.predict(False,prediction.get()),'Predict the next empty or previously AI-predicted image. Human-confirmed images are never changed.',state=prediction_state,style='Primary.TButton');self.predict_next_button.pack(side='left',padx=(4,0))
@@ -278,7 +297,7 @@ class LandmarksSection(SectionView):
    current=str((self.context.current() or {}).get('image_id') or '')
    try:active=bool(self.context.project.active_model_readonly('landmark'))
    except ValueError:active=False
-   eligible=current in set(_prediction_candidate_ids(self.context.project,self.context.rows)) if current else False
+   eligible=_current_prediction_allowed(self.context.project,self.context.current()) if current else False
    predict_current.configure(state='normal' if active and eligible else 'disabled')
    for button in (getattr(self,'predict_next_button',None),getattr(self,'predict_all_button',None)):
     if button and button.winfo_exists():button.configure(state='normal' if active else 'disabled')

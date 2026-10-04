@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from app.ui import preferences
 from app.ui.module_credits import module_credit_rows
-from app.ui.landmarks_section import _landmark_toolbar_state
+from app.ui.landmarks_section import _current_prediction_allowed, _landmark_toolbar_state
 from app.ui.design import model_selector_width
 
 from app.ui.icons import TOPBAR_ICON_SIZE, render_icon
@@ -164,13 +164,27 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertFalse(_landmark_toolbar_state(verified,None)["verify_enabled"])
         self.assertTrue(_landmark_toolbar_state(draft,None)["verify_enabled"])
 
+    def test_predict_current_button_checks_only_the_current_landmark_specimen(self):
+        class Project:
+            def __init__(self):self.calls=[]
+            def landmark_prediction_locked(self,image_id):self.calls.append(("locked",image_id));return False
+            def load_landmarks(self,image_id):self.calls.append(("load",image_id));return {}
+            def annotation_status(self,image_id):raise AssertionError("empty current specimen should not need status")
+        project=Project();row={"image_id":"current","excluded":False}
+        self.assertTrue(_current_prediction_allowed(project,row))
+        self.assertEqual([("locked","current"),("load","current")],project.calls)
+        source_text=source("app/ui/landmarks_section.py")
+        render_block=source_text[source_text.index("self.predict_current_button=self.button("):source_text.index("self.predict_next_button=",source_text.index("self.predict_current_button=self.button("))]
+        self.assertIn("_current_prediction_allowed(self.context.project,self.context.current())",render_block)
+        self.assertNotIn("_prediction_candidate_ids",render_block)
+
     def test_verify_apply_and_predict_current_button_contracts(self):
         landmarks=source("app/ui/landmarks_section.py")
         crop=source("app/xray_crop_ui.py")
         structures=source("app/xray_structures_ui.py")
         self.assertIn("self.predict_current_button=self.button(",landmarks)
         self.assertIn("def predict_current(self):",landmarks)
-        self.assertIn("state='normal' if active and eligible else 'disabled'",landmarks)
+        self.assertIn("state='normal' if active and _current_prediction_allowed(self.context.project,self.context.current()) else 'disabled'",landmarks)
         self.assertIn("def _current_apply_needed(self):",crop)
         self.assertIn('button.configure(state="normal" if needed else "disabled")',crop)
         self.assertIn('self.apply_button.configure(text="Verified ✓" if verified else "Verify specimen",state=state)',structures)
