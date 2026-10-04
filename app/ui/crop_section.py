@@ -282,7 +282,7 @@ class CropSection(SectionView):
  def train(self,parent_model_id=None):
   dialog=tk.Toplevel(self.shell);dialog.title("Train crop model");dialog.transient(self.shell);frame=ttk.Frame(dialog,padding=14);frame.pack();ttk.Label(frame,text="Training crop model…").pack(anchor="w");bar=ttk.Progressbar(frame,mode="indeterminate");bar.pack(fill="x",pady=(8,0));bar.start();events=queue.Queue();center(self.shell,dialog)
   def worker():
-   try:events.put(("done",train(project=self.context.project)))
+   try:events.put(("done",train(project=self.context.project,parent_model_id=parent_model_id)))
    except Exception as exc:events.put(("error",exc))
   threading.Thread(target=worker,daemon=True,name="production-crop-training").start()
   def poll():
