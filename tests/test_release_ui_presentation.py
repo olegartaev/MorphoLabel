@@ -203,6 +203,25 @@ class PresentationTkTests(_ProjectFixture,unittest.TestCase):
         self.assertGreater(workspace.canvas.winfo_height(),120)
         dock._toggle();self.pump();self.assertGreater(workspace.canvas.winfo_height(),300)
 
+    def test_crop_apply_disables_when_verified_and_reenables_after_real_edit(self):
+        workspace=XRayCropWorkspace(self.host,self.project);self.pump()
+        self.assertIn("disabled",workspace.apply_button.state())
+        self.assertTrue(workspace.session.flip_horizontal())
+        workspace._set_save_status();self.pump()
+        self.assertNotIn("disabled",workspace.apply_button.state())
+        self.assertEqual("SAVED",workspace.apply_current());self.pump()
+        self.assertIn("disabled",workspace.apply_button.state())
+
+    def test_structure_verify_disables_until_annotation_changes(self):
+        self.seed();workspace=XRayStructureWorkspace(self.host,self.project);self.pump()
+        workspace._load_specimen(self.ids[0]);self.pump()
+        self.assertTrue(workspace.verify_current());self.pump()
+        self.assertIn("disabled",workspace.apply_button.state())
+        point=self.project.annotations(self.ids[0])[0]
+        self.project.move_annotation(point["annotation_id"],.23,.52)
+        workspace._after_edit();self.pump()
+        self.assertNotIn("disabled",workspace.apply_button.state())
+
     def test_verify_next_keeps_existing_validation_and_advances_only_after_confirmation(self):
         self.project.start_structure_batch(2);workspace=XRayStructureWorkspace(self.host,self.project);self.pump()
         current=workspace.selected_specimen_id

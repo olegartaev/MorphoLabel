@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from app.ui import preferences
 from app.ui.module_credits import module_credit_rows
+from app.ui.landmarks_section import _landmark_toolbar_state
 
 from app.ui.icons import TOPBAR_ICON_SIZE, render_icon
 
@@ -141,6 +142,12 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn("options['image']=image",workflow)
         separator=workflow[workflow.index("def add_command_separator"):workflow.index("def build_help_button")]
         self.assertNotIn("ttk.Separator",separator)
+
+    def test_landmark_verify_state_disables_after_verification_and_reenables_after_edit_state(self):
+        verified=SimpleNamespace(human_verified=True,points_by_id={})
+        draft=SimpleNamespace(human_verified=False,points_by_id={})
+        self.assertFalse(_landmark_toolbar_state(verified,None)["verify_enabled"])
+        self.assertTrue(_landmark_toolbar_state(draft,None)["verify_enabled"])
 
     def test_verify_apply_and_predict_current_button_contracts(self):
         landmarks=source("app/ui/landmarks_section.py")
