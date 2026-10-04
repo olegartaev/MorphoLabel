@@ -1,5 +1,4 @@
 """Project-level exports backed by canonical production services."""
-import os
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from app.export_formats import available_groups, selected_groups, export_landmark_tps, export_landmark_csv_long, export_landmark_wide, export_morphoj_text
