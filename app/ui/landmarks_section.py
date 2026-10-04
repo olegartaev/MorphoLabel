@@ -233,7 +233,13 @@ class LandmarksSection(SectionView):
   ttk.Label(batch_row,text='images',style='Muted.TLabel').pack(side='left',padx=(4,0))
   predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,sticky='w',pady=(3,0))
   prediction_state='normal' if active else 'disabled'
-  self.button(predict_actions,'Predict next batch',lambda:self.predict(False,prediction.get()),'Predict the next empty or previously AI-predicted image. Human-confirmed images are never changed.',state=prediction_state,style='Primary.TButton').pack(side='left')
+  self.predict_current_button=self.button(
+   predict_actions,'Predict current',self.predict_current,
+   'Apply the active Landmark model only to the current eligible image. Human-verified images are protected.',
+   state='normal' if active and str((self.context.current() or {}).get('image_id') or '') in set(_prediction_candidate_ids(self.context.project,self.context.rows)) else 'disabled',
+   icon='predict'
+  );self.predict_current_button.pack(side='left')
+  self.button(predict_actions,'Predict next batch',lambda:self.predict(False,prediction.get()),'Predict the next empty or previously AI-predicted image. Human-confirmed images are never changed.',state=prediction_state,style='Primary.TButton').pack(side='left',padx=(4,0))
   self.button(predict_actions,'Predict all',lambda:self.predict(True,prediction.get()),'Predict all empty and previously AI-predicted images. Human-confirmed images are never changed.',state=prediction_state).pack(side='left',padx=(4,0))
   add_command_separator(predict_actions)
   self.button(
@@ -259,6 +265,13 @@ class LandmarksSection(SectionView):
   missing=getattr(self,'missing_button',None);verify=getattr(self,'verify_button',None)
   if missing and missing.winfo_exists():missing.configure(text=values['missing_text'])
   if verify and verify.winfo_exists():verify.configure(text=values['verify_text'],state='normal' if values['verify_enabled'] else 'disabled')
+  predict_current=getattr(self,'predict_current_button',None)
+  if predict_current and predict_current.winfo_exists():
+   current=str((self.context.current() or {}).get('image_id') or '')
+   try:active=bool(self.context.project.active_model_readonly('landmark'))
+   except ValueError:active=False
+   eligible=current in set(_prediction_candidate_ids(self.context.project,self.context.rows)) if current else False
+   predict_current.configure(state='normal' if active and eligible else 'disabled')
 
  def _refresh_repeatability_summary(self):
   """Refresh the visible workflow-card counters from persisted repeatability state."""
@@ -940,6 +953,13 @@ class LandmarksSection(SectionView):
    create_review_session_for_ids(self.context.project,session_id,ids,kind='review_worst_v2',metadata=metadata)
    self._open_review_session(session_id)
   self.shell._run_background_task('Review AI predictions','Ranking complete AI predictions for review…',worker,done)
+ def predict_current(self):
+  row=self.context.current() or {};image_id=str(row.get('image_id') or '')
+  if not image_id:return
+  if image_id not in set(_prediction_candidate_ids(self.context.project,self.context.rows)):
+   messagebox.showinfo('Predict current','The current image is already human-verified or otherwise protected from Landmark AI overwrite.',parent=self.shell);return
+  self.predict(False,1,explicit_ids=(image_id,),title='Predict current',selection_mode='current_prediction_target')
+
  def predict(self,remaining,count,explicit_ids=None,title='Predict landmarks',selection_mode=None,attention_retry=False):
   row=self.context.current();active=self.context.project.active_model_readonly('landmark') or {}
   if not active or (explicit_ids is None and not row):messagebox.showwarning('Landmark prediction','No active landmark model.',parent=self.shell);return

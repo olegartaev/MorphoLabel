@@ -5,6 +5,7 @@ from tkinter import ttk
 from app.identity import APP_NAME, APP_VERSION, APP_STATUS, icon_image
 from .icons import WORKFLOW_ICON_SIZE
 from app.xray_icons import tk_xray_icon
+from .preferences import last_xray_project
 
 
 class ModuleHub:
@@ -36,7 +37,7 @@ class ModuleHub:
             ttk.Label(header,image=icon).pack(side="left",padx=(0,8))
             ttk.Label(header,text=spec.display_name,style="ModuleTitle.TLabel").pack(side="left")
             ttk.Label(card,text=spec.description,style="Muted.TLabel",wraplength=300,justify="left").grid(row=1,column=0,sticky="nw",pady=(8,8))
-            remembered=getattr(self.shell,"_remembered_project_path",None)
+            remembered=last_xray_project() if spec.module_id=="xray_counts" else getattr(self.shell,"_remembered_project_path",None)
             recent=f"Last project: {Path(remembered).name}" if remembered else "Last project: —"
             ttk.Label(card,text=recent,style="Muted.TLabel",wraplength=300).grid(row=2,column=0,sticky="w",pady=(0,8))
             self.shell.control_button(card,"Open module",lambda key=spec.module_id:self.shell.open_module(key),f"Open {spec.display_name}.",primary=True).grid(row=3,column=0,sticky="ew")

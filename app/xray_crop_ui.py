@@ -350,13 +350,13 @@ class XRayCropWorkspace:
         self.root.after_idle(lambda:self._set_initial_sash())
 
         header=ttk.Frame(main);header.grid(row=0,column=0,sticky="ew",pady=(0,3));header.columnconfigure(0,weight=1)
-        context_fields=ttk.Frame(header);context_fields.grid(row=0,column=0,sticky="ew",padx=6,pady=(1,3));context_fields.columnconfigure(3,weight=1)
+        context_fields=ttk.Frame(header);context_fields.grid(row=0,column=0,sticky="ew",padx=6,pady=(1,3));context_fields.columnconfigure(1,weight=1);context_fields.columnconfigure(3,weight=0)
         ttk.Label(context_fields,text="Sample:",style="ContextKey.TLabel").grid(row=0,column=0,sticky="w")
         self.sample_value=ttk.Label(context_fields,text="—",style="ContextValue.TLabel");self.sample_value.grid(row=0,column=1,sticky="w",padx=(4,14))
         ttk.Label(context_fields,text="Plate:",style="ContextKey.TLabel").grid(row=0,column=2,sticky="w")
-        self.context_label=ElidedLabel(context_fields,text="—",style="ContextValue.TLabel",anchor="w");self.context_label.grid(row=0,column=3,sticky="ew",padx=(4,14))
-        ttk.Label(context_fields,text="Crop:",style="ContextKey.TLabel").grid(row=0,column=4,sticky="w")
-        self.crop_value=ttk.Label(context_fields,text="—",style="ContextValue.TLabel");self.crop_value.grid(row=0,column=5,sticky="w",padx=(4,0))
+        self.context_label=ElidedLabel(context_fields,text="—",style="ContextValue.TLabel",anchor="w");self.context_label.grid(row=0,column=3,sticky="w",padx=(4,14))
+        ttk.Label(context_fields,text="Specimen №:",style="ContextKey.TLabel").grid(row=0,column=4,sticky="w")
+        self.specimen_value=ttk.Label(context_fields,text="—",style="ContextValue.TLabel");self.specimen_value.grid(row=0,column=5,sticky="w",padx=(4,0));self.crop_value=self.specimen_value
         self._tip.bind(self.context_label,lambda:self.context_label.full_text);self.prediction_text=""
         status_host=ttk.Frame(header);status_host.grid(row=0,column=1,sticky="e",padx=(10,6))
         self.predict_status_labels={}
@@ -546,7 +546,30 @@ class XRayCropWorkspace:
         self.predict_next_button.configure(state=next_state);self.predict_all_button.configure(state=all_state)
         self._refresh_predict_current_state(model)
         self.review_button.configure(state="normal" if status["ai_pending_plates"] else "disabled")
+        self._refresh_apply_state()
         self._refresh_flip_controls();self._refresh_batch_banner();self._update_batch_controls()
+
+    def _current_apply_needed(self):
+        if not self.selected_image_id:return False
+        try:image=self.project.source_image(self.selected_image_id)
+        except KeyError:return False
+        if bool(image.get("excluded")):return False
+        items=list(self.session.active_items())
+        if not items:return False
+        if self.session.dirty:return True
+        if not bool(image.get("crop_reviewed")):return True
+        return any(
+            str(item.get("crop_status") or "")!="confirmed"
+            or not bool((item.get("crop") or {}).get("orientation_verified"))
+            for item in items
+        )
+
+    def _refresh_apply_state(self):
+        needed=self._current_apply_needed()
+        button=getattr(self,"apply_button",None)
+        if button is not None and button.winfo_exists():
+            button.configure(state="normal" if needed else "disabled")
+        return needed
 
     def _refresh_predict_current_state(self,model=None):
         model=model or self.project.active_crop_model()
@@ -633,6 +656,7 @@ class XRayCropWorkspace:
     def _set_save_status(self,text=None):
         if text is None:text="Unsaved changes" if self.session.dirty else ""
         self.save_status.configure(text=text)
+        self._refresh_apply_state()
 
     def flush_pending_edits(self):
         """Persist the current local Crop delta before leaving this plate/stage."""

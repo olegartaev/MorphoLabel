@@ -12,6 +12,9 @@ from .ai_component import component_manifest, component_root_for_runtime
 from .ai_delivery import ensure_ai_runtime
 from .runtime_paths import is_frozen
 
+LANDMARK_BOOTSTRAP_ARCHITECTURE = "RTMPose-M"
+LANDMARK_BOOTSTRAP_DATASET = "AP-10K"
+
 
 @dataclass(frozen=True)
 class BootstrapSpec:

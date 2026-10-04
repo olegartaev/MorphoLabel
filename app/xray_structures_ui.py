@@ -354,7 +354,7 @@ class XRayStructureWorkspace:
         self.root.after_idle(self._set_initial_sash)
 
         context=ttk.Frame(main,padding=(6,2));context.grid(row=0,column=0,sticky="ew");context.columnconfigure(0,weight=1)
-        context_fields=ttk.Frame(context);context_fields.grid(row=0,column=0,sticky="ew",padx=(0,8));context_fields.columnconfigure(3,weight=1)
+        context_fields=ttk.Frame(context);context_fields.grid(row=0,column=0,sticky="ew",padx=(0,8));context_fields.columnconfigure(1,weight=1);context_fields.columnconfigure(3,weight=0)
         ttk.Label(context_fields,text="Sample:",style="ContextKey.TLabel").grid(row=0,column=0,sticky="w")
         self.locality_value=ttk.Label(context_fields,text="—",style="ContextValue.TLabel");self.locality_value.grid(row=0,column=1,sticky="w",padx=(4,14))
         ttk.Label(context_fields,text="Plate:",style="ContextKey.TLabel").grid(row=0,column=2,sticky="w")
@@ -460,7 +460,6 @@ class XRayStructureWorkspace:
         self.structure_review_button=self._button(predict_actions,"Review AI",self.review_structure_ai,"Inspect saved AI drafts before verification.",style="ReviewAction.TButton");self.structure_review_button.pack(side="left")
         self.check_results_button=self._button(predict_actions,"Check results…",self.on_check_results,"Review suspicious calculated trait values.",style="ReviewAction.TButton");self.check_results_button.pack(side="left",padx=(4,0))
         add_command_separator(predict_actions)
-        self._button(predict_actions,"Next unfinished",self.next_unfinished,"Open the next unfinished specimen.").pack(side="left")
 
     def _show_help(self):
         messagebox.showinfo("Structures — quick guide",
@@ -738,7 +737,10 @@ class XRayStructureWorkspace:
         summary=self.project.annotation_summary(self.pass_no.get())
         labels={"verified":"Verified","draft":"Draft","unstarted":"Not started"}
         for key,label in self.summary_labels.items():label.configure(text=f"{labels[key]}: {summary[key]}")
-        state="normal" if self.selected_specimen_id and not self.current_specimen_excluded else "disabled";self.apply_button.configure(state=state)
+        run=self.project.annotation_run(self.selected_specimen_id,self.pass_no.get(),create=False) if self.selected_specimen_id else None
+        verified=bool(run and str(run.get("status") or "")=="verified")
+        state="normal" if self.selected_specimen_id and not self.current_specimen_excluded and not verified else "disabled"
+        self.apply_button.configure(text="Verified ✓" if verified else "Verify specimen",state=state)
         model=self.project.active_structure_model()
         can_predict=(not self.current_specimen_excluded) and _current_prediction_allowed(self.project,self.selected_specimen_id,model,self.pass_no.get())
         self.predict_current_button.configure(state="normal" if can_predict else "disabled")

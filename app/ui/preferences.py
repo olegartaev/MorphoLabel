@@ -35,8 +35,8 @@ def _read() -> dict:
             log("GLOBAL", "ui_preference_read", "ERROR", path=str(path), detail=str(exc))
     return {}
 
-def last_project() -> Path | None:
-    raw = _read().get("last_project")
+def _last_project_value(key: str, event: str) -> Path | None:
+    raw = _read().get(str(key))
     if not raw:
         return None
     try:
@@ -44,12 +44,18 @@ def last_project() -> Path | None:
         if not path.is_dir() or not os.access(path, os.R_OK):
             raise OSError("stored project directory is not readable")
     except Exception as exc:
-        log("GLOBAL", "ui_preference_last_project", "ERROR", path=str(raw), detail=str(exc))
+        log("GLOBAL", event, "ERROR", path=str(raw), detail=str(exc))
         return None
-    log("GLOBAL", "ui_preference_last_project", "END", path=str(path), detail="stored project path is readable")
+    log("GLOBAL", event, "END", path=str(path), detail="stored project path is readable")
     return path
 
-def remember_project(path: Path | str) -> bool:
+def last_project() -> Path | None:
+    return _last_project_value("last_project","ui_preference_last_project")
+
+def last_xray_project() -> Path | None:
+    return _last_project_value("last_xray_project","ui_preference_last_xray_project")
+
+def _remember_project_value(key: str, path: Path | str) -> bool:
     target = preference_path()
     try:
         normalized = Path(path).expanduser().resolve(strict=True)
@@ -57,12 +63,18 @@ def remember_project(path: Path | str) -> bool:
             raise OSError("project directory is not readable")
         target.parent.mkdir(parents=True, exist_ok=True)
         data = _read()
-        data["last_project"] = str(normalized)
+        data[str(key)] = str(normalized)
         temporary = target.with_suffix(target.suffix + ".tmp")
         temporary.write_text(json.dumps(data, indent=2), encoding="utf-8")
         os.replace(temporary, target)
-        log("GLOBAL", "ui_preference_write", "END", path=str(target), detail=f"last_project={normalized}")
+        log("GLOBAL", "ui_preference_write", "END", path=str(target), detail=f"{key}={normalized}")
         return True
     except Exception as exc:
         log("GLOBAL", "ui_preference_write", "ERROR", path=str(target), detail=str(exc))
         return False
+
+def remember_project(path: Path | str) -> bool:
+    return _remember_project_value("last_project",path)
+
+def remember_xray_project(path: Path | str) -> bool:
+    return _remember_project_value("last_xray_project",path)

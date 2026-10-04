@@ -5,100 +5,82 @@ from .icons import ICON_NAMES, WORKFLOW_ICON_SIZE
 
 
 def columns_for_width(width: int, card_count: int, card_widths=None) -> int:
+    """Compatibility helper retained for callers/tests from the former card layout."""
     count=max(1,int(card_count or 1));width=max(0,int(width or 0))
     required=[max(1,int(v)) for v in (card_widths or (300,)*count)]
     if len(required)!=count:raise ValueError('one requested width is required for each workflow card')
-    # Each wide-mode column retains its own minimum requested width.
     if width>=sum(required)+18*(count-1):return count
     return 1
 
 
 class WorkflowDock(ttk.Frame):
-    """All cards on wide windows; stage tabs on narrow windows.
+    """Compact workflow presented as real tabs.
 
-    Only placement and visibility change. Existing widgets, variables and
-    commands live for the whole section lifetime, including hidden cards.
+    Only one stage is open at a time, so the active stage is unambiguous and
+    the image keeps the largest possible working area. Stage widgets stay
+    alive for the whole section lifetime, including when another tab is open.
     """
     def __init__(self,parent,shell,*,help_factory=None,title='Workflow'):
         super().__init__(parent,style='WorkflowDock.TFrame',padding=(0,1,0,0))
-        self.shell=shell;self._cards=[];self._card_headers=[];self._tabs=[];self._layout_after=None;self._last_columns=None;self._selected_card=0;self._last_selection=None;self._collapsed=False
+        self.shell=shell;self._cards=[];self._tabs=[];self._tab_images=[];self._selected_card=0
+        self._collapsed=False;self._last_columns=1;self._last_selection=0
         header=ttk.Frame(self,style='WorkflowDock.TFrame');header.grid(row=0,column=0,sticky='ew',pady=(0,1));header.columnconfigure(0,weight=1)
         self.toggle=ttk.Button(header,text=title+' ▾',style='Stage.TButton',command=self._toggle)
         self.toggle.grid(row=0,column=0,sticky='w');self._title=title
         shell.tip.bind(self.toggle,'Hide or show workflow controls to make more room for the image.')
         if help_factory is not None:help_factory(header).grid(row=0,column=1,sticky='e')
-        self.tab_host=ttk.Frame(self,style='WorkflowDock.TFrame');self.tab_host.grid(row=1,column=0,sticky='ew',pady=(0,2))
-        self.cards_host=ttk.Frame(self,style='WorkflowDock.TFrame');self.cards_host.grid(row=2,column=0,sticky='ew')
-        self.columnconfigure(0,weight=1);self.bind('<Configure>',self._schedule_layout,add='+')
+        self.notebook=ttk.Notebook(self,style='Workflow.TNotebook')
+        self.notebook.grid(row=1,column=0,sticky='ew')
+        self.notebook.bind('<<NotebookTabChanged>>',self._tab_changed,add='+')
+        self.columnconfigure(0,weight=1)
 
     def add_card(self,title,*,icon='',help_text=''):
-        header=ttk.Frame(self.cards_host)
-        if icon:
-            if icon in ICON_NAMES:
-                ttk.Label(header,image=self.shell.ui_icon(icon, max(26,WORKFLOW_ICON_SIZE-4))).pack(side='left',padx=(0,5))
-            else:ttk.Label(header,text=icon,style='WorkflowIcon.TLabel').pack(side='left',padx=(0,6))
-        ttk.Label(header,text=title,style='WorkflowCardTitle.TLabel').pack(side='left')
-        card=ttk.LabelFrame(self.cards_host,labelwidget=header,padding=(8,5),style='WorkflowCard.TLabelframe')
-        if help_text:self.shell.tip.bind(card,help_text);self.shell.tip.bind(header,help_text)
-        index=len(self._cards);self._cards.append(card);self._card_headers.append(header)
-        label=title.split('. ',1)[-1]
+        index=len(self._cards);label=title.split('. ',1)[-1]
         short={'Repeatability':'Repeatability','Training data':'Examples','Train model':'Train','Predict & review':'Predict & review'}.get(label,label)
-        tab=ttk.Button(self.tab_host,text=f'{index+1}. {short}',style='Stage.TButton',command=lambda value=index:self._select_card(value))
-        tab.pack(side='left',padx=(0,3));self._tabs.append(tab)
-        if label=='Training data' and index==1:self._selected_card=1
-        self._schedule_layout();return card
+        card=ttk.Frame(self.notebook,padding=(8,6),style='WorkflowDock.TFrame')
+        image=''
+        if icon:
+            image=self.shell.ui_icon(icon if icon in ICON_NAMES else 'modules',max(24,WORKFLOW_ICON_SIZE-6))
+        self._cards.append(card);self._tabs.append(card);self._tab_images.append(image)
+        options={'text':f'{index+1}. {short}','compound':'left'}
+        if image:options['image']=image
+        self.notebook.add(card,**options)
+        if help_text:self.shell.tip.bind(card,help_text)
+        if label=='Training data' and index==1:
+            self._selected_card=index;self.notebook.select(card)
+        self._last_selection=self._selected_card
+        return card
+
+    def _tab_changed(self,_event=None):
+        try:self._selected_card=int(self.notebook.index('current'))
+        except Exception:return
+        self._last_selection=self._selected_card
 
     def _select_card(self,index):
-        self._selected_card=int(index);self._last_columns=None;self._layout_cards()
+        index=max(0,min(len(self._cards)-1,int(index))) if self._cards else 0
+        self._selected_card=index;self._last_selection=index
+        if self._cards:self.notebook.select(self._cards[index])
 
     def _toggle(self):
         self._collapsed=not self._collapsed
         self.toggle.configure(text=self._title+(' ▸' if self._collapsed else ' ▾'))
-        self._last_columns=None;self._layout_cards()
+        self._layout_cards()
 
     def _schedule_layout(self,_event=None):
-        if self._layout_after is not None:
-            try:self.after_cancel(self._layout_after)
-            except Exception:pass
-        self._layout_after=self.after_idle(self._layout_cards)
+        self.after_idle(self._layout_cards)
 
     def _layout_cards(self):
-        self._layout_after=None
-        if not self._cards:return
         if self._collapsed:
-            self.tab_host.grid_remove();self.cards_host.grid_remove();return
-        self.cards_host.grid()
-        width=self.winfo_width() or self.cards_host.winfo_width() or 1000
-        columns=columns_for_width(width,len(self._cards),[max(card.winfo_reqwidth(),header.winfo_reqwidth()+20) for card,header in zip(self._cards,self._card_headers)])
-        compact=columns<len(self._cards)
-        if compact:self.tab_host.grid()
-        else:self.tab_host.grid_remove()
-        if columns==self._last_columns and self._last_selection==self._selected_card:return
-        self._last_columns=columns;self._last_selection=self._selected_card
-        for card,header in zip(self._cards,self._card_headers):
-            card.grid_forget()
-            card.configure(labelwidget="" if compact else header)
-        for index in range(max(1,len(self._cards))):self.cards_host.columnconfigure(index,weight=0,uniform='',minsize=0)
-        self.cards_host.rowconfigure(0,minsize=0)
-        if compact:
-            self.cards_host.columnconfigure(0,weight=1)
-            self._cards[self._selected_card].grid(row=0,column=0,sticky='nsew')
-        else:
-            # Equal-height cards, separated by whitespace rather than divider bars.
-            self.update_idletasks()
-            target_height=max(card.winfo_reqheight() for card in self._cards)
-            self.cards_host.rowconfigure(0,minsize=target_height)
-            for index,card in enumerate(self._cards):
-                self.cards_host.columnconfigure(index,weight=1,uniform='workflow_stage',minsize=card.winfo_reqwidth())
-                card.grid(row=0,column=index,sticky='nsew',padx=(0 if index==0 else 5,0))
-        for index,tab in enumerate(self._tabs):tab.configure(style='StageActive.TButton' if index==self._selected_card else 'Stage.TButton')
+            self.notebook.grid_remove();return
+        self.notebook.grid()
+        if self._cards:self.notebook.select(self._cards[self._selected_card])
 
 
 def add_command_separator(parent, *, padx=6):
-    """Visually separate command groups without adding another boxed panel."""
-    separator=ttk.Separator(parent,orient="vertical")
-    separator.pack(side="left",fill="y",padx=padx,pady=2)
-    return separator
+    """Keep command-group spacing without drawing vertical divider bars."""
+    spacer=ttk.Frame(parent,width=1)
+    spacer.pack(side='left',padx=padx)
+    return spacer
 
 
 def build_help_button(section,parent,title,text):

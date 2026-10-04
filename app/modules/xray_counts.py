@@ -14,6 +14,7 @@ from app.ui.tooltips import Tooltip
 from app.ui.icons import TOPBAR_ICON_SIZE,tk_icon
 from app.xray_icons import XRAY_ICON_SIZE,TRAIT_ICON_SIZE,tk_xray_icon,tk_rule_preview
 from app.xray_project import XRayProject
+from app.ui.preferences import last_xray_project, remember_xray_project
 from app.xray_result_qc import build_result_qc
 from app.xray_result_qc import start_result_review_queue,result_review_queue,clear_result_review_queue
 from app.xray_trait_export import export_trait_rows
@@ -309,7 +310,7 @@ class OrientationSetupDialog(tk.Toplevel):
 
 
 class XRayCountsRuntime:
-    def __init__(self):self.host=None;self.project=None;self.stage="project";self._images={};self._tip=None;self._workspace=None
+    def __init__(self):self.host=None;self.project=None;self.stage="project";self._images={};self._tip=None;self._workspace=None;self._restore_attempted=False
     def close(self):
         flush=getattr(self._workspace,"flush_pending_edits",None)
         if callable(flush):
@@ -377,8 +378,20 @@ class XRayCountsRuntime:
         for key,label in getattr(self,"_selection_context_values",{}).items():
             label.configure(text=values.get(key,"—"))
 
+    def _restore_last_project(self):
+        if self._restore_attempted:return bool(self.project)
+        self._restore_attempted=True
+        remembered=last_xray_project()
+        if remembered is None:return False
+        try:
+            self.project=XRayProject(remembered)
+            self.project.compact_disposable_ai_artifacts()
+        except Exception:
+            self.project=None;return False
+        self.stage="project";return True
+
     def render(self,host):
-        self.host=host;parent=host.container
+        self.host=host;self._restore_last_project();parent=host.container
         for child in parent.winfo_children():child.destroy()
         self._workspace=None;self._images={};self._tip=Tooltip(parent.winfo_toplevel())
         outer=ttk.Frame(parent,padding=(8,6));outer.pack(fill="both",expand=True)
@@ -766,6 +779,7 @@ class XRayCountsRuntime:
         if dialog.result is None:return
         try:self.project=XRayProject.create(name,source,dest,blank_scheme(),scheme_note="Blank scheme created with project",orientation_policy=dialog.result)
         except Exception as exc:messagebox.showerror("New X-ray project",str(exc),parent=root);return
+        remember_xray_project(self.project.root)
         self.stage="project";self._rerender()
 
     def _make_self_contained(self):
@@ -791,6 +805,7 @@ class XRayCountsRuntime:
             self.project=XRayProject(folder)
             self.project.compact_disposable_ai_artifacts()
         except Exception as exc:messagebox.showerror("Open X-ray project",str(exc),parent=root);return
+        remember_xray_project(self.project.root)
         self.stage="project";self._rerender()
 class MarkerSettingsDialog(tk.Toplevel):
     """Optional second depth: appearance and keyboard shortcuts only."""
