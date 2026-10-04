@@ -1,8 +1,9 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
-from app.gui_crop_debug import _rotate_log
+from app.gui_crop_debug import _append, _rotate_log, log
 
 
 class DiagnosticLogRetentionTests(unittest.TestCase):
@@ -17,6 +18,26 @@ class DiagnosticLogRetentionTests(unittest.TestCase):
             self.assertTrue(backup.is_file())
             self.assertLessEqual(backup.stat().st_size,48)
             self.assertLess(backup.stat().st_size,original)
+
+    def test_permission_denied_log_sink_never_breaks_caller(self):
+        denied=MagicMock()
+        denied.parent=MagicMock()
+        denied.open.side_effect=PermissionError(13,"denied")
+        with patch("app.gui_crop_debug._log_paths",return_value=(denied,)), \
+             patch("app.gui_crop_debug._rotate_log",return_value=False):
+            self.assertFalse(_append("diagnostic\n"))
+            log("TEST","permission","PASS")
+
+    def test_unwritable_primary_sink_falls_through_to_secondary_sink(self):
+        primary=MagicMock();secondary=MagicMock()
+        primary.parent=MagicMock();secondary.parent=MagicMock()
+        primary.open.side_effect=PermissionError(13,"denied")
+        handle=MagicMock()
+        secondary.open.return_value.__enter__.return_value=handle
+        with patch("app.gui_crop_debug._log_paths",return_value=(primary,secondary)), \
+             patch("app.gui_crop_debug._rotate_log",return_value=False):
+            self.assertTrue(_append("secondary survives\n"))
+        handle.write.assert_called_once_with("secondary survives\n")
 
     def test_small_log_is_left_untouched(self):
         with tempfile.TemporaryDirectory() as td:

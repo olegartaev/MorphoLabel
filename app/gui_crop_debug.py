@@ -57,12 +57,19 @@ def _rotate_log(path_target, *, max_bytes=LOG_MAX_BYTES, backup_bytes=LOG_BACKUP
 
 
 def _append(line):
+ """Best-effort diagnostics: logging must never break scientific or UI work."""
+ wrote=False
  with _IO_LOCK:
   for path_target in _log_paths():
-   path_target.parent.mkdir(parents=True, exist_ok=True)
-   _rotate_log(path_target)
-   with path_target.open("a", encoding="utf-8") as handle:
-    handle.write(line); handle.flush()
+   try:
+    path_target.parent.mkdir(parents=True, exist_ok=True)
+    _rotate_log(path_target)
+    with path_target.open("a", encoding="utf-8") as handle:
+     handle.write(line);handle.flush()
+    wrote=True
+   except OSError:
+    continue
+ return wrote
 
 
 def _stamp():
