@@ -99,11 +99,11 @@ def _gui_preflight(project: Project) -> dict:
     """Exercise the production Landmarks -> Train preflight without starting training."""
     from app.ui.shell import ProductionShell
 
-    shell = ProductionShell(project)
+    shell = ProductionShell(initial_module="landmarks", module_states={"landmarks": {"project": project}})
     captured: dict[str, object] = {}
     try:
-        shell.select("landmarks")
-        view = shell.current_view
+        shell._active_module_runtime.select("landmarks")
+        view = shell._active_module_runtime.current_view
         original = view._confirm_training
         view._confirm_training = lambda plan: captured.setdefault("plan", plan)
         view.preflight()

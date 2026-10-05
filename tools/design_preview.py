@@ -104,16 +104,10 @@ def main(argv=None):
     if module is None:return 0
     core,xray=build_preview_projects(PREVIEW_ROOT)
     from app.ui.shell import ProductionShell
-    shell=ProductionShell()
-    if module=="landmarks":
-        from app.ui.context import UIContext
-        shell.module_key="landmarks";shell.context=UIContext(core,section="landmarks")
-        shell.context.refresh(force=True);shell.render()
-    else:
-        from app.modules.xray_counts import XRayCountsRuntime
-        runtime=XRayCountsRuntime();runtime.project=xray;runtime.stage="structures"
-        shell.module_key="xray_counts";shell._active_module_runtime=runtime
-        shell._clear();runtime.render(shell._module_host())
+    from app.ui.context import UIContext
+    shell=ProductionShell(module_states={"landmarks":{"context":UIContext(core,section="landmarks")},"xray_counts":{"project":xray}})
+    shell.open_module(module)
+    if module=="xray_counts":shell._active_module_runtime._select("structures")
     shell.title("MorphoLabel — DESIGN PREVIEW · synthetic data")
     shell.mainloop()
     return 0

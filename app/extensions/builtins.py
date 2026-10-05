@@ -7,15 +7,16 @@ from pathlib import Path
 from .api import BackendContext, BackendSpec, EXTENSION_API_VERSION, ModuleSpec
 from .discovery import discover_backends, discover_modules
 from .registry import BackendRegistry, ModuleRegistry
-from app.modules.landmarks import LandmarksRuntime
-from app.modules.xray_counts import XRayCountsRuntime
+from app.ui.preferences import last_project, last_xray_project
 
 
 def module_registry():
+    from app.modules.landmarks import LandmarksRuntime
+    from app.modules.xray_counts import XRayCountsRuntime
     registry = ModuleRegistry()
     for spec in (
-        ModuleSpec("landmarks", "Landmarks & measurements", "Crop → landmark annotation and AI review → measurements → export", "1", EXTENSION_API_VERSION, 10, "available", LandmarksRuntime, "builtin"),
-        ModuleSpec("xray_counts", "X-ray traits", "Trait-first X-ray annotation → calculated results → export", "1", EXTENSION_API_VERSION, 20, "available", XRayCountsRuntime, "builtin"),
+        ModuleSpec("landmarks", "Landmarks & measurements", "Crop → landmark annotation and AI review → measurements → export", "1", EXTENSION_API_VERSION, 10, "available", LandmarksRuntime, "builtin", last_project),
+        ModuleSpec("xray_counts", "X-ray traits", "Trait-first X-ray annotation → calculated results → export", "1", EXTENSION_API_VERSION, 20, "available", XRayCountsRuntime, "builtin", last_xray_project),
         ModuleSpec("scales_meristics", "Scales & meristics", "Scales and meristics workflow", "1", EXTENSION_API_VERSION, 30, "planned", None, "builtin"),
     ):
         registry.register(spec)
@@ -44,8 +45,14 @@ def _rtmpose_provider(context: BackendContext):
     return RTMPoseBackend(spec)
 
 
+def _structure_provider(context):
+    from app.xray_structure_ai import BuiltinStructureBackend
+    return BuiltinStructureBackend(context)
+
+
 @lru_cache(maxsize=1)
 def backend_registry():
     registry = BackendRegistry()
     registry.register(BackendSpec("rtmpose", "RTMPose", "landmark", "1", EXTENSION_API_VERSION, _rtmpose_provider, "builtin"))
+    registry.register(BackendSpec("resnet18_heatmap_v1", "ResNet-18 structure heatmap", "xray_structure", "1", EXTENSION_API_VERSION, _structure_provider, "builtin"))
     return discover_backends(registry)

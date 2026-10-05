@@ -313,6 +313,7 @@ class OrientationSetupDialog(tk.Toplevel):
 class XRayCountsRuntime:
     def __init__(self):self.host=None;self.project=None;self.stage="project";self._images={};self._tip=None;self._workspace=None;self._restore_attempted=False
     def close(self):
+        if self.host:self.host.state["project"]=self.project
         flush=getattr(self._workspace,"flush_pending_edits",None)
         if callable(flush):
             try:flush()
@@ -378,6 +379,7 @@ class XRayCountsRuntime:
     def _restore_last_project(self):
         if self._restore_attempted:return bool(self.project)
         self._restore_attempted=True
+        if self.project is not None:return True
         remembered=last_xray_project()
         if remembered is None:return False
         try:
@@ -388,6 +390,7 @@ class XRayCountsRuntime:
         self.stage="project";return True
 
     def render(self,host):
+        if self.host is None:self.project=host.state.get("project")
         self.host=host;self._restore_last_project();parent=host.container
         for child in parent.winfo_children():child.destroy()
         self._workspace=None;self._images={}

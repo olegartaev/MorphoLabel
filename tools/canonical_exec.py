@@ -81,8 +81,8 @@ def main(argv: list[str] | None = None) -> int:
             from app.ui.preferences import last_project
             from app.project_storage import Project
             project_path = last_project()
-            shell = ProductionShell(Project.open(project_path) if project_path is not None else None)
-            shell.select("landmarks")
+            shell = ProductionShell(initial_module="landmarks", module_states={"landmarks": {"project": Project.open(project_path) if project_path is not None else None}})
+            shell._active_module_runtime.select("landmarks")
             shell.mainloop()
         return 0
     from tools.gate4a_smoke import main as smoke

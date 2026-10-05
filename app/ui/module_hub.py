@@ -7,7 +7,6 @@ from app.identity import APP_NAME, APP_VERSION, APP_STATUS, icon_image
 from app.runtime_paths import resource_path
 from .icons import WORKFLOW_ICON_SIZE
 from app.xray_icons import tk_xray_icon
-from .preferences import last_xray_project
 
 
 _MODULE_COVER_FILES={
@@ -61,7 +60,7 @@ class ModuleHub:
                 self._module_covers.append(cover)
                 ttk.Label(card,image=cover).grid(row=1,column=0,sticky="n",pady=(10,10))
             ttk.Label(card,text=spec.description,style="Muted.TLabel",wraplength=300,justify="left").grid(row=2,column=0,sticky="nw",pady=(0,8))
-            remembered=last_xray_project() if spec.module_id=="xray_counts" else getattr(self.shell,"_remembered_project_path",None)
+            remembered=spec.recent_project() if callable(spec.recent_project) else None
             recent=f"Last project: {Path(remembered).name}" if remembered else "Last project: —"
             ttk.Label(card,text=recent,style="Muted.TLabel",wraplength=300).grid(row=3,column=0,sticky="w",pady=(0,8))
             self.shell.control_button(card,"Open module",lambda key=spec.module_id:self.shell.open_module(key),f"Open {spec.display_name}.",primary=True).grid(row=4,column=0,sticky="ew")

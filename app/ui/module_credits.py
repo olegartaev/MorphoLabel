@@ -33,7 +33,9 @@ def _backend_label(value,default):
 
 def _landmarks_ai(shell):
     from app.landmark_bootstrap import LANDMARK_BOOTSTRAP_ARCHITECTURE, LANDMARK_BOOTSTRAP_DATASET
-    project=getattr(getattr(shell,'context',None),'project',None) if shell is not None else None
+    state=getattr(shell,'module_states',{}).get('landmarks',{}) if shell is not None else {}
+    context=state.get('context') or getattr(shell,'context',None)
+    project=getattr(context,'project',None) or state.get('project')
     active=None
     if project is not None:
         try:active=project.active_model_readonly('landmark')

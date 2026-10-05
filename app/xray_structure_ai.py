@@ -21,6 +21,8 @@ from .process_utils import hidden_window_kwargs
 from .runtime_paths import resource_path
 from .xray_crop import oriented_crop
 from .xray_schema import calculate_trait_values, compatible_reference_roles, spatial_series_order
+from .extensions.api import StructureBackend, StructureBackendContext
+from .extensions.builtins import backend_registry
 
 STRUCTURE_BACKEND = "resnet18_heatmap_v1"
 MODEL_PACKAGE_FORMAT = "morpholabel-xray-structure-model-v1"
@@ -36,6 +38,55 @@ class XRayStructureAIError(RuntimeError):
 
 class XRayStructurePackageError(ValueError):
     pass
+
+
+class BuiltinStructureBackend:
+    """Adapter for the existing managed heatmap runner, registered normally."""
+
+    def __init__(self, context):
+        self.runtime, _ = ensure_ai_runtime(progress=context.progress)
+
+    def train(self, payload, timeout):
+        result = _run(self.runtime, "train", payload, timeout)
+        result.setdefault("metrics", {}).setdefault("initialization", "imagenet_resnet18")
+        return result
+
+    def predict_many(self, payload, timeout):
+        return _run(self.runtime, "predict_many", payload, timeout)
+
+
+def _structure_provider_spec(backend_id, registry=None, error_type=XRayStructureAIError):
+    spec = (registry or backend_registry()).get(str(backend_id))
+    if spec is None or spec.task != "xray_structure":
+        raise error_type(f"X-ray structure backend is unavailable or incompatible: {backend_id}")
+    return spec
+
+
+def _structure_backend(spec, progress=None):
+    backend = spec.factory(StructureBackendContext(progress))
+    if not isinstance(backend, StructureBackend) or not all(callable(getattr(backend, method, None)) for method in ("train", "predict_many")):
+        raise XRayStructureAIError(f"Structure provider {spec.backend_id} did not return a StructureBackend")
+    return backend
+
+
+def backend_for_structure_model(project, model, *, registry=None):
+    """Validate module-owned compatibility before constructing a provider."""
+    if str(model.get("schema_digest") or "") != structure_schema_digest(project.scheme):
+        raise XRayStructureAIError("The structure model is incompatible with the current X-ray structure scheme.")
+    spec = _structure_provider_spec(model.get("backend") or STRUCTURE_BACKEND, registry)
+    checkpoint = project.root / str(model["path"])
+    metadata = project.root / str(model["metadata_path"])
+    if not checkpoint.is_file() or not metadata.is_file():
+        raise XRayStructureAIError("The active structure model artifact is incomplete.")
+    try:
+        info = json.loads(metadata.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise XRayStructureAIError("Structure model metadata is invalid.") from exc
+    if str(info.get("backend") or STRUCTURE_BACKEND) != spec.backend_id:
+        raise XRayStructureAIError("Structure model/provider backend identity is incompatible.")
+    if info.get("schema_digest") and str(info["schema_digest"]) != str(model["schema_digest"]):
+        raise XRayStructureAIError("Structure model metadata schema is incompatible.")
+    return _structure_backend(spec)
 
 
 def _canonical(value):
@@ -157,7 +208,7 @@ def _split_by_plate(rows, seed):
     return split
 
 
-def prepare_structure_training_dataset(project, workspace_root, seed=42):
+def prepare_structure_training_dataset(project, workspace_root, seed=42, *, backend_id=STRUCTURE_BACKEND):
     truth = _verified_truth(project)
     if len(truth) < MIN_STRUCTURE_TRAINING_SPECIMENS:
         raise ValueError(
@@ -233,7 +284,7 @@ def prepare_structure_training_dataset(project, workspace_root, seed=42):
         raise RuntimeError("Source-plate leakage detected between structure train and validation splits.")
     manifest = {
         "format_version": 2,
-        "backend": STRUCTURE_BACKEND,
+        "backend": backend_id,
         "input_size": list(INPUT_SIZE),
         "schema_digest": structure_schema_digest(project.scheme),
         "structures": structures,
@@ -254,8 +305,7 @@ def prepare_structure_training_dataset(project, workspace_root, seed=42):
     }
 
 
-def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None):
-    runtime, _ = ensure_ai_runtime(project=project, progress=progress)
+def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None, *, backend_id=None, registry=None):
     model_id = project.next_structure_model_id()
     if parent_model_id is None:
         parent = project.active_structure_model()
@@ -268,6 +318,11 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
     schema_digest = structure_schema_digest(project.scheme)
     if parent and str(parent.get("schema_digest") or "") != schema_digest:
         raise XRayStructureAIError("The active structure model is incompatible with the current X-ray structure scheme.")
+    provider_id = backend_id or (parent or {}).get("backend") or STRUCTURE_BACKEND
+    spec = _structure_provider_spec(provider_id, registry)
+    if parent and str(parent.get("backend") or STRUCTURE_BACKEND) != provider_id:
+        raise XRayStructureAIError("The parent model is incompatible with the selected structure provider.")
+    backend = _structure_backend(spec, progress)
     performance = structure_performance_settings()
     settings = performance["training"]
     target = project.models_root / model_id
@@ -275,7 +330,7 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
         raise XRayStructureAIError(f"Model folder already exists: {target}")
     with tempfile.TemporaryDirectory(prefix=f"morpholabel_xray_structure_{model_id}_") as scratch_name:
         scratch = Path(scratch_name)
-        dataset = prepare_structure_training_dataset(project, scratch, seed=seed)
+        dataset = prepare_structure_training_dataset(project, scratch, seed=seed, backend_id=provider_id)
         if progress:
             progress(
                 "STRUCTURE TRAINING",
@@ -314,7 +369,7 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
                 "seed": int(seed),
             }
             try:
-                result = _run(runtime, "train", payload, 10800)
+                result = backend.train(payload, 10800)
                 used_batch = batch_size
                 break
             except Exception as exc:
@@ -335,6 +390,8 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
             model_meta = json.loads(metadata.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise XRayStructureAIError("Structure model metadata is invalid.") from exc
+        if str(model_meta.get("backend") or "") != provider_id:
+            raise XRayStructureAIError("Trained artifact backend is incompatible with the selected structure provider.")
         model_meta.update({
             "model_id": model_id,
             "schema_digest": schema_digest,
@@ -354,15 +411,15 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
         shutil.copy2(metadata, staging / "model.json")
         staging.replace(target)
         metrics = {
-            "backend": STRUCTURE_BACKEND,
+            **dict(result.get("metrics") or {}),
+            "backend": provider_id,
             "schema_digest": schema_digest,
             "dataset_hash": dataset["dataset_hash"],
             "batch_size": used_batch,
             "device": settings["device"],
-            "initialization": (parent or {}).get("model_id") or "imagenet_resnet18",
+            "initialization": (parent or {}).get("model_id") or str((result.get("metrics") or {}).get("initialization") or provider_id),
             "training_plates": dataset["training_plates"],
             "validation_plates": dataset["validation_plates"],
-            **dict(result.get("metrics") or {}),
         }
         project.register_structure_model(
             model_id,
@@ -370,7 +427,7 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
             str((target / "model.json").relative_to(project.root)),
             (parent or {}).get("model_id"),
             schema_digest,
-            STRUCTURE_BACKEND,
+            provider_id,
             metrics,
             dataset["membership"],
             training_specimen_count=dataset["training_specimens"],
@@ -410,13 +467,14 @@ def _flatten_prediction(groups):
     return rows
 
 
-def predict_structures(project, specimen_ids=None, count=None, cancel=None, progress=None, model=None, pass_no=1, allow_verified=False):
+def predict_structures(project, specimen_ids=None, count=None, cancel=None, progress=None, model=None, pass_no=1, allow_verified=False, *, registry=None):
     model = model or project.active_structure_model()
     if not model:
         raise XRayStructureAIError("Train or import an X-ray structure model before prediction.")
     current_digest = structure_schema_digest(project.scheme)
     if str(model.get("schema_digest") or "") != current_digest:
         raise XRayStructureAIError("The active structure model is incompatible with the current X-ray structure scheme.")
+    _structure_provider_spec(model.get("backend") or STRUCTURE_BACKEND, registry)
     pass_no = int(pass_no)
     candidates = list(project.structure_prediction_candidate_ids(pass_no))
     if specimen_ids is not None:
@@ -431,7 +489,7 @@ def predict_structures(project, specimen_ids=None, count=None, cancel=None, prog
         )
     if not ids:
         return {"success": [], "failures": [], "model_id": model["model_id"]}
-    runtime, _ = ensure_ai_runtime(project=project)
+    backend = backend_for_structure_model(project, model, registry=registry)
     settings = structure_performance_settings()["inference"]
     checkpoint = project.root / str(model["path"])
     metadata = project.root / str(model["metadata_path"])
@@ -462,7 +520,7 @@ def predict_structures(project, specimen_ids=None, count=None, cancel=None, prog
                 "device": settings["device"],
             }
             try:
-                result = _run(runtime, "predict_many", payload, max(900, 180 * len(chunk)))
+                result = backend.predict_many(payload, max(900, 180 * len(chunk)))
             except Exception as exc:
                 if is_cuda_oom(exc) and batch_size > 1:
                     batch_size = max(1, batch_size // 2)
@@ -690,7 +748,7 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
     }
 
 
-def compare_structure_model_to_human(project,model_id=None,split="val",progress=None):
+def compare_structure_model_to_human(project,model_id=None,split="val",progress=None, *, registry=None):
     """Run read-only model inference on its recorded membership and compare with current human truth."""
     model=next((item for item in project.structure_models() if item["model_id"]==str(model_id)),None) if model_id else project.active_structure_model()
     if not model:raise XRayStructureAIError("Select an X-ray Structure AI model first.")
@@ -711,7 +769,7 @@ def compare_structure_model_to_human(project,model_id=None,split="val",progress=
         verified.append(specimen_id)
     if not verified:
         raise XRayStructureAIError("None of this model's recorded validation specimens currently has human-verified annotations.")
-    runtime,_=ensure_ai_runtime(project=project)
+    backend=backend_for_structure_model(project,model,registry=registry)
     settings=structure_performance_settings()["inference"];predictions={};failures=[]
     with tempfile.TemporaryDirectory(prefix="morpholabel_xray_structure_compare_") as scratch_name:
         scratch=Path(scratch_name);prepared=[]
@@ -722,7 +780,7 @@ def compare_structure_model_to_human(project,model_id=None,split="val",progress=
         while index<len(prepared):
             chunk=prepared[index:index+batch_size]
             payload={"metadata":str(metadata),"checkpoint":str(checkpoint),"images":[str(path) for _sid,path in chunk],"device":settings["device"]}
-            try:result=_run(runtime,"predict_many",payload,max(900,180*len(chunk)))
+            try:result=backend.predict_many(payload,max(900,180*len(chunk)))
             except Exception as exc:
                 if is_cuda_oom(exc) and batch_size>1:
                     batch_size=max(1,batch_size//2);continue
@@ -814,7 +872,7 @@ def export_structure_model_package(project, target, model_id=None):
     return target
 
 
-def import_structure_model_package(project, source):
+def import_structure_model_package(project, source, *, registry=None):
     source = Path(source)
     try:
         archive = zipfile.ZipFile(source)
@@ -827,8 +885,8 @@ def import_structure_model_package(project, source):
             raise XRayStructurePackageError("Structure model package manifest is invalid.") from exc
         if manifest.get("package_format") != MODEL_PACKAGE_FORMAT:
             raise XRayStructurePackageError("Unsupported X-ray structure model package format.")
-        if str(manifest.get("backend") or "") != STRUCTURE_BACKEND:
-            raise XRayStructurePackageError("This package uses an unsupported X-ray structure backend.")
+        provider_id = str(manifest.get("backend") or "")
+        _structure_provider_spec(provider_id, registry, XRayStructurePackageError)
         current_digest = structure_schema_digest(project.scheme)
         if str(manifest.get("schema_digest") or "") != current_digest:
             raise XRayStructurePackageError(
@@ -854,6 +912,8 @@ def import_structure_model_package(project, source):
             raise XRayStructurePackageError("Imported structure model metadata is invalid.") from exc
         if str(metadata.get("schema_digest") or "") != current_digest:
             raise XRayStructurePackageError("Imported model metadata does not match the current structure scheme.")
+        if str(metadata.get("backend") or STRUCTURE_BACKEND) != provider_id:
+            raise XRayStructurePackageError("Imported model metadata backend does not match the package provider.")
         original = str(manifest.get("model_id") or "imported_structure_model")
         if not _SAFE_ID.fullmatch(original):
             raise XRayStructurePackageError("Imported structure model ID is unsafe.")
@@ -890,7 +950,7 @@ def import_structure_model_package(project, source):
                 str((destination / "model.json").relative_to(project.root)),
                 None,
                 current_digest,
-                STRUCTURE_BACKEND,
+                provider_id,
                 metrics,
                 (),
                 training_specimen_count=int(stats.get("training_specimen_count") or 0),

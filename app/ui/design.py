@@ -227,6 +227,11 @@ class FlowRow(ttk.Frame):
         self._layout_job=None
         self._row_height=0
         self.bind("<Configure>",self.relayout,add="+")
+        self.bind("<Destroy>",self._release_layout,add="+")
+
+    def _release_layout(self,event):
+        if event.widget is self and self._layout_job is not None:
+            self.after_cancel(self._layout_job);self._layout_job=None
 
     def relayout(self,_event=None):
         if self._layout_job is None:self._layout_job=self.after_idle(self._layout)

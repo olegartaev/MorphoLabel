@@ -18,15 +18,15 @@ class ShellDestroyLifecycleTests(unittest.TestCase):
             schema=root/"schema.csv"
             schema.write_text("id,abbr,name,role\n1,A,Alpha,BOTH\n",encoding="utf-8")
             project=Project.create("shutdown",source,root,schema,source_types=["png"],source_layout="direct")
-            with patch("app.ui.shell.last_project",return_value=None), \
+            with patch("app.modules.landmarks.last_project",return_value=None), \
                  patch.object(ProductionShell,"_warm_ai_hardware",return_value=None):
                 shell=ProductionShell()
             shell.withdraw()
             shell.open_module("landmarks")
-            shell.context.project=project
-            shell.context.invalidate_catalog()
+            shell._active_module_runtime.context.project=project
+            shell._active_module_runtime.context.invalidate_catalog()
             for section in ("project","crop","landmarks","measurements","export"):
-                shell.select(section)
+                shell._active_module_runtime.select(section)
                 shell.update_idletasks()
             shell.destroy()
             gc.collect()

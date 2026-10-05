@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from app.ui.photo_list_panel import PhotoListPanel
-from app.ui.shell import ProductionShell
+from app.modules.landmarks import LandmarksRuntime
 from app.ui.landmarks_section import LandmarksSection
 from app.ui.crop_section import CropSection
 from app.ui.landmark_canvas import LandmarkCanvasController
@@ -35,7 +35,7 @@ class AttentionNavigationFastPathTests(unittest.TestCase):
    _sync_photo_panel_current=Mock(),_selected_image=Mock(),render=Mock(),
    _update_status=Mock(),after_idle=lambda fn:fn(),
   )
-  self.assertTrue(ProductionShell.open_landmark_attention(shell,{"image_id":"b","stage":"landmarks","reason":"Review"}))
+  self.assertTrue(LandmarksRuntime.open_landmark_attention(shell,{"image_id":"b","stage":"landmarks","reason":"Review"}))
   self.assertEqual(["b"],selected)
   shell.render.assert_not_called()
   shell._sync_photo_panel_current.assert_called_once_with(align_top=True,refresh_rows=False)
@@ -52,7 +52,7 @@ class AttentionNavigationFastPathTests(unittest.TestCase):
    _sync_photo_panel_current=Mock(),_selected_image=Mock(),render=Mock(),
    _update_status=Mock(),after_idle=lambda fn:fn(),
   )
-  self.assertTrue(ProductionShell.open_landmark_attention(shell,{"image_id":"b","stage":"landmarks","reason":"Review"}))
+  self.assertTrue(LandmarksRuntime.open_landmark_attention(shell,{"image_id":"b","stage":"landmarks","reason":"Review"}))
   self.assertTrue(shell._align_selected_top_once)
   shell.render.assert_called_once()
   shell._selected_image.assert_not_called()

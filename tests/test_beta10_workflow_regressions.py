@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from app import ai_hardware
 from app.ui.photo_list_panel import PhotoListPanel
-from app.ui.shell import ProductionShell
+from app.modules.landmarks import LandmarksRuntime
 
 
 def _runner_module():
@@ -86,13 +86,13 @@ class Beta10WorkflowRegressionTests(unittest.TestCase):
         self.assertEqual([(1,False)],panel.canvas.seen)
 
     def test_navigation_is_only_visible_for_persisted_batch_or_review(self):
-        self.assertFalse(ProductionShell._workflow_navigation_visible(None))
-        self.assertTrue(ProductionShell._workflow_navigation_visible({"kind":"landmark","text":"2 / 20"}))
+        self.assertFalse(LandmarksRuntime._workflow_navigation_visible(None))
+        self.assertTrue(LandmarksRuntime._workflow_navigation_visible({"kind":"landmark","text":"2 / 20"}))
 
     def test_public_workflow_actions_and_menu_are_wired_to_the_named_operation(self):
         root=Path(__file__).resolve().parents[1]
         landmarks=(root/"app"/"ui"/"landmarks_section.py").read_text(encoding="utf-8")
-        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
+        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8") + (Path(__file__).resolve().parents[1]/"app/modules/landmarks.py").read_text(encoding="utf-8")
         service=(root/"app"/"landmark_ai_service.py").read_text(encoding="utf-8")
         project=(root/"app"/"ui"/"project_section.py").read_text(encoding="utf-8")
         self.assertIn("'Predict next batch',lambda:self.predict(False,prediction.get())",landmarks)

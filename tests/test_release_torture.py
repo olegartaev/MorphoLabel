@@ -301,8 +301,8 @@ class ReleaseTortureTests(unittest.TestCase):
                 elif kind == "reopen":
                     self.landmark = Project.open(self.landmark.root)
                     self.xray = XRayProject(self.xray.root)
-                    shell.context = UIContext(self.landmark)
-                    shell.context.refresh()
+                    shell.module_states["landmarks"]["context"] = UIContext(self.landmark)
+                    shell.module_states["landmarks"]["context"].refresh()
                 elif kind == "export":
                     self.assertEqual(self.export_bytes(self.xray), self.export_bytes(XRayProject(self.xray.root)))
                     self.assertEqual(self.export_bytes(self.landmark), self.export_bytes(Project.open(self.landmark.root)))
@@ -315,7 +315,7 @@ class ReleaseTortureTests(unittest.TestCase):
                         stage = rng.choice(stages)
                         detail["stage"] = stage
                         if key == "landmarks":
-                            shell.select(stage)
+                            shell._active_module_runtime.select(stage)
                         else:
                             shell._active_module_runtime._select(stage)
                     shell.update()
@@ -357,11 +357,10 @@ class ReleaseTortureTests(unittest.TestCase):
         remember_xray_project(self.xray.root)
         with patch("app.ui.shell.first_run_setup_required", return_value=False), \
              patch("app.extensions.discovery.entry_points", return_value=EntryPoints()):
-            shell = ProductionShell()
+            shell = ProductionShell(module_states={"landmarks": {"context": UIContext(self.landmark)}})
         shell.withdraw()
         shell.update_idletasks()
-        shell.context = UIContext(self.landmark)
-        shell.context.refresh()
+        shell.module_states["landmarks"]["context"].refresh()
         def destroy_shell():
             if not getattr(shell, "_morpholabel_destroying", False):
                 shell.update_idletasks()
@@ -404,7 +403,7 @@ class ReleaseTortureTests(unittest.TestCase):
         from app.xray_crop_ui import XRayPlateListPanel
         from app.xray_structures_ui import XRaySpecimenListPanel
         shell, errors = self.make_shell()
-        panels = [PhotoListPanel(shell.root, shell.context, lambda *_: None, shell.tip),
+        panels = [PhotoListPanel(shell.root, shell.module_states["landmarks"]["context"], lambda *_: None, shell.tip),
                   XRayPlateListPanel(shell.root, self.xray, lambda *_: None, shell.tip),
                   XRaySpecimenListPanel(shell.root, self.xray, lambda *_: None, shell.tip)]
         references = [weakref.ref(panel) for panel in panels]
@@ -418,16 +417,16 @@ class ReleaseTortureTests(unittest.TestCase):
     def test_landmark_export_view_releases_variable_callbacks(self):
         shell, errors = self.make_shell()
         shell.open_module("landmarks")
-        shell.select("export")
+        shell._active_module_runtime.select("export")
         shell.update()
-        released = weakref.ref(shell.current_view)
+        released = weakref.ref(shell._active_module_runtime.current_view)
         def controls(widget):
             result = []
             for child in widget.winfo_children():
                 result.extend(controls(child))
                 result.append(weakref.ref(child))
             return result
-        released_controls = controls(shell.current_view.parent)
+        released_controls = controls(shell._active_module_runtime.current_view.parent)
         shell.show_module_hub()
         gc.collect()
         self.assertIsNone(released())
@@ -437,8 +436,8 @@ class ReleaseTortureTests(unittest.TestCase):
     def test_landmark_display_dialog_releases_color_variable_callbacks(self):
         shell, errors = self.make_shell()
         shell.open_module("landmarks")
-        shell.select("landmarks")
-        shell.current_view.open_display_settings()
+        shell._active_module_runtime.select("landmarks")
+        shell._active_module_runtime.current_view.open_display_settings()
         dialog = next(widget for widget in shell.winfo_children() if widget.winfo_class() == "Toplevel")
         released = weakref.ref(dialog)
         dialog.destroy()
@@ -480,22 +479,22 @@ class ReleaseTortureTests(unittest.TestCase):
     def test_module_switching_and_pending_save_20_cycles(self):
         shell, errors = self.make_shell()
         selected = self.landmark_ids[1]
-        shell.context.select_image(selected)
+        shell.module_states["landmarks"]["context"].select_image(selected)
         return_binding = shell.bind("<Return>").strip()
         click_binding = shell.bind("<ButtonPress>").strip()
         for cycle in range(20):
             with self.subTest(cycle=cycle):
                 shell.open_module("landmarks")
                 lm = shell._active_module_runtime
-                self.assertIs(self.landmark, lm._host.project)
-                self.assertEqual(selected, shell.context.current()["image_id"])
+                self.assertIs(self.landmark, lm.project)
+                self.assertEqual(selected, shell.module_states["landmarks"]["context"].current()["image_id"])
                 with patch.object(lm, "close", wraps=lm.close) as close_lm:
                     shell.show_module_hub()
                     close_lm.assert_called_once()
                 shell.open_module("xray_counts")
                 xr = shell._active_module_runtime
                 self.assertEqual(self.xray.root, xr.project.root)
-                self.assertIs(self.landmark, shell.context.project)
+                self.assertIs(self.landmark, shell.module_states["landmarks"]["context"].project)
                 xr._select("crops")
                 shell.update()
                 workspace = xr._workspace
@@ -512,7 +511,7 @@ class ReleaseTortureTests(unittest.TestCase):
                 persisted = XRayProject(self.xray.root).specimen(sid)["crop"]
                 self.assertNotEqual(original.get("head_side", "left"), persisted["head_side"])
                 self.assertIsNone(shell._active_module_runtime)
-                self.assertEqual(selected, shell.context.current()["image_id"])
+                self.assertEqual(selected, shell.module_states["landmarks"]["context"].current()["image_id"])
                 self.assertEqual(self.landmark.root, last_project())
                 self.assertEqual(self.xray.root, last_xray_project())
                 self.assertEqual([], errors)
@@ -530,7 +529,7 @@ class ReleaseTortureTests(unittest.TestCase):
                 shell.open_module(key)
                 if key == "landmarks":
                     for stage in ("project", "crop", "landmarks", "measurements", "export"):
-                        shell.select(stage)
+                        shell._active_module_runtime.select(stage)
                         shell.update()
                 else:
                     runtime = shell._active_module_runtime

@@ -54,7 +54,7 @@ class UISortingAndReviewContextTests(unittest.TestCase):
   root=Path(__file__).resolve().parents[1]
   section=(root/"app"/"ui"/"landmarks_section.py").read_text(encoding="utf-8")
   canvas=(root/"app"/"ui"/"landmark_canvas.py").read_text(encoding="utf-8")
-  shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
+  shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8") + (Path(__file__).resolve().parents[1]/"app/modules/landmarks.py").read_text(encoding="utf-8")
   project=(root/"app"/"ui"/"project_section.py").read_text(encoding="utf-8")
   self.assertNotIn("self.prediction_info=ttk.Label",section)
   self.assertNotIn("predict_actions,'Reapply'",section)

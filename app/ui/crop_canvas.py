@@ -63,14 +63,23 @@ class CropCanvasController:
   self._cache_lock=context._crop_navigation_cache_lock
   self._image_cache_budget=int(context._crop_navigation_cache_budget)
   self._image_cache_bytes=sum(int(item.get("bytes") or 0) for item in self._image_cache.values())
-  self._prefetch_thread=None;self.photo_creations=0;self.preview_rotate_source_sizes=[];self.context_message="";self.status_callback=None;self.canvas.bind('<Destroy>',self._destroy,add='+');self.load_current()
+  self._prefetch_thread=None;self._idle_jobs=set();self.photo_creations=0;self.preview_rotate_source_sizes=[];self.context_message="";self.status_callback=None;self.canvas.bind('<Destroy>',self._destroy,add='+');self.load_current()
  def _destroy(self,event):
   if event.widget is self.canvas:self._closed=True;self._cancel.set();self._load_token+=1
   if event.widget is self.canvas:
-   for job in (self._poll_job,self._rotation_render_job,self._loading_pulse_job):
+   for job in (self._poll_job,self._rotation_render_job,self._loading_pulse_job,*self._idle_jobs):
     if job:
      try:self.canvas.after_cancel(job)
      except tk.TclError:pass
+   self._idle_jobs.clear()
+   for worker in (self._worker,self._prefetch_thread):
+    if worker is not None:worker.join(timeout=.25)
+ def _after_idle(self,callback):
+  job=None
+  def invoke():
+   self._idle_jobs.discard(job)
+   if not self._closed:callback()
+  job=self.canvas.after_idle(invoke);self._idle_jobs.add(job)
  def ready_for(self,image_id):
   return bool(image_id and self.requested_image_id==self.displayed_image_id==((self.context.current() or {}).get('image_id'))==image_id and self.base and self.model and not self.loading)
  def _cache_get(self,row):
@@ -107,8 +116,8 @@ class CropCanvasController:
   record=self.context.project.crop_record(image_id) or {};self.context_message=prediction_stamp(record.get("model_id"),record.get("prediction_at")) if record.get("model_id") else "";self.render()
   callback=self.on_image_ready
   if callback and self.ready_for(image_id) and token==self.requested_generation:
-   self.canvas.after_idle(lambda: callback(image_id,token,getattr(self,'requested_request_epoch',0)) if token==self.requested_generation and self.ready_for(image_id) else None)
-  self.canvas.after_idle(self._prefetch_neighbors)
+   self._after_idle(lambda: callback(image_id,token,getattr(self,'requested_request_epoch',0)) if token==self.requested_generation and self.ready_for(image_id) else None)
+  self._after_idle(self._prefetch_neighbors)
   return True
  def _prefetch_neighbors(self):
   if self._closed or self._prefetch_thread and self._prefetch_thread.is_alive():return

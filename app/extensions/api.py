@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Literal, Protocol, TYPE_CHECKING
+from typing import Callable, Literal, Protocol, TYPE_CHECKING, runtime_checkable
 
 if TYPE_CHECKING:
     from tkinter import Misc
@@ -15,14 +15,20 @@ ModuleStatus = Literal["available", "planned", "unavailable"]
 
 @dataclass(frozen=True)
 class ModuleHost:
-    """Documented host surface; the container is empty when render is called."""
+    """Generic application services and opaque, module-owned session state.
+
+    The host retains the state dictionary across runtime lifecycles but never
+    interprets its contents. Modules define their own project type and actions.
+    """
 
     container: Misc
-    project: Project | None
+    state: dict[str, object]
     show_module_hub: Callable[[], None]
-    open_project: Callable[..., object]
-    new_project: Callable[[], object]
     build_standard_menu: Callable[["Misc"], object] | None = None
+    ui_icon: Callable[..., object] | None = None
+    control_button: Callable[..., object] | None = None
+    run_background_task: Callable[..., object] | None = None
+    tooltip: object | None = None
 
 
 class ModuleRuntime(Protocol):
@@ -41,6 +47,7 @@ class ModuleSpec:
     status: ModuleStatus
     factory: Callable[[], ModuleRuntime] | None
     source: str
+    recent_project: Callable[[], Path | None] | None = None
 
 
 @dataclass(frozen=True)
@@ -62,5 +69,27 @@ class BackendSpec:
     task: str
     version: str
     api_version: int
-    factory: Callable[[BackendContext], object]
+    factory: Callable[..., object]
     source: str
+
+
+@dataclass(frozen=True)
+class StructureBackendContext:
+    """Application progress only; providers never receive scientific storage."""
+
+    progress: Callable[..., object] | None = None
+
+
+@runtime_checkable
+class StructureBackend(Protocol):
+    """Compute from prepared artifacts; the X-ray module saves scientific truth.
+
+    train returns checkpoint/metadata paths and metrics. predict_many returns
+    one result per input image, with structure_id and normalized x/y/score points.
+    Payloads contain prepared manifest/images, model artifacts and execution
+    settings, never a project/database. Portable artifacts keep model.pth and
+    model.json envelope names; their implementation is provider-owned.
+    """
+
+    def train(self, payload: dict, timeout: int) -> dict: ...
+    def predict_many(self, payload: dict, timeout: int) -> dict: ...

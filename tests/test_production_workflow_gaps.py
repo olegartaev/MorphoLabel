@@ -11,7 +11,7 @@ from app.landmark_ai_workflow import STATE_KEY,load_state
 from app.ui.landmarks_section import LandmarksSection,_format_percent,_landmark_toolbar_state,_confirm_complex_qc_image
 from app.ui.context import UIContext, _training_ready_image_ids, _training_seen_image_ids
 from app.ui.batch_status import position_and_remaining
-from app.ui.shell import ProductionShell
+from app.modules.landmarks import LandmarksRuntime
 from unittest.mock import patch,Mock
 from types import SimpleNamespace
 import queue,threading
@@ -479,7 +479,7 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   self.assertEqual(1,counts['Incomplete']);self.assertEqual(0,counts['New/changed'])
  def test_landmark_batch_counter_uses_cached_rows_without_status_scan(self):
   ids=self.ids[:3];self.p.set_ui_state(STATE_KEY,{'stage':'INITIAL_TRAINING','initial_image_ids':ids,'improvement_image_ids':[],'current_image_id':ids[0],'current_position':0})
-  context=UIContext(self.p,'landmarks');context.refresh(force=True);shell=ProductionShell.__new__(ProductionShell);shell.context=context
+  context=UIContext(self.p,'landmarks');context.refresh(force=True);shell=LandmarksRuntime.__new__(LandmarksRuntime);shell.context=context
   with patch.object(self.p,'annotation_status',side_effect=AssertionError('batch-wide status scan')):
    summary=shell._active_batch_summary()
   self.assertEqual('landmark',summary['kind']);self.assertIn('1 / 3',summary['text'])
@@ -592,7 +592,7 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   self.assertFalse(_landmark_toolbar_state(verified,2)['verify_enabled'])
 
  def test_landmark_models_window_is_plain_language_and_opens_accuracy_details(self):
-  source=(Path(__file__).parents[1]/'app'/'ui'/'shell.py').read_text(encoding='utf8')
+  source=(Path(__file__).parents[1]/'app'/'ui'/'shell.py').read_text(encoding='utf8') + (Path(__file__).resolve().parents[1]/"app/modules/landmarks.py").read_text(encoding="utf-8")
   self.assertIn('text="Landmark models"',source)
   self.assertIn('"Training images"',source)
   self.assertIn('"Validation P90"',source)
@@ -604,13 +604,13 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   source=(Path(__file__).parents[1]/'app'/'ui'/'context.py').read_text(encoding='utf8')
   self.assertIn('("Human verified", "Training set", "New/changed", "Incomplete")',source)
   self.assertIn("'Images':len(included)",source)
-  shell=(Path(__file__).parents[1]/'app'/'ui'/'shell.py').read_text(encoding='utf8')
+  shell=(Path(__file__).parents[1]/'app'/'ui'/'shell.py').read_text(encoding='utf8') + (Path(__file__).resolve().parents[1]/"app/modules/landmarks.py").read_text(encoding="utf-8")
   self.assertIn('"Images":"Images currently included in the Landmarks workflow."',shell)
   self.assertIn('"Training set":"Verified, complete images currently eligible for model training.',shell)
   self.assertIn('"New/changed":"Training-set images whose current Crop or landmarks are not yet represented',shell)
 
  def test_active_section_has_theme_independent_visual_marker(self):
-  source=(Path(__file__).parents[1]/'app'/'ui'/'shell.py').read_text(encoding='utf8')
+  source=(Path(__file__).parents[1]/'app'/'ui'/'shell.py').read_text(encoding='utf8') + (Path(__file__).resolve().parents[1]/"app/modules/landmarks.py").read_text(encoding="utf-8")
   self.assertIn('style="StageActive.TButton" if active else "Stage.TButton"',source)
   design=(Path(__file__).parents[1]/'app/ui/design.py').read_text(encoding='utf8')
   self.assertIn('("vista","xpnative","winnative")',design)
@@ -671,7 +671,7 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   self.assertIn('"production_landmark_load_stage"',source)
 
  def test_ai_hardware_is_qualified_at_setup_and_prediction_reuses_it(self):
-  shell=(Path(__file__).parents[1]/'app'/'ui'/'shell.py').read_text(encoding='utf8')
+  shell=(Path(__file__).parents[1]/'app'/'ui'/'shell.py').read_text(encoding='utf8') + (Path(__file__).resolve().parents[1]/"app/modules/landmarks.py").read_text(encoding="utf-8")
   setup=(Path(__file__).parents[1]/'app'/'first_run_setup.py').read_text(encoding='utf8')
   landmarks=(Path(__file__).parents[1]/'app'/'ui'/'landmarks_section.py').read_text(encoding='utf8')
   service=(Path(__file__).parents[1]/'app'/'landmark_ai_service.py').read_text(encoding='utf8')

@@ -40,13 +40,19 @@ class FakeRuntime:
 
     def render(self, host):
         self.rendered = True
-        self.project_seen = host.project
-        self.label_text = "Project loaded" if host.project is not None else "External workspace ready"
+        self.host = host
+        self.project_seen = host.state.get("project")
+        self.label_text = "Project loaded" if self.project_seen is not None else "External workspace ready"
         tk.Label(host.container, text=self.label_text).pack()
         tk.Button(host.container, text="Modules", command=host.show_module_hub).pack()
-        if self.project_path is not None and host.project is None:
-            tk.Button(host.container, text="Open project", command=lambda: host.open_project(self.project_path)).pack()
-        self.has_project_actions = callable(host.open_project) and callable(host.new_project)
+        if self.project_path is not None and self.project_seen is None:
+            tk.Button(host.container, text="Open project", command=self.open_project).pack()
+        self.has_project_actions = not hasattr(host, "open_project") and not hasattr(host, "new_project")
+
+    def open_project(self):
+        self.host.state["project"] = {"root": self.project_path, "external_annotations": [(1, 2)]}
+        for widget in self.host.container.winfo_children():widget.destroy()
+        self.render(self.host)
 
     def close(self):
         self.closed = True
@@ -82,8 +88,11 @@ class FakeEntryPoints(list):
 class ExtensionArchitectureTests(unittest.TestCase):
     def _shell(self):
         from app.ui.shell import ProductionShell
+        # The module reads its remembered project on open, after shell creation.
+        # Keep this fixture guard for its whole lifecycle.
+        remembered = patch("app.modules.landmarks.last_project", return_value=None)
+        remembered.start();self.addCleanup(remembered.stop)
         with patch("app.extensions.discovery.entry_points",return_value=FakeEntryPoints()), \
-             patch("app.ui.shell.last_project",return_value=None), \
              patch.object(ProductionShell,"_warm_ai_hardware",return_value=None):
             shell=ProductionShell()
         shell.withdraw()
@@ -113,26 +122,24 @@ class ExtensionArchitectureTests(unittest.TestCase):
 
     def test_builtin_landmarks_runtime_owns_core_queue_and_model_actions(self):
         from app.modules.landmarks import LandmarksRuntime
-        events=[]
-        host=SimpleNamespace(project=None)
-        runtime=LandmarksRuntime()._bind_core(
-            lambda:events.append("render"),
-            lambda:events.append("open"),
-            lambda:({"title":"saved queue"},),
-            lambda:events.append("models"),
-        )
-        runtime.render(host)
-        self.assertEqual(["render"],events)
-        self.assertEqual(({"title":"saved queue"},),runtime.queue_entries())
-        entries=runtime.standard_menu_entries()
-        self.assertEqual("AI model transfer...",entries[0]["label"])
-        self.assertEqual("disabled",entries[0]["state"])
-        host.project=object()
-        entries=runtime.standard_menu_entries()
-        self.assertEqual("normal",entries[0]["state"])
-        entries[0]["command"]()
-        self.assertEqual(["render","models"],events)
-        runtime.close()
+        shell=self._shell()
+        try:
+            with patch.object(LandmarksRuntime,"_render_landmarks_workspace") as render:
+                shell.open_module("landmarks")
+                runtime=shell._active_module_runtime
+                render.assert_called_once()
+                self.assertIsInstance(runtime,LandmarksRuntime)
+                with patch.object(runtime,"_landmark_queue_entries",return_value=({"title":"saved queue"},)):
+                    self.assertEqual(({"title":"saved queue"},),runtime.queue_entries())
+                self.assertEqual("disabled",runtime.standard_menu_entries()[0]["state"])
+                runtime.context.project=object()
+                with patch.object(runtime,"show_model_transfer") as models:
+                    entries=runtime.standard_menu_entries()
+                    self.assertEqual("AI model transfer...",entries[0]["label"])
+                    self.assertEqual("normal",entries[0]["state"])
+                    entries[0]["command"]();models.assert_called_once()
+                shell.show_module_hub()
+        finally:self._destroy_shell(shell)
 
     def test_deterministic_order_and_duplicate_module(self):
         registry = ModuleRegistry()
@@ -169,7 +176,7 @@ class ExtensionArchitectureTests(unittest.TestCase):
             runtime=FakeRuntime(project.root)
             entries = FakeEntryPoints((FakeEntryPoint("external", provider=lambda: fake_module(factory=lambda: runtime)),))
             with patch("app.extensions.discovery.entry_points", return_value=entries), \
-                 patch("app.ui.shell.last_project", return_value=None), \
+                 patch("app.modules.landmarks.last_project", return_value=None), \
                  patch.object(ProductionShell, "_warm_ai_hardware", return_value=None):
                 shell = ProductionShell()
             try:
@@ -184,12 +191,14 @@ class ExtensionArchitectureTests(unittest.TestCase):
                 self.assertTrue(runtime.has_project_actions)
                 next(w for w in shell.root.winfo_children() if isinstance(w,tk.Button) and w.cget("text")=="Open project").invoke()
                 deadline=time.monotonic()+5
-                while shell.context.project is None and time.monotonic()<deadline:
+                while runtime.project_seen is None and time.monotonic()<deadline:
                     shell.update()
                     time.sleep(0.02)
-                self.assertIsNotNone(shell.context.project)
+                self.assertIsNotNone(runtime.project_seen)
                 self.assertEqual("external",shell.module_key)
-                self.assertIs(runtime.project_seen,shell.context.project)
+                self.assertIs(runtime.project_seen,shell.module_states["external"]["project"])
+                self.assertEqual(project.root,runtime.project_seen["root"])
+                self.assertFalse(hasattr(shell,"context"))
                 self.assertEqual("Project loaded",runtime.label_text)
                 next(w for w in shell.root.winfo_children() if isinstance(w,tk.Button) and w.cget("text")=="Modules").invoke()
                 self.assertTrue(runtime.closed)
@@ -225,7 +234,7 @@ class ExtensionArchitectureTests(unittest.TestCase):
             self.assertIn("factory exploded",shell.module_registry.diagnostics[-1])
             shell.open_module("landmarks")
             self.assertEqual("landmarks",shell.module_key)
-            self.assertIsNotNone(shell.current_view)
+            self.assertIsNotNone(shell._active_module_runtime.current_view)
         finally:self._destroy_shell(shell)
 
     def test_broken_render_closes_once_and_returns_to_hub(self):
@@ -271,7 +280,7 @@ class ExtensionArchitectureTests(unittest.TestCase):
         self.assertNotIn("_open_core",public_api)
         self.assertNotIn("ProductionShell",inspect.getsource(FakeRuntime))
         self.assertNotIn("._",inspect.getsource(FakeRuntime))
-        self.assertEqual({"container","project","show_module_hub","open_project","new_project","build_standard_menu"},
+        self.assertEqual({"container","state","show_module_hub","build_standard_menu","ui_icon","control_button","run_background_task","tooltip"},
                          {item.name for item in fields(ModuleHost)})
         registry_source=(root/"app/extensions/registry.py").read_text(encoding="utf-8")
         self.assertNotIn("LandmarkBackend",registry_source+public_api)
@@ -287,19 +296,19 @@ class ExtensionArchitectureTests(unittest.TestCase):
             schema = root / "schema.csv"
             schema.write_text("id,abbr,name,role\n1,A,Alpha,BOTH\n", encoding="utf-8")
             project = Project.create("extension-smoke", source, root, schema, source_types=["png"], source_layout="direct")
-            with patch("app.ui.shell.last_project", return_value=None), \
+            with patch("app.modules.landmarks.last_project", return_value=None), \
                  patch.object(ProductionShell, "_warm_ai_hardware", return_value=None):
                 shell = ProductionShell()
             try:
                 shell.withdraw()
                 shell.open_module("landmarks")
-                shell.context.project = project
-                shell.context.invalidate_catalog()
+                shell._active_module_runtime.context.project = project
+                shell._active_module_runtime.context.invalidate_catalog()
                 for section in ("project", "crop", "landmarks", "measurements", "export"):
-                    shell.select(section)
+                    shell._active_module_runtime.select(section)
                     shell.update_idletasks()
-                    self.assertEqual(section, shell.context.section)
-                    self.assertIsNotNone(shell.current_view)
+                    self.assertEqual(section, shell._active_module_runtime.context.section)
+                    self.assertIsNotNone(shell._active_module_runtime.current_view)
                 self.assertEqual("landmarks", shell.module_key)
             finally:
                 shell.destroy()

@@ -1,0 +1,168 @@
+{
+  "landmark": {
+    "export_sha256": "d38a529b9404614ad3aefee41b797be285ab68b5a8bf251bd6195f8889d9771a",
+    "tables": {
+      "ai_permanent_holdouts": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "annotation_drafts": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "corrections": {
+        "rows": 8,
+        "sha256": "3e161d39278c29d3d8d508caae6ed1b7f16f6dfe74292ce6ea5a4d556936b59d"
+      },
+      "crop_evaluations": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "crop_holdout": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "crop_holdout_references": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "crop_predictions": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "crop_training_membership": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "crop_verified_observations": {
+        "rows": 4,
+        "sha256": "4c81deb60c6e83e423a94a6374c59831aeab629f95b0f739cf8fe7d74b2f11e7"
+      },
+      "crops": {
+        "rows": 4,
+        "sha256": "62970e2d29cfce191cf2ec925eacb1418f6888cd9b8df4c162fab46276f8bc70"
+      },
+      "image_attributes": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "image_review": {
+        "rows": 4,
+        "sha256": "36f1c83d3d3a92a9d118f1ed5506418fcf7da7383f33543aa8840b69af0e46c9"
+      },
+      "images": {
+        "rows": 4,
+        "sha256": "a245b09c374fa52d76135f699761ae1ab4c2e1e7cc242b83fc5925ef573729df"
+      },
+      "landmark_schema": {
+        "rows": 2,
+        "sha256": "726959517e2c47a463af751fd37aad6193ece16fc6764f03b2a2b44e93d3ddea"
+      },
+      "landmarks": {
+        "rows": 8,
+        "sha256": "2db73951966383095a35590527afd14122cb81d91d03776ba1002f1fe7c9d292"
+      },
+      "locality_calibrations": {
+        "rows": 1,
+        "sha256": "00c81515d6f3ab0d05028554a7653a9c708584fc46e52969f902624e247e0e77"
+      },
+      "models": {
+        "rows": 3,
+        "sha256": "f3b7707a787562110b84746840e95f8f0250c3548f588e20575353d175dc1f7e"
+      },
+      "project": {
+        "rows": 4,
+        "sha256": "5b91c6ee7ff8b5b60373fedfc41a7e2a28360f967e92461d4e8c21b7ff8da48e"
+      },
+      "qc": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "training_examples": {
+        "rows": 8,
+        "sha256": "6f105aa3680254927c425d1da3f0c29c4e2f9d26a2ca537ccf2834113d404a04"
+      }
+    }
+  },
+  "xray": {
+    "export_sha256": "2ef34164ccf06c637474f033913d9b025b08bb6df2b8ccd2889decd1c500b5fb",
+    "tables": {
+      "annotation_archives": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "annotation_events": {
+        "rows": 48,
+        "sha256": "3f1a9bf549e10cefb030e354842d6830a7de9c87e61578b3cce67f5ef81d2a3e"
+      },
+      "annotation_roles": {
+        "rows": 12,
+        "sha256": "2b1d36dfd07c6e7be04d86bc66907de135ec3237ff1c7fabe889916840ff2236"
+      },
+      "annotation_runs": {
+        "rows": 12,
+        "sha256": "f59a4c1c7d3a456d057f214986d4a4a1b6c554c1aa81b94b74319f2f58fbf3d8"
+      },
+      "annotation_structure_states": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "annotations": {
+        "rows": 24,
+        "sha256": "c2a59ac5013374eac4cca82caa7390e509d2ee186fe3e2b3937504c27b18e730"
+      },
+      "crop_events": {
+        "rows": 16,
+        "sha256": "e46efd3346460b3cafb8133a037982affccf38cd9b55cfc391125a35813a6169"
+      },
+      "meta": {
+        "rows": 5,
+        "sha256": "8b61872f29c516892292cc6047805870dc1add4f84670e738d2f8d468a9a6c77"
+      },
+      "schema_versions": {
+        "rows": 1,
+        "sha256": "94d769a40ffa3a6c0b44d757d6cb58b8c8a84e34d969ecf7c4cc34c7ef2af0ef"
+      },
+      "source_images": {
+        "rows": 4,
+        "sha256": "627267dba4ed976120f5737a917162148580fa8e9ac0fa006ee77116ed14d546"
+      },
+      "specimens": {
+        "rows": 8,
+        "sha256": "57e8e864b908c9a7c3df5398e9cb57dee54aa36dc0c2ead5ed1ec35a448e293a"
+      },
+      "trait_results": {
+        "rows": 8,
+        "sha256": "4a04971b15e4355b7ab2b0d8d2ef7727e608ea0881f4ccbf8e427ac13ab1fc00"
+      },
+      "ui_state": {
+        "rows": 4,
+        "sha256": "a4e243824c15d235fe8fe7ae5081e5613d6a3504b72d611ccda7fda6d86f45c6"
+      },
+      "xray_crop_models": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "xray_crop_training_membership": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "xray_structure_models": {
+        "rows": 2,
+        "sha256": "50d85aed7c4b19c7511c553fee162c14cb1782670881e194f88613925a882b3d"
+      },
+      "xray_structure_repeatability_membership": {
+        "rows": 2,
+        "sha256": "bd09f73284c02ea361fe622805a255356df460163cc51ef5b8e47222d4a9502c"
+      },
+      "xray_structure_repeatability_runs": {
+        "rows": 1,
+        "sha256": "988065e8b93bbe2cc8183a58240731ade922a093f99b6265d7224ae8371a81ef"
+      },
+      "xray_structure_training_membership": {
+        "rows": 16,
+        "sha256": "88ed33d0816fa024a071fc78c3725214e216707ccdd7e3745c8603763ebcea65"
+      }
+    }
+  }
+}

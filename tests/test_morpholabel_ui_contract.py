@@ -14,7 +14,8 @@ from app import __version__ as PACKAGE_VERSION
 from app.project_storage import Project
 from app.ui.context import UIContext
 from app.ui.measurements_section import MeasurementsSection
-from app.ui.shell import ProductionShell, _first_run_progress_state
+from app.ui.shell import _first_run_progress_state
+from app.modules.landmarks import LandmarksRuntime
 from app.landmark_suspicious_review import start as start_suspicious_review, current as current_suspicious
 from app.landmark_ai_review import create_review_session_for_ids, activate_review_session, active_review_session
 
@@ -57,7 +58,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
 
     def test_about_credits_codex_assistance(self):
         root=Path(__file__).parents[1]
-        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
+        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8") + (Path(__file__).resolve().parents[1]/"app/modules/landmarks.py").read_text(encoding="utf-8")
         self.assertIn("Developed with the assistance of OpenAI Codex.",shell)
 
     def test_repository_contains_open_source_license_notice_and_citation(self):
@@ -111,7 +112,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
             context.refresh(force=True);context.select_image(ids[0])
             project.exclude_image(ids[0],"User excluded")
             shell=SimpleNamespace(context=context,current_view=None,photo_panel=None,render=lambda:None)
-            ProductionShell._photo_exclusion_changed(shell,ids[0])
+            LandmarksRuntime._photo_exclusion_changed(shell,ids[0])
             self.assertTrue(project.image_exclusion(ids[0])["excluded"])
             self.assertEqual(ids[1],context.current()["image_id"])
             self.assertEqual(ids[1],current_suspicious(project)["image_id"])
@@ -131,7 +132,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
             context=UIContext(project=project,section="landmarks");context.refresh(force=True);context.select_image(ids[0])
             project.exclude_image(ids[0],"User excluded")
             shell=SimpleNamespace(context=context,current_view=None,photo_panel=None,render=lambda:None)
-            ProductionShell._photo_exclusion_changed(shell,ids[0])
+            LandmarksRuntime._photo_exclusion_changed(shell,ids[0])
             active=active_review_session(project)
             self.assertNotIn(ids[0],active["image_ids"])
             self.assertEqual(ids[1],context.current()["image_id"])
@@ -139,7 +140,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
             shutil.rmtree(root,ignore_errors=True)
 
     def test_section_change_contract_preserves_current_image_id(self):
-        source=Path(__file__).parents[1]/"app"/"ui"/"shell.py"
+        source=Path(__file__).parents[1]/"app"/"modules"/"landmarks.py"
         text=source.read_text(encoding="utf-8")
         self.assertIn('image_id=(self.context.current() or {}).get("image_id")',text)
         self.assertIn('if image_id:self.context.select_image(image_id)',text)
@@ -172,7 +173,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         root=Path(__file__).parents[1]
         identity=(root/"app"/"identity.py").read_text(encoding="utf-8")
         hub=(root/"app"/"ui"/"module_hub.py").read_text(encoding="utf-8")
-        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
+        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8") + (Path(__file__).resolve().parents[1]/"app/modules/landmarks.py").read_text(encoding="utf-8")
         self.assertNotIn('.zoom(',identity)
         self.assertNotIn('zoom=',hub)
         self.assertNotIn('zoom=',shell)
@@ -185,7 +186,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
 
     def test_installed_ai_setup_is_explicit_and_can_be_deferred(self):
         root=Path(__file__).parents[1]
-        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
+        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8") + (Path(__file__).resolve().parents[1]/"app/modules/landmarks.py").read_text(encoding="utf-8")
         delivery=(root/"app"/"ai_delivery.py").read_text(encoding="utf-8")
         self.assertIn('"Install AI support"',shell)
         self.assertIn('"Continue without AI"',shell)
@@ -218,7 +219,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
 
     def test_landmark_batch_navigation_uses_verify_next_with_green_verify_icon(self):
         root=Path(__file__).parents[1]
-        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
+        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8") + (Path(__file__).resolve().parents[1]/"app/modules/landmarks.py").read_text(encoding="utf-8")
         self.assertIn('"Verify & Next"',shell)
         self.assertIn('self.ui_icon("verify" if landmark_confirm or crop_confirm',shell)
         self.assertIn('icon="previous"',shell)
@@ -235,7 +236,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
 
     def test_current_public_ui_has_one_supported_root_and_no_legacy_gui_imports(self):
         root = Path(__file__).parents[1]
-        shell = (root / "app" / "ui" / "shell.py").read_text(encoding="utf-8")
+        shell = (root / "app" / "ui" / "shell.py").read_text(encoding="utf-8") + (Path(__file__).resolve().parents[1]/"app/modules/landmarks.py").read_text(encoding="utf-8")
         hub = (root / "app" / "ui" / "module_hub.py").read_text(encoding="utf-8")
         self.assertIn("class ProductionShell", shell)
         self.assertIn("ModuleHub", shell)
@@ -265,7 +266,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
 
     def test_core_context_and_queue_share_xray_visual_language(self):
         root=Path(__file__).parents[1]
-        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
+        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8") + (Path(__file__).resolve().parents[1]/"app/modules/landmarks.py").read_text(encoding="utf-8")
         self.assertIn('build_context_row(left,("Sample","Specimen"))',shell)
         design=(root/"app"/"ui"/"design.py").read_text(encoding="utf-8")
         self.assertIn('style="ContextKey.TLabel"',design)
@@ -286,10 +287,11 @@ class MorphoLabelUIContractTests(unittest.TestCase):
 
     def test_source_contract_starts_on_module_hub_and_labels_landmark_actions(self):
         root=Path(__file__).parents[1]
-        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
+        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8") + (Path(__file__).resolve().parents[1]/"app/modules/landmarks.py").read_text(encoding="utf-8")
         hub=(root/"app"/"ui"/"module_hub.py").read_text(encoding="utf-8")
         landmarks=(root/"app"/"ui"/"landmarks_section.py").read_text(encoding="utf-8")
-        self.assertIn('self.module_key="landmarks" if project is not None else None',shell)
+        self.assertIn('self.module_key=None',shell)
+        self.assertIn('if initial_module is not None:',shell)
         self.assertNotIn('elif remembered_path:',shell)
         from app.extensions.builtins import module_registry
         self.assertEqual("Landmarks & measurements",module_registry().get("landmarks").display_name)

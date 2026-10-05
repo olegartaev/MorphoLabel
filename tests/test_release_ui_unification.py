@@ -16,7 +16,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 
 def source(relative):
-    return (ROOT/relative).read_text(encoding="utf-8")
+    return (ROOT/relative).read_text(encoding="utf-8") + ((ROOT/"app/modules/landmarks.py").read_text(encoding="utf-8") if relative=="app/ui/shell.py" else "")
 
 
 class ReleaseUIUnificationTests(unittest.TestCase):
@@ -111,7 +111,7 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn("parent_model_id=parent_model_id",crop)
         self.assertIn("parent_model_id=parent_model_id",structures)
         self.assertIn("def train_detector(project,seed=42,epochs=80,progress=None,parent_model_id=None):",detector)
-        self.assertIn("def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None):",structure_ai)
+        self.assertIn("def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None, *, backend_id=None, registry=None):",structure_ai)
 
     def test_structures_never_stacks_two_yellow_queue_banners(self):
         structures=source("app/xray_structures_ui.py")

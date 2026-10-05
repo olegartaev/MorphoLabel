@@ -107,7 +107,7 @@ def _project_summary(project):
 
 
 def collect_summary(shell=None):
-    context = getattr(shell, "context", None)
+    context = getattr(getattr(shell, "_active_module_runtime", None), "context", None) or getattr(shell, "context", None)
     project = getattr(context, "project", None)
     current = None
     if context is not None:
@@ -140,7 +140,9 @@ def _known_replacements(shell=None):
         ("<CODE_ROOT>", source_root()),
     ):
         values.append((str(value), label))
-    project = getattr(getattr(shell, "context", None), "project", None)
+    runtime = getattr(shell, "_active_module_runtime", None)
+    context = getattr(runtime, "context", None) or getattr(shell, "context", None)
+    project = getattr(context, "project", None) or getattr(runtime, "project", None)
     if project is not None:
         for label, value in (
             ("<PROJECT_ROOT>", getattr(project, "root", None)),

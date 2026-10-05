@@ -133,7 +133,7 @@ class ComplexQCTests(unittest.TestCase):
     def test_workflow_has_prominent_complex_qc_and_no_review_pending_button(self):
         root=Path(__file__).parents[1]
         landmarks=(root/"app"/"ui"/"landmarks_section.py").read_text(encoding="utf8")
-        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf8")
+        shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf8") + (Path(__file__).resolve().parents[1]/"app/modules/landmarks.py").read_text(encoding="utf-8")
         dialog=(root/"app"/"ui"/"complex_qc_dialog.py").read_text(encoding="utf8")
         self.assertIn("'Final data QC'",landmarks)
         self.assertIn("'Review AI predictions'",landmarks)

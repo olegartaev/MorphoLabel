@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 from PIL import Image
 
 from app.ui.design import apply_styles, structure_prediction_text, prediction_stamp, sidebar_width_for_window, dialog_width_for_columns, model_selector_width
-from app.ui.shell import ProductionShell
+from app.modules.landmarks import LandmarksRuntime
 from app.ui.tooltips import Tooltip
 from app.xray_crop import crop_from_geometry
 from app.xray_crop_ui import PlateCropEditSession, XRayCropWorkspace
@@ -95,7 +95,7 @@ class PresentationProjectTests(_ProjectFixture,unittest.TestCase):
 
     def test_closing_core_navigation_does_not_write_project_data(self):
         batch={"kind":"landmark","text":"1/2"}
-        shell=object.__new__(ProductionShell)
+        shell=object.__new__(LandmarksRuntime)
         shell.context=SimpleNamespace(project=self.project,section="landmarks")
         shell._persisted_batch_summary=Mock(return_value=batch);shell.render=Mock()
         before=self.project.db_path.read_bytes()
