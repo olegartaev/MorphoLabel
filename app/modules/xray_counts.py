@@ -14,8 +14,11 @@ from app.ui.tooltips import Tooltip
 from app.ui.icons import TOPBAR_ICON_SIZE,tk_icon
 from app.xray_icons import XRAY_ICON_SIZE,TRAIT_ICON_SIZE,tk_xray_icon,tk_rule_preview
 from app.xray_project import XRayProject
+from app.xray_specimen_identity import specimen_display_id
 from app.ui.preferences import last_xray_project, remember_xray_project
-from app.ui.design import build_context_row
+from app.ui.design import build_context_row, FlowRow
+from app.ui.tk_lifecycle import after_idle_for_widget
+from app.ui.anatomical_guide import AnatomicalGuide
 from app.xray_result_qc import build_result_qc
 from app.xray_result_qc import start_result_review_queue,result_review_queue,clear_result_review_queue
 from app.xray_trait_export import export_trait_rows
@@ -348,8 +351,8 @@ class XRayCountsRuntime:
         except KeyError:return ""
         path=Path(image["relative_path"]);sample=self._sample_name(image["relative_path"])
         if specimen is not None:
-            number=int(specimen.get("ordinal") or 0)
-            return f"Sample: {sample}  ·  Plate: {path.name}  ·  Specimen №: {number}"
+            number=specimen_display_id(specimen)
+            return f"Sample: {sample}  ·  Plate: {path.name}  ·  Specimen: {number}"
         return f"Sample: {sample}  ·  Plate: {path.name}"
 
     def _selection_context_fields(self):
@@ -363,11 +366,11 @@ class XRayCountsRuntime:
         except KeyError:return ()
         path=Path(image["relative_path"]);fields=[("Sample",self._sample_name(image["relative_path"])),("Plate",path.name)]
         if specimen is not None:
-            fields.append(("Specimen №",str(int(specimen.get("ordinal") or 0))))
+            fields.append(("Specimen",specimen_display_id(specimen)))
         return tuple(fields)
 
     def _render_selection_context(self,parent):
-        row,self._selection_context_values=build_context_row(parent,("Sample","Plate","Specimen №"));row.pack(fill="x",pady=(2,3))
+        row,self._selection_context_values=build_context_row(parent,("Sample","Plate","Specimen"));row.pack(fill="x",pady=(2,3))
         self._refresh_selection_context()
         return row
 
@@ -419,8 +422,8 @@ class XRayCountsRuntime:
         available=bool(self.project)
         active=bool(available and self.project.active_structure_model())
         return (
-            {"label":"Import X-ray Structure AI…","command":self._menu_import_structure_ai,"state":"normal" if available else "disabled"},
-            {"label":"Export active X-ray Structure AI…","command":self._menu_export_structure_ai,"state":"normal" if active else "disabled"},
+            {"label":"Import X-ray Structure AI…","command":self._menu_import_structure_ai,"group":"models","state":"normal" if available else "disabled"},
+            {"label":"Export active X-ray Structure AI…","command":self._menu_export_structure_ai,"group":"models","state":"normal" if active else "disabled"},
         )
 
     def _menu_import_structure_ai(self):
@@ -461,7 +464,7 @@ class XRayCountsRuntime:
         )
 
     def _header(self,parent):
-        nav=ttk.Frame(parent,style="Topbar.TFrame");nav.pack(fill="x",pady=(0,4))
+        nav=FlowRow(parent,style="Topbar.TFrame");nav.pack(fill="x",pady=(0,4))
         home=ttk.Button(nav,text="Modules",image=self._core_icon(nav,"modules"),compound="left",command=self._show_module_hub,style="Modules.TButton")
         home.pack(side="left",padx=(8,12),pady=(1,1));self._tip.bind(home,"Return to the MorphoLabel module hub.")
         ttk.Separator(nav,orient="vertical").pack(side="left",fill="y",padx=(0,12),pady=4)
@@ -604,9 +607,9 @@ class XRayCountsRuntime:
         source_actions=ttk.Frame(source_box);source_actions.pack(anchor="w")
         self._button(source_actions,"Rescan for images",self._rescan_source,"Scan the project source X-ray folder for new images without changing existing project work.").pack(side="left")
         if not storage["self_contained"]:
-            self._button(source_actions,"Make self-contained…",self._make_self_contained,"Import the indexed source X-rays into the project once; hard links are used when possible to avoid duplicate disk usage.").pack(side="left",padx=(6,0))
+            self._button(source_actions,"Make self-contained…",self._make_self_contained,"Keep a local copy of the source X-rays so this project can open without the original folder.").pack(side="left",padx=(6,0))
         if storage["cache_bytes"]:
-            self._button(source_actions,"Clear reproducible cache",self._compact_project,"Remove only temporary/reproducible X-ray AI cache files; scientific data and final models are kept.").pack(side="left",padx=(6,0))
+            self._button(source_actions,"Clear reproducible cache",self._compact_project,"Free space by removing temporary files. Images, annotations and trained models are kept.").pack(side="left",padx=(6,0))
 
         scheme_box=ttk.LabelFrame(content,text="Trait definition",padding=10);scheme_box.grid(row=1,column=1,sticky="nsew",padx=(6,4),pady=(0,7))
         ttk.Label(scheme_box,text=model["name"],style="SectionTitle.TLabel").pack(anchor="w")
@@ -672,7 +675,7 @@ class XRayCountsRuntime:
         ttk.Radiobutton(actions,text="Verified only",variable=self._trait_export_scope,value="verified").pack(side="left",padx=(2,6))
         self._button(
             actions,"Export",lambda:self._export_traits(self._trait_export_scope.get()=="verified"),
-            "Export trait values using the selected scope. Verified only is the safer default for scientific output.",True,
+            "Save the selected trait rows as a table. Verified only includes results you have checked.",True,
         ).pack(side="left")
         self._render_selection_context(parent)
         ttk.Label(parent,text="Review trait values. Choose the specimens to include, then export the table.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(0,8))
@@ -685,22 +688,33 @@ class XRayCountsRuntime:
         tree.heading("row_no",text="#");tree.column("row_no",width=64,anchor="center",stretch=False)
         tree.heading("locality",text="Sample");tree.column("locality",width=180,anchor="w")
         tree.heading("plate",text="Plate");tree.column("plate",width=220,anchor="w")
-        tree.heading("fish",text="Specimen №");tree.column("fish",width=90,anchor="center",stretch=False)
+        tree.heading("fish",text="Specimen");tree.column("fish",width=90,anchor="center",stretch=False)
         for trait in traits:
             col=trait.get("abbr") or trait["id"];tree.heading(col,text=col);tree.column(col,width=78,anchor="center",stretch=False)
         tree.heading("status",text="Status");tree.column("status",width=90,anchor="center",stretch=False)
+        from tkinter import font as tkfont
+        font=tkfont.Font(root=tree,font=ttk.Style(tree).lookup("Treeview","font") or "TkDefaultFont")
+        for column in cols:
+            minimum=max(int(tree.column(column,"width")),font.measure(tree.heading(column,"text"))+24)
+            if column=="status":minimum=max(minimum,font.measure("Not started")+24)
+            tree.column(column,minwidth=minimum,width=minimum)
         for column in cols:tree.heading(column,command=lambda value=column:_sort_export_tree(tree,value,False))
         current=self._selection().get("specimen_id")
         for index,row in enumerate(self.project.trait_rows(),1):
             path=Path(row["relative_path"]);values=row["trait_values"];workflow_no=int(row.get("workflow_no") or index)
-            display=[workflow_no,self._sample_name(row["relative_path"]),path.name,int(row.get("ordinal") or 0)]
+            display=[workflow_no,self._sample_name(row["relative_path"]),path.name,specimen_display_id(row)]
             display.extend("" if values.get(trait["id"]) is None else str(values.get(trait["id"])) for trait in traits)
             status=str(row.get("result_status") or "not_started")
-            tree.insert("","end",iid=row["specimen_id"],values=(*display,status),tags=("alternate",) if index%2==0 else ())
+            status_text={"not_started":"Not started","draft":"Draft","verified":"Verified","stale_crop":"Crop changed"}.get(status,status.replace("_"," ").capitalize())
+            tree.insert("","end",iid=row["specimen_id"],values=(*display,status_text),tags=("alternate",) if index%2==0 else ())
         tree.tag_configure("alternate",background="#f7f7f7")
         scroll=ttk.Scrollbar(host,orient="vertical",command=tree.yview);tree.configure(yscrollcommand=scroll.set)
         tree.grid(row=0,column=0,sticky="nsew");scroll.grid(row=0,column=1,sticky="ns")
-        if current and tree.exists(current):tree.selection_set(current);tree.focus(current);tree.see(current)
+        horizontal=ttk.Scrollbar(host,orient="horizontal",command=tree.xview)
+        tree.configure(xscrollcommand=horizontal.set);horizontal.grid(row=1,column=0,sticky="ew")
+        if current and tree.exists(current):
+            tree.selection_set(current);tree.focus(current);tree.see(current)
+            after_idle_for_widget(tree,lambda:tree.see(current) if tree.exists(current) else None)
         def selected(_event=None):
             chosen=tree.selection()
             if not chosen:return
@@ -896,7 +910,7 @@ class ReferenceRelationshipDialog(tk.Toplevel):
         outer=ttk.Frame(self,padding=14);outer.pack(fill="both",expand=True)
         ttk.Label(outer,text="How is this reference related?",style="PageTitle.TLabel").pack(anchor="w")
         ttk.Label(
-            outer,text="Choose the biological relationship. MorphoLabel uses this to choose the appropriate recognition approach.",
+            outer,text="Is this boundary one of the elements you count, or a separate anatomical landmark?",
             style="PageSubtitle.TLabel",wraplength=620,
         ).pack(anchor="w",pady=(2,10))
         series_text="It is one of the elements in an existing series\nExample: a particular vertebra is one of the vertebrae."
@@ -908,7 +922,7 @@ class ReferenceRelationshipDialog(tk.Toplevel):
         self.combo.pack(side="left",padx=(7,0),fill="x",expand=True)
         ttk.Radiobutton(outer,text=separate_text,value="independent",variable=self.mode,command=self._refresh).pack(anchor="w")
         ttk.Label(
-            outer,text="This describes anatomy, not a technical AI option. You can change it later with Relationship…",
+            outer,text="For a counted element, assign the reference to its existing point. For a separate landmark, place a new point.",
             style="Muted.TLabel",wraplength=620,
         ).pack(anchor="w",pady=(10,0))
         actions=ttk.Frame(outer);actions.pack(anchor="e",pady=(12,0))
@@ -1025,7 +1039,8 @@ class TraitSchemeDialog(tk.Toplevel):
         menu.add_command(label="Open...",command=self._open_saved)
         menu.add_separator();menu.add_command(label="Save copy...",command=self._save_copy)
         set_menu.configure(menu=menu);set_menu._menu=menu
-        self.apply_button=self._button(toolbar,"Use these traits for project",self._use_for_project,"Apply this trait set as a new project version. Changes are not saved until you choose this button.",True)
+        self._button(toolbar,"Quick guide",self._show_trait_help,"How elements, reference marks and traits fit together.").pack(side="left",padx=(8,0))
+        self.apply_button=self._button(toolbar,"Use these traits for project",self._use_for_project,"Apply the whole trait set to this project. Until then, you are editing a draft.",True)
         self.apply_button.pack(side="right",padx=(8,0))
         scheme=ttk.LabelFrame(outer,text="Trait set",padding=8);scheme.grid(row=2,column=0,sticky="ew");scheme.columnconfigure(1,weight=1);scheme.columnconfigure(3,weight=1)
         name_label=ttk.Label(scheme,text="Name");name_label.grid(row=0,column=0,sticky="w")
@@ -1036,10 +1051,10 @@ class TraitSchemeDialog(tk.Toplevel):
         ref_entry=ttk.Entry(scheme,textvariable=self.reference_label);ref_entry.grid(row=2,column=1,sticky="ew",padx=(7,12),pady=(5,0))
         doi_label=ttk.Label(scheme,text="DOI");doi_label.grid(row=2,column=2,sticky="w",pady=(5,0))
         doi_entry=ttk.Entry(scheme,textvariable=self.reference_doi,width=28);doi_entry.grid(row=2,column=3,sticky="ew",padx=(7,0),pady=(5,0))
-        self._help("Name of this reusable set of biological traits.",name_label,name_entry)
-        self._help("Optional short description of what this trait set measures.",desc_label,desc_entry)
-        self._help("Optional literature citation in compact form, for example: Bogutskaya et al. (2020).",ref_label,ref_entry)
-        self._help("Optional DOI for the cited work. The project view will make it clickable.",doi_label,doi_entry)
+        self._help("Give this trait set a name you will recognize.",name_label,name_entry)
+        self._help("Briefly describe what you want to measure. Optional.",desc_label,desc_entry)
+        self._help("Publication used for your definitions, e.g. Bogutskaya et al. (2020). Optional.",ref_label,ref_entry)
+        self._help("Publication DOI, if available. It becomes a link in the project.",doi_label,doi_entry)
 
         ttk.Separator(outer,orient="horizontal").grid(row=3,column=0,sticky="ew",pady=8)
 
@@ -1048,8 +1063,11 @@ class TraitSchemeDialog(tk.Toplevel):
             step1,1,"annotation_setup","Define the anatomical marks",
             "Add the repeated structures you count and the anatomical reference marks that define where counting starts or stops."
         )
-        annotations=ttk.Frame(step1);annotations.grid(row=1,column=0,sticky="ew");annotations.columnconfigure(0,weight=1)
+        annotation_row=ttk.Frame(step1);annotation_row.grid(row=1,column=0,sticky="ew")
+        annotation_row.columnconfigure(0,weight=3);annotation_row.columnconfigure(1,weight=2)
+        annotations=ttk.Frame(annotation_row);annotations.grid(row=0,column=0,sticky="nsew",padx=(0,12));annotations.columnconfigure(0,weight=1)
         self._build_annotation_lists(annotations)
+        self.anatomical_guide=AnatomicalGuide(annotation_row);self.anatomical_guide.grid(row=0,column=1,sticky="nsew")
 
         step2=ttk.LabelFrame(outer,padding=10);step2.grid(row=5,column=0,sticky="nsew");step2.columnconfigure(0,weight=1);step2.rowconfigure(1,weight=1)
         self._section_header(
@@ -1063,6 +1081,13 @@ class TraitSchemeDialog(tk.Toplevel):
         actions=ttk.Frame(outer);actions.grid(row=6,column=0,sticky="ew",pady=(10,0))
         self._button(actions,"Close",self.destroy,"Close without applying this draft to the project.").pack(side="right")
 
+    def _show_trait_help(self):
+        messagebox.showinfo("Traits — quick guide",
+            "1. Elements to count\nAdd the structures you mark repeatedly, such as vertebrae. Place one point on each visible element.\n\n"
+            "2. Reference marks\nAdd the anatomical boundaries used by your study. If a boundary is one of the counted elements, link it to that series. During annotation, right-click its point to assign the reference. For a separate landmark, place its own mark.\n\n"
+            "3. Biological traits\nChoose the series and counting rule. Before excludes the boundary; Through includes it; From starts at the boundary and includes it. The preview shows which elements contribute. Any correction is added after counting.\n\n"
+            "Save trait keeps the rule in this draft. Use these traits for project applies the whole set.",parent=self)
+
     def _build_trait_list(self,parent):
         parent.columnconfigure(0,weight=1);parent.rowconfigure(0,weight=1)
         self.trait_tree=ttk.Treeview(parent,columns=("name","rule"),show="headings",selectmode="browse",height=9)
@@ -1071,10 +1096,10 @@ class TraitSchemeDialog(tk.Toplevel):
         scroll=ttk.Scrollbar(parent,orient="vertical",command=self.trait_tree.yview);self.trait_tree.configure(yscrollcommand=scroll.set)
         self.trait_tree.grid(row=0,column=0,sticky="nsew");scroll.grid(row=0,column=1,sticky="ns")
         self.trait_tree.bind("<<TreeviewSelect>>",self._trait_selected);self.trait_tree.bind("<Double-1>",self._trait_double_click)
-        self._help("The biological output values you want to obtain. Select one to define how it is counted.",self.trait_tree)
+        self._help("The results you want to obtain. Select a trait to edit its counting rule.",self.trait_tree)
         row=ttk.Frame(parent);row.grid(row=1,column=0,columnspan=2,sticky="w",pady=(7,0))
         self._button(row,"+ Add trait",self._new_trait,"Add a biological result such as Total vertebrae or Abdominal vertebrae.").pack(side="left")
-        self._button(row,"Remove",self._remove_trait,"Remove the selected trait from this draft; earlier project versions remain stored.").pack(side="left",padx=(4,0))
+        self._button(row,"Remove",self._remove_trait,"Remove this trait from the draft. Earlier project versions are kept.").pack(side="left",padx=(4,0))
 
     def _build_annotation_lists(self,parent):
         parent.columnconfigure(0,weight=1);parent.columnconfigure(1,weight=1);parent.rowconfigure(1,weight=1)
@@ -1091,7 +1116,7 @@ class TraitSchemeDialog(tk.Toplevel):
         self._button(counted_actions,"Rename",lambda:self._rename_structure(True),"Rename the selected counted element.").pack(side="left",padx=(4,0))
         self._button(counted_actions,"Remove",lambda:self._remove_structure(True),"Remove the selected counted element if no trait or saved annotation uses it.").pack(side="left",padx=(4,0))
         self.counted_tree.bind("<Double-1>",lambda _e:self._rename_structure(True))
-        self._help("Step 1A. Add the repeated anatomical elements you will click and count on each X-ray, for example vertebrae or pterygiophores.",counted_help,self.counted_tree)
+        self._help("Add elements you count one by one, such as vertebrae or pterygiophores.",counted_help,self.counted_tree)
 
         rh=ttk.Frame(refs);rh.grid(row=0,column=0,sticky="ew",pady=(0,4))
         ttk.Label(rh,image=self._icon(rh,"reference_mark",30)).pack(side="left",padx=(0,5))
@@ -1103,7 +1128,7 @@ class TraitSchemeDialog(tk.Toplevel):
         self._button(ref_actions,"Relation…",self._edit_reference_relationship,"Specify whether this reference is one member of a counted series or a separate anatomical mark.").pack(side="left",padx=(4,0))
         self._button(ref_actions,"Remove",lambda:self._remove_structure(False),"Remove the selected reference mark if no trait or saved annotation uses it.").pack(side="left",padx=(4,0))
         self.reference_tree.bind("<Double-1>",lambda _e:self._rename_structure(False))
-        self._help("Step 1B. Add anatomical reference marks used as counting boundaries. For each mark, indicate whether it is one member of a counted series (for example the first caudal vertebra) or a separate anatomical landmark.",ref_help,self.reference_tree)
+        self._help("Add a counting boundary. Choose whether it belongs to a counted series or is a separate landmark.",ref_help,self.reference_tree)
 
     def _field_row(self,parent,row,icon_name,label_text,variable,help_text,values=(),readonly=True):
         icon=ttk.Label(parent,image=self._icon(parent,icon_name,22));icon.grid(row=row,column=0,sticky="w",pady=(7,0))
@@ -1125,7 +1150,7 @@ class TraitSchemeDialog(tk.Toplevel):
         method_label=ttk.Label(parent,text="Counting rule");method_label.grid(row=1,column=0,columnspan=2,sticky="w",pady=(8,0))
         self.method_combo=ttk.Combobox(parent,textvariable=self.trait_method,values=tuple(METHOD_ID_TO_LABEL[item] for item in EDITOR_METHOD_IDS),state="readonly")
         self.method_combo.grid(row=1,column=2,columnspan=3,sticky="ew",padx=(7,0),pady=(8,0));self.method_combo.bind("<<ComboboxSelected>>",lambda _e:self._refresh_method_fields())
-        self._help("Choose one simple rule: count all elements, count to a reference mark, count between two reference marks, or calculate from other traits.",method_label,self.method_combo)
+        self._help("Count all elements, use anatomical boundaries, or calculate from other traits.",method_label,self.method_combo)
 
         self.annotation_frame=ttk.LabelFrame(parent,text="Counting on the X-ray",padding=8);self.annotation_frame.grid(row=2,column=0,columnspan=5,sticky="ew",pady=(10,0))
         self.annotation_frame.columnconfigure(2,weight=1);self.annotation_frame.columnconfigure(3,weight=1)
@@ -1145,7 +1170,7 @@ class TraitSchemeDialog(tk.Toplevel):
         self.count_options=ttk.Frame(self.annotation_frame);self.count_options.grid(row=3,column=0,columnspan=4,sticky="ew",pady=(8,0));self.count_options.columnconfigure(4,weight=1)
         offset_label=ttk.Label(self.count_options,text="Add fixed number");offset_label.grid(row=0,column=0,sticky="w")
         self.offset_entry=ttk.Entry(self.count_options,textvariable=self.trait_offset,width=7);self.offset_entry.grid(row=0,column=1,sticky="w",padx=(7,16))
-        self._help("Optional correction added after counting, for example known vertebrae that are not clicked individually. Leave blank for zero.",offset_label,self.offset_entry)
+        self._help("A fixed number added to the count. Leave blank for no correction.",offset_label,self.offset_entry)
         self.stop_behavior_label=ttk.Label(self.count_options,text="At the stop mark");self.stop_behavior_label.grid(row=0,column=2,sticky="w")
         self.stop_behavior_combo=ttk.Combobox(self.count_options,textvariable=self.trait_stop_behavior,values=tuple(STOP_BEHAVIOR_VALUES),state="readonly",width=22)
         self.stop_behavior_combo.grid(row=0,column=3,columnspan=2,sticky="ew",padx=(7,0));self.stop_behavior_combo.bind("<<ComboboxSelected>>",lambda _e:self._refresh_rule_preview())
@@ -1175,7 +1200,7 @@ class TraitSchemeDialog(tk.Toplevel):
         self.calc_preview_label=ttk.Label(self.derived_frame,textvariable=self.calc_preview,style="SectionTitle.TLabel")
         self.calc_preview_label.grid(row=2,column=1,columnspan=3,sticky="w",padx=(7,0),pady=(8,0))
         self._help("Choose an existing trait; no formula typing is needed.",left_label,self.calc_left_combo,right_label,self.calc_right_combo)
-        self._help("Choose a simple biological calculation. MorphoLabel stores the formula automatically.",operation_label,self.calc_operation_combo)
+        self._help("Choose how to combine the two trait values.",operation_label,self.calc_operation_combo)
         self._help("Used only for Join as text, for example abdominal + caudal.",self.calc_separator_label,self.calc_separator_combo)
         for widget in (self.calc_left_combo,self.calc_operation_combo,self.calc_right_combo,self.calc_separator_combo):
             widget.bind("<<ComboboxSelected>>",lambda _e:self._derived_builder_changed(),add="+")

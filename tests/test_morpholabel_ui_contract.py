@@ -296,7 +296,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         from app.extensions.builtins import module_registry
         self.assertEqual("Landmarks & measurements",module_registry().get("landmarks").display_name)
         self.assertIn("spec.display_name",hub)
-        self.assertIn('"Open module"',hub)
+        self.assertIn('caption=f"Open {spec.display_name}"',hub)
         self.assertIn("Landmark actions:",landmarks)
 
 

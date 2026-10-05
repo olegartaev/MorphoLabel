@@ -58,7 +58,7 @@ def _download_verified_checkpoint(url, target, expected_sha256, progress_callbac
         from .first_run_setup import ai_download_consent_granted
         if not ai_download_consent_granted():
             raise RuntimeError(
-                "AI bootstrap model is not installed yet. Open AI → Set up AI support… "
+                "AI bootstrap model is not installed yet. Open Menu → AI support → Set up AI support… "
                 "to review and approve the required download."
             )
 

@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import uuid
 
 from .xray_crop import apply_orientation_defaults, normalize_orientation_policy
+from .xray_specimen_identity import next_specimen_ordinal, specimen_display_id, validate_specimen_code
 from .xray_schema import bundled_scheme, calculate_trait_values, compatible_reference_roles, normalize_scheme, scheme_hash, spatial_series_order
 
 IMAGE_EXTENSIONS={".png",".jpg",".jpeg",".tif",".tiff",".bmp"}
@@ -96,6 +97,7 @@ class XRayProject:
         CREATE TABLE IF NOT EXISTS specimens(
           specimen_id TEXT PRIMARY KEY, image_id TEXT NOT NULL, label TEXT NOT NULL,
           crop_json TEXT, excluded INTEGER NOT NULL DEFAULT 0, ordinal INTEGER NOT NULL DEFAULT 0,
+          specimen_code TEXT NOT NULL DEFAULT '',
           crop_source TEXT NOT NULL DEFAULT '', crop_status TEXT NOT NULL DEFAULT 'proposed',
           crop_qc_json TEXT NOT NULL DEFAULT '[]', model_id TEXT NOT NULL DEFAULT '',
           updated_at TEXT NOT NULL DEFAULT '',
@@ -214,6 +216,7 @@ class XRayProject:
             })
             self._ensure_columns(c,"specimens",{
                 "ordinal":"INTEGER NOT NULL DEFAULT 0",
+                "specimen_code":"TEXT NOT NULL DEFAULT ''",
                 "crop_source":"TEXT NOT NULL DEFAULT ''",
                 "crop_status":"TEXT NOT NULL DEFAULT 'proposed'",
                 "crop_qc_json":"TEXT NOT NULL DEFAULT '[]'",
@@ -506,7 +509,7 @@ class XRayProject:
 
     def add_manual_specimen(self,image_id,crop,label=""):
         crop=apply_orientation_defaults(crop,self.orientation_policy);crop["confidence"]="high";crop["orientation_verified"]=False;specimen_id=str(uuid.uuid4());now=_now()
-        ordinal=1+max((int(x.get("ordinal") or 0) for x in self.specimens(image_id)),default=0)
+        ordinal=next_specimen_ordinal(self.specimens(image_id))
         if not label:label=f"{self.source_image_path(image_id).stem}-{ordinal:02d}"
         status="confirmed" if self.source_image(image_id).get("crop_reviewed") else "proposed"
         with _db_connection(self.db_path) as c:
@@ -529,6 +532,43 @@ class XRayProject:
         with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             rows={row["specimen_id"]:self._decode_specimen(row) for row in c.execute("SELECT * FROM specimens WHERE image_id=?",(image_id,))}
+            # Validate edited identifiers against the final plate state before
+            # mutation. Legacy detector output may have duplicate ordinals;
+            # unrelated crops must remain editable while users name them.
+            numbers={key:int(item.get("ordinal") or 0) for key,item in rows.items()
+                     if key not in removed_ids and item["crop_status"] not in {"rejected","superseded"}}
+            def number(value):
+                text=str(value).strip()
+                if not text.isascii() or not text.isdecimal() or int(text)<1:
+                    raise ValueError("Enter a whole specimen number greater than zero.")
+                if int(text)>2147483647:raise ValueError("The specimen number is too large. Use at most 2147483647.")
+                return int(text)
+            for edit in edits:
+                key=str(edit.get("specimen_id") or "")
+                if key not in rows:raise KeyError(f"Unknown specimen on this plate: {key}")
+                if "ordinal" in edit and key not in removed_ids:numbers[key]=number(edit["ordinal"])
+            next_number=max(numbers.values(),default=0)
+            for index,entry in enumerate(new_crops):
+                next_number=number(entry["ordinal"]) if "ordinal" in entry else next_number+1
+                entry["ordinal"]=next_number;numbers[f"new:{index}"]=next_number
+                next_number=max(numbers.values(),default=0)
+            changed_numbers={str(edit["specimen_id"]) for edit in edits if "ordinal" in edit}
+            changed_numbers.update(f"new:{index}" for index in range(len(new_crops)))
+            if any(key in numbers and any(other!=key and value==numbers[key] for other,value in numbers.items()) for key in changed_numbers):
+                raise ValueError("Each specimen on a plate needs a different number.")
+            codes={key:specimen_display_id({**rows[key],"ordinal":ordinal}) for key,ordinal in numbers.items() if key in rows}
+            for edit in edits:
+                key=str(edit.get("specimen_id") or "")
+                if "specimen_code" in edit and key not in removed_ids:
+                    codes[key]=validate_specimen_code(edit["specimen_code"])
+            for index,entry in enumerate(new_crops):
+                code=entry.get("specimen_code") or ""
+                entry["specimen_code"]=validate_specimen_code(code) if code else ""
+                codes[f"new:{index}"]=specimen_display_id(entry)
+            changed_codes={str(edit["specimen_id"]) for edit in edits if "specimen_code" in edit or "ordinal" in edit}
+            changed_codes.update(f"new:{index}" for index in range(len(new_crops)))
+            if any(key in codes and any(other!=key and value==codes[key] for other,value in codes.items()) for key in changed_codes):
+                raise ValueError("Each specimen on a plate needs a different ID.")
             for specimen_id in removed_ids:
                 item=rows.get(specimen_id)
                 if item is None:raise KeyError(f"Unknown specimen on this plate: {specimen_id}")
@@ -541,6 +581,20 @@ class XRayProject:
                 specimen_id=str(edit.get("specimen_id") or "");item=rows.get(specimen_id)
                 if item is None:raise KeyError(f"Unknown specimen on this plate: {specimen_id}")
                 if specimen_id in removed_ids:continue
+                if "specimen_code" in edit:
+                    code=validate_specimen_code(edit["specimen_code"])
+                    c.execute("UPDATE specimens SET specimen_code=?,updated_at=? WHERE specimen_id=?",(code,now,specimen_id))
+                    self._event(c,specimen_id,"rename","human",{"previous":specimen_display_id(item),"code":code})
+                if "ordinal" in edit:
+                    ordinal=number(edit["ordinal"])
+                    # Keep custom labels; update only the generated plate-number label.
+                    stem=self.source_image_path(image_id).stem
+                    old_label=f"{stem}-{int(item.get('ordinal') or 0):02d}"
+                    label=f"{stem}-{ordinal:02d}" if item["label"]==old_label else item["label"]
+                    c.execute("UPDATE specimens SET ordinal=?,label=?,updated_at=? WHERE specimen_id=?",(ordinal,label,now,specimen_id))
+                    self._event(c,specimen_id,"renumber","human",{"previous":item["ordinal"],"number":ordinal})
+                if "crop" not in edit:
+                    updated+=1;continue
                 crop=apply_orientation_defaults(edit.get("crop") or {},self.orientation_policy);crop["confidence"]="high";crop["orientation_verified"]=False
                 if not crop.get("corners") or not crop.get("bounds"):raise ValueError("Crop geometry is incomplete.")
                 c.execute(
@@ -554,11 +608,12 @@ class XRayProject:
             for entry in new_crops:
                 crop=apply_orientation_defaults(entry.get("crop") or {},self.orientation_policy);crop["confidence"]="high";crop["orientation_verified"]=False
                 if not crop.get("corners") or not crop.get("bounds"):raise ValueError("Crop geometry is incomplete.")
-                ordinal+=1;specimen_id=str(uuid.uuid4());client_id=str(entry.get("client_id") or specimen_id);label=f"{stem}-{ordinal:02d}"
+                ordinal=entry["ordinal"];specimen_id=str(uuid.uuid4());client_id=str(entry.get("client_id") or specimen_id);label=f"{stem}-{ordinal:02d}"
                 c.execute(
                     "INSERT INTO specimens(specimen_id,image_id,label,crop_json,excluded,ordinal,crop_source,crop_status,crop_qc_json,model_id,updated_at) VALUES(?,?,?,?,0,?,'manual',?,'[]','',?)",
                     (specimen_id,image_id,label,_json(crop),ordinal,status,now),
                 )
+                c.execute("UPDATE specimens SET specimen_code=? WHERE specimen_id=?",(entry["specimen_code"],specimen_id))
                 self._event(c,specimen_id,"add","human",{"crop":crop,"action":"apply_crop"});id_map[client_id]=specimen_id;added+=1
         return {"updated":updated,"added":added,"removed":removed,"id_map":id_map}
 
@@ -1454,7 +1509,8 @@ class XRayProject:
         annotations=self.effective_annotations(specimen_id,1,"human") if run and not status.startswith("stale") else []
         visibility=self.structure_visibility_states(specimen_id,1,"human") if run and not status.startswith("stale") else {}
         unknown={sid for sid,value in visibility.items() if value in {"partial","not_visible"}}
-        values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations,unknown_structures=unknown))
+        absent={sid for sid,value in visibility.items() if value=="absent"}
+        values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations,unknown_structures=unknown,absent_structures=absent))
         qc="" if status=="verified" else status
         now=_now()
         with _db_connection(self.db_path) as c:
@@ -1476,7 +1532,8 @@ class XRayProject:
             annotations=self.effective_annotations(item["specimen_id"],1,"human") if run and not status.startswith("stale") else []
             visibility=self.structure_visibility_states(item["specimen_id"],1,"human") if run and not status.startswith("stale") else {}
             unknown={sid for sid,value in visibility.items() if value in {"partial","not_visible"}}
-            values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations,unknown_structures=unknown))
+            absent={sid for sid,value in visibility.items() if value=="absent"}
+            values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations,unknown_structures=unknown,absent_structures=absent))
             rows.append({**item,"trait_values":values,"result_status":status})
         return rows
 

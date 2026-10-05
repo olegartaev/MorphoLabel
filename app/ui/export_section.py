@@ -13,7 +13,7 @@ class ExportSection(SectionView):
   header=ttk.Frame(panel);header.pack(fill='x',pady=(0,14));header.columnconfigure(0,weight=1)
   ttk.Label(header,text='Export',style='PageTitle.TLabel').grid(row=0,column=0,sticky='w')
   ttk.Label(header,text=f"{cfg.get('name',self.context.project.root.name)} · {len(self.context.rows)} images",style='PageSubtitle.TLabel').grid(row=1,column=0,sticky='w',pady=(2,0))
-  guide='Why: Export creates portable files for statistics, figures and reproducible downstream analysis.\n\nLandmark coordinates\nExport landmark positions when you need shape coordinates in TPS, CSV or MorphoJ-compatible form.\n\nMeasurements\nExport the named distances defined in Measurements as a simple table for statistical analysis.'
+  guide='Save reviewed results for statistics or figures.\n\nLandmark coordinates\nChoose TPS, CSV or a MorphoJ-compatible format for shape analysis.\n\nMeasurements\nSave the distances you defined in Measurements as a table.'
   self.what_to_do(header,'Export — quick guide',guide).grid(row=0,column=1,rowspan=2,sticky='ne')
 
   cards=ttk.Frame(panel);cards.pack(fill='x');cards.columnconfigure(0,weight=1);cards.columnconfigure(1,weight=1)

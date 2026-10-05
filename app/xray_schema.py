@@ -153,12 +153,14 @@ def spatial_series_order(points):
     )
 
 
-def calculate_trait_values(scheme,annotations,unknown_structures=None):
-    """Calculate trait values; partial/not-visible structures can be declared unknown."""
+def calculate_trait_values(scheme,annotations,unknown_structures=None,absent_structures=None):
+    """Missing marks give missing values; explicit absence can give a real zero."""
     scheme=normalize_scheme(scheme);grouped={};unknown={str(value) for value in (unknown_structures or ())}
+    absent={str(value) for value in (absent_structures or ())}
     structures={str(item["id"]):item for item in scheme.get("structures",())}
     for row in annotations or ():
         grouped.setdefault(str(row["structure_id"]),[]).append(dict(row))
+    if not grouped and not absent:return {trait["id"]:None for trait in scheme["traits"]}
     for structure_id,rows in tuple(grouped.items()):
         if bool((structures.get(structure_id) or {}).get("repeated")):grouped[structure_id]=spatial_series_order(rows)
         else:rows.sort(key=lambda row:(int(row.get("sort_order",0)),int(row.get("annotation_id",0))))
@@ -175,7 +177,8 @@ def calculate_trait_values(scheme,annotations,unknown_structures=None):
             continue
         primary=points(ids[0]) if ids else []
         if method=="count":
-            value=len(primary)+int(rule.get("offset",0) or 0)
+            if primary or (ids and str(ids[0]) in absent):
+                value=len(primary)+int(rule.get("offset",0) or 0)
         elif method in {"count_to","position"} and len(ids)>=2:
             refs=points(ids[1]);index=nearest_index(primary,refs[0] if refs else None)
             if index is not None:
@@ -188,7 +191,8 @@ def calculate_trait_values(scheme,annotations,unknown_structures=None):
             one=points(ids[1]);two=points(ids[2]);a=nearest_index(primary,one[0] if one else None);b=nearest_index(primary,two[0] if two else None)
             if a is not None and b is not None:value=abs(b-a)+1+int(rule.get("offset",0) or 0)
         elif method=="presence":
-            value=1 if primary else 0
+            if primary:value=1
+            elif ids and str(ids[0]) in absent:value=0
         elif method=="distance" and len(ids)>=2:
             one=points(ids[0]);two=points(ids[1])
             if one and two:value=math.hypot(float(two[0]["x"])-float(one[0]["x"]),float(two[0]["y"])-float(one[0]["y"]))
@@ -200,6 +204,9 @@ def calculate_trait_values(scheme,annotations,unknown_structures=None):
                 denom=max(1e-12,math.hypot(ax,ay)*math.hypot(cx,cy))
                 value=math.degrees(math.acos(max(-1.0,min(1.0,(ax*cx+ay*cy)/denom))))
         elif method=="derived":
+            if any(values.get(str(dependency)) is None for dependency in rule.get("depends_on",())):
+                values[ident]=None
+                continue
             try:value=_safe_derived(rule.get("expression",""),values)
             except (ValueError,TypeError,ZeroDivisionError):value=None
         values[ident]=value

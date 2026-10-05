@@ -46,10 +46,26 @@ class MeasurementTests(unittest.TestCase):
    p=Fake(tmp_path); save_measurements(p,[{"use":True,"abbr":"LEN","name":"Length","point1":1,"point2":2}])
    values,mpp=values_for_image(p,p.rows[0]); assert mpp==.5 and values["LEN"]==pytest.approx(1.5)
    assert values_for_image(p,p.rows[1])[0]["LEN"]=="NA"
-   report=export_measurements(p); data=list(csv.DictReader(report["path"].open(newline=""))); assert report["rows"]==2 and data[0]["LEN_mm"]=="1.50" and data[1]["LEN_mm"]=="NA"
+   report=export_measurements(p)
+   with report["path"].open(newline="") as stream:data=list(csv.DictReader(stream))
+   assert report["rows"]==2 and data[0]["LEN_mm"]=="1.50" and data[1]["LEN_mm"]=="" and data[1]["mm_per_pixel"]==""
    tab=Path(tmp_path)/"measurements.txt";export_measurements(p,target=tab,delimiter="\t");header=tab.read_text(encoding="utf-8").splitlines()[0];assert "\t" in header and "," not in header
    p.points["i1"][2]["x_standardized"]=11; assert values_for_image(p,p.rows[0])[0]["LEN"]==pytest.approx(3)
    p.cal["L1"]["calibration_data"]["mm_per_pixel"]=1; assert values_for_image(p,p.rows[0])[0]["LEN"]==pytest.approx(6)
+
+
+ def test_export_missing_endpoints_and_calibration_are_blank_but_zero_is_kept(self):
+  with tempfile.TemporaryDirectory() as folder:
+   p=Fake(folder);save_measurements(p,[{"use":True,"abbr":"LEN","name":"Length","point1":1,"point2":2}])
+   p.cal["L2"]={"scale":2,"calibration_data":{"mm_per_pixel":.5}}
+   for delimiter in (",","\t"):
+    result=export_measurements(p,delimiter=delimiter)
+    with result["path"].open(encoding="utf-8",newline="") as stream:data=list(csv.DictReader(stream,delimiter=delimiter))
+    self.assertEqual("",data[1]["LEN_mm"]);self.assertEqual("0.500000",data[1]["mm_per_pixel"])
+   p.points["i1"][2]=dict(p.points["i1"][1])
+   result=export_measurements(p)
+   with result["path"].open(encoding="utf-8",newline="") as stream:data=list(csv.DictReader(stream))
+   self.assertEqual("0.00",data[0]["LEN_mm"])
 
 
 if __name__=="__main__":

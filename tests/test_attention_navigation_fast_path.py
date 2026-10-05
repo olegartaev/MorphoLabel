@@ -16,11 +16,11 @@ class AttentionNavigationFastPathTests(unittest.TestCase):
   panel.context=SimpleNamespace(selected=5)
   panel.visible_indices=[3,5,7]
   panel.refresh=Mock()
-  panel.canvas=SimpleNamespace(selection_set=Mock(),see=Mock())
+  panel.canvas=SimpleNamespace(selection_set=Mock(),reveal_selection=Mock())
   panel.sync_current(reveal=True,align_top=True,refresh_rows=False)
   panel.refresh.assert_not_called()
   panel.canvas.selection_set.assert_called_once_with(1)
-  panel.canvas.see.assert_called_once_with(1,align_top=True)
+  panel.canvas.reveal_selection.assert_called_once_with(align_top=True)
 
  def test_attention_transition_within_landmarks_does_not_rebuild_workspace(self):
   selected=[]

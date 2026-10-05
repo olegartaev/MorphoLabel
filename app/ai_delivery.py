@@ -318,7 +318,7 @@ def ensure_ai_runtime(*, project=None, explicit=None, configured=None, runner_pa
     from .first_run_setup import ai_download_consent_granted
     if not ai_download_consent_granted():
         raise AIDeliveryError(
-            "AI support is not installed yet. Open AI → Set up AI support… "
+            "AI support is not installed yet. Open Menu → AI support → Set up AI support… "
             "to review and approve the required downloads."
         )
     install_published_ai_component(progress=progress)

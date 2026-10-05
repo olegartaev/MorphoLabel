@@ -47,9 +47,9 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         module=source("app/modules/xray_counts.py")
         design=source("app/ui/design.py")
         self.assertIn('build_context_row(left,("Sample","Specimen"))',shell)
-        self.assertIn('build_context_row(header,("Sample","Plate","Specimen №"))',crop)
-        self.assertIn('build_context_row(context,("Sample","Plate","Specimen №"))',structures)
-        self.assertIn('build_context_row(parent,("Sample","Plate","Specimen №"))',module)
+        self.assertIn('build_context_row(header,("Sample","Plate","Specimen"))',crop)
+        self.assertIn('build_context_row(context,("Sample","Plate","Specimen"))',structures)
+        self.assertIn('build_context_row(parent,("Sample","Plate","Specimen"))',module)
         self.assertIn('ttk.Label(row,text=f"{key}:",style="ContextKey.TLabel")',design)
         self.assertIn('ttk.Label(row,text="—",style="ContextValue.TLabel"',design)
         self.assertNotIn('status_locality=ElidedLabel',shell)
@@ -156,7 +156,9 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         separator=workflow[workflow.index("def add_command_separator"):workflow.index("def build_help_button")]
         self.assertIn("ttk.Separator",separator)
         core_crop=source("app/ui/crop_section.py")
-        for section in (core_crop,landmarks,xcrop,structures):self.assertIn("Start examples are the initial",section)
+        for section in (core_crop,landmarks):self.assertIn("Start examples are the initial",section)
+        self.assertIn("Begin with a small set of different plates.",xcrop)
+        self.assertIn("Mark and verify a first batch to teach AI.",structures)
 
     def test_landmark_verify_state_disables_after_verification_and_reenables_after_edit_state(self):
         verified=SimpleNamespace(human_verified=True,points_by_id={})
@@ -207,16 +209,16 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         packaging=source("packaging/morpholabel.spec")
         self.assertIn('resource_path("app","resources","module_covers",filename)',hub)
         self.assertIn('self._module_covers.append(cover)',hub)
-        self.assertIn('_MODULE_COVER_DISPLAY_SIZE=(240,285)',hub)
+        self.assertIn('_MODULE_COVER_DISPLAY_SIZE=(460,500)',hub)
         self.assertIn('"app/resources/module_covers"',packaging)
         from PIL import Image
-        expected={"landmarks.jpg":(160,190),"xray_traits.jpg":(160,190)}
+        expected={"landmarks.png":(670,785),"xray_traits.png":(668,785)}
         for filename,size in expected.items():
             path=ROOT/"app/resources/module_covers"/filename
             self.assertTrue(path.is_file(),filename)
             with Image.open(path) as image:
                 self.assertEqual(size,image.size)
-                self.assertEqual("JPEG",image.format)
+                self.assertEqual("PNG",image.format)
 
     def test_about_ai_rows_show_architecture_but_never_active_model_ids(self):
         class Registry:
@@ -305,22 +307,22 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn('self.specimen_value.configure(text=values["specimen"])',clear)
         self.assertNotIn("No confirmed specimen",clear.split("self.canvas.create_text",1)[0])
 
-    def test_xray_specimen_number_means_ordinal_on_current_plate(self):
+    def test_xray_specimen_context_uses_visible_id_on_current_plate(self):
         structures=source("app/xray_structures_ui.py")
         module=source("app/modules/xray_counts.py")
         context=structures[structures.index("def _set_context"):structures.index("def _refresh_plate_context") if "def _refresh_plate_context" in structures else structures.index("def refresh(",structures.index("def _set_context"))]
-        self.assertIn('int(item.get("ordinal") or 0)',context)
+        self.assertIn('specimen_display_id(item)',context)
         self.assertNotIn("structure_workflow_number",context)
         self.assertIn('tree.heading("row_no",text="#")',module)
         self.assertIn('tree.heading("locality",text="Sample")',module)
-        self.assertIn('tree.heading("fish",text="Specimen №")',module)
+        self.assertIn('tree.heading("fish",text="Specimen")',module)
         self.assertIn("self._refresh_selection_context()",module)
 
     def test_structure_list_preserves_scroll_when_workspace_refreshes(self):
         structures=source("app/xray_structures_ui.py")
         self.assertIn("self.specimen_list.refresh(preserve_scroll=True,reveal=True)",structures)
-        self.assertIn("self.canvas.see(visible,align_top=False)",structures)
-        self.assertIn("self.specimen_list.select(specimen_id,reveal=False)",structures)
+        self.assertIn("self.canvas.reveal_selection()",structures)
+        self.assertIn("self.specimen_list.select(specimen_id,reveal=True)",structures)
         self.assertIn("self.pass_no.set(1);self.specimen_list.pass_no=1;self.refresh()",structures)
 
     def test_active_models_are_initial_training_parent_choices(self):
@@ -374,11 +376,11 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertGreaterEqual(module.count('initial_image_id=selection.get("image_id"),initial_specimen_id=selection.get("specimen_id")'),2)
         self.assertIn('self._set_selection(specimen["image_id"],chosen[0]);self._refresh_selection_context()',module)
 
-    def test_export_uses_plate_ordinal_for_specimen_number_and_keeps_row_index_separate(self):
+    def test_export_uses_visible_specimen_id_and_keeps_row_index_separate(self):
         module=source("app/modules/xray_counts.py")
         self.assertIn('tree.heading("row_no",text="#")',module)
-        self.assertIn('tree.heading("fish",text="Specimen №")',module)
-        self.assertIn('int(row.get("ordinal") or 0)',module)
+        self.assertIn('tree.heading("fish",text="Specimen")',module)
+        self.assertIn('specimen_display_id(row)',module)
         self.assertIn("workflow_no=int(row.get(\"workflow_no\") or index)",module)
 
     def test_modules_are_visually_separated_and_queues_sit_left_of_menu(self):

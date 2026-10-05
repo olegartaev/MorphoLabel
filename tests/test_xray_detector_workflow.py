@@ -348,7 +348,7 @@ class XRayDetectorContractTests(unittest.TestCase):
         for text in (
             "Apply crops","1. Training data","Start first batch","Add next batch","2. Train model",'"Train",self.train_model',
             "3. Predict & review","Predict next","Predict all","Review AI crops","Confirm & Next",
-            "Drag empty image space","<Delete>","WorkflowDock","PhotoListCanvas","Sample","Plate","Show excluded",
+            "Drag on empty image space","<Delete>","WorkflowDock","PhotoListCanvas","Sample","Plate","Show excluded",
             "NavPrimary.TButton","apply_and_confirm_plate",
         ):self.assertIn(text,ui)
         self.assertNotIn("Selected specimen",ui)

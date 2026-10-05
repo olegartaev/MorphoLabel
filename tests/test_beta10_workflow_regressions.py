@@ -43,6 +43,7 @@ class _Canvas:
     def __init__(self):self.selected=[];self.seen=[]
     def selection_set(self,index):self.selected.append(index)
     def see(self,index,align_top=False):self.seen.append((index,bool(align_top)))
+    def reveal_selection(self,align_top=False):self.see(self.selected[-1],align_top=align_top)
 
 
 class Beta10WorkflowRegressionTests(unittest.TestCase):

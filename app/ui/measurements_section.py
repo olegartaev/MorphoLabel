@@ -116,7 +116,7 @@ class MeasurementsSection(SectionView):
   self.preview_host=ttk.LabelFrame(panel,text='Preview',padding=2);self.preview_host.grid(row=1,column=0,sticky='nsew')
   self.preview=MeasurementPreview(self.preview_host,self.context)
 
-  guide='Why: Measurements turns confirmed landmarks into quantitative traits that can be compared and analysed.\n\n1. Calibrate samples\nNeeded when results must be in physical units such as millimetres. Set one known reference distance for each sample.\n\n2. Define measurements\nCreate named distances by choosing the two landmarks that define each trait.\n\n3. Review and export\nInspect the preview, then export the measurements for statistical analysis.'
+  guide='Turn landmark positions into distances you can compare.\n\n1. Set the scale\nTo obtain millimetres or other physical units, calibrate each sample using a known distance.\n\n2. Define a measurement\nGive it a name and choose the two landmarks that define the distance.\n\n3. Review and export\nCheck the preview, then save the table for statistical analysis.'
   dock=self.workflow_dock(panel,help_title='Measurements — quick guide',help_text=guide);dock.grid(row=2,column=0,sticky='ew',pady=(4,0))
 
   first=dock.add_card('1. Calibrate samples',icon='measurement_calibrate',help_text='Convert pixel distances to physical units for each sample.')

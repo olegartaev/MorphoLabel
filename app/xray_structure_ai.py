@@ -667,8 +667,12 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
                         stat["role_abs_error"].append(error);role_abs.append(error)
                         if error==0:stat["role_exact"]+=1;role_exact+=1
         unknown={sid for sid,state in visibility.items() if str(state) in {"partial","not_visible"}}
-        human_values=calculate_trait_values(scheme,human,unknown_structures=unknown)
-        predicted_values=calculate_trait_values(scheme,predicted,unknown_structures=unknown)
+        absent={sid for sid,state in visibility.items() if str(state)=="absent"}
+        human_values=calculate_trait_values(scheme,human,unknown_structures=unknown,absent_structures=absent)
+        # No model detections is a predicted zero, compared against known human
+        # values. Unmarked human categories remain missing observations.
+        predicted_absent={str(item["id"]) for item in structures if not pred_group.get(str(item["id"]))}
+        predicted_values=calculate_trait_values(scheme,predicted,unknown_structures=unknown,absent_structures=predicted_absent)
         specimen_total=specimen_ok=0;specimen_all_terms=specimen_all_ok=0
         for trait in traits:
             tid=str(trait["id"]);method=str(trait.get("method") or "");truth=human_values.get(tid);prediction=predicted_values.get(tid)

@@ -9,7 +9,7 @@ from app.landmark_attention_queue import active as active_attention_queue, class
 from .section_base import SectionView
 from .crop_canvas import CropCanvasController
 from .dialogs import center
-from .design import model_selector_width
+from .design import model_selector_width, FlowRow
 from .workflow import add_command_separator
 
 
@@ -26,7 +26,7 @@ class CropSection(SectionView):
   self.canvas=CropCanvasController(self.canvas_frame,self.context,self.refresh);self.canvas.on_image_ready=self._crop_ready
 
   batch=tk.IntVar(value=24);prediction=tk.IntVar(value=24)
-  guide="Why: Crop reduces irrelevant differences in framing and rotation before downstream analysis.\n\n1. Adjust the crop\nMove or resize the frame. Use the yellow handle when rotation is needed. Apply crop saves the current image.\n\n2. Training batch\nCorrect a batch manually and use Confirm & Next for each image.\n\n3. Train\nTrain from all human-confirmed crops.\n\n4. Predict and review\nPredict only uncropped images, then review and confirm pending AI Crop proposals."
+  guide='Frame and orient each specimen before placing landmarks.\n\n1. Adjust a crop\nDrag the frame to move it or a corner to resize it. The yellow handle rotates it. Apply crop saves this image.\n\n2. Work through a batch\nCheck each crop and use Confirm & Next to save and move on.\n\n3. Train AI\nTeach a model using crops you have confirmed.\n\n4. Predict and review\nLet AI suggest crops for images that need them. Check and confirm each suggestion.'
   dock=self.workflow_dock(panel,help_title="Crop — quick guide",help_text=guide);dock.grid(row=2,column=0,sticky="ew",pady=(4,0))
 
   training_rows=self.context.project.crop_training_rows()
@@ -60,7 +60,8 @@ class CropSection(SectionView):
   self.button(train_actions,"Models…",lambda:self.shell.show_models('crop'),"Compare and select saved Crop model versions.").pack(side="left")
 
   three=dock.add_card("3. Predict & review",icon="crop_apply",help_text="Predict only uncropped images. Pending AI Crop proposals are a separate review state and are not predicted again.")
-  batch_row=ttk.Frame(three);batch_row.grid(row=0,column=0,sticky="w")
+  three.columnconfigure(0,weight=1)
+  batch_row=ttk.Frame(three);batch_row.grid(row=0,column=0,sticky="ew")
   ttk.Label(batch_row,text="Next batch").pack(side="left")
   ttk.Spinbox(batch_row,from_=1,to=500,textvariable=prediction,width=5).pack(side="left",padx=(4,0))
   ttk.Label(batch_row,text="images",style="Muted.TLabel").pack(side="left",padx=(4,0))
@@ -68,9 +69,9 @@ class CropSection(SectionView):
   ttk.Label(batch_row,text="Model").pack(side="left")
   self.prediction_model_choice=tk.StringVar(master=three,value=active_crop.get("model_id") or "")
   self.prediction_model_box=ttk.Combobox(batch_row,textvariable=self.prediction_model_choice,values=crop_model_ids,width=model_selector_width(crop_model_ids),state="readonly" if crop_model_ids else "disabled")
-  self.prediction_model_box.pack(side="left",padx=(4,0));self.prediction_model_box.bind("<<ComboboxSelected>>",self._activate_prediction_model)
+  self.prediction_model_box.pack(side="left",fill="x",expand=True,padx=(4,0));self.prediction_model_box.bind("<<ComboboxSelected>>",self._activate_prediction_model)
   self.shell.tip.bind(self.prediction_model_box,"Active Crop model used by Predict next batch and Predict all. Choosing a model makes it active immediately.")
-  apply_actions=ttk.Frame(three);apply_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
+  apply_actions=FlowRow(three);apply_actions.grid(row=1,column=0,sticky="ew",pady=(3,0))
   self.button(apply_actions,"Predict next batch",lambda:self.auto_batch(prediction.get()),"Predict Crop for the next uncropped eligible images.",style="Primary.TButton").pack(side="left")
   self.button(apply_actions,"Predict all",lambda:self.auto_batch(None),"Predict Crop for every uncropped eligible image. Existing AI proposals are not rerun.").pack(side="left",padx=(4,0))
   add_command_separator(apply_actions)

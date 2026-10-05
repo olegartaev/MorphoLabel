@@ -5,6 +5,8 @@ fingerprints are checked in; timestamps, temporary paths and generated IDs are
 normalized for the static oracle. Reopen checks additionally compare exact rows.
 """
 import hashlib
+import csv
+import io
 import base64
 import json
 import re
@@ -162,8 +164,24 @@ class ArchitectureCompatibilityTests(unittest.TestCase):
         result = {}
         for name, p in (("landmark", self.landmark), ("xray", self.xray)):
             rows = persisted_rows(p)
+            output = self.export_bytes(p)
+            if name == "xray":
+                # The frozen oracle predates user-assigned IDs. Prove that the
+                # additive field has its legacy default, then compare every
+                # original column and export byte against the unchanged oracle.
+                for row in rows["specimens"]:
+                    self.assertEqual("", row.pop("specimen_code"))
+                reader = csv.DictReader(io.StringIO(output.decode("utf-8-sig"), newline=""))
+                self.assertIn("specimen_code", reader.fieldnames)
+                legacy = io.StringIO(newline="")
+                writer = csv.DictWriter(legacy, fieldnames=[key for key in reader.fieldnames if key != "specimen_code"])
+                writer.writeheader()
+                for row in reader:
+                    self.assertEqual(row["ordinal"], row.pop("specimen_code"))
+                    writer.writerow(row)
+                output = legacy.getvalue().encode("utf-8-sig")
             result[name] = {"tables": {k: {"rows": len(v), "sha256": digest(v)} for k, v in rows.items()},
-                            "export_sha256": digest(self.export_bytes(p))}
+                            "export_sha256": digest(output)}
         return result
 
     def test_pre_refactor_fingerprints_and_exact_reopen(self):

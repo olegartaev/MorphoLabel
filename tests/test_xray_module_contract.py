@@ -53,7 +53,7 @@ class XRayModuleContractTests(unittest.TestCase):
     def test_traits_workspace_has_explicit_visible_project_apply_action(self):
         source=(Path(__file__).resolve().parents[1]/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         self.assertIn('"Use these traits for project"',source)
-        self.assertIn("Changes are not saved until you choose this button.",source)
+        self.assertIn("Until then, you are editing a draft.",source)
         self.assertIn("self.apply_button.pack(side=\"right\"",source)
 
     def test_project_has_one_primary_entry_to_trait_configuration(self):
@@ -97,8 +97,8 @@ class XRayModuleContractTests(unittest.TestCase):
             "How is this reference related?",
             "It is one of the elements in an existing series",
             "It is a separate anatomical mark",
-            "Choose the biological relationship.",
-            "Relationship…",
+            "Is this boundary one of the elements you count, or a separate anatomical landmark?",
+            "For a counted element, assign the reference to its existing point.",
         ):
             self.assertIn(text,source)
         from app.xray_schema import blank_scheme
@@ -185,7 +185,7 @@ class XRayModuleContractTests(unittest.TestCase):
         for help_text in (
             "Choose one of the Elements to count defined in step 1.",
             "Choose one of the Start / stop marks defined in step 1.",
-            "Optional correction added after counting",
+            "A fixed number added to the count.",
             "Choose whether the stop mark itself belongs to the count",
         ):
             self.assertIn(help_text,source)
@@ -219,16 +219,16 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertEqual("10.1111/jfb.14210",model["reference_doi"])
         self.assertEqual(7,model["trait_count"])
 
-    def test_xray_user_facing_context_uses_plate_specimen_ordinal_not_global_row_number(self):
+    def test_xray_user_facing_context_uses_visible_specimen_id_not_global_row_number(self):
         root=Path(__file__).resolve().parents[1]
         module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         structures=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
-        self.assertIn('tree.heading("fish",text="Specimen №")',module)
+        self.assertIn('tree.heading("fish",text="Specimen")',module)
         self.assertIn('tree.heading("locality",text="Sample")',module)
-        self.assertIn('int(row.get("ordinal") or 0)',module)
-        self.assertIn('build_context_row(context,("Sample","Plate","Specimen №"))',structures)
-        self.assertIn('self.specimen_value=context_values["Specimen №"]',structures)
-        self.assertIn('"specimen":str(int(item.get("ordinal") or 0))',structures)
+        self.assertIn('specimen_display_id(row)',module)
+        self.assertIn('build_context_row(context,("Sample","Plate","Specimen"))',structures)
+        self.assertIn('self.specimen_value=context_values["Specimen"]',structures)
+        self.assertIn('"specimen":specimen_display_id(item)',structures)
         self.assertNotIn("Fish №",module)
 
     def test_xray_icons_include_role_step_and_fish_crop_icons(self):
@@ -294,7 +294,7 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertNotIn("Check results…",export_section)
         self.assertIn('cols=("row_no","locality","plate","fish"',export_section)
         self.assertIn('tree.heading("row_no",text="#")',export_section)
-        self.assertIn('tree.heading("fish",text="Specimen №")',export_section)
+        self.assertIn('tree.heading("fish",text="Specimen")',export_section)
         self.assertIn("_sort_export_tree(tree,value,False)",export_section)
         self.assertIn("def _trait_columns",exporter)
         self.assertNotIn('f"trait:',exporter)

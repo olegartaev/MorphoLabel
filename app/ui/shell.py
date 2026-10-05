@@ -397,27 +397,34 @@ class ProductionShell(tk.Tk):
 
     def _menus(self,row):
         button=ttk.Menubutton(row,text="Menu"); menu=tk.Menu(button,tearoff=False)
-        menu.add_command(label="AI",state="disabled")
-        menu.add_command(label="Set up AI support...",command=self._show_first_run_setup)
-        menu.add_command(label="Hardware status...",command=self.show_hardware)
+        ai_menu=tk.Menu(menu,tearoff=False)
+        ai_menu.add_command(label="Set up AI support...",command=self._show_first_run_setup)
+        ai_menu.add_command(label="Hardware status…",command=self.show_hardware)
+        menu.add_cascade(label="AI support",menu=ai_menu)
         provider=getattr(getattr(self,"_active_module_runtime",None),"standard_menu_entries",None)
         if callable(provider):
             entries=tuple(provider() or ())
             if entries:
-                menu.add_separator();menu.add_command(label="Current module",state="disabled")
-                for entry in entries:
-                    if entry is None:menu.add_separator();continue
-                    menu.add_command(
-                        label=str(entry.get("label") or "Module action"),
-                        command=entry.get("command"),
-                        state=str(entry.get("state") or "normal"),
-                    )
+                models_menu=tk.Menu(menu,tearoff=False)
+                category="AI models · import / export" if all(entry.get("group")=="models" for entry in entries if entry) else "Current module"
+                menu.add_cascade(label=category,menu=models_menu)
+                def refresh_models_menu():
+                    models_menu.delete(0,"end")
+                    for entry in tuple(provider() or ()):
+                        if entry is None:models_menu.add_separator();continue
+                        models_menu.add_command(
+                            label=str(entry.get("label") or "Module action"),
+                            command=entry.get("command"),
+                            state=str(entry.get("state") or "normal"),
+                        )
+                models_menu.configure(postcommand=refresh_models_menu)
+                refresh_models_menu()
         menu.add_separator()
-        menu.add_command(label="Support",state="disabled")
-        menu.add_command(label="Create diagnostic report...",command=self.create_diagnostic_report)
-        menu.add_command(label="GitHub project",command=lambda:webbrowser.open(PUBLIC_REPOSITORY))
+        support=tk.Menu(menu,tearoff=False)
+        support.add_command(label="Create diagnostic report…",command=self.create_diagnostic_report)
+        support.add_command(label="GitHub project",command=lambda:webbrowser.open(PUBLIC_REPOSITORY))
+        menu.add_cascade(label="Support",menu=support)
         menu.add_separator()
-        menu.add_command(label="About",state="disabled")
         menu.add_command(label="About MorphoLabel...",command=self.show_about)
         button.configure(menu=menu);button.pack(side="right",padx=2)
         self.tip.bind(button,"AI setup, diagnostics, project links and About MorphoLabel.")

@@ -11,7 +11,7 @@ from app.ui.icons import TOPBAR_ICON_SIZE, CONTROL_ICON_SIZE
 from app.ui.dialogs import center
 from app.ui.tk_lifecycle import unbind_callback
 from app.ui.photo_list_panel import PhotoListPanel
-from app.ui.design import build_context_row, sidebar_width_for_window, dialog_width_for_columns
+from app.ui.design import build_context_row, sidebar_width_for_window, dialog_width_for_columns, FlowRow
 from app.ui.landmark_sidebar import LandmarkSidebar
 from app.ui.preferences import last_project, remember_project
 from app.ui.project_section import ProjectSection
@@ -111,7 +111,7 @@ class LandmarksRuntime(tk.Misc):
         return self._host.run_background_task(title, initial_text, worker, done)
 
     def standard_menu_entries(self):
-        return ({'label': 'AI model transfer...', 'command': self.show_model_transfer,
+        return ({'label': 'Import / export models…', 'command': self.show_model_transfer, 'group': 'models',
                  'state': 'normal' if self.project is not None else 'disabled'},)
 
     def queue_entries(self):
@@ -202,7 +202,7 @@ class LandmarksRuntime(tk.Misc):
 
 
     def _nav(self):
-        row=ttk.Frame(self.root,style="Topbar.TFrame"); row.grid(row=0,column=0,sticky="ew",pady=(0,4))
+        row=FlowRow(self.root,style="Topbar.TFrame"); row.grid(row=0,column=0,sticky="ew",pady=(0,4))
         home=ttk.Button(row,text="Modules",image=self.ui_icon("modules",TOPBAR_ICON_SIZE),compound="left",command=self.show_module_hub,style="Modules.TButton")
         home.pack(side="left",padx=(8,12),pady=(1,1));self.tip.bind(home,"Return to the MorphoLabel module hub.")
         ttk.Separator(row,orient="vertical").pack(side="left",fill="y",padx=(0,12),pady=4)
@@ -1117,15 +1117,18 @@ class LandmarksRuntime(tk.Misc):
 
     def show_model_transfer(self):
         if not self.context.project: return
-        dialog=tk.Toplevel(self); dialog.title("AI Model Transfer"); dialog.transient(self); dialog.resizable(False,False)
+        dialog=tk.Toplevel(self); dialog.title("Import / export AI models"); dialog.transient(self); dialog.resizable(False,False)
         frame=ttk.Frame(dialog,padding=16); frame.pack(fill="both",expand=True)
+        ttk.Label(frame,text="Move trained AI between projects or computers.",style="SectionTitle.TLabel").pack(anchor="w",pady=(0,4))
+        ttk.Label(frame,text="Model ZIP files contain AI and its settings. Research images stay in the project.",wraplength=520,style="Muted.TLabel").pack(anchor="w",pady=(0,8))
         for kind,label in (("crop","Crop model"),("landmark","Landmark model")):
             card=ttk.LabelFrame(frame,text=label,padding=12); card.pack(fill="x",pady=5)
             model=self.context.project.active_model(kind) or {}
             ttk.Label(card,text=f"Current model: {model.get('model_id','None')}").pack(anchor="w")
-            ttk.Label(card,text=f"Save or load a {kind} model.").pack(anchor="w",pady=(2,6))
-            self.control_button(card,"Export...",lambda k=kind:self._export_model(k),f"Save the active {kind} model as a package.").pack(side="left")
-            self.control_button(card,"Import...",lambda k=kind:self._import_model(k),f"Load a {kind} model package.").pack(side="left",padx=5)
+            ttk.Label(card,text="Finds specimen frames." if kind=="crop" else "Places anatomical landmarks. Use the same landmark definitions when transferring.",wraplength=490).pack(anchor="w",pady=(2,6))
+            self.control_button(card,"Import model…",lambda k=kind:self._import_model(k),"Open a trained model ZIP file.").pack(side="left")
+            export=self.control_button(card,"Export active…",lambda k=kind:self._export_model(k),"Save the active model as a ZIP file for another project or computer.")
+            export.configure(state="normal" if model else "disabled");export.pack(side="left",padx=5)
         self.control_button(frame,"Close",dialog.destroy,"Close this transfer window.").pack(anchor="e",pady=(8,0)); center(self,dialog)
 
 

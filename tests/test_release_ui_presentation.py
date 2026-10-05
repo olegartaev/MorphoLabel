@@ -19,6 +19,7 @@ from app.xray_crop_ui import PlateCropEditSession, XRayCropWorkspace
 from app.xray_project import XRayProject, _db_connection
 from app.xray_schema import bundled_scheme
 from app.xray_structures_ui import XRayStructureWorkspace
+from app.xray_specimen_identity import specimen_display_id
 
 
 class _ProjectFixture:
@@ -168,12 +169,35 @@ class PresentationTkTests(_ProjectFixture,unittest.TestCase):
         super().setUp()
         try:self.root=tk.Tk()
         except tk.TclError as exc:self.skipTest(f"Tk display unavailable: {exc}")
-        self.addCleanup(self.root.destroy)
+        self.addCleanup(self._close_tk_fixture)
         self.root.geometry("980x650+0+0");apply_styles(self.root,ttk.Style(self.root))
         self.errors=[];self.root.report_callback_exception=lambda *args:self.errors.append(args)
         errors=patch("tkinter.messagebox.showerror",side_effect=lambda title,text,**kw:(_ for _ in ()).throw(AssertionError(f"{title}: {text}")))
         errors.start();self.addCleanup(errors.stop)
         self.host=ttk.Frame(self.root);self.host.pack(fill="both",expand=True)
+
+    def _close_tk_fixture(self):
+        # These tests use bare Tk rather than ProductionShell's owned teardown.
+        # Drop fixture references and collect widget cycles on the Tk thread,
+        # before a later parallel test can finalize their Variables on a worker.
+        import gc
+        root=self.root;self.root=None;self.host=None
+        root.destroy();del root
+        gc.collect()
+
+    def test_fixture_releases_variables_before_background_collection(self):
+        import gc
+        import threading
+        import weakref
+        workspace=XRayStructureWorkspace(self.host,self.project);self.pump()
+        references=[weakref.ref(workspace.pass_no),weakref.ref(workspace.specimen_list.sample_query)]
+        del workspace
+        self.doCleanups()
+        self.assertTrue(all(reference() is None for reference in references))
+        errors=[]
+        with patch('sys.unraisablehook',side_effect=lambda event:errors.append(str(event.exc_value))):
+            worker=threading.Thread(target=gc.collect);worker.start();worker.join()
+        self.assertEqual([],errors)
 
     def pump(self):
         for _ in range(8):self.root.update_idletasks();self.root.update()
@@ -249,6 +273,92 @@ class PresentationTkTests(_ProjectFixture,unittest.TestCase):
         self.seed();workspace._load_specimen(self.ids[0]);self.pump();workspace.verify_next();self.pump()
         self.assertEqual("verified",self.project.annotation_run(self.ids[0])["status"])
         self.assertEqual(self.ids[1],workspace.selected_specimen_id)
+
+
+    def assert_selected_row_visible(self,canvas):
+        self.assertTrue(canvas.curselection())
+        y=canvas.curselection()[0]*canvas.row_height
+        top=canvas.canvasy(0);bottom=top+canvas.winfo_height()
+        self.assertGreaterEqual(y,top-1)
+        self.assertLessEqual(y+canvas.row_height,bottom+1)
+
+    def test_late_selection_stays_visible_across_crops_structures_and_export(self):
+        from app.modules.xray_counts import XRayCountsRuntime
+        source=Path(self.temp.name)/"source"
+        for i in range(40):Image.new("L",(900,480),90).save(source/f"plate_extra_{i:02d}.png")
+        self.project.scan_source()
+        for row in self.project.source_images():
+            if not self.project.specimens(row["image_id"]):
+                self.project.add_manual_specimen(row["image_id"],self.crop)
+                self.project.confirm_plate(row["image_id"])
+        item=self.project.structure_specimens()[-1]
+        ident=item["specimen_id"]
+        self.project.apply_plate_crop_edits(item["image_id"],edits=[{"specimen_id":ident,"specimen_code":"AB-001"}])
+        self.project.set_current_selection(item["image_id"],ident)
+        host=SimpleNamespace(container=self.host,state={"project":self.project})
+        runtime=XRayCountsRuntime();runtime.stage="crops";runtime.render(host)
+        self.addCleanup(runtime.close)
+        for stage in ("crops","structures","export","crops","structures","export"):
+            runtime._select(stage);self.pump()
+            self.assertEqual(ident,self.project.current_selection()["specimen_id"])
+            if stage=="crops":
+                self.assert_selected_row_visible(runtime._workspace.plate_list.canvas)
+                self.assertEqual("AB-001",runtime._workspace.crop_value.cget("text"))
+            elif stage=="structures":
+                self.assert_selected_row_visible(runtime._workspace.specimen_list.canvas)
+                self.assertEqual("AB-001",runtime._workspace.specimen_value.cget("text"))
+            else:
+                def descendants(widget):
+                    for child in widget.winfo_children():
+                        yield child
+                        yield from descendants(child)
+                tree=next(w for w in descendants(self.host) if isinstance(w,ttk.Treeview))
+                self.assertEqual((ident,),tree.selection());self.assertTrue(tree.bbox(ident))
+                self.assertEqual("AB-001",tree.set(ident,"fish"))
+
+    def test_specimen_dialog_saves_text_and_shows_invalid_input_inline(self):
+        from app.ui.specimen_id_dialog import SpecimenIDDialog
+        workspace=XRayCropWorkspace(self.host,self.project);self.pump()
+        old=workspace.session.selected_id
+        def operate():
+            dialog=next(w for w in self.root.winfo_children() if isinstance(w,SpecimenIDDialog))
+            dialog.value.set("");dialog.ok()
+            self.assertTrue(dialog.winfo_exists());self.assertIn("Enter a specimen ID",dialog.error.cget("text"))
+            dialog.value.set("AB-001");dialog.ok()
+        self.root.after(100,operate)
+        workspace._edit_specimen_id();self.pump()
+        self.assertEqual("AB-001",specimen_display_id(self.project.specimen(old)))
+        self.assertEqual("AB-001",workspace.crop_value.cget("text"))
+        def cancel():
+            dialog=next(w for w in self.root.winfo_children() if isinstance(w,SpecimenIDDialog))
+            dialog.value.set("Unsaved");dialog.cancel()
+        self.root.after(100,cancel);workspace._edit_specimen_id();self.pump()
+        self.assertEqual("AB-001",specimen_display_id(self.project.specimen(old)))
+
+    def test_selection_idle_callback_is_cancelled_when_view_closes(self):
+        from app.photo_list import PhotoListCanvas
+        canvas=PhotoListCanvas(self.host);canvas.pack()
+        canvas.set_rows([{"text":str(i)} for i in range(50)])
+        canvas.selection_set(49);canvas.reveal_selection();canvas.destroy();self.pump()
+
+    def test_hub_caps_layout_at_reference_size_and_preserves_artwork(self):
+        from app.ui.module_hub import ModuleHub, _HUB_MAX_SIZE
+        from app.extensions.builtins import module_registry
+        from app.ui.icons import tk_icon
+        images=[Path(__file__).resolve().parents[1]/"app/resources/module_covers"/name for name in ("landmarks.png","xray_traits.png")]
+        before=[hashlib.sha256(path.read_bytes()).digest() for path in images]
+        shell=SimpleNamespace(tip=Tooltip(self.root),open_module=Mock(),show_about=Mock(),
+            ui_icon=lambda name,size:tk_icon(self.root,name,size),
+            control_button=lambda parent,text,command,help_text:ttk.Button(parent,text=text,command=command))
+        hub=ModuleHub(shell,self.host,module_registry());hub.render()
+        for size in ("1600x900","1920x1080"):
+            self.root.geometry(size+"+0+0");self.pump()
+            self.assertEqual(_HUB_MAX_SIZE,(hub.content.winfo_width(),hub.content.winfo_height()))
+            stage=hub.content.master
+            self.assertLessEqual(abs(hub.content.winfo_x()-(stage.winfo_width()-hub.content.winfo_width())/2),1)
+        self.root.geometry("980x650+0+0");self.pump()
+        self.assertEqual((980,650),(hub.content.winfo_width(),hub.content.winfo_height()))
+        self.assertEqual(before,[hashlib.sha256(path.read_bytes()).digest() for path in images])
 
 
 if __name__=="__main__":unittest.main()

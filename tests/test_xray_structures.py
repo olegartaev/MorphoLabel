@@ -580,7 +580,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertNotIn("Specimen image / annotation canvas",module)
         self.assertNotIn("Structures to mark",ui)
         self.assertIn("trait_rows()",module)
-        self.assertIn("self.specimen_list.select(specimen_id,reveal=False)",ui)
+        self.assertIn("self.specimen_list.select(specimen_id,reveal=True)",ui)
         self.assertNotIn("self.selected_specimen_id=row[\"specimen_id\"];self.on_select(row[\"specimen_id\"]);self.refresh(preserve_scroll=True)",ui)
         self.assertIn("preferred_plate=next((row[\"specimen_id\"] for row in rows if row[\"image_id\"]==self.preferred_image_id),None)",ui)
         self.assertIn("elif self.preferred_image_id:target=preferred_plate if preferred_plate in ids else None",ui)
@@ -631,7 +631,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         ui=(root/"app/xray_structures_ui.py").read_text(encoding="utf-8")
         for text in ('"Complete"','"Partial"','"Not visible"','"Absent"',"_VISIBILITY_SYMBOLS","_marker_visibility_buttons","StatusChip.TLabel"):
             self.assertIn(text,ui)
-        self.assertIn('build_context_row(context,("Sample","Plate","Specimen №"))',ui)
+        self.assertIn('build_context_row(context,("Sample","Plate","Specimen"))',ui)
         self.assertIn('self.locality_value.configure(text=values["locality"])',ui)
         self.assertIn('self.context_label.configure(text=values["plate"])',ui)
         self.assertIn('self.specimen_value.configure(text=values["specimen"])',ui)
@@ -668,7 +668,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn("self._source_cache_id",ui)
         self.assertIn("source=self._source_for(item[\"image_id\"])",ui)
         self.assertIn("self.project.orientation_policy",ui)
-        self.assertIn("align_top=False",ui)
+        self.assertIn("self.canvas.reveal_selection()",ui)
 
     def test_shared_role_ui_uses_context_menu_badges_and_preserves_right_drag_pan(self):
         root=Path(__file__).resolve().parents[1]
@@ -713,7 +713,7 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertNotIn(".save(",ui)
         self.assertIn("draw_xray_marker",ui)
         self.assertIn('self.canvas.move(f"annotation:{self._drag_annotation}"',ui)
-        self.assertIn("| specimen {int(row.get('ordinal') or 0)}",ui)
+        self.assertIn("| specimen {specimen_display_id(row)}",ui)
         self.assertIn('"number":str(int(row.get("workflow_no") or index+1))',ui)
         self.assertNotIn('text="Delete"',ui)
         self.assertNotIn("Wheel = zoom · right-drag = pan",ui)

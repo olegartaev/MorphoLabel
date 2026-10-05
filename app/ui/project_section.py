@@ -30,7 +30,17 @@ def sorted_project_samples(rows, column="sample", descending=False):
 
 class ProjectSection(SectionView):
  def render(self):
-  host=self.frame(padding=(18,12));host.pack(fill="both",expand=True);project=self.context.project
+  viewport=self.frame();viewport.pack(fill="both",expand=True)
+  canvas=tk.Canvas(viewport,highlightthickness=0,background=ttk.Style(viewport).lookup("TFrame","background") or "#f0f0f0")
+  scroll=ttk.Scrollbar(viewport,orient="vertical",command=canvas.yview)
+  canvas.configure(yscrollcommand=scroll.set);canvas.pack(side="left",fill="both",expand=True);scroll.pack(side="right",fill="y")
+  host=ttk.Frame(canvas,padding=(18,12));window=canvas.create_window((0,0),window=host,anchor="nw")
+  self.scroll_canvas=canvas
+  def layout(_event=None):
+   canvas.itemconfigure(window,width=max(1,canvas.winfo_width()))
+   canvas.configure(scrollregion=canvas.bbox("all"))
+  canvas.bind("<Configure>",layout);host.bind("<Configure>",layout)
+  project=self.context.project
   if not project:
    ttk.Label(host,text="Project",style="PageTitle.TLabel").pack(anchor="w")
    ttk.Label(host,text="Create a project or open an existing portable MorphoLabel project.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(3,16))
@@ -47,16 +57,21 @@ class ProjectSection(SectionView):
   # Project identity is deliberately a separate full-width strip. Opening or
   # creating a project changes the whole workspace; the cards below edit that
   # project's settings and therefore must not look like peer actions.
+  def path_label(parent,text,style="Muted.TLabel"):
+   label=ttk.Label(parent,text=str(text),style=style,wraplength=320)
+   label.pack(anchor="w",fill="x",pady=(2,8))
+   label.bind("<Configure>",lambda event:label.configure(wraplength=max(120,event.width)))
+   return label
   project_box=ttk.LabelFrame(content,text="Current project",padding=14,style="ProjectIdentity.TLabelframe",borderwidth=2,relief="groove");project_box.grid(row=0,column=0,columnspan=2,sticky="ew",padx=4,pady=(4,12))
-  ttk.Label(project_box,text=str(project.config.get("name",project.root.name)),style="SectionTitle.TLabel").pack(anchor="w")
-  ttk.Label(project_box,text=str(project.root),style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,8))
+  path_label(project_box,project.config.get("name",project.root.name),"SectionTitle.TLabel")
+  path_label(project_box,project.root)
   actions=ttk.Frame(project_box);actions.pack(anchor="w")
   self.button(actions,"Open",self.shell.open_project,"Open another project in this same MorphoLabel window.").pack(side="left")
   self.button(actions,"New project...",self.shell.new_project,"Create another MorphoLabel project.").pack(side="left",padx=(6,0))
 
   source=ttk.LabelFrame(content,text="Source photos",padding=10);source.grid(row=1,column=0,sticky="nsew",padx=(4,6),pady=(0,7))
   ttk.Label(source,text="Photo folder",style="SectionTitle.TLabel").pack(anchor="w")
-  ttk.Label(source,text=str(project.source_root),style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,8))
+  path_label(source,project.source_root)
   actions=ttk.Frame(source);actions.pack(anchor="w")
   self.button(actions,"Change folder...",self.shell.relink_source,"Choose the photo folder and safely match it to the existing catalog.").pack(side="left")
   self.button(actions,"Rescan for images",self.shell.add_samples,"Scan the source photo folder for new samples/images. Existing project work is preserved.").pack(side="left",padx=(6,0))
@@ -90,7 +105,7 @@ class ProjectSection(SectionView):
   samples=ttk.LabelFrame(lower,text="Samples",padding=8);samples.grid(row=0,column=0,sticky="nsew",padx=(0,7))
   samples.rowconfigure(1,weight=1);samples.columnconfigure(0,weight=1)
   ttk.Label(samples,text=f"{len(sample_rows)} samples · click a column title to sort",style="Muted.TLabel").grid(row=0,column=0,columnspan=2,sticky="w",pady=(0,5))
-  columns=("sample","images","calibrated");table=ttk.Treeview(samples,columns=columns,show="headings",selectmode="browse",height=14)
+  columns=("sample","images","calibrated");table=ttk.Treeview(samples,columns=columns,show="headings",selectmode="browse",height=6)
   labels={"sample":"Sample","images":"Images","calibrated":"Calibration"}
   table.column("sample",width=330,stretch=True,anchor="w");table.column("images",width=72,stretch=False,anchor="e");table.column("calibrated",width=96,stretch=False,anchor="center")
   table.tag_configure("alternate",background="#f7f7f7")
@@ -119,4 +134,20 @@ class ProjectSection(SectionView):
    block=ttk.Frame(overview,padding=(4,3));block.grid(row=index//2,column=index%2,sticky="nsew",padx=(0 if index%2==0 else 8,0),pady=(0,8))
    ttk.Label(block,text=value,font=("Segoe UI",17,"bold")).pack(anchor="w")
    ttk.Label(block,text=label,style="Muted.TLabel").pack(anchor="w")
+
+  def wheel(event):
+   canvas.yview_scroll(-1 if event.delta>0 else 1,"units");return "break"
+  def reveal(event):
+   top=event.widget.winfo_rooty()-host.winfo_rooty();bottom=top+event.widget.winfo_height()
+   visible=canvas.canvasy(0);height=canvas.winfo_height();total=max(1,host.winfo_height())
+   if top<visible:canvas.yview_moveto(top/total)
+   elif bottom>visible+height:canvas.yview_moveto((bottom-height)/total)
+  def bind_navigation(widget):
+   # Keep the sample table's own wheel behavior and release all callbacks with
+   # this view, without adding bindings to the durable application root.
+   if not isinstance(widget,(ttk.Treeview,ttk.Scrollbar)):
+    widget.bind("<MouseWheel>",wheel,add="+")
+   widget.bind("<FocusIn>",reveal,add="+")
+   for child in widget.winfo_children():bind_navigation(child)
+  bind_navigation(host)
 

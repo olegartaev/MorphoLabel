@@ -135,7 +135,7 @@ class ExtensionArchitectureTests(unittest.TestCase):
                 runtime.context.project=object()
                 with patch.object(runtime,"show_model_transfer") as models:
                     entries=runtime.standard_menu_entries()
-                    self.assertEqual("AI model transfer...",entries[0]["label"])
+                    self.assertEqual("Import / export models…",entries[0]["label"])
                     self.assertEqual("normal",entries[0]["state"])
                     entries[0]["command"]();models.assert_called_once()
                 shell.show_module_hub()

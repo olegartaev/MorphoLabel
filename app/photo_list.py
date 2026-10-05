@@ -2,6 +2,7 @@
 from __future__ import annotations
 import tkinter as tk
 from app.ui.tooltips import place_popup
+from app.ui.tk_lifecycle import after_idle_for_widget
 
 class PhotoListCanvas(tk.Canvas):
  row_height=24
@@ -18,6 +19,11 @@ class PhotoListCanvas(tk.Canvas):
  def set_row(self,index,row):
   if 0<=index<len(self.rows):self.rows[index]=row;self._draw()
  def curselection(self):return self._selection
+ def reveal_selection(self,align_top=False):
+  """Reveal once now and once after the new section's geometry has settled."""
+  def reveal():
+   if self._selection:self.see(self._selection[0],align_top=align_top)
+  reveal();after_idle_for_widget(self,reveal)
  def selection_clear(self,_first,_last=None):self._selection=();self._draw()
  def selection_set(self,index,_last=None):
   if self.rows:self._selection=(max(0,min(int(index),len(self.rows)-1)),);self._draw()

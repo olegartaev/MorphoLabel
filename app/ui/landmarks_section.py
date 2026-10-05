@@ -201,7 +201,7 @@ class LandmarksSection(SectionView):
   controls.relayout()
   self.shell.build_queue_navigation(header)
   batch=tk.IntVar(value=24);prediction=tk.IntVar(value=24)
-  guide='Why: Landmarks turns specimen anatomy into comparable point coordinates for morphometric analysis.\n\n1. Human Repeatability\nOptional. Mark the same control images twice, with a break between passes, to estimate your own placement error.\n\n2. Training data\nMark every required point or choose Mark missing. Use Verify & Next to finish each image.\n\n3. Train model\nTrain from all human-verified images. Choose Bootstrap for the first model or a saved model as the parent.\n\n4. Predict & review\nPredict only unresolved images. Yellow images already have complete AI landmark sets and belong in Review AI predictions. Verify & Next confirms each reviewed image. Final data QC is a separate post-verification audit of human-verified landmark sets.'
+  guide='Landmarks describe shape for geometric morphometrics (GM) and provide points for measurements.\n\n1. Check your consistency (optional)\nHuman Repeatability lets you mark the same control images twice, with a break, to estimate placement error.\n\n2. Place and verify points\nMark each required landmark. Use Mark missing if it cannot be seen. Verify & Next confirms an image and moves on.\n\n3. Train AI\nUse verified images to teach a model. Choose Bootstrap for your first model, or a saved model to improve it.\n\n4. Review AI suggestions\nPredict images that need landmarks. Yellow means the AI points need checking: open Review AI predictions, correct them, then Verify & Next. Final data QC checks already verified annotations for possible mistakes.'
   dock=self.workflow_dock(panel,help_title='Landmarks — quick guide',help_text=guide);dock.grid(row=2,column=0,sticky='ew',pady=(2,0))
 
   repeat_run=current_run(self.context.project)
@@ -248,7 +248,8 @@ class LandmarksSection(SectionView):
   self.button(train_actions,'Models…',lambda:self.shell.show_models('landmark'),'Compare and select saved Landmark models.').pack(side='left')
 
   four=dock.add_card('4. Predict & review',icon='landmark_apply',help_text='Run AI prediction, review the saved results, then perform final data QC.')
-  batch_row=ttk.Frame(four);batch_row.grid(row=0,column=0,sticky='w')
+  four.columnconfigure(0,weight=1)
+  batch_row=ttk.Frame(four);batch_row.grid(row=0,column=0,sticky='ew')
   ttk.Label(batch_row,text='Next batch').pack(side='left')
   ttk.Spinbox(batch_row,from_=1,to=500,textvariable=prediction,width=5).pack(side='left',padx=(4,0))
   ttk.Label(batch_row,text='images',style='Muted.TLabel').pack(side='left',padx=(4,0))
@@ -257,9 +258,9 @@ class LandmarksSection(SectionView):
   prediction_models=tuple(item['model_id'] for item in parents)
   self.prediction_model_choice=tk.StringVar(master=four,value=active.get('model_id',''))
   self.prediction_model_box=ttk.Combobox(batch_row,textvariable=self.prediction_model_choice,values=prediction_models,width=model_selector_width(prediction_models),state='readonly' if prediction_models else 'disabled')
-  self.prediction_model_box.pack(side='left',padx=(4,0));self.prediction_model_box.bind('<<ComboboxSelected>>',self._activate_prediction_model)
+  self.prediction_model_box.pack(side='left',fill='x',expand=True,padx=(4,0));self.prediction_model_box.bind('<<ComboboxSelected>>',self._activate_prediction_model)
   self.shell.tip.bind(self.prediction_model_box,'Active Landmark model used by Predict current, Predict next batch and Predict all. Choosing a model makes it active immediately.')
-  predict_actions=ttk.Frame(four);predict_actions.grid(row=1,column=0,sticky='w',pady=(3,0))
+  predict_actions=FlowRow(four);predict_actions.grid(row=1,column=0,sticky='ew',pady=(3,0))
   prediction_state='normal' if active else 'disabled'
   self.predict_current_button=self.button(
    predict_actions,'Predict current',self.predict_current,

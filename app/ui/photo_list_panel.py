@@ -41,7 +41,10 @@ class PhotoListPanel(ttk.Frame):
   tooltip.bind(self.locality_entry,'Find images in a sample.');tooltip.bind(self.image_entry,'Find an image by its filename.')
   self._build_legend()
   list_host=ttk.Frame(self);list_host.pack(fill='both',expand=True);self.canvas=PhotoListCanvas(list_host,height=24,bg='white');self.scrollbar=ttk.Scrollbar(list_host,orient='vertical',command=self.canvas.yview);self.canvas.configure(yscrollcommand=self.scrollbar.set);self.canvas.pack(side='left',fill='both',expand=True);self.scrollbar.pack(side='right',fill='y');self.canvas.bind('<<ListboxSelect>>',self._selected);self.visible_indices=[];self._cache=()
-  action=ttk.Frame(self,padding=(0,5,0,0));action.pack(fill='x');self.exclude_button=ttk.Button(action,text='Exclude',image=self._action_icon('exclude'),compound='left',style='Icon.TButton',command=self.exclude_or_restore);self.exclude_button.pack(side='left');tooltip.bind(self.exclude_button,'Exclude this image from active workflows and review queues without deleting its scientific data. Restore keeps the data but does not silently re-add the image to a finite review queue.')
+  action=ttk.Frame(self,padding=(0,5,0,0));action.pack(fill='x');self.exclude_button=ttk.Button(action,text='Exclude',image=self._action_icon('exclude'),compound='left',style='Icon.TButton',command=self.exclude_or_restore);self.exclude_button.pack(side='left');tooltip.bind(self.exclude_button,'Skip this image in analysis. Its data are kept. Use Restore to include it again.')
+  options=ttk.Frame(action);options.pack(side='right')
+  show=ttk.Checkbutton(options,text='Show excluded',variable=self.show_excluded);show.pack(side='left');self.tooltip.bind(show,'Include excluded images in the list.')
+
   for variable in (self.image_query,self.locality_query,self.show_excluded):trace_for_widget(self,variable,'write',lambda *_:self.refresh())
  def _action_icon(self,name):
   key=(name,CONTROL_ICON_SIZE)
@@ -56,8 +59,6 @@ class PhotoListPanel(ttk.Frame):
   ttk.Label(meta,text=' crop applied',style='Muted.TLabel').pack(side='left',padx=(0,7))
   ttk.Label(meta,text='×').pack(side='left')
   ttk.Label(meta,text=' excluded',style='Muted.TLabel').pack(side='left')
-  options=ttk.Frame(legend);options.pack(fill='x',pady=(2,0))
-  show=ttk.Checkbutton(options,text='Show excluded',variable=self.show_excluded);show.pack(side='left');self.tooltip.bind(show,'Include excluded images in the list.')
 
   states=ttk.Frame(legend);states.pack(fill='x',pady=(2,0))
   for color,text in (('#d93025',' unresolved'),('#e6a700',' review'),('#188038',' verified')):
@@ -91,7 +92,7 @@ class PhotoListPanel(ttk.Frame):
    self.refresh(preserve_scroll=not reveal)
   if self.context.selected in self.visible_indices:
    visible=self.visible_indices.index(self.context.selected);self.canvas.selection_set(visible)
-   if reveal:self.canvas.see(visible,align_top=align_top)
+   if reveal:self.canvas.reveal_selection(align_top=align_top)
  def _selected(self,_event=None):
   selection=self.canvas.curselection()
   if selection and 0<=selection[0]<len(self.visible_indices):

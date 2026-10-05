@@ -22,11 +22,14 @@ CANVAS = "#202020"
 
 def build_context_row(parent,fields):
     """Create one readable left-aligned context row and return its value labels."""
+    from .tooltips import Tooltip
     row=ttk.Frame(parent);values={}
+    tip=Tooltip(parent.winfo_toplevel(),owner=row);row.context_tooltip=tip
     for index,key in enumerate(tuple(fields)):
         ttk.Label(row,text=f"{key}:",style="ContextKey.TLabel").pack(side="left",padx=(0 if index==0 else 14,0))
         value=ttk.Label(row,text="—",style="ContextValue.TLabel",anchor="w")
         value.pack(side="left",padx=(4,0));values[str(key)]=value
+        tip.bind(value,lambda label=value:label.cget("text"))
     return row,values
 
 

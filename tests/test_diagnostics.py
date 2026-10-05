@@ -75,7 +75,7 @@ class DiagnosticBundleTests(unittest.TestCase):
 
     def test_shell_exposes_manual_and_automatic_diagnostic_paths(self):
         source=(Path(__file__).resolve().parents[1]/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
-        self.assertIn('label="Create diagnostic report..."', source)
+        self.assertIn('label="Create diagnostic report…"', source)
         self.assertIn("def report_callback_exception", source)
         self.assertIn("create_diagnostic_bundle(shell=self)", source)
         self.assertIn("record_exception(type(exc),exc,exc.__traceback__)", source)

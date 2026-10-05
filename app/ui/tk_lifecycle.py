@@ -2,6 +2,21 @@
 import tkinter as tk
 
 
+def after_idle_for_widget(widget, callback):
+    """Run after layout; cancel the callback if its view is closed first."""
+    state={"job":None,"binding":None}
+    def run():
+        state["job"]=None
+        unbind_callback(widget,"<Destroy>",state["binding"])
+        callback()
+    def release(event):
+        if event.widget is widget and state["job"] is not None:
+            widget.after_cancel(state["job"]);state["job"]=None
+    state["binding"]=widget.bind("<Destroy>",release,add="+")
+    state["job"]=widget.after_idle(run)
+    return state["job"]
+
+
 def unbind_callback(widget, sequence, binding):
     # Tkinter in Python 3.11/early 3.12 clears the entire event even when a
     # function ID is supplied to unbind(). Durable shells share these events.
