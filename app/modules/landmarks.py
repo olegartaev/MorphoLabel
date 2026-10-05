@@ -665,6 +665,11 @@ class LandmarksRuntime(tk.Misc):
 
     def select(self,key):
         if not self.context.project and key != "project": return
+        if self.context.project and key != "project" and (not self.context.project.schema or self.context.project.schema_error):
+            messagebox.showwarning("Landmark scheme required", "A landmark scheme must be created/applied before continuing.\n\nIn Project, choose Create scheme… or Edit scheme… and apply a valid scheme.", parent=self)
+            if self.context.section != "project":
+                self.context.section="project";self.render()
+            return
         if key == "crop" and not self.context.crop_enabled(): key="landmarks"
         image_id=(self.context.current() or {}).get("image_id")
         self._align_selected_top_once=(key!=self.context.section)
@@ -731,7 +736,9 @@ class LandmarksRuntime(tk.Misc):
         project=self.context.project
         if not project: return
         from app.schema_editor import SchemaEditor
-        dialog=SchemaEditor(self,project.schema_path); center(self,dialog)
+        def applied():
+            self.context.refresh(force=True);self.context.invalidate_counts();self.render()
+        dialog=SchemaEditor(self,project.schema_path,project=project,on_apply=applied); center(self,dialog)
         dialog.bind("<Destroy>",lambda event,d=dialog: self._schema_closed(event,d), add="+")
 
 
@@ -1133,14 +1140,16 @@ class LandmarksRuntime(tk.Misc):
 
 
     def _export_model(self,kind):
-        target=filedialog.asksaveasfilename(parent=self,title=f"Export {kind.title()} model",defaultextension=".zip",filetypes=[("MorphoLabel model package","*.zip")])
+        from app.model_transfer import model_package_filename
+        target=filedialog.asksaveasfilename(parent=self,title=f"Export {kind.title()} model",initialfile=model_package_filename(self.context.project.active_model(kind),kind+"_model"),defaultextension=".zip",filetypes=[("MorphoLabel model package","*.zip")])
         if target:
             try: export_model_package(self.context.project,kind,target); messagebox.showinfo("AI Model Transfer",f"Saved: {target}",parent=self)
             except Exception as exc: messagebox.showerror("AI Model Transfer",str(exc),parent=self)
 
 
     def _import_model(self,kind):
-        source=filedialog.askopenfilename(parent=self,title=f"Import {kind.title()} model",filetypes=[("MorphoLabel model package","*.zip")])
+        from app.model_transfer import model_package_filename
+        source=filedialog.askopenfilename(parent=self,title=f"Import {kind.title()} model",initialfile=model_package_filename(self.context.project.active_model(kind),kind+"_model"),filetypes=[("MorphoLabel model package","*.zip")])
         if source:
-            try: model=import_model_package(self.context.project,source,kind); messagebox.showinfo("AI Model Transfer",f"Imported {kind} model: {model}",parent=self); self.render()
+            try: model=import_model_package(self.context.project,source,kind); self.context.project.set_active_model(kind,model); self.context.invalidate_counts(); messagebox.showinfo("AI Model Transfer",f"Imported and activated {kind} model: {model}",parent=self); self.render()
             except Exception as exc: messagebox.showerror("AI Model Transfer",str(exc),parent=self)

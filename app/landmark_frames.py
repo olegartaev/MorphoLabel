@@ -179,11 +179,12 @@ def restore_standardized_frame(project, image_id, crop=None):
     manifest_path=_standardized_manifest_path(target)
     if _standardized_cache_matches(project, image_id, crop, target, developed):
         return target, False
+    legacy_allowed=str(project.attributes_for_image(image_id).get("standardized_frame_legacy_adoption_forbidden","")).casefold()!="true"
     # One-way migration for valid old projects: if no manifest existed yet,
     # the standardized PNG is the right size and was written no earlier than
     # the current persisted Crop, it already represents that Crop. Trust it
     # and attach the new fingerprint instead of reopening a huge developed/RAW image.
-    if not manifest_path.exists() and _legacy_standardized_can_be_adopted(crop,target):
+    if legacy_allowed and not manifest_path.exists() and _legacy_standardized_can_be_adopted(crop,target):
         write_standardized_frame_manifest(project,image_id,crop,target=target,developed=developed)
         return target, False
     if not developed.is_file():
@@ -192,7 +193,7 @@ def restore_standardized_frame(project, image_id, crop=None):
         # did not exist when that frame was created. Exact transform size is
         # sufficient for this one-way migration when no developed source is
         # available to perform the stricter geometry check.
-        if _legacy_standardized_size_matches(crop,target):
+        if legacy_allowed and not manifest_path.exists() and _legacy_standardized_size_matches(crop,target):
             write_standardized_frame_manifest(project,image_id,crop,target=target,developed=developed)
             return target, False
         source = project.image_path(image_id)

@@ -167,10 +167,12 @@ class LandmarkCroppedFramesTests(unittest.TestCase):
         self.project.save_reviewed_crop(first, changed)
         self.assertTrue(self.project.landmark_crop_review_required(first))
         self.assertNotIn(first, v2_human_final_eligible_image_ids(self.project))
-        # A crop change without a provable preceding frame preserves the old
-        # points in corrections but makes their active coordinates unresolved.
+        # The persisted prior transform proves this frame. The DB authority
+        # preserves original biological positions even without a UI remap call.
         current = self.project.load_landmarks(first)
-        self.assertTrue(all(row["state"] == "unresolved" for row in current.values()))
+        for ident,row in current.items():
+            self.assertEqual(points[ident]["x_standardized"]-1,row["x_standardized"])
+            self.assertEqual(points[ident]["y_standardized"],row["y_standardized"])
         self.assertTrue(self.project.landmark_crop_review_required(first))
 
 

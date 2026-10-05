@@ -188,7 +188,11 @@ def train_project(project,seed=42,ridge=1.0,parent_model_id=None):
  X=np.asarray([cached[row['image_id']][0] for row in rows]);Y=np.asarray([_project_target(row,cached[row['image_id']][1],cached[row['image_id']][2]) for row in rows])
  A=np.c_[np.ones((len(train_i),1)),X[train_i]];weights=np.linalg.solve(A.T@A+ridge*np.eye(A.shape[1]),A.T@Y[train_i]);timings["ridge_solve_s"]=time.perf_counter()-solve_started;validation_started=time.perf_counter();metrics=_metrics(_predict_features(X[val_i],weights),Y[val_i]);metrics.update({"train_count":int(len(train_i)),"validation_count":int(len(val_i))});timings["validation_s"]=time.perf_counter()-validation_started
  write_started=time.perf_counter()
- existing=sorted(project.models_root.glob('crop_model_v[0-9][0-9][0-9]'));version=f"crop_model_v{len(existing)+1:03d}";directory=project.models_root/version;directory.mkdir(parents=True,exist_ok=False);np.savez_compressed(directory/'model.npz',weights=weights)
+ existing=sorted(project.models_root.glob('crop_model_v[0-9][0-9][0-9]'));number=len(existing)+1
+ # Imported artifacts live under models/crop/<id>, but IDs belong to the
+ # shared registry. Never reuse an imported parent's ID for its new child.
+ while project.model_metadata(f"crop_model_v{number:03d}") or (project.models_root/f"crop_model_v{number:03d}").exists():number+=1
+ version=f"crop_model_v{number:03d}";directory=project.models_root/version;directory.mkdir(parents=True,exist_ok=False);np.savez_compressed(directory/'model.npz',weights=weights)
  manifest={"model_id":version,"backend":"numpy_ridge_image_regression","input":"32x24 grayscale","output_schema":{"version":2,"fields":["x1","y1","x2","y2","sin_rotation","cos_rotation"],"rotation_convention":"PIL/CropModel positive counter-clockwise about image centre; normalized [-180,180)"},"training_examples":len(rows),"training_image_ids":[r['image_id'] for r in rows],"train_indices":train_i.tolist(),"validation_indices":val_i.tolist(),"seed":seed,"ridge":ridge,"feature_workers":config['workers'],"metrics":metrics,"created_at":datetime.now(timezone.utc).isoformat()};atomic_json_write(directory/'model_manifest.json',manifest)
  previous=(project.active_model('crop') or {}).get('model_id');lineage_parent=previous if parent_model_id is None else (str(parent_model_id) or None);image_ids=[r['image_id'] for r in rows];summary=project.crop_training_breakdown(previous,image_ids);all_metrics={**metrics,"training_examples":len(rows),"dataset_summary":summary};project.register_model(version,'crop',path=str(directory.relative_to(project.data_root)).replace('\\','/'),metrics=all_metrics,active=True,parent_model_id=lineage_parent);project.record_crop_training_membership(version,image_ids);log("GLOBAL","crop_training_dataset_summary","END",path=str(project.path),detail=" ".join(f"{k}={v}" for k,v in summary.items()));log("GLOBAL","crop_training_candidate_created","END",path=str(directory),detail=f"candidate_model_id={version} previous_active_model_id={previous} lineage_parent_model_id={lineage_parent} training_examples={len(rows)} source=project.sqlite")
  timings["model_write_register_s"]=time.perf_counter()-write_started;timings["total_s"]=time.perf_counter()-started_total
@@ -196,7 +200,8 @@ def train_project(project,seed=42,ridge=1.0,parent_model_id=None):
 
 def predict(image, *, image_id="UNKNOWN", model_id=None, project=None):
  """Existing crop inference with concise diagnostics; prediction semantics unchanged."""
- info=active_info();project_row=project.active_model("crop") if project is not None else None
+ info=active_info();project_row=(project.model_metadata(model_id) if model_id else project.active_model("crop")) if project is not None else None
+ if project_row and project_row.get("kind")!="crop":raise ValueError("Selected model is not a Crop model")
  if project is not None and project_row is None: model_id=None
  else: model_id=model_id or (project_row or {}).get("model_id") or info.get("model_id")
  if project_row: info={**info,"path":str(project.data_root/project_row["path"])}

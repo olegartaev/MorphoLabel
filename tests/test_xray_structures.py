@@ -701,8 +701,9 @@ class XRayStructureUIContractTests(unittest.TestCase):
         self.assertIn("Check results…",ui)
         self.assertNotIn('text="Visibility:"',ui)
         self.assertIn("standard_menu_entries",module)
-        self.assertIn("Import X-ray Structure AI…",module)
-        self.assertIn("Export active X-ray Structure AI…",module)
+        self.assertIn('"Import / export AI models…"',module)
+        self.assertIn('"X-ray Crop model"',module)
+        self.assertIn('"X-ray Structure model"',module)
         self.assertIn("standard_menu_entries",shell)
 
     def test_structures_ui_renders_oriented_crop_without_project_image_copy(self):

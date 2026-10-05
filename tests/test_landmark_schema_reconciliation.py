@@ -98,6 +98,7 @@ class LandmarkSchemaReconciliationTests(unittest.TestCase):
 
     def test_canvas_places_explicit_selected_unresolved_landmark(self):
         canvas = LandmarkCanvasController.__new__(LandmarkCanvasController)
+        canvas.canvas = SimpleNamespace(focus_set=lambda:None)
         canvas.image = SimpleNamespace(width=100, height=100); canvas._points = {}; canvas.image_id = self.image_id
         canvas.state = SimpleNamespace(unresolved_ids=frozenset({1, 2, 3, 4}))
         canvas.operator_state = EditorState(point_ids=(1, 2, 3, 4)); canvas.operator_state.select(3)

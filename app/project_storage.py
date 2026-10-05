@@ -321,6 +321,36 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
     for row in missing:
      c.execute("INSERT INTO landmark_schema(landmark_id,abbr,name) VALUES (?,?,?)",(next_key,str(row["abbr"]),str(row["name"])));next_key+=1
   return True
+ def apply_landmark_schema(self,path):
+  """Explicit scheme application; abbreviations remain the persisted identity.
+
+  Removed abbreviations stay in SQLite/history, new ones get new persistent
+  keys. A changed target order/role invalidates verification, never maps points.
+  """
+  path=Path(path);chosen=load_schema(path)
+  if not chosen:raise ValueError("Create at least one valid landmark before applying the scheme.")
+  previous=list(self.schema);before=self.schema_path.read_bytes();payload=path.read_bytes()
+  if before==payload:return False
+  backup=schema_migration_backup(self)
+  staged=self.schema_path.with_suffix(".csv.applying")
+  try:
+   staged.write_bytes(payload);staged.replace(self.schema_path)
+   self._schema_cache=None;self._schema_cache_signature=None;self._schema_error=None
+   self.reconcile_landmark_schema();self._sync_schema_hash_metadata()
+   semantic=lambda rows:tuple((row["abbr"],row.get("role","BOTH")) for row in rows)
+   if semantic(previous)!=semantic(chosen):
+    stamp=now()
+    with self.transaction() as c:
+     ids=[row[0] for row in c.execute("SELECT DISTINCT image_id FROM landmarks")]
+     for ident in ids:
+      c.execute("INSERT INTO corrections(image_id,landmark_id,kind,previous_json,accepted_json,created_at) VALUES (?,?,?,?,?,?)",(ident,None,"landmark_scheme_applied",json.dumps({"schema":previous}),json.dumps({"schema":chosen,"backup":str(backup.relative_to(self.root)),"mapping":"persistent_abbreviation_identity"}),stamp))
+      c.execute("INSERT INTO image_review(image_id,human_verified,updated_at) VALUES (?,?,?) ON CONFLICT(image_id) DO UPDATE SET human_verified=0,updated_at=excluded.updated_at",(ident,0,stamp))
+      c.execute("INSERT INTO image_attributes(image_id,attribute_key,value,updated_at) VALUES (?,?,?,?) ON CONFLICT(image_id,attribute_key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",(ident,"landmark_scheme_review_required","true",stamp))
+   return True
+  except Exception:
+   self.schema_path.write_bytes(before);self._schema_cache=None;self._schema_cache_signature=None;self._sync_schema_hash_metadata();raise
+  finally:
+   if staged.exists():staged.unlink()
  def _persistent_landmark_id(self, connection, abbr):
   row=connection.execute("SELECT landmark_id FROM landmark_schema WHERE abbr=?",(str(abbr),)).fetchone()
   if not row: raise ValueError(f"Persistent landmark identity is missing for abbreviation {abbr!r}; reopen the project to reconcile its schema.")
@@ -425,7 +455,7 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
   from .landmark_state import landmark_needs_ai_review
   pending_ai=any(landmark_needs_ai_review(row) for row in rows.values())
   with self.transaction() as c:
-   crop_review=c.execute("SELECT 1 FROM image_attributes WHERE image_id=? AND attribute_key='landmark_crop_review_required' AND lower(value)='true'",(image_id,)).fetchone()
+   crop_review=c.execute("SELECT 1 FROM image_attributes WHERE image_id=? AND attribute_key IN ('landmark_crop_review_required','landmark_scheme_review_required') AND lower(value)='true'",(image_id,)).fetchone()
    if crop_review or pending_ai:return False
    c.execute("INSERT INTO image_review(image_id,human_verified,updated_at) VALUES (?,?,?) ON CONFLICT(image_id) DO UPDATE SET human_verified=1,updated_at=excluded.updated_at",(image_id,1,now()))
   return True
@@ -449,7 +479,7 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
     if row["image_id"] not in by_image or row["landmark_abbr"] not in required:continue
     item=dict(row);by_image[row["image_id"]][row["landmark_abbr"]]=item
     if landmark_needs_ai_review(item):pending_ai.add(row["image_id"])
-   crop_review={row["image_id"] for row in c.execute("SELECT image_id FROM image_attributes WHERE attribute_key='landmark_crop_review_required' AND lower(value)='true'")}
+   crop_review={row["image_id"] for row in c.execute("SELECT image_id FROM image_attributes WHERE attribute_key IN ('landmark_crop_review_required','landmark_scheme_review_required') AND lower(value)='true'")}
    blocked=crop_review|pending_ai;stamp=now()
    for image_id,rows in by_image.items():
     if image_id in blocked or existing_review.get(image_id)==1:continue
@@ -484,13 +514,14 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
   with self.transaction() as c:
    for ident,row in snapshot.items(): c.execute("UPDATE landmarks SET x_standardized=?,y_standardized=?,state=?,provenance=?,reviewed=?,updated_at=? WHERE image_id=? AND landmark_id=?",(row['x_standardized'],row['y_standardized'],row['state'],row['provenance'],row['reviewed'],now(),image_id,int(ident)))
    c.execute("INSERT INTO image_review(image_id,human_verified,updated_at) VALUES (?,?,?) ON CONFLICT(image_id) DO UPDATE SET human_verified=excluded.human_verified,updated_at=excluded.updated_at",(image_id,int(human_verified),now()))
- def remap_landmarks_for_transform(self,image_id,old_transform,new_transform):
+ def remap_landmarks_for_transform(self,image_id,old_transform,new_transform,*,_connection=None):
   """Atomically move mutable standardized coordinates through a transform change."""
   from .transforms import Transform
   import math
   def coerce(value): return value if isinstance(value,Transform) else Transform(**value)
   new_transform=coerce(new_transform);old_transform=coerce(old_transform) if old_transform is not None else None
-  with self.transaction() as c:
+  from contextlib import nullcontext
+  with (nullcontext(_connection) if _connection is not None else self.transaction()) as c:
    rows=[dict(row) for row in c.execute("SELECT * FROM landmarks WHERE image_id=? ORDER BY landmark_id",(image_id,))]
    needs_old=any((row["x_standardized"] is not None and row["y_standardized"] is not None) or (row["predicted_x"] is not None and row["predicted_y"] is not None) for row in rows)
    if needs_old and old_transform is None: raise ValueError("Cannot safely remap landmarks: previous crop transform is unavailable.")
@@ -500,7 +531,7 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
     original=old_transform.standardized_to_original(float(x),float(y));return new_transform.original_to_standardized(*original)
    for row in rows:
     current_x,current_y=row["x_standardized"],row["y_standardized"];pred_x,pred_y=remap_pair(row["predicted_x"],row["predicted_y"]) if old_transform is not None else (row["predicted_x"],row["predicted_y"])
-    state=row["state"];reviewed=row["reviewed"]
+    state=row["state"];reviewed=0
     if state!="missing" and current_x is not None and current_y is not None:
      present_before+=1;x,y=remap_pair(current_x,current_y)
      if not (math.isfinite(x) and math.isfinite(y) and 0<=x<new_transform.output_width and 0<=y<new_transform.output_height):
@@ -538,8 +569,28 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
   """A changed scientific frame never silently keeps checked landmarks."""
   old=connection.execute("SELECT crop_json,transform_json,rotation_degrees FROM crops WHERE image_id=?",(image_id,)).fetchone()
   rows=[dict(row) for row in connection.execute("SELECT * FROM landmarks WHERE image_id=? ORDER BY landmark_id",(image_id,))]
-  if self._same_crop_frame(old,crop) or not rows:return {"legacy_landmarks_invalidated":False}
+  same=self._same_crop_frame(old,crop)
+  if old and not same:
+   # An old PNG without a fingerprint cannot be adopted as this NEW frame,
+   # even when dimensions and rounded file timestamps happen to agree.
+   connection.execute("INSERT INTO image_attributes(image_id,attribute_key,value,updated_at) VALUES (?,?,?,?) ON CONFLICT(image_id,attribute_key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",(image_id,"standardized_frame_legacy_adoption_forbidden","true",now()))
+  if same or not rows:return {"legacy_landmarks_invalidated":False}
   stamp=now()
+  # The persisted transform proves the old landmark frame, independently of
+  # which UI/API saved Crop. Remap and Crop update share this transaction.
+  remap=None
+  if old and old["transform_json"]:
+   from .transforms import Transform
+   try:
+    prior=Transform(**json.loads(old["transform_json"]));current=Transform(**crop["transform"])
+    import math
+    valid=all(math.isfinite(float(v)) for t in (prior,current) for v in (t.rotation_degrees,t.center_x,t.center_y,t.crop_left,t.crop_top,t.original_width,t.original_height,t.output_width,t.output_height))
+    valid=valid and prior.version==current.version=="affine_crop_v1" and (prior.original_width,prior.original_height)==(current.original_width,current.original_height) and min(prior.output_width,prior.output_height,current.output_width,current.output_height)>0
+   except (TypeError,ValueError,KeyError):valid=False
+   if valid:
+    remap=self.remap_landmarks_for_transform(image_id,prior,current,_connection=connection)
+    previous_frame_proven=True
+   else:previous_frame_proven=False
   if not previous_frame_proven:
    review=connection.execute("SELECT human_verified FROM image_review WHERE image_id=?",(image_id,)).fetchone()
    snapshot={"reason":"previous_landmark_frame_unknown_before_crop_change","landmarks":rows,"human_verified":int(review["human_verified"]) if review else 0}
@@ -551,7 +602,7 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
   connection.execute("UPDATE landmarks SET reviewed=0 WHERE image_id=? AND (provenance=? OR model_id IS NOT NULL OR prediction_run_id IS NOT NULL)",(image_id,"machine"))
   connection.execute("INSERT INTO image_review(image_id,human_verified,updated_at) VALUES (?,?,?) ON CONFLICT(image_id) DO UPDATE SET human_verified=0,updated_at=excluded.updated_at",(image_id,0,stamp))
   connection.execute("INSERT INTO image_attributes(image_id,attribute_key,value,updated_at) VALUES (?,?,?,?) ON CONFLICT(image_id,attribute_key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",(image_id,"landmark_crop_review_required","true",stamp))
-  return {"legacy_landmarks_invalidated":False}
+  return {"legacy_landmarks_invalidated":False,"landmarks_remapped":remap is not None,**(remap or {})}
 
  def landmark_crop_review_required(self,image_id):
   with self.transaction() as c: row=c.execute("SELECT value FROM image_attributes WHERE image_id=? AND attribute_key='landmark_crop_review_required'",(image_id,)).fetchone()
@@ -1055,7 +1106,7 @@ ORDER BY l.image_id""",active).fetchall()
    payload={"image_id":str(image_id),"batch_id":None if batch_id is None else str(batch_id),"prediction_run_ids":run_ids,"model_ids":model_ids,"schema_sha256":schema_hash(self.schema_path),"schema_identity":list(identity),"state_fingerprint":fingerprint,"confirmed_at":stamp}
    c.execute("INSERT INTO image_review(image_id,human_verified,updated_at) VALUES (?,?,?) ON CONFLICT(image_id) DO UPDATE SET human_verified=excluded.human_verified,updated_at=excluded.updated_at",(image_id,1,stamp))
    c.execute("DELETE FROM annotation_drafts WHERE image_id=?",(image_id,))
-   c.execute("DELETE FROM image_attributes WHERE image_id=? AND attribute_key=?",(image_id,"landmark_crop_review_required"))
+   c.execute("DELETE FROM image_attributes WHERE image_id=? AND attribute_key IN ('landmark_crop_review_required','landmark_scheme_review_required')",(image_id,))
    existing=c.execute("SELECT payload_json FROM qc WHERE image_id=? AND kind=? ORDER BY qc_id DESC",(image_id,"landmark_ai_review_confirmation")).fetchall()
    if not any((json.loads(row["payload_json"]).get("state_fingerprint")==fingerprint) for row in existing):
     c.execute("INSERT INTO qc(image_id,kind,payload_json,created_at) VALUES (?,?,?,?)",(image_id,"landmark_ai_review_confirmation",json.dumps(payload,sort_keys=True),stamp))
@@ -1068,7 +1119,7 @@ ORDER BY l.image_id""",active).fetchall()
   with self.transaction() as c:
    c.execute("INSERT INTO image_review(image_id,human_verified,updated_at) VALUES (?,?,?) ON CONFLICT(image_id) DO UPDATE SET human_verified=excluded.human_verified,updated_at=excluded.updated_at",(image_id,1,now()))
    c.execute("DELETE FROM annotation_drafts WHERE image_id=?",(image_id,))
-   c.execute("DELETE FROM image_attributes WHERE image_id=? AND attribute_key='landmark_crop_review_required'",(image_id,))
+   c.execute("DELETE FROM image_attributes WHERE image_id=? AND attribute_key IN ('landmark_crop_review_required','landmark_scheme_review_required')",(image_id,))
  def clear_checked(self,image_id):
   with self.transaction() as c:c.execute("INSERT INTO image_review(image_id,human_verified,updated_at) VALUES (?,?,?) ON CONFLICT(image_id) DO UPDATE SET human_verified=0,updated_at=excluded.updated_at",(image_id,0,now()))
  def accept_review_warning(self,image_id,warning):
@@ -1127,7 +1178,7 @@ ORDER BY l.image_id""",active).fetchall()
   with self.transaction() as c:
    images=c.execute("SELECT i.*,COALESCE(r.human_verified,0) human_verified,EXISTS(SELECT 1 FROM locality_calibrations lc WHERE lc.locality_id=COALESCE(i.locality,i.sample_id)) calibrated,EXISTS(SELECT 1 FROM crops cr WHERE cr.image_id=i.image_id AND cr.crop_json IS NOT NULL AND cr.crop_json!='null' AND cr.transform_json IS NOT NULL AND cr.transform_json!='null' AND cr.provenance IN ('manual','ai_accepted','ai_corrected') AND COALESCE(cr.human_verified,0)=1) has_crop FROM images i LEFT JOIN image_review r ON r.image_id=i.image_id WHERE COALESCE(i.active,1)=1 ORDER BY locality COLLATE NOCASE,index_in_locality,relative_path").fetchall()
    image_ids={row["image_id"] for row in images}
-   review_required={row["image_id"] for row in c.execute("SELECT image_id FROM image_attributes WHERE attribute_key='landmark_crop_review_required' AND lower(value)='true'") if row["image_id"] in image_ids}
+   review_required={row["image_id"] for row in c.execute("SELECT image_id FROM image_attributes WHERE attribute_key IN ('landmark_crop_review_required','landmark_scheme_review_required') AND lower(value)='true'") if row["image_id"] in image_ids}
    grouped={image_id:{} for image_id in image_ids}
    for raw in c.execute("SELECT image_id,landmark_abbr,x_standardized,y_standardized,state,provenance,model_id,prediction_run_id,reviewed FROM landmarks"):
     image_id=raw["image_id"]

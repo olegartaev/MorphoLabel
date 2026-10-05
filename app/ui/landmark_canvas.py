@@ -18,7 +18,7 @@ class LandmarkCanvasController:
     def __init__(self, parent, context, changed, selection_changed=None):
         self.parent, self.context = parent, context
         self.changed, self.selection_changed = changed, selection_changed
-        self.canvas = tk.Canvas(parent, background="#202020", highlightthickness=0)
+        self.canvas = tk.Canvas(parent, background="#202020", highlightthickness=0, takefocus=True)
         self.canvas.pack(fill="both", expand=True)
         self._token = 0
         self._events = queue.Queue()
@@ -64,6 +64,7 @@ class LandmarkCanvasController:
             ("<ButtonRelease-1>", self.release), ("<Button-3>", self.pan_start),
             ("<B3-Motion>", self.pan_motion), ("<ButtonRelease-3>", lambda _e: setattr(self, "pan_drag", None)),
             ("<MouseWheel>", self.wheel), ("<Configure>", lambda _e: self.redraw_cached()),
+            ("<Delete>", self._delete_key),
         ):
             self.canvas.bind(event, handler)
         self.canvas.bind("<Destroy>", self.destroy, add="+")
@@ -424,6 +425,7 @@ class LandmarkCanvasController:
     def place(self, event):
         if not self.ready_for(self.image_id):
             return
+        self.canvas.focus_set()
         for ident, point in self._points.items():
             if point.get("state") == "missing" or point.get("x_standardized") is None:
                 continue
@@ -544,6 +546,12 @@ class LandmarkCanvasController:
         self._draw_overlays()
         self._sync_selection()
         self.changed()
+
+    def _delete_key(self, _event):
+        # Widget-local binding: Entries, Comboboxes and dialogs never reach it.
+        if self.ready_for(self.image_id):
+            self.delete_current()
+        return "break"
 
     clear_current = delete_current
 

@@ -13,12 +13,14 @@ ROLE_NAMES={"BT":"Both","GM":"Geometric morphometrics","CL":"Classical morphomet
 ROLE_FROM_NAME={v:k for k,v in ROLE_NAMES.items()}
 
 class SchemaEditor(tk.Toplevel):
- def __init__(self,parent,path=None):
+ def __init__(self,parent,path=None,*,project=None,on_apply=None):
   super().__init__(parent);apply_window_identity(self,short=True);self.geometry("760x520");self.path=Path(path) if path else None;self.rows=[];self.delimiter=";";self.dirty=False;self._editor=None;self._editor_row=None;self._editor_key=None
   namebar=ttk.Frame(self,padding=5);namebar.pack(fill="x")
   ttk.Label(namebar,text="Scheme name:").pack(side="left")
   self.scheme_name=tk.StringVar();ttk.Entry(namebar,textvariable=self.scheme_name,width=44).pack(side="left",padx=6);trace_for_widget(self,self.scheme_name,"write",lambda *_: setattr(self,"dirty",True))
   bar=ttk.Frame(self,padding=5);bar.pack(fill="x")
+  self.project=project;self.on_apply=on_apply
+  self.apply_button=ttk.Button(bar,text="Apply to this project",command=self.apply_to_project) if project is not None else None
   for text,cmd in (("New",self.new_schema),("Open...",self.open_schema),("Save",self.save),("Save As...",self.save_as)) : ttk.Button(bar,text=text,command=cmd).pack(side="left",padx=2)
   frame=ttk.Frame(self,padding=5);frame.pack(fill="both",expand=True)
   self.table=ttk.Treeview(frame,columns=("id","role","abbr","name"),show="headings",selectmode="browse")
@@ -37,10 +39,38 @@ class SchemaEditor(tk.Toplevel):
  def new_schema(self):
   if self.dirty and not self.confirm_discard():return
   self.close_editor();self.path=None;self.rows=[{"id":1,"role":"BT","abbr":"","name":""}];self.delimiter=";";self.scheme_name.set("New landmark schema");self.dirty=True;self.redraw()
+  self._update_apply_button()
  def load_path(self,path):
   try:
+   from .project_storage import load_schema
+   load_schema(path)
    self.close_editor();delim,_,raw=read_schema_csv(path);text=Path(path).read_text(encoding="utf-8-sig");name=next((line.strip()[13:] for line in text.splitlines() if line.lstrip().startswith("# SCHEMA_NAME=")),Path(path).stem);self.rows=[{"id":i+1,"role":({"BOTH":"BT","GM":"GM","CLASSICAL":"CL"}.get(r.get("role","BOTH").upper(),"BT")),"abbr":r.get("abbr","").strip(),"name":r.get("name","").strip()} for i,r in enumerate(raw)] or [{"id":1,"role":"BT","abbr":"","name":""}];self.delimiter=delim;self.path=Path(path);self.scheme_name.set(name);self.dirty=False;self.redraw()
+   for row,source in zip(self.rows,raw):row["category"]=(source.get("category") or "").strip()
+   self._update_apply_button()
   except Exception as exc:messagebox.showerror("Open schema",str(exc),parent=self)
+ def _update_apply_button(self):
+  if self.apply_button is None:return
+  meaningful=self.path is None or self.path.resolve()!=self.project.schema_path.resolve()
+  if meaningful:self.apply_button.pack(side="left",padx=(12,2))
+  else:self.apply_button.pack_forget()
+ def apply_to_project(self):
+  if self.project is None:return False
+  self.close_editor()
+  try:self.validate()
+  except ValueError as exc:messagebox.showerror("Invalid schema",str(exc),parent=self);return False
+  import tempfile
+  with tempfile.TemporaryDirectory(prefix="morpholabel_scheme_") as scratch:
+   target=Path(scratch)/"scheme.csv"
+   fields=("id","abbr","name","role","category") if any(row.get("category") for row in self.rows) else ("id","abbr","name","role")
+   with target.open("w",newline="",encoding="utf-8") as stream:
+    writer=csv.DictWriter(stream,fieldnames=fields);writer.writeheader()
+    for i,row in enumerate(self.rows,1):writer.writerow({key:({"id":i,"abbr":row["abbr"].strip(),"name":row["name"].strip(),"role":ROLE_CODES[row["role"]],"category":row.get("category","")})[key] for key in fields})
+   if self.project.count("landmarks") and not messagebox.askyesno("Apply landmark scheme","Apply this scheme to the current project?\n\nExisting points stay attached to their abbreviations. Removed landmarks remain in history; new landmarks need annotation. Changed scientific definitions require review. A backup preserves the previous scheme and data.",parent=self,default=messagebox.NO):return False
+   try:self.project.apply_landmark_schema(self.path if self.path is not None and not self.dirty else target)
+   except Exception as exc:messagebox.showerror("Apply landmark scheme",str(exc),parent=self);return False
+  self.path=self.project.schema_path;self.dirty=False;self._update_apply_button()
+  if self.on_apply:self.on_apply()
+  return True
  def open_schema(self):
   if self.dirty and not self.confirm_discard():return
   path=filedialog.askopenfilename(parent=self,filetypes=[("CSV","*.csv"),("All files","*.*")])

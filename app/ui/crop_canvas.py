@@ -34,7 +34,7 @@ def _row_source_key(row):
  return (row.get("file_size"),row.get("mtime_ns"),row.get("source_sha256"))
 
 def _rotate_about_center(x,y,cx,cy,degrees):
- theta=math.radians(float(degrees));dx=float(x)-float(cx);dy=float(y)-float(cy);c=math.cos(theta);sn=math.sin(theta)
+ theta=math.radians(-float(degrees));dx=float(x)-float(cx);dy=float(y)-float(cy);c=math.cos(theta);sn=math.sin(theta)
  return (dx*c-dy*sn+float(cx),dx*sn+dy*c+float(cy))
 
 def crop_model_to_source(model,x,y):
@@ -263,7 +263,7 @@ class CropCanvasController:
    sx,sy=self._source_point(event.x,event.y);icx,icy=self.model.width/2,self.model.height/2
    qx=(self.model.left+self.model.right)/2;qy=self.model.top-35/self.scale
    qangle=math.atan2(qy-icy,qx-icx);pangle=math.atan2(sy-icy,sx-icx)
-   angle=math.degrees(qangle-pangle);self.model.angle=((angle+180)%360)-180
+   angle=math.degrees(pangle-qangle);self.model.angle=((angle+180)%360)-180
    self._draw_overlay(qc=False);self._schedule_rotation_preview();return
   else:self.model.set_edge(self.mode,x,y)
   self._draw_overlay(qc=False)

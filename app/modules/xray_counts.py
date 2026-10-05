@@ -270,7 +270,8 @@ class OrientationSetupDialog(tk.Toplevel):
         outer=ttk.Frame(self,padding=14);outer.pack(fill="both",expand=True)
         ttk.Label(outer,text="Standard orientation",style="PageTitle.TLabel").pack(anchor="w")
         ttk.Label(outer,text="Choose a consistent view for cropped animals.",style="PageSubtitle.TLabel",wraplength=600).pack(anchor="w",pady=(2,8))
-        self.preview=tk.Canvas(outer,width=600,height=160,background="#f8fafc",highlightthickness=1,highlightbackground="#d6dbe0");self.preview.pack(fill="x")
+        self.preview=tk.Canvas(outer,width=600,height=220,background="#f8fafc",highlightthickness=1,highlightbackground="#d6dbe0");self.preview.pack(fill="x")
+        self.preview.bind("<Configure>",lambda _event:self._draw())
         controls=ttk.Frame(outer);controls.pack(fill="x",pady=(8,0))
         head_box=ttk.LabelFrame(controls,text="Head faces",padding=9);head_box.pack(side="left",fill="x",expand=True,padx=(0,5))
         for text,value in (("Left","left"),("Right","right"),("Don't standardize","none")):
@@ -285,7 +286,7 @@ class OrientationSetupDialog(tk.Toplevel):
         self._draw();self.grab_set()
 
     def _draw(self):
-        c=self.preview;c.delete("all");w=600;h=160;cx=w/2;cy=h/2
+        c=self.preview;c.delete("all");w=max(600,c.winfo_width());h=max(220,c.winfo_height());cx=w/2;cy=h/2
         head=self.head.get();bottom=self.bottom.get()
         state=orientation_preview_transform(head,bottom);flip_x=state["flip_x"];flip_y=state["flip_y"]
         def point(x,y):return (cx+(x-cx)*(-1 if flip_x else 1),cy+(y-cy)*(-1 if flip_y else 1))
@@ -293,21 +294,28 @@ class OrientationSetupDialog(tk.Toplevel):
             c.create_oval(cx-142,cy-35,cx+142,cy+35,fill="#edf2f5",outline="#71818d",width=2)
             c.create_line(cx-95,cy,cx+95,cy,fill="#a7b2ba",width=2)
         else:
-            body=[(cx-118,cy-30),(cx-55,cy-42),(cx+45,cy-37),(cx+112,cy-20),(cx+132,cy),(cx+112,cy+20),(cx+45,cy+37),(cx-55,cy+42),(cx-118,cy+30),(cx-142,cy+12),(cx-142,cy-12)]
+            # Rounded snout at the left; tapering body and forked tail at right.
+            body=[(cx-160,cy),(cx-146,cy-23),(cx-110,cy-34),(cx-50,cy-39),(cx+40,cy-28),(cx+114,cy-12),(cx+114,cy+12),(cx+40,cy+29),(cx-70,cy+33),(cx-136,cy+23)]
             tail=[(cx+108,cy-18),(cx+182,cy-50),(cx+160,cy),(cx+182,cy+50),(cx+108,cy+18)]
             coords=[v for p in body for v in point(*p)];c.create_polygon(*coords,fill="#edf2f5",outline="#71818d",width=2)
             coords=[v for p in tail for v in point(*p)];c.create_polygon(*coords,fill="#edf2f5",outline="#71818d",width=2)
-            hx,hy=point(cx-139,cy);c.create_oval(hx-18,hy-20,hx+18,hy+20,fill="#dfe8ee",outline="#71818d",width=2)
-            eye=point(cx-148,cy-7);c.create_oval(eye[0]-3,eye[1]-3,eye[0]+3,eye[1]+3,fill="#2196f3",outline="#ffffff")
-            marker=point(cx-160,cy);c.create_polygon(marker[0]-9,marker[1],marker[0]+5,marker[1]-8,marker[0]+5,marker[1]+8,fill="#2196f3",outline="#ffffff")
-            label=point(cx-126,cy-54);c.create_text(*label,text="Head",fill="#176fa7",font=("Segoe UI",9,"bold"))
+            eye=point(cx-134,cy-10);c.create_oval(eye[0]-4,eye[1]-4,eye[0]+4,eye[1]+4,fill="#344955",outline="")
+            gill=[point(cx-113,cy-24),point(cx-107,cy),point(cx-113,cy+23)]
+            c.create_line(*gill[0],*gill[1],*gill[2],fill="#8d9da8",width=2,smooth=True)
+            label=point(cx-205,cy-55);tip=point(cx-148,cy-17)
+            c.create_text(*label,text="Head",fill="#176fa7",font=("Segoe UI",10,"bold"))
+            start=point(cx-202,cy-39);c.create_line(*start,*tip,fill="#2196f3",width=2,arrow="last")
         if state["show_bottom"]:
             y=cy+38
             line=[point(cx-62,y),point(cx+62,y)]
             c.create_line(*line[0],*line[1],fill="#ffad1f",width=6)
             tip=point(cx,y+19);base1=point(cx-9,y+2);base2=point(cx+9,y+2)
             c.create_polygon(*tip,*base1,*base2,fill="#ffad1f",outline="#ffffff")
-            label=point(cx,y+45);c.create_text(*label,text="Ventral side",fill="#9a6500",font=("Segoe UI",9,"bold"))
+            label=point(cx,y+39);c.create_text(*label,text="Ventral side",fill="#9a6500",font=("Segoe UI",10,"bold"))
+        notes=[]
+        if not state["show_head"]:notes.append("Head: don't standardize")
+        if not state["show_bottom"]:notes.append("Ventral side: don't standardize")
+        if notes:c.create_text(cx,h-16,text=" · ".join(notes),fill="#66727d",font=("Segoe UI",9))
 
     def _accept(self):
         self.result={"head":self.head.get(),"bottom":self.bottom.get()};self.destroy()
@@ -420,17 +428,58 @@ class XRayCountsRuntime:
     def standard_menu_entries(self):
         """Module-owned commands injected into MorphoLabel's top-right Menu."""
         available=bool(self.project)
-        active=bool(available and self.project.active_structure_model())
         return (
-            {"label":"Import X-ray Structure AI…","command":self._menu_import_structure_ai,"group":"models","state":"normal" if available else "disabled"},
-            {"label":"Export active X-ray Structure AI…","command":self._menu_export_structure_ai,"group":"models","state":"normal" if active else "disabled"},
+            {"label":"Import / export AI models…","command":self.show_model_transfer,"group":"models","state":"normal" if available else "disabled"},
         )
+
+    def show_model_transfer(self):
+        if self.project is None:return
+        root=self.host.container.winfo_toplevel()
+        dialog=tk.Toplevel(root);dialog.title("Import / export AI models");dialog.transient(root);dialog.resizable(False,False)
+        frame=ttk.Frame(dialog,padding=16);frame.pack(fill="both",expand=True)
+        ttk.Label(frame,text="Move trained AI between projects or computers.",style="SectionTitle.TLabel").pack(anchor="w")
+        ttk.Label(frame,text="Model ZIP files contain inference settings and weights. Source X-rays stay in the project.",wraplength=520,style="Muted.TLabel").pack(anchor="w",pady=(4,8))
+        for kind,label,model in (("crop","X-ray Crop model",self.project.active_crop_model()),("structure","X-ray Structure model",self.project.active_structure_model())):
+            card=ttk.LabelFrame(frame,text=label,padding=12);card.pack(fill="x",pady=5)
+            ttk.Label(card,text=f"Current model: {(model or {}).get('model_id','None')}").pack(anchor="w",pady=(0,6))
+            def transfer(action,k=kind):
+                getattr(self,f"_menu_{action}_{k}_ai")()
+                if dialog.winfo_exists():dialog.destroy();self.show_model_transfer()
+            ttk.Button(card,text="Import model…",command=lambda k=kind:transfer("import",k)).pack(side="left")
+            ttk.Button(card,text="Export active…",command=lambda k=kind:transfer("export",k),state="normal" if model else "disabled").pack(side="left",padx=5)
+        ttk.Button(frame,text="Close",command=dialog.destroy).pack(anchor="e",pady=(8,0))
+
+    def _menu_import_crop_ai(self):
+        if self.project is None:return
+        from app.xray_crop_package import import_crop_model_package
+        from app.model_transfer import model_package_filename
+        root=self.host.container.winfo_toplevel()
+        source=filedialog.askopenfilename(parent=root,title="Import X-ray Crop model",initialfile=model_package_filename(self.project.active_crop_model(),"xray_crop_model"),filetypes=(("MorphoLabel Crop AI","*.zip"),))
+        if not source:return
+        try:
+            local=import_crop_model_package(self.project,source);self.project.activate_crop_model(local)
+        except Exception as exc:messagebox.showerror("Import Crop AI",str(exc),parent=root);return
+        if self._workspace is not None and hasattr(self._workspace,"_refresh_workflow"):self._workspace._refresh_workflow()
+        messagebox.showinfo("Import Crop AI",f"Imported and activated {local}.",parent=root)
+
+    def _menu_export_crop_ai(self):
+        if self.project is None:return
+        from app.xray_crop_package import export_crop_model_package
+        from app.model_transfer import model_package_filename
+        root=self.host.container.winfo_toplevel();model=self.project.active_crop_model()
+        if not model:return
+        target=filedialog.asksaveasfilename(parent=root,title="Export X-ray Crop model",defaultextension=".zip",initialfile=model_package_filename(model,"xray_crop_model"),filetypes=(("MorphoLabel Crop AI","*.zip"),))
+        if not target:return
+        try:export_crop_model_package(self.project,target,model["model_id"])
+        except Exception as exc:messagebox.showerror("Export Crop AI",str(exc),parent=root);return
+        messagebox.showinfo("Export Crop AI",f"Saved: {target}",parent=root)
 
     def _menu_import_structure_ai(self):
         if self.project is None:return
         root=self.host.container.winfo_toplevel()
+        from app.model_transfer import model_package_filename
         source=filedialog.askopenfilename(
-            parent=root,title="Import trained Structure AI",
+            parent=root,title="Import trained Structure AI",initialfile=model_package_filename(self.project.active_structure_model(),"xray_structure_model"),
             filetypes=(("MorphoLabel Structure AI","*.zip"),("ZIP files","*.zip")),
         )
         if not source:return
@@ -446,11 +495,12 @@ class XRayCountsRuntime:
     def _menu_export_structure_ai(self):
         if self.project is None:return
         root=self.host.container.winfo_toplevel();model=self.project.active_structure_model()
+        from app.model_transfer import model_package_filename
         if not model:
             messagebox.showinfo("Export Structure AI","No active Structure AI model.",parent=root);return
         target=filedialog.asksaveasfilename(
             parent=root,title="Export trained Structure AI",defaultextension=".zip",
-            initialfile=f"{model['model_id']}.zip",
+            initialfile=model_package_filename(model,"xray_structure_model"),
             filetypes=(("MorphoLabel Structure AI","*.zip"),("ZIP files","*.zip")),
         )
         if not target:return

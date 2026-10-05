@@ -624,6 +624,7 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   project=SimpleNamespace(
    data_root=self.root,cache_root=self.root/'cache',
    crop_record=lambda _id:{'crop_json':[0,0,20,10],'transform_json':transform,'developed_relpath':'cache/developed/missing.png','standardized_relpath':f'cache/standardized/{image_id}.png'},
+   attributes_for_image=lambda _id:{},
    image_path=lambda _id:None,
   )
   self.assertIsNotNone(crop_frame_record(project,image_id))

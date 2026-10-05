@@ -46,6 +46,9 @@ class LandmarkSidebar(ttk.Frame):
     def refresh(self, *args, **kwargs):
         return self.photos.refresh(*args, **kwargs)
 
+    def refresh_image(self, image_id):
+        return self.photos.refresh_image(image_id)
+
     def navigate(self, step):
         return self.photos.navigate(step)
 

@@ -14,6 +14,7 @@ from PIL import Image, ImageDraw, ImageTk
 from app.photo_list import PhotoListCanvas
 from app.ui.icons import CONTROL_ICON_SIZE, tk_icon
 from app.ui.design import ElidedLabel, FlowRow, action_icon, build_context_row, model_selector_width, structure_prediction_text, sidebar_width_for_window, dialog_width_for_columns
+from app.model_transfer import model_package_filename
 from app.ui.workflow import WorkflowDock, add_command_separator
 from types import SimpleNamespace
 from app.ui.photo_list_panel import DEFAULT_SHOW_EXCLUDED, filtered_photo_indices
@@ -426,7 +427,7 @@ class XRayStructureWorkspace:
             limit=row_height*(2 if main.winfo_height()>=650 else 1)
             marker_viewport.configure(height=min(height,limit),scrollregion=(0,0,width,height))
             marker_viewport.itemconfigure(marker_window,width=width)
-        marker_viewport.bind("<Configure>",layout_markers);self.marker_host.bind("<Configure>",layout_markers)
+        marker_viewport.bind("<Configure>",layout_markers);self.marker_host.bind("<Configure>",layout_markers,add="+")
         main.bind("<Configure>",layout_markers,add="+")
 
         adapter=SimpleNamespace(ui_icon=lambda name,size:self._icon(main,name,size),tip=self.tip)
@@ -1178,7 +1179,7 @@ class XRayStructureWorkspace:
             messagebox.showinfo("Export trained AI","Train or import a Structure AI model first.",parent=self.root);return
         target=filedialog.asksaveasfilename(
             parent=self.root,title="Export trained Structure AI",defaultextension=".zip",
-            initialfile=f"{model['model_id']}.zip",
+            initialfile=model_package_filename(model,"xray_structure_model"),
             filetypes=(("MorphoLabel trained AI","*.zip"),("ZIP files","*.zip")),
         )
         if not target:return
@@ -1192,7 +1193,7 @@ class XRayStructureWorkspace:
 
     def import_structure_ai_file(self):
         source=filedialog.askopenfilename(
-            parent=self.root,title="Import trained Structure AI",
+            parent=self.root,title="Import trained Structure AI",initialfile=model_package_filename(self.project.active_structure_model(),"xray_structure_model"),
             filetypes=(("MorphoLabel trained AI","*.zip"),("ZIP files","*.zip")),
         )
         if not source:return
@@ -1254,7 +1255,7 @@ class XRayStructureWorkspace:
                 messagebox.showinfo("Export Structure AI","Select a model first.",parent=dialog);return
             target=filedialog.asksaveasfilename(
                 parent=dialog,title="Export Structure AI",defaultextension=".zip",
-                initialfile=f"{model_id}.zip",filetypes=(("MorphoLabel Structure AI","*.zip"),("ZIP files","*.zip")),
+                initialfile=model_package_filename({"model_id":model_id},"xray_structure_model"),filetypes=(("MorphoLabel Structure AI","*.zip"),("ZIP files","*.zip")),
             )
             if not target:return
             try:export_structure_model_package(self.project,target,model_id)
@@ -1262,7 +1263,7 @@ class XRayStructureWorkspace:
             messagebox.showinfo("Export Structure AI","Portable model package saved. It can be imported on another computer with the same X-ray structure scheme.",parent=dialog)
         def import_model():
             source=filedialog.askopenfilename(
-                parent=dialog,title="Import Structure AI",filetypes=(("MorphoLabel Structure AI","*.zip"),("ZIP files","*.zip")),
+                parent=dialog,title="Import Structure AI",initialfile=model_package_filename(self.project.active_structure_model(),"xray_structure_model"),filetypes=(("MorphoLabel Structure AI","*.zip"),("ZIP files","*.zip")),
             )
             if not source:return
             try:model_id=import_structure_model_package(self.project,source)

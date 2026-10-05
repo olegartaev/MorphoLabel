@@ -16,16 +16,12 @@ def previous_transform(project, image_id, base, standard_path):
     crop = project.crop_record(image_id) or {}
     stored = crop.get("transform_json")
     if stored:
-        return Transform(**stored)
-    bounds = crop.get("crop_json")
-    if isinstance(bounds, (list, tuple)) and len(bounds) == 4:
-        left, top, right, bottom = (round(float(value)) for value in bounds)
-        if right > left and bottom > top:
-            return Transform(base.width, base.height, float(crop.get("rotation_degrees") or 0), base.width / 2, base.height / 2, left, top, right - left, bottom - top)
-    if standard_path.exists():
-        with Image.open(standard_path) as standard:
-            if standard.size == (base.width, base.height):
-                return Transform(base.width, base.height, 0, base.width / 2, base.height / 2, 0, 0, base.width, base.height)
+        import math
+        try:
+            transform=Transform(**stored)
+            if transform.version=="affine_crop_v1" and (transform.original_width,transform.original_height)==base.size and min(transform.output_width,transform.output_height)>0 and all(math.isfinite(float(v)) for v in (transform.rotation_degrees,transform.center_x,transform.center_y,transform.crop_left,transform.crop_top)):
+                return transform
+        except (ValueError,TypeError):pass
     # A legacy row can contain points but no scientifically provable frame.  The
     # Project save authority archives and invalidates those finals; Crop itself
     # must remain usable rather than presenting a routine modal dead-end.
@@ -55,30 +51,21 @@ def reviewed_crop_change(project, image_id, base, bounds, angle, standard_path):
 def apply_reviewed_crop(project, image_id, base, bounds, angle, standard_path, source_path):
     """Persist the same reversible reviewed crop used by the established editor."""
     change = reviewed_crop_change(project, image_id, base, bounds, angle, standard_path)
-    old_transform = change["old_transform"]
     new_transform = change["new_transform"]
     crop = change["crop"]
     rotated = base.rotate(float(angle), resample=Image.Resampling.BICUBIC, expand=False, fillcolor=(255, 255, 255))
     master = rotated.crop(crop)
-    atomic_save_png(master, standard_path, image_id)
-    had_landmarks = change["had_landmarks"]
-    frame_changed = change["frame_changed"]
     saved = project.save_reviewed_crop(image_id, {
         "developed_full_relpath": f"cache/developed/{image_id}.png",
         "standardized_relpath": f"cache/standardized/{image_id}.png",
         "crop_bounds": list(crop), "rotation_degrees": float(angle),
         "transform": new_transform.__dict__, "normalization_status": "PASS", "source_sha256": None,
-    }, previous_frame_proven=old_transform is not None)
+    })
+    atomic_save_png(master, standard_path, image_id)
     write_standardized_frame_manifest(project, image_id, project.crop_record(image_id), target=standard_path)
-    remap = {"present_before": 0, "present_after": 0, "outside_count": 0}
-    if had_landmarks and old_transform is not None and frame_changed:
-        # Preserve biological positions through the crop-frame change:
-        # old standardized -> original -> new standardized. The Project remap
-        # authority clears Checked state and leaves the image requiring review.
-        remap = project.remap_landmarks_for_transform(image_id, old_transform, new_transform)
     return {
-        **remap,
+        "present_before":0,"present_after":0,"outside_count":0,**saved,
         "review_required": project.landmark_crop_review_required(image_id),
         "legacy_landmarks_invalidated": bool(saved.get("legacy_landmarks_invalidated")),
-        "landmarks_remapped": bool(had_landmarks and old_transform is not None and frame_changed),
+        "landmarks_remapped": bool(saved.get("landmarks_remapped")),
     }

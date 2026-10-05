@@ -124,8 +124,13 @@ class ArchitectureCompatibilityTests(unittest.TestCase):
         membership = [{"specimen_id": sid, "split": "val" if i < 2 else "train"}
                       for i, sid in enumerate(self.specimens)]
         for ident, parent in (("old_xr_parent", None), ("old_xr_child", "old_xr_parent")):
+            # This fixture materializes pre-refactor v1 records. Pin the legacy
+            # scientific digest rather than constructing a new v2 model here;
+            # the immutable oracle and serialized fixture remain unchanged.
+            from app.xray_structure_ai import _legacy_structure_schema_contract
+            legacy_digest=hashlib.sha256(json.dumps(_legacy_structure_schema_contract(p.scheme),ensure_ascii=False,sort_keys=True,separators=(",",":")).encode()).hexdigest()
             p.register_structure_model(ident, f"models/{ident}/model.pth", f"models/{ident}/model.json",
-                                       parent, structure_schema_digest(p.scheme), "resnet18_heatmap_v1",
+                                       parent, legacy_digest, "resnet18_heatmap_v1",
                                        {"frozen_metric": .75}, membership)
         p.set_ui_state("xray_crop_active_batch", {"ids": self.plates, "position": 1})
         p.set_ui_state("xray_structure_active_batch", {"ids": self.specimens, "position": 1, "pass_no": 1})

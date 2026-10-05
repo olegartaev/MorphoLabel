@@ -402,7 +402,7 @@ class LandmarksSection(SectionView):
 
  def refresh(self):
   # A persisted landmark edit refreshes one authoritative list row, never the catalogue.
-  image_id=self.canvas.image_id or (self.context.current() or {}).get("image_id");self.context.refresh_landmark_state(image_id);self.context.update_landmark_counts(image_id);self.shell._update_status();panel=getattr(self.shell,"photo_panel",None);panel and panel.refresh(preserve_scroll=True);state=self.canvas.take_fresh_state() or self.canvas.refresh_authoritative(notify=False);self._refresh_prediction_info();self._refresh_landmark_sidebar(state);self._refresh_action_buttons(state)
+  image_id=self.canvas.image_id or (self.context.current() or {}).get("image_id");self.context.refresh_landmark_state(image_id);self.context.update_landmark_counts(image_id);self.shell._update_status();panel=getattr(self.shell,"photo_panel",None);panel and panel.refresh_image(image_id);state=self.canvas.take_fresh_state() or self.canvas.refresh_authoritative(notify=False);self._refresh_prediction_info();self._refresh_landmark_sidebar(state);self._refresh_action_buttons(state)
  def cancel_pending_for_target(self,image_id):
   """Discard a deferred Next unless it belongs to this exact target image."""
   pending=getattr(self,'_pending_next_image_id',None)

@@ -71,7 +71,7 @@ def _structure_backend(spec, progress=None):
 
 def backend_for_structure_model(project, model, *, registry=None):
     """Validate module-owned compatibility before constructing a provider."""
-    if str(model.get("schema_digest") or "") != structure_schema_digest(project.scheme):
+    if not _scheme_matches_model(project,model):
         raise XRayStructureAIError("The structure model is incompatible with the current X-ray structure scheme.")
     spec = _structure_provider_spec(model.get("backend") or STRUCTURE_BACKEND, registry)
     checkpoint = project.root / str(model["path"])
@@ -105,7 +105,7 @@ def _sha256_file(path):
     return digest.hexdigest()
 
 
-def structure_schema_contract(scheme):
+def _legacy_structure_schema_contract(scheme):
     structures = []
     compatibility = {}
     for item in scheme.get("structures") or ():
@@ -120,6 +120,41 @@ def structure_schema_contract(scheme):
         structures.append(contract)
         compatibility[sid] = [str(role["id"]) for role in compatible_reference_roles(scheme, sid)]
     return {"structures": structures, "role_compatibility": compatibility}
+
+
+def _normalized_structure_contract(contract):
+    """v2 semantics: channel order, IDs, target types and effective role graph.
+
+    Display names/colors/hotkeys/trait labels are not model targets. Declaration
+    spelling (inferred vs explicit role_on_structure) is irrelevant when the
+    effective graph agrees. Channel order IS scientific and remains ordered.
+    Role lists are sets of allowed shared labels, not channel indices.
+    """
+    if contract.get("contract_version",1) not in (1,2):raise ValueError("Unsupported structure contract version")
+    structures=contract["structures"];ids=[str(item["id"]) for item in structures]
+    if not ids or len(set(ids))!=len(ids):raise ValueError("Invalid structure contract IDs")
+    graph=contract["role_compatibility"]
+    if set(graph)!=set(ids) or any(set(values)-set(ids) for values in graph.values()):raise ValueError("Incomplete structure role contract")
+    return {"contract_version":2,"structures":[{"id":str(item["id"]),"repeated":bool(item["repeated"]),"annotation":str(item["annotation"]),"required":bool(item["required"])} for item in structures],"role_compatibility":{sid:sorted(set(graph[sid])) for sid in ids}}
+
+
+def structure_schema_contract(scheme):
+    from .xray_schema import normalize_scheme
+    return _normalized_structure_contract(_legacy_structure_schema_contract(normalize_scheme(scheme)))
+
+
+def _scheme_matches_model(project,model,metadata=None):
+    digest=str(model.get("schema_digest") or "")
+    if digest==structure_schema_digest(project.scheme):return True
+    # Old local models remain compatible with exactly their old contract.
+    legacy=_legacy_structure_schema_contract(project.scheme)
+    if digest==_sha256_bytes(_canonical(legacy).encode("utf-8")):return True
+    if metadata is None:
+        try:metadata=json.loads((project.root/str(model["metadata_path"])).read_text(encoding="utf-8"))
+        except (OSError,ValueError,KeyError):metadata={}
+    contract=(metadata or {}).get("schema_contract")
+    try:return bool(contract and _sha256_bytes(_canonical(contract).encode("utf-8"))==digest and _normalized_structure_contract(contract)==structure_schema_contract(project.scheme))
+    except (ValueError,KeyError,TypeError):return False
 
 
 def structure_schema_digest(scheme):
@@ -316,7 +351,7 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
         if parent is None:
             raise XRayStructureAIError(f"Unknown Structure AI parent model: {parent_model_id}")
     schema_digest = structure_schema_digest(project.scheme)
-    if parent and str(parent.get("schema_digest") or "") != schema_digest:
+    if parent and not _scheme_matches_model(project,parent):
         raise XRayStructureAIError("The active structure model is incompatible with the current X-ray structure scheme.")
     provider_id = backend_id or (parent or {}).get("backend") or STRUCTURE_BACKEND
     spec = _structure_provider_spec(provider_id, registry)
@@ -395,6 +430,7 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
         model_meta.update({
             "model_id": model_id,
             "schema_digest": schema_digest,
+            "schema_contract": structure_schema_contract(project.scheme),
             "dataset_hash": dataset["dataset_hash"],
             "parent_model_id": (parent or {}).get("model_id"),
             "training_specimens": dataset["training_specimens"],
@@ -472,7 +508,7 @@ def predict_structures(project, specimen_ids=None, count=None, cancel=None, prog
     if not model:
         raise XRayStructureAIError("Train or import an X-ray structure model before prediction.")
     current_digest = structure_schema_digest(project.scheme)
-    if str(model.get("schema_digest") or "") != current_digest:
+    if not _scheme_matches_model(project,model):
         raise XRayStructureAIError("The active structure model is incompatible with the current X-ray structure scheme.")
     _structure_provider_spec(model.get("backend") or STRUCTURE_BACKEND, registry)
     pass_no = int(pass_no)
@@ -756,7 +792,7 @@ def compare_structure_model_to_human(project,model_id=None,split="val",progress=
     """Run read-only model inference on its recorded membership and compare with current human truth."""
     model=next((item for item in project.structure_models() if item["model_id"]==str(model_id)),None) if model_id else project.active_structure_model()
     if not model:raise XRayStructureAIError("Select an X-ray Structure AI model first.")
-    if str(model.get("schema_digest") or "")!=structure_schema_digest(project.scheme):
+    if not _scheme_matches_model(project,model):
         raise XRayStructureAIError("This model uses a different X-ray structure scheme.")
     membership=[item for item in project.structure_model_membership(model["model_id"]) if str(item.get("split") or "")==str(split)]
     if not membership:
@@ -825,7 +861,7 @@ def _safe_model_json(path):
         "format_version", "backend", "training_objective", "target_encoding", "input_size", "output_stride", "structures", "preprocessing",
         "thresholds", "validation", "epochs_completed", "model_id", "schema_digest",
         "dataset_hash", "parent_model_id", "training_specimens", "validation_specimens",
-        "training_plates", "validation_plates",
+        "training_plates", "validation_plates", "schema_contract",
     }
     return {key: source[key] for key in allowed if key in source}
 
@@ -844,6 +880,13 @@ def export_structure_model_package(project, target, model_id=None):
     safe_meta = _safe_model_json(metadata)
     safe_meta["model_id"] = str(model["model_id"])
     safe_meta["schema_digest"] = str(model["schema_digest"])
+    current=structure_schema_contract(project.scheme)
+    legacy=_legacy_structure_schema_contract(project.scheme)
+    contract=current if str(model["schema_digest"])==structure_schema_digest(project.scheme) else legacy
+    if _sha256_bytes(_canonical(contract).encode("utf-8"))!=str(model["schema_digest"]):
+        contract=safe_meta.get("schema_contract")
+        if not contract or not _scheme_matches_model(project,model,safe_meta):raise XRayStructurePackageError("Cannot prove the model's scientific structure contract.")
+    safe_meta["schema_contract"]=contract
     meta_bytes = json.dumps(safe_meta, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
     checkpoint_bytes = checkpoint.read_bytes()
     files = {
@@ -860,6 +903,7 @@ def export_structure_model_package(project, target, model_id=None):
         "model_id": str(model["model_id"]),
         "backend": str(model.get("backend") or STRUCTURE_BACKEND),
         "schema_digest": str(model["schema_digest"]),
+        "schema_contract": contract,
         "training_statistics": {
             "training_specimen_count": int(model.get("training_specimen_count") or 0),
             "validation_specimen_count": int(model.get("validation_specimen_count") or 0),
@@ -892,10 +936,6 @@ def import_structure_model_package(project, source, *, registry=None):
         provider_id = str(manifest.get("backend") or "")
         _structure_provider_spec(provider_id, registry, XRayStructurePackageError)
         current_digest = structure_schema_digest(project.scheme)
-        if str(manifest.get("schema_digest") or "") != current_digest:
-            raise XRayStructurePackageError(
-                "This structure model was trained for a different X-ray structure scheme."
-            )
         expected = dict(manifest.get("files") or {})
         if set(expected) != {"artifacts/model.pth", "artifacts/model.json"}:
             raise XRayStructurePackageError("Structure model package has an unexpected artifact set.")
@@ -914,8 +954,17 @@ def import_structure_model_package(project, source, *, registry=None):
             metadata = json.loads(payload["artifacts/model.json"].decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise XRayStructurePackageError("Imported structure model metadata is invalid.") from exc
-        if str(metadata.get("schema_digest") or "") != current_digest:
-            raise XRayStructurePackageError("Imported model metadata does not match the current structure scheme.")
+        package_digest=str(manifest.get("schema_digest") or "")
+        if str(metadata.get("schema_digest") or "") != package_digest:
+            raise XRayStructurePackageError("Manifest and model metadata schema digests disagree; cannot prove scheme compatibility.")
+        contract=manifest.get("schema_contract")
+        if contract is not None:
+            try:
+                proven=metadata.get("schema_contract")==contract and _sha256_bytes(_canonical(contract).encode("utf-8"))==package_digest and _normalized_structure_contract(contract)==structure_schema_contract(project.scheme)
+            except (ValueError,KeyError,TypeError):proven=False
+            if not proven:raise XRayStructurePackageError("This structure model was trained for a different X-ray structure scheme or has an invalid scientific contract.")
+        elif package_digest!=current_digest and package_digest!=_sha256_bytes(_canonical(_legacy_structure_schema_contract(project.scheme)).encode("utf-8")):
+            raise XRayStructurePackageError("This structure model was trained for a different X-ray structure scheme; embedded information cannot prove equivalence.")
         if str(metadata.get("backend") or STRUCTURE_BACKEND) != provider_id:
             raise XRayStructurePackageError("Imported model metadata backend does not match the package provider.")
         original = str(manifest.get("model_id") or "imported_structure_model")
@@ -936,6 +985,9 @@ def import_structure_model_package(project, source, *, registry=None):
             (staging / "model.pth").write_bytes(payload["artifacts/model.pth"])
             metadata["model_id"] = local
             metadata["imported_from_model_id"] = original
+            metadata["original_schema_digest"]=package_digest
+            metadata["schema_digest"]=current_digest
+            metadata["schema_contract"]=structure_schema_contract(project.scheme)
             (staging / "model.json").write_text(
                 json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True),
                 encoding="utf-8",

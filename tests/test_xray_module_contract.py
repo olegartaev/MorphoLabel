@@ -277,8 +277,10 @@ class XRayModuleContractTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]
         module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         self.assertIn("def standard_menu_entries",module)
-        self.assertIn("Import X-ray Structure AI…",module)
-        self.assertIn("Export active X-ray Structure AI…",module)
+        self.assertIn('"Import / export AI models…"',module)
+        self.assertIn('"X-ray Crop model"',module)
+        self.assertIn('"X-ray Structure model"',module)
+        self.assertNotIn('"Import X-ray Structure AI…"',module)
         self.assertIn("on_check_results=self._show_result_checks",module)
 
     def test_xray_export_has_one_action_scope_sorting_row_number_and_clean_headers(self):
