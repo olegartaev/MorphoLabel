@@ -818,7 +818,9 @@ class XRayStructureWorkspace:
         else:
             self.repeat_pool_label.configure(text=f"{p1['verified']} eligible")
             self.repeat_pass_label.configure(text="A1 — · A2 —")
-        self.repeat_button.configure(state="normal" if p1["verified"] else "disabled")
+        # The launcher explains eligibility and can reopen saved runs even
+        # when the current main annotation has no verified specimens yet.
+        self.repeat_button.configure(state="normal")
         model=self.project.active_structure_model();candidates=len(self.project.structure_prediction_candidate_ids());review=len(self.project.structure_ai_review_ids())
         self.training_summary.configure(text=f"Ready: {p1['verified']} human-verified")
         active_id=(model or {}).get("model_id") or "none"
@@ -1415,7 +1417,8 @@ class XRayStructureWorkspace:
         if not ids:return False
         self.pass_no.set(1);self.specimen_list.pass_no=1
         state={"pass_no":1,"ids":ids,"position":0}
-        self.project.set_ui_state("xray_structure_active_batch",state)
+        from app.crop_queues import replace_batch
+        replace_batch(self.project,"xray_structure_active_batch",state)
         self._load_specimen(ids[0]);self._refresh_workflow()
         return True
 
@@ -1567,7 +1570,8 @@ class XRayStructureWorkspace:
             if not current or str(current.get("status") or "")!="verified":remaining.append(specimen_id)
         browse=remaining or ids
         self.pass_no.set(pass_no);self.specimen_list.pass_no=pass_no
-        self.project.set_ui_state("xray_structure_active_batch",{"pass_no":pass_no,"ids":browse,"position":0})
+        from app.crop_queues import replace_batch
+        replace_batch(self.project,"xray_structure_active_batch",{"pass_no":pass_no,"ids":browse,"position":0})
         self.selected_specimen_id="";self.refresh()
         if browse:self._load_specimen(browse[0])
         if launcher is not None:

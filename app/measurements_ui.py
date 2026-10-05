@@ -24,7 +24,7 @@ def transfer_measurement_definitions(parent,project,action,on_saved=None):
 class MeasurementsWindow(tk.Toplevel):
  def __init__(self,parent,project,on_saved=None,on_selection=None):
   super().__init__(parent)
-  self.parent=parent;self.project=project;self.on_saved=on_saved;self.on_selection=on_selection;self.rows=load_measurements(project)
+  self.parent=parent;self.project=project;self.on_saved=on_saved;self.on_selection=on_selection;self.rows=load_measurements(project,include_unresolved=True)
   self.title("Measurement definitions");self.geometry("860x520");self.minsize(680,420);self.resizable(True,True);self.transient(parent)
 
   root=ttk.Frame(self,padding=14);root.pack(fill="both",expand=True);root.rowconfigure(2,weight=1);root.columnconfigure(0,weight=1)
@@ -45,6 +45,7 @@ class MeasurementsWindow(tk.Toplevel):
    self.tree.heading(col,text=text);self.tree.column(col,width=width,anchor="w",stretch=stretch)
   scroll=ttk.Scrollbar(table_host,orient="vertical",command=self.tree.yview);self.tree.configure(yscrollcommand=scroll.set)
   self.tree.grid(row=0,column=0,sticky="nsew");scroll.grid(row=0,column=1,sticky="ns")
+  horizontal=ttk.Scrollbar(table_host,orient="horizontal",command=self.tree.xview);horizontal.grid(row=1,column=0,sticky="ew");self.tree.configure(xscrollcommand=horizontal.set)
   self.tree.bind("<<TreeviewSelect>>",self._selected);self.tree.bind("<Double-1>",lambda _e:self.edit())
 
   actions=ttk.Frame(root);actions.grid(row=3,column=0,sticky="ew",pady=(10,0));actions.columnconfigure(3,weight=1)
@@ -59,7 +60,7 @@ class MeasurementsWindow(tk.Toplevel):
   self.refresh();center(parent,self)
 
  def transfer(self,action):
-  def saved():self.rows=load_measurements(self.project);self.refresh();self._done()
+  def saved():self.rows=load_measurements(self.project,include_unresolved=True);self.refresh();self._done()
   return transfer_measurement_definitions(self,self.project,action,saved)
 
  def _help(self):
@@ -73,7 +74,8 @@ class MeasurementsWindow(tk.Toplevel):
   self.edit_button.configure(state=state);self.delete_button.configure(state=state)
   if selected and self.on_selection:self.on_selection(self.rows[int(selected[0])])
 
- def _label(self,ident):
+ def _label(self,ident,abbr=None):
+  if ident is None:return f"Unavailable: {abbr or 'removed landmark'}"
   row=next((x for x in self.project.schema if int(x.get("id",x.get("landmark_id")))==int(ident)),{})
   name=(row.get('name') or row.get('abbr') or 'Landmark').strip()
   abbr=(row.get('abbr') or '').strip()
@@ -83,7 +85,7 @@ class MeasurementsWindow(tk.Toplevel):
  def refresh(self):
   self.tree.delete(*self.tree.get_children())
   for i,r in enumerate(self.rows):
-   self.tree.insert("","end",iid=str(i),values=("✓" if r["use"] else "",r["abbr"],r["name"],self._label(r["point1"]),self._label(r["point2"])))
+   self.tree.insert("","end",iid=str(i),values=("!" if r.get('unresolved') else "✓" if r["use"] else "",r["abbr"],r["name"],self._label(r["point1"],r.get('point1_abbr')),self._label(r["point2"],r.get('point2_abbr'))))
   self._selected()
 
  def add(self):
@@ -100,11 +102,11 @@ class MeasurementsWindow(tk.Toplevel):
   if not selected:return
   index=int(selected[0]);name=self.rows[index].get("name") or self.rows[index].get("abbr") or "this measurement"
   if not messagebox.askyesno("Delete measurement",f"Delete {name}?",parent=self):return
-  del self.rows[index];save_measurements(self.project,self.rows);self.refresh();self._done()
+  del self.rows[index];save_measurements(self.project,self.rows,preserve_unresolved=False);self.refresh();self._done()
 
  def _edit(self,index):
   value=self.rows[index].copy() if index is not None else {"use":True,"abbr":"","name":"","point1":int(self.project.schema[0]["id"]),"point2":int(self.project.schema[1]["id"])}
-  d=tk.Toplevel(self);d.title("Edit measurement" if index is not None else "Add measurement");d.transient(self);d.resizable(False,False)
+  d=tk.Toplevel(self);d.title("Edit measurement" if index is not None else "Add measurement");d.transient(self);d.minsize(580,340);d.resizable(True,True)
   frame=ttk.Frame(d,padding=14);frame.pack(fill="both",expand=True);frame.columnconfigure(1,weight=1)
   ttk.Label(frame,text="Edit measurement" if index is not None else "Add measurement",style="SectionTitle.TLabel").grid(row=0,column=0,columnspan=2,sticky="w")
   ttk.Label(frame,text="A measurement is the distance between two landmarks.",style="Muted.TLabel").grid(row=1,column=0,columnspan=2,sticky="w",pady=(2,10))
@@ -112,7 +114,7 @@ class MeasurementsWindow(tk.Toplevel):
   use=tk.BooleanVar(master=d,value=value["use"]);abbr=tk.StringVar(master=d,value=value["abbr"]);name=tk.StringVar(master=d,value=value["name"])
   choices=[self._label(x.get("id",x.get("landmark_id"))) for x in self.project.schema]
   bylabel={label:int(row.get("id",row.get("landmark_id"))) for label,row in zip(choices,self.project.schema)}
-  p1=tk.StringVar(master=d,value=self._label(value["point1"]));p2=tk.StringVar(master=d,value=self._label(value["point2"]))
+  p1=tk.StringVar(master=d,value=self._label(value["point1"],value.get('point1_abbr')));p2=tk.StringVar(master=d,value=self._label(value["point2"],value.get('point2_abbr')))
 
   ttk.Label(frame,text="Code").grid(row=2,column=0,sticky="w",pady=4);ttk.Entry(frame,textvariable=abbr,width=22).grid(row=2,column=1,sticky="ew",padx=(10,0),pady=4)
   ttk.Label(frame,text="Name").grid(row=3,column=0,sticky="w",pady=4);ttk.Entry(frame,textvariable=name,width=38).grid(row=3,column=1,sticky="ew",padx=(10,0),pady=4)
@@ -127,7 +129,7 @@ class MeasurementsWindow(tk.Toplevel):
    except (ValueError,KeyError) as exc:messagebox.showerror("Measurement",str(exc),parent=d);return
    if index is None:self.rows.append(new)
    else:self.rows[index]=new
-   save_measurements(self.project,self.rows);d.destroy();self.refresh();self._done()
+   save_measurements(self.project,self.rows,preserve_unresolved=False);d.destroy();self.refresh();self._done()
   ttk.Button(actions,text="Save measurement",command=save,style="Primary.TButton").pack(side="left",padx=(6,0))
   center(self,d)
 

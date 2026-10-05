@@ -90,9 +90,10 @@ class ProjectSection(SectionView):
   from .design import FlowRow
   actions=FlowRow(definitions);actions.pack(fill="x")
   state="normal" if defined else "disabled"
-  self.button(actions,"Edit…",self.shell.open_measurements,"Define distances between landmarks.",state=state).pack(side="left")
+  self.button(actions,"+ Add",self.shell.add_measurement,"Add a distance between two landmarks.",state=state).pack(side="left")
+  self.button(actions,"Edit…",self.shell.open_measurements,"Define distances between landmarks.",state=state).pack(side="left",padx=4)
   self.button(actions,"Import…",self.shell.import_measurement_definitions,"Apply measurement definitions by landmark abbreviation.",state=state).pack(side="left",padx=4)
-  self.button(actions,"Export…",self.shell.export_measurement_definitions,"Save measurement definitions for another project.",state=state).pack(side="left")
+  self.button(actions,"Save…",self.shell.export_measurement_definitions,"Save measurement definitions as a portable CSV.",state=state).pack(side="left")
 
   workflow=ttk.LabelFrame(content,text="Image preparation",padding=10);workflow.grid(row=2,column=0,columnspan=2,sticky="ew",padx=4,pady=(0,7))
   ttk.Label(workflow,text="Before landmarks",style="SectionTitle.TLabel").pack(anchor="w")
@@ -108,7 +109,8 @@ class ProjectSection(SectionView):
   sample_rows=project_sample_rows(project,self.context.rows)
   from .model_transfer import model_transfer_card
   for column,(kind,title) in enumerate((("crop","Crop model"),("landmark","Landmark model"))):
-   card=model_transfer_card(content,title,project.active_model(kind),lambda k=kind:self.shell._import_model(k),lambda k=kind:self.shell._export_model(k))
+   models=project.models(kind);active=next((model for model in models if model.get("active")),None)
+   card=model_transfer_card(content,title,active,lambda k=kind:self.shell._import_model(k),lambda k=kind:self.shell._export_model(k),models=models)
    card.grid(row=3,column=column,sticky="ew",padx=4,pady=(0,7))
   lower=ttk.Frame(content);lower.grid(row=4,column=0,columnspan=2,sticky="nsew",padx=4);lower.rowconfigure(0,weight=1)
   lower.columnconfigure(0,weight=4,uniform="project_lower");lower.columnconfigure(1,weight=1,uniform="project_lower")

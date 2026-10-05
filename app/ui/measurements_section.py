@@ -116,7 +116,7 @@ class MeasurementsSection(SectionView):
   self.preview_host=ttk.LabelFrame(panel,text='Preview',padding=2);self.preview_host.grid(row=1,column=0,sticky='nsew')
   self.preview=MeasurementPreview(self.preview_host,self.context)
 
-  guide='Turn landmark positions into distances you can compare.\n\n1. Set the scale\nTo obtain millimetres or other physical units, calibrate each sample using a known distance.\n\n2. Define a measurement\nGive it a name and choose the two landmarks that define the distance.\n\n3. Review and export\nCheck the preview, then save the table for statistical analysis.'
+  guide='Turn landmark positions into distances you can compare.\n\n1. Set the scale\nTo obtain millimetres or other physical units, calibrate each sample using a known distance.\n\n2. Define a measurement\nGive it a name and choose the two landmarks that define the distance.'
   dock=self.workflow_dock(panel,help_title='Measurements — quick guide',help_text=guide);dock.grid(row=2,column=0,sticky='ew',pady=(4,0))
 
   first=dock.add_card('1. Calibrate samples',icon='measurement_calibrate',help_text='Convert pixel distances to physical units for each sample.')
@@ -126,10 +126,6 @@ class MeasurementsSection(SectionView):
   second=dock.add_card('2. Define measurements',icon='measurement_define',help_text='Define each measurement as the distance between two landmarks.')
   ttk.Label(second,text='Choose landmark pairs and give each distance a short code and name.',style='Muted.TLabel',wraplength=310,justify='left').pack(anchor='w')
   self.button(second,'Measurement definitions…',self.shell.open_measurements,'Create, edit or disable measurement definitions.').pack(anchor='w',pady=(7,0))
-
-  third=dock.add_card('3. Review and export',icon='measurement_export',help_text='Check the measurement preview, then export project-level results.')
-  ttk.Label(third,text='Preview the active definitions, then export them for analysis.',style='Muted.TLabel',wraplength=310,justify='left').pack(anchor='w')
-  self.button(third,'Open Export',lambda:self.shell.select('export'),'Open the Export section for project-level output.').pack(anchor='w',pady=(7,0))
 
   self.refresh_definitions()
  def _eligible_images(self):

@@ -81,7 +81,6 @@ class ToolbarIconContractTests(unittest.TestCase):
             ),
             "app/ui/measurements_section.py":(
                 "icon='measurement_calibrate'","icon='measurement_define'",
-                "icon='measurement_export'",
             ),
             "app/ui/export_section.py":(
                 "card_header('export_landmarks','Landmark coordinates')",

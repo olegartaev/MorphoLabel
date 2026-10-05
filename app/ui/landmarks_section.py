@@ -951,11 +951,15 @@ class LandmarksSection(SectionView):
   # This direct state read deliberately avoids stage_summary(), which may refresh global workflow/catalog state.
   from app.landmark_ai_workflow import load_state,save_state
   state_doc=load_state(self.context.project);stage=state_doc.get('stage')
-  if state_doc.get('finite_editing_complete'):return False
   key='initial_image_ids' if stage=='INITIAL_TRAINING' else 'improvement_image_ids' if stage=='MODEL_IMPROVEMENT' else ''
   ids=list(state_doc.get(key,()))
   current=(self.context.current() or {}).get('image_id')
   if stage not in {'INITIAL_TRAINING','MODEL_IMPROVEMENT'} or current not in ids:return False
+  if state_doc.get('finite_editing_complete'):
+   if all(self.context.project.annotation_status(ident).get('verified') for ident in ids):return False
+   # A new Improvement selection may retain the previous batch's UI flag.
+   # Its unfinished members still require navigation and human review.
+   state_doc.pop('finite_editing_complete',None);save_state(self.context.project,state_doc)
   if int(step)>0:
    ready=getattr(self.canvas,'ready_for',None)
    if ready is not None and not ready(current):
@@ -973,6 +977,9 @@ class LandmarksSection(SectionView):
     messagebox.showwarning('Training batch',str(exc),parent=self.shell);return True
   if int(step)<0:self._pending_next_image_id=None
   position=ids.index(current);target=max(0,min(len(ids)-1,position+int(step)))
+  if target==position and int(step)>0:
+   pending=[ident for ident in ids if not self.context.project.annotation_status(ident).get('verified')]
+   if pending:target=ids.index(pending[0])
   if target==position and int(step)>0:
    state_doc['current_image_id']=current;state_doc['current_position']=position;state_doc['finite_editing_complete']=True;save_state(self.context.project,state_doc)
    ready=self.context.landmark_counts().get('New/changed',0);title='Training batch complete' if stage=='INITIAL_TRAINING' else 'Improvement batch complete';message=f"{title}.\nReviewed: {len(ids)} / {len(ids)}\nNew/changed for next training: {ready}";self.shell._update_status();self._offer_batch_error_review(ids,title,message);return True

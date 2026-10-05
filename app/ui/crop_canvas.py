@@ -114,7 +114,12 @@ class CropCanvasController:
   image_id=str(row["image_id"])
   if self._closed or token!=self._load_token or image_id!=self.requested_image_id or image_id!=((self.context.current() or {}).get("image_id")):return False
   self.loading=False;self._stop_loading_pulse();self.canvas.delete('crop_loading_status');self.base=entry["base"];self._display_source=entry.get("proxy");self._current_cache_entry=entry;self.displayed_image_id=image_id;self.model=CropModel(self.base.width,self.base.height,*bounds,angle).clamp();self._display_base=None;self._display_key=None;self._raster_key=None
-  record=self.context.project.crop_record(image_id) or {};self.context_message=prediction_stamp(record.get("model_id"),record.get("prediction_at")) if record.get("model_id") else "";self.render()
+  record=self.context.project.crop_record(image_id) or {};self.context_message=prediction_stamp(record.get("model_id"),record.get("prediction_at")) if record.get("model_id") else ""
+  from app.crop_training import rotation_supported
+  model_id=record.get("model_id") or (self.context.project.active_model("crop") or {}).get("model_id")
+  self._rotation_unavailable=bool(model_id and self.context.project.model_metadata(model_id) and not rotation_supported(self.context.project,model_id))
+  if self._rotation_unavailable:self.context_message+=(" · " if self.context_message else "")+"Bounds-only model: adjust rotation manually or train a new model."
+  self.render()
   callback=self.on_image_ready
   if callback and self.ready_for(image_id) and token==self.requested_generation:
    self._after_idle(lambda: callback(image_id,token,getattr(self,'requested_request_epoch',0)) if token==self.requested_generation and self.ready_for(image_id) else None)
@@ -224,7 +229,9 @@ class CropCanvasController:
   qcx=(self.model.left+self.model.right)/2;qtop=self.model.top;qhy=self.model.top-35/self.scale
   tcx,tcy=self._screen_source(*crop_model_to_source(self.model,qcx,qtop));hx,hy=self._screen_source(*crop_model_to_source(self.model,qcx,qhy))
   self.canvas.create_line(tcx,tcy,hx,hy,fill='#ffcc00',width=2,tags='crop_overlay');self.canvas.create_oval(hx-7,hy-7,hx+7,hy+7,fill='#ffcc00',outline='#fff',tags='crop_overlay')
-  label_x,label_y=screen[0];self.canvas.create_text(label_x,label_y-9,anchor='sw',fill='#ffcc00',text=f'rotation {self.model.angle:.1f}°',tags='crop_overlay')
+  label_x,label_y=screen[0];angle_label=f'rotation {self.model.angle:.1f}°'
+  if getattr(self,'_rotation_unavailable',False) and self.model.angle==0:angle_label+=' (manual; model has no angle)'
+  self.canvas.create_text(label_x,label_y-9,anchor='sw',fill='#ffcc00',text=angle_label,tags='crop_overlay')
   message_y=12
   if self.context_message:
    self.canvas.create_text(13,message_y+1,anchor='nw',fill='#202020',text=self.context_message,font=('Segoe UI',10,'bold'),tags='crop_overlay')

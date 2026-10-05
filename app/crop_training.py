@@ -21,6 +21,14 @@ def current_label(project=None):
   row=project.active_model("crop")
   return row.get("model_id") if row else "rule-based"
  info=active_info(); return info.get("model_id") or "rule-based"
+
+def rotation_supported(project,model_id=None):
+ row=project.model_metadata(model_id) if model_id else project.active_model("crop")
+ if not row:return False
+ path=project.data_root/str(row.get("path") or "")/"model.npz"
+ if not path.is_file():return False
+ with np.load(path) as archive:
+  return archive["weights"].shape==(769,6)
 def activate(model_id,path=None):
  directory=Path(path) if path else MODELS/str(model_id);manifest=read_json(directory/"model_manifest.json",None)
  if not manifest: raise ValueError(f"unknown crop model: {model_id}")
@@ -209,7 +217,11 @@ def predict(image, *, image_id="UNKNOWN", model_id=None, project=None):
  if not model_id:
   log(image_id,"crop_inference_skipped","END",detail="active_crop_model_id=None inference_executed=false reason=no_active_crop_model raw_output=NA confidence=NA")
   return None,"rule-based"
- weights=np.load(Path(info.get("path") or (MODELS/model_id))/"model.npz")["weights"];feature=_feature_image(image);raw=_predict_features(np.asarray([feature]),weights)[0];rotation=normalize_rotation(math.degrees(math.atan2(raw[4],raw[5]))) if len(raw)>=6 else 0.0
- result={"bounds":raw[:4],"rotation_degrees":rotation,"output_count":int(len(raw))}
+ with np.load(Path(info.get("path") or (MODELS/model_id))/"model.npz") as archive:weights=archive["weights"]
+ if weights.shape not in {(769,4),(769,6)} or not np.isfinite(weights).all():raise ValueError("Invalid Crop weights: expected finite 32x24 regression with four bounds or bounds plus rotation.")
+ feature=_feature_image(image);raw=_predict_features(np.asarray([feature]),weights)[0];supported=len(raw)==6
+ rotation=normalize_rotation(math.degrees(math.atan2(raw[4],raw[5]))) if supported else 0.0
+ if supported and math.hypot(raw[4],raw[5])<1e-8:raise ValueError("Crop model produced an undefined rotation; review the crop manually or retrain the model.")
+ result={"bounds":raw[:4],"rotation_degrees":rotation,"rotation_supported":supported,"output_count":int(len(raw))}
  log(image_id,"crop_inference_result","END",detail=f"active_crop_model_id={model_id} inference_executed=true raw_output={raw.tolist()} predicted_rotation={rotation:.3f}")
  return result,model_id

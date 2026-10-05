@@ -80,8 +80,8 @@ def start_result_review_queue(project,issues):
     items=build_result_review_queue(issues)
     state={"format_version":1,"generation_id":uuid.uuid4().hex,"created_at":datetime.now(timezone.utc).isoformat(),
            "active":bool(items),"items":items,"position":0,"completed":[]}
-    project.set_ui_state(_RESULT_REVIEW_STATE_KEY,state)
-    return state
+    from .crop_queues import replace_batch
+    return replace_batch(project,_RESULT_REVIEW_STATE_KEY,state)
 
 
 def result_review_queue(project):
@@ -97,7 +97,10 @@ def move_result_review_queue(project,step):
     if value is None:return None,False
     position=int(value["position"])+int(step);items=value["items"]
     if position<0:position=0
-    if position>=len(items):
+    if position>=len(items) or (int(step)>0 and all(index in value.get("completed",()) for index in range(len(items)))):
+        pending=[index for index in range(len(items)) if index not in value.get("completed",())]
+        if pending:
+            value["position"]=pending[0];project.set_ui_state(_RESULT_REVIEW_STATE_KEY,value);return value,False
         value["active"]=False;value["position"]=len(items)-1;project.set_ui_state(_RESULT_REVIEW_STATE_KEY,value)
         return value,True
     value["position"]=position;project.set_ui_state(_RESULT_REVIEW_STATE_KEY,value);return value,False

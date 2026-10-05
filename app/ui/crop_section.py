@@ -11,6 +11,7 @@ from .crop_canvas import CropCanvasController
 from .dialogs import center
 from .design import model_selector_width, FlowRow
 from .workflow import add_command_separator
+from app.crop_queues import replace_batch
 
 
 class CropSection(SectionView):
@@ -129,7 +130,7 @@ class CropSection(SectionView):
       dialog.destroy();messagebox.showerror("Crop training batch",str(value[0]),parent=self.shell);return
      else:
       dialog.destroy();data,prepared=value
-      ids=list(prepared["prepared_ids"]);self.context.project.set_ui_state("crop_active_batch",{"batch_id":data["batch_id"],"batch_type":"training","ids":ids,"prepared_ids":ids,"completed_ids":[],"position":0,"proposals":prepared.get("proposals",{}),"proposal_rotations":prepared.get("proposal_rotations",{})})
+      ids=list(prepared["prepared_ids"]);replace_batch(self.context.project,"crop_active_batch",{"batch_id":data["batch_id"],"batch_type":"training","ids":ids,"prepared_ids":ids,"completed_ids":[],"position":0,"proposals":prepared.get("proposals",{}),"proposal_rotations":prepared.get("proposal_rotations",{})})
       if ids:self.context.selected=next(i for i,row in enumerate(self.context.rows) if row["image_id"]==ids[0])
       messagebox.showinfo("Crop training batch",f"Prepared {len(ids)} image(s). Correct them, then use Confirm & Next or Enter to move through this batch.",parent=self.shell);self.shell.render();return
    except queue.Empty:self.shell.after(100,poll)
@@ -175,6 +176,10 @@ class CropSection(SectionView):
     if outcome=='DEFERRED':self._defer_crop_action(True)
     return
   position=ids.index(current)+int(step)
+  if int(step)>0:
+   completed=set(state.get("completed_ids",()));completed.add(current);state["completed_ids"]=[ident for ident in ids if ident in completed]
+   pending=[ident for ident in ids if ident not in completed]
+   if pending and position>=len(ids):position=ids.index(pending[0])
   if position<0: position=0
   if position>=len(ids):
    batch_type=state.get("batch_type")
@@ -214,7 +219,7 @@ class CropSection(SectionView):
  def _start_review_batch(self,ids,batch_type,title):
   ids=[image_id for image_id in ids if any(row.get('image_id')==image_id and not row.get('excluded') for row in self.context.rows)]
   if not ids:messagebox.showinfo(title,"No matching crops are available for review.",parent=self.shell);return False
-  self.context.project.set_ui_state("crop_active_batch",{"batch_id":f"{batch_type}-{int(__import__('time').time())}","batch_type":batch_type,"ids":ids,"prepared_ids":ids,"completed_ids":[],"position":0,"completion_announced":False})
+  replace_batch(self.context.project,"crop_active_batch",{"batch_id":f"{batch_type}-{int(__import__('time').time())}","batch_type":batch_type,"ids":ids,"prepared_ids":ids,"completed_ids":[],"position":0,"completion_announced":False})
   self.context.selected=next(i for i,row in enumerate(self.context.rows) if row['image_id']==ids[0]);self.shell.render();return True
  def review_worst(self):
   ids=self.context.project.crop_review_candidates()
@@ -286,7 +291,7 @@ class CropSection(SectionView):
        summary+=f"\nNeeds attention: {len(failures)}.\nFirst issue: {reason}\nThese images were not silently accepted; details are recorded in app.log."
       if result["success"] and messagebox.askyesno(title,summary+"\n\nReview this batch now?",parent=self.shell,default=messagebox.YES):
        ids=list(result.get("successful_ids",()))
-       self.context.project.set_ui_state("crop_active_batch",{"batch_id":(prediction_batch or {}).get("batch_id","crop_prediction_review"),"batch_type":"prediction_review","ids":ids,"prepared_ids":ids,"completed_ids":[],"position":0,"model_id":result.get("model_id"),"completion_announced":False})
+       replace_batch(self.context.project,"crop_active_batch",{"batch_id":(prediction_batch or {}).get("batch_id","crop_prediction_review"),"batch_type":"prediction_review","ids":ids,"prepared_ids":ids,"completed_ids":[],"position":0,"model_id":result.get("model_id"),"completion_announced":False})
        if ids:self.context.selected=next(i for i,row in enumerate(self.context.rows) if row["image_id"]==ids[0])
        self.shell.render();return
       messagebox.showinfo(title,summary,parent=self.shell);self.shell.render();return

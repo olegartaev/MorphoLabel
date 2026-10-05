@@ -151,18 +151,18 @@ class FinalModelTransferTests(unittest.TestCase):
         for kind,ident in (("crop","current_crop_7"),("structure","structure_test")):
             with patch("app.modules.xray_counts.filedialog.askopenfilename",return_value="") as dialog:
                 getattr(runtime,f"_menu_import_{kind}_ai")()
-                self.assertEqual(ident+".zip",dialog.call_args.kwargs["initialfile"])
+                self.assertEqual("xray_"+ident+".zip",dialog.call_args.kwargs["initialfile"])
             with patch("app.modules.xray_counts.filedialog.asksaveasfilename",return_value="") as dialog:
                 getattr(runtime,f"_menu_export_{kind}_ai")()
-                self.assertEqual(ident+".zip",dialog.call_args.kwargs["initialfile"])
+                self.assertEqual("xray_"+ident+".zip",dialog.call_args.kwargs["initialfile"])
         from app.xray_structures_ui import XRayStructureWorkspace
         workspace=SimpleNamespace(project=self.xray,root=None)
         with patch("app.xray_structures_ui.filedialog.askopenfilename",return_value="") as dialog:
             XRayStructureWorkspace.import_structure_ai_file(workspace)
-            self.assertEqual("structure_test.zip",dialog.call_args.kwargs["initialfile"])
+            self.assertEqual("xray_structure_test.zip",dialog.call_args.kwargs["initialfile"])
         with patch("app.xray_structures_ui.filedialog.asksaveasfilename",return_value="") as dialog:
             XRayStructureWorkspace.export_active_structure_ai(workspace)
-            self.assertEqual("structure_test.zip",dialog.call_args.kwargs["initialfile"])
+            self.assertEqual("xray_structure_test.zip",dialog.call_args.kwargs["initialfile"])
 
     def test_detector_package_preserves_effective_nested_inference_pipeline(self):
         from app.xray_crop_package import _portable_config
@@ -184,10 +184,10 @@ class FinalModelTransferTests(unittest.TestCase):
         for kind,ident in (("crop","crop_name_7"),("landmark","landmark_name_9")):
             with patch("app.modules.landmarks.filedialog.asksaveasfilename",return_value="") as dialog:
                 LandmarksRuntime._export_model(dummy,kind)
-                self.assertEqual(ident+".zip",dialog.call_args.kwargs["initialfile"])
+                self.assertEqual("landmarks_"+ident+".zip",dialog.call_args.kwargs["initialfile"])
             with patch("app.modules.landmarks.filedialog.askopenfilename",return_value="") as dialog:
                 LandmarksRuntime._import_model(dummy,kind)
-                self.assertEqual(ident+".zip",dialog.call_args.kwargs["initialfile"])
+                self.assertEqual("landmarks_"+ident+".zip",dialog.call_args.kwargs["initialfile"])
         with patch("app.modules.landmarks.filedialog.askopenfilename",return_value="model.zip"), \
              patch("app.modules.landmarks.import_model_package",return_value="crop_name_7"), \
              patch("app.modules.landmarks.messagebox.showinfo"), \

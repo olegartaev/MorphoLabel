@@ -115,13 +115,15 @@ class LandmarkAIReviewTests(unittest.TestCase):
         self.assertEqual([first,second,third],session["original_image_ids"])
         self.assertNotIn(second,session.get("review_meta",{}))
 
-    def test_new_ranked_review_supersedes_older_unfinished_ranked_session(self):
+    def test_new_ranked_review_keeps_older_unfinished_session_resumable(self):
         first,second,third=self.ids
         for image_id in self.ids:self._machine(image_id)
         create_review_session_for_ids(self.project,"older",(first,second),kind="review_worst_v2")
         create_review_session_for_ids(self.project,"newer",(third,),kind="review_worst_v2")
-        self.assertEqual("newer",pending_review_session(self.project)["batch_id"])
-        self.assertIsNone(activate_review_session(self.project,"older"))
+        from app.landmark_ai_review import pending_review_sessions
+        self.assertEqual(["older","newer"],[row['batch_id'] for row in pending_review_sessions(Project.open(self.project.root))])
+        self.assertEqual([first,second],activate_review_session(self.project,"older")['image_ids'])
+        self.assertEqual([third],activate_review_session(self.project,"newer")['image_ids'])
 
     def test_review_previous_does_not_enter_verified_member(self):
         first,second,third=self.ids

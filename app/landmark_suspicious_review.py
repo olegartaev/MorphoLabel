@@ -35,7 +35,8 @@ def start(project, issues, *, source="landmark_batch"):
         "position": 0,
         "completed": [],
     }
-    project.set_ui_state(_STATE_KEY, state)
+    from .crop_queues import replace_batch
+    replace_batch(project,_STATE_KEY,state)
     return state
 
 
@@ -89,7 +90,10 @@ def move(project, step):
     target = position + int(step)
     if target < 0:
         target = 0
-    if target >= len(issues):
+    if target >= len(issues) or (int(step)>0 and all(index in value.get("completed",()) for index in range(len(issues)))):
+        pending=[index for index in range(len(issues)) if index not in value.get("completed",())]
+        if pending:
+            value["position"]=pending[0];project.set_ui_state(_STATE_KEY,value);return value,False
         value["active"] = False
         value["position"] = len(issues) - 1
         project.set_ui_state(_STATE_KEY, value)

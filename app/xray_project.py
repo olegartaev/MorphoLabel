@@ -1439,26 +1439,32 @@ class XRayProject:
         ids=[str(value) for value in state.get("ids",()) if str(value) in eligible]
         if not ids:return {}
         pos=max(0,min(len(ids)-1,int(state.get("position",0) or 0)))
-        return {"pass_no":pass_no,"ids":ids,"position":pos}
+        return {**state,"pass_no":pass_no,"ids":ids,"position":pos}
 
     def start_structure_batch(self,count,pass_no=1,start_specimen_id=None):
         pass_no=int(pass_no);count=max(1,int(count));rows=self.structure_specimens(pass_no)
         candidates=[row for row in rows if str(row.get("annotation_status") or "")!="verified"]
         if not candidates:
-            self.set_ui_state("xray_structure_active_batch",{});return {}
+            return {}
         ids=[row["specimen_id"] for row in candidates]
         start=str(start_specimen_id or "")
         if start in ids:
             index=ids.index(start);ids=ids[index:]+ids[:index]
         ids=ids[:count]
         state={"pass_no":pass_no,"ids":ids,"position":0}
-        self.set_ui_state("xray_structure_active_batch",state);return state
+        from .crop_queues import replace_batch
+        return replace_batch(self,"xray_structure_active_batch",state)
 
     def move_structure_batch(self,current_specimen_id,step,pass_no=1):
         state=self.structure_batch(pass_no);ids=list(state.get("ids") or ())
         if not ids or str(current_specimen_id) not in ids:return {"finished":False,"specimen_id":None,"state":state}
         pos=ids.index(str(current_specimen_id))+int(step)
         if pos>=len(ids):
+            statuses={row["specimen_id"]:row.get("annotation_status") for row in self.structure_specimens(pass_no)}
+            pending=[ident for ident in ids if statuses.get(ident)!="verified"]
+            if pending:
+                pos=ids.index(pending[0]);state["position"]=pos;self.set_ui_state("xray_structure_active_batch",state)
+                return {"finished":False,"specimen_id":ids[pos],"state":state}
             self.set_ui_state("xray_structure_active_batch",{})
             return {"finished":True,"specimen_id":None,"state":{}}
         pos=max(0,pos);state["position"]=pos;self.set_ui_state("xray_structure_active_batch",state)

@@ -14,7 +14,7 @@ ROLE_FROM_NAME={v:k for k,v in ROLE_NAMES.items()}
 
 class SchemaEditor(tk.Toplevel):
  def __init__(self,parent,path=None,*,project=None,on_apply=None):
-  super().__init__(parent);apply_window_identity(self,short=True);self.geometry("760x520");self.path=Path(path) if path else None;self.rows=[];self.delimiter=";";self.dirty=False;self._editor=None;self._editor_row=None;self._editor_key=None
+  super().__init__(parent);apply_window_identity(self,short=True);self.geometry("900x520");self.minsize(680,420);self.path=Path(path) if path else None;self.rows=[];self.delimiter=";";self.dirty=False;self._editor=None;self._editor_row=None;self._editor_key=None
   namebar=ttk.Frame(self,padding=5);namebar.pack(fill="x")
   ttk.Label(namebar,text="Scheme name:").pack(side="left")
   self.scheme_name=tk.StringVar();ttk.Entry(namebar,textvariable=self.scheme_name,width=44).pack(side="left",padx=6);trace_for_widget(self,self.scheme_name,"write",lambda *_: setattr(self,"dirty",True))
@@ -26,7 +26,12 @@ class SchemaEditor(tk.Toplevel):
   self.table=ttk.Treeview(frame,columns=("id","role","abbr","name"),show="headings",selectmode="browse")
   for c,h,w,st in (("id","#",45,False),("role","Morphometry",190,False),("abbr","Abbr",100,False),("name","Name",400,True)):
    self.table.heading(c,text=h);self.table.column(c,width=w,minwidth=w,stretch=st,anchor="w")
-  scroll=ttk.Scrollbar(frame,orient="vertical",command=self.table.yview);self.table.configure(yscrollcommand=scroll.set);self.table.pack(side="left",fill="both",expand=True);scroll.pack(side="right",fill="y")
+  frame.rowconfigure(0,weight=1);frame.columnconfigure(0,weight=1)
+  scroll=ttk.Scrollbar(frame,orient="vertical",command=self.table.yview)
+  def scroll_x(*args):self.close_editor();self.table.xview(*args)
+  horizontal=ttk.Scrollbar(frame,orient="horizontal",command=scroll_x)
+  self.table.configure(yscrollcommand=scroll.set,xscrollcommand=horizontal.set)
+  self.table.grid(row=0,column=0,sticky="nsew");scroll.grid(row=0,column=1,sticky="ns");horizontal.grid(row=1,column=0,sticky="ew")
   self.table.bind("<Double-1>",self.edit_cell);self.table.bind("<ButtonPress-1>",self.table_press);self.table.bind("<B1-Motion>",self.drag_motion);self.table.bind("<ButtonRelease-1>",self.drag_end);self.table.bind("<MouseWheel>",lambda e:self.close_editor())
   controls=ttk.Frame(self,padding=5);controls.pack(fill="x")
   for text,cmd in (("+ Add landmark",self.add_row),("Delete",self.delete_row),("↑",lambda:self.move(-1)),("↓",lambda:self.move(1))):ttk.Button(controls,text=text,command=cmd).pack(side="left",padx=2)
@@ -38,7 +43,7 @@ class SchemaEditor(tk.Toplevel):
   for row in self.rows:self.table.insert("","end",iid=str(row["id"]),values=(row["id"],ROLE_NAMES.get(row["role"],row["role"]),row["abbr"],row["name"]))
  def new_schema(self):
   if self.dirty and not self.confirm_discard():return
-  self.close_editor();self.path=None;self.rows=[{"id":1,"role":"BT","abbr":"","name":""}];self.delimiter=";";self.scheme_name.set("New landmark schema");self.dirty=True;self.redraw()
+  self.close_editor();self.path=None;self.rows=[{"id":1,"role":"BT","abbr":"","name":""}];self.delimiter=";";self._stored_scheme_name=None;self._initial_scheme_name="";self.scheme_name.set("New landmark schema");self.dirty=True;self.redraw()
   self._update_apply_button()
  def load_path(self,path):
   try:
@@ -46,6 +51,7 @@ class SchemaEditor(tk.Toplevel):
    load_schema(path)
    self.close_editor();delim,_,raw=read_schema_csv(path);text=Path(path).read_text(encoding="utf-8-sig");name=next((line.strip()[13:] for line in text.splitlines() if line.lstrip().startswith("# SCHEMA_NAME=")),Path(path).stem);self.rows=[{"id":i+1,"role":({"BOTH":"BT","GM":"GM","CLASSICAL":"CL"}.get(r.get("role","BOTH").upper(),"BT")),"abbr":r.get("abbr","").strip(),"name":r.get("name","").strip()} for i,r in enumerate(raw)] or [{"id":1,"role":"BT","abbr":"","name":""}];self.delimiter=delim;self.path=Path(path);self.scheme_name.set(name);self.dirty=False;self.redraw()
    for row,source in zip(self.rows,raw):row["category"]=(source.get("category") or "").strip()
+   self._stored_scheme_name=next((line for line in text.splitlines() if line.lstrip().startswith("# SCHEMA_NAME=")),None);self._initial_scheme_name=name
    self._update_apply_button()
   except Exception as exc:messagebox.showerror("Open schema",str(exc),parent=self)
  def _update_apply_button(self):
@@ -84,10 +90,19 @@ class SchemaEditor(tk.Toplevel):
    if row["role"] not in ROLE_CODES:raise ValueError(f"Row {i}: invalid role")
    seen.add(row["abbr"].strip())
  def save(self):
+  self.close_editor()
   if not self.path:return self.save_as()
   try:self.validate()
   except ValueError as exc:messagebox.showerror("Invalid schema",str(exc),parent=self);return False
-  self.close_editor();self.renumber();d=self.delimiter if self.delimiter in ",;\t|" else ",";self.path.write_text(d.join(("id","abbr","name","role"))+"\n"+"".join(d.join((str(r["id"]),r["abbr"].strip(),r["name"].strip(),ROLE_CODES[r["role"]]))+"\n" for r in self.rows),encoding="utf-8");self.dirty=False;return True
+  self.renumber();d=self.delimiter if self.delimiter in ",;\t|" else ","
+  import io
+  out=io.StringIO(newline="")
+  if self._stored_scheme_name is not None or self.scheme_name.get()!=self._initial_scheme_name:out.write("# SCHEMA_NAME="+self.scheme_name.get().replace("\n"," ").replace("\r"," ")+"\n")
+  fields=("id","abbr","name","role","category") if any(row.get("category") for row in self.rows) else ("id","abbr","name","role")
+  writer=csv.DictWriter(out,fieldnames=fields,delimiter=d,lineterminator="\n");writer.writeheader()
+  for row in self.rows:writer.writerow({key:({"id":row["id"],"abbr":row["abbr"].strip(),"name":row["name"].strip(),"role":ROLE_CODES[row["role"]],"category":row.get("category","")})[key] for key in fields})
+  from .measurements import _atomic
+  _atomic(self.path,out.getvalue());self.dirty=False;return True
  def save_as(self):
   safe="".join(ch if ch.isalnum() or ch in " _-" else "_" for ch in self.scheme_name.get()).strip().replace(" ","_") or "landmark_schema"
   path=filedialog.asksaveasfilename(parent=self,defaultextension=".csv",initialfile=safe+".csv",filetypes=[("CSV","*.csv")])
@@ -109,7 +124,12 @@ class SchemaEditor(tk.Toplevel):
  def close_editor(self,commit=True):
   w=self._editor
   if w is None:return
-  if commit and self._editor_row is not None:self.rows[self._editor_row][self._editor_key]=w.get()
+  if commit and self._editor_row is not None:
+   value=w.get()
+   if self.rows[self._editor_row][self._editor_key]!=value:self.dirty=True
+   self.rows[self._editor_row][self._editor_key]=value
+   rowid=str(self._editor_row+1)
+   if self.table.exists(rowid):self.table.set(rowid,self._editor_key,value)
   try:w.destroy()
   except tk.TclError:pass
   self._editor=None;self._editor_row=None;self._editor_key=None
@@ -136,7 +156,8 @@ class SchemaEditor(tk.Toplevel):
   i=self.table.index(rowid);key={"#3":"abbr","#4":"name"}.get(col)
   if not key:return
   bbox=self.table.bbox(rowid,col);var=tk.StringVar(value=self.rows[i][key]);w=ttk.Entry(self.table,textvariable=var)
-  w.place(x=bbox[0],y=bbox[1],width=bbox[2],height=bbox[3]);w.focus_set();self._editor=w;self._editor_row=i;self._editor_key=key
+  x=max(0,bbox[0]);width=max(24,min(bbox[2],self.table.winfo_width()-x-2))
+  w.place(x=x,y=bbox[1],width=width,height=bbox[3]);w.focus_set();w.xview_moveto(1);self._editor=w;self._editor_row=i;self._editor_key=key
   def finish(_=None):
    self.rows[i][key]=var.get();self.dirty=True;self.close_editor(False);self.redraw();self.table.selection_set(rowid)
   def cancel(_=None):self.close_editor(False);self.redraw()

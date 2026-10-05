@@ -348,8 +348,8 @@ class FollowupTkTests(unittest.TestCase):
         before=(dialog.head.get(),dialog.bottom.get())
         for scale in (1,1.25,1.5):
             shell.tk.call("tk","scaling",scale*96/72)
-            for example in ("fish","radial"):
-                dialog.example.set(example);dialog._draw();shell.update()
+            for _repeat in (0,1):
+                dialog._draw();shell.update()
                 images=dialog.preview.find_withtag("orientation_reference")
                 self.assertEqual(1,len(images));self.assertEqual("image",dialog.preview.type(images[0]))
                 self.assertEqual(before,(dialog.head.get(),dialog.bottom.get()))

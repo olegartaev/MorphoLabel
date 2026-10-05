@@ -50,7 +50,8 @@ def start(project,image_ids,*,batch_id=None,failure_reasons=None,source="landmar
   "active":bool(ids),
   "failure_reasons":{str(k):str(v) for k,v in (failure_reasons or {}).items() if str(k) in ids},
  }
- _save(project,value);return dict(value)
+ from .crop_queues import replace_batch
+ replace_batch(project,_STATE_KEY,value);return dict(value)
 
 def state(project):
  value=_load(project)

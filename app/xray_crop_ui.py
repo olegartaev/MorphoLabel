@@ -527,7 +527,8 @@ class XRayCropWorkspace:
     def _set_batch(self,ids,batch_type,model_id=""):
         ids=list(dict.fromkeys(str(value) for value in ids))
         state={"batch_type":str(batch_type),"ids":ids,"position":0,"model_id":str(model_id or "")}
-        self.project.set_ui_state("xray_crop_active_batch",state);self._queue_active=bool(ids)
+        from app.crop_queues import replace_batch
+        replace_batch(self.project,"xray_crop_active_batch",state);self._queue_active=bool(ids)
         if ids:self.selected_image_id=ids[0]
         self.refresh(preserve_plate=bool(ids));return bool(ids)
 
@@ -1049,11 +1050,18 @@ class XRayCropWorkspace:
         state=self._batch();ids=list(state.get("ids") or [])
         if not ids or self.selected_image_id not in ids:return False
         pos=ids.index(self.selected_image_id)+int(step)
+        if int(step)>0 and self.project.source_image(self.selected_image_id).get("crop_reviewed"):
+            completed=set(state.get("completed_ids",()));completed.add(self.selected_image_id)
+            state["completed_ids"]=[ident for ident in ids if ident in completed]
         if pos<0:pos=0
         if pos>=len(ids):
-            batch_type=state.get("batch_type");self.project.set_ui_state("xray_crop_active_batch",{"batch_type":batch_type,"ids":[],"finished":True})
-            self._refresh_controls();self.plate_list.refresh(preserve_scroll=True)
-            messagebox.showinfo("Crop review batch" if batch_type=="prediction_review" else "Crop training batch","Batch complete.",parent=self.root);return True
+            pending=[ident for ident in ids if ident not in state.get("completed_ids",())]
+            if pending:
+                pos=ids.index(pending[0])
+            else:
+                batch_type=state.get("batch_type");self.project.set_ui_state("xray_crop_active_batch",{"batch_type":batch_type,"ids":[],"finished":True})
+                self._refresh_controls();self.plate_list.refresh(preserve_scroll=True)
+                messagebox.showinfo("Crop review batch" if batch_type=="prediction_review" else "Crop training batch","Batch complete.",parent=self.root);return True
         state["position"]=pos;self.project.set_ui_state("xray_crop_active_batch",state);self._load_plate(ids[pos]);self.plate_list.select(ids[pos],reveal=False);self._refresh_batch_banner();self.on_changed();return True
 
     def train_model(self):

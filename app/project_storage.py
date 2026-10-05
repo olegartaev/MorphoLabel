@@ -2,6 +2,7 @@
 from __future__ import annotations
 import csv, hashlib, json, math, shutil, sqlite3, uuid
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 from .io import read_json
@@ -11,6 +12,7 @@ from .profile import read_schema_csv
 PROJECT_FILE="project.yaml"; SCHEMA_FILE="landmark_schema.csv"; DATABASE_FILE="project.sqlite"
 SUPPORTED_SOURCE_TYPES={"nef":".nef","jpg":".jpg","jpeg":".jpeg","png":".png","tif":".tif","tiff":".tiff"}
 EXCLUDED_DIR_NAMES={"_points","png","bad","cache","output","outputs","reference","references","work","standardized","developed_full"}
+_ATOMIC_CONNECTIONS=ContextVar("project_atomic_connections",default={})
 
 def natural_key(value):
  import re
@@ -92,13 +94,13 @@ class Project:
  @property
  def results_root(self): return self.root/"results"
  @classmethod
- def create(cls,name,source_root,destination,schema_csv=None,source_types=None,source_image_subfolder="orig",source_layout=None):
+ def create(cls,name,source_root,destination,schema_csv=None,source_types=None,source_image_subfolder="orig",source_layout=None,progress=None):
   source_root=Path(source_root).resolve();destination=Path(destination).resolve();schema=load_schema(Path(schema_csv).resolve()) if schema_csv else [];root=destination/name
   if source_layout is None: source_layout="subfolder" if any(p.is_dir() and p.name.casefold()==str(source_image_subfolder).casefold() for loc in source_root.iterdir() if loc.is_dir() for p in loc.iterdir()) else "direct"
   if root.exists() and any(root.iterdir()): raise FileExistsError(f"project directory is not empty: {root}")
   root.mkdir(parents=True,exist_ok=True)
   for folder in ("project_data/cache/developed","project_data/cache/standardized","project_data/models","results"): (root/folder).mkdir(parents=True,exist_ok=True)
-  (shutil.copy2(schema_csv,root/SCHEMA_FILE) if schema_csv else (root/SCHEMA_FILE).write_text("id,abbr,name,role"+chr(10),encoding="utf-8"));project=cls(root);_json(project.config_path,{"format_version":1,"name":name,"source_root":str(source_root),"source_layout":source_layout,"source_image_subfolder":source_image_subfolder if source_layout=="subfolder" else "","schema_sha256":schema_hash(project.schema_path),"created_at":now()});chosen=project.choose_source_types(source_types);_json(project.config_path,{"format_version":1,"name":name,"source_root":str(source_root),"source_layout":source_layout,"source_image_subfolder":source_image_subfolder if source_layout=="subfolder" else "","source_types":chosen,"schema_sha256":schema_hash(project.schema_path),"created_at":now()});project.initialize(schema);project.scan_originals(source_types=chosen);return project
+  (shutil.copy2(schema_csv,root/SCHEMA_FILE) if schema_csv else (root/SCHEMA_FILE).write_text("id,abbr,name,role"+chr(10),encoding="utf-8"));project=cls(root);_json(project.config_path,{"format_version":1,"name":name,"source_root":str(source_root),"source_layout":source_layout,"source_image_subfolder":source_image_subfolder if source_layout=="subfolder" else "","schema_sha256":schema_hash(project.schema_path),"created_at":now()});chosen=project.choose_source_types(source_types);_json(project.config_path,{"format_version":1,"name":name,"source_root":str(source_root),"source_layout":source_layout,"source_image_subfolder":source_image_subfolder if source_layout=="subfolder" else "","source_types":chosen,"schema_sha256":schema_hash(project.schema_path),"created_at":now()});project.initialize(schema);project.scan_originals(source_types=chosen,progress=progress);return project
  @classmethod
  def open(cls,root):
   project=cls(root)
@@ -245,10 +247,34 @@ WHERE provenance='manual'
   conn=sqlite3.connect(self.path);conn.row_factory=sqlite3.Row;conn.execute("PRAGMA journal_mode=DELETE");conn.execute("PRAGMA foreign_keys=ON");conn.execute("PRAGMA synchronous=FULL");return conn
  @contextmanager
  def transaction(self):
+  shared=_ATOMIC_CONNECTIONS.get().get(str(self.path.resolve()))
+  if shared is not None:
+   yield shared;return
   conn=self.connect()
   try:
    with conn: yield conn
   finally: conn.close()
+ @contextmanager
+ def atomic_model_import(self):
+  """Register a portable model and its small scheme files as one recoverable change.
+
+  Nested project operations share this thread's transaction; other projects
+  and worker threads keep their independent connections.
+  """
+  files=(self.schema_path,self.config_path,self.root/"measurement_schema.csv")
+  before={path:path.read_bytes() if path.exists() else None for path in files}
+  conn=self.connect();key=str(self.path.resolve());token=_ATOMIC_CONNECTIONS.set({**_ATOMIC_CONNECTIONS.get(),key:conn})
+  try:
+   with conn:
+    conn.execute("BEGIN IMMEDIATE")
+    yield
+  except Exception:
+   for path,payload in before.items():
+    if payload is None:path.unlink(missing_ok=True)
+    else:path.write_bytes(payload)
+   self._schema_cache=None;self._schema_cache_signature=None;self._schema_error=None
+   raise
+  finally:_ATOMIC_CONNECTIONS.reset(token);conn.close()
  def initialize(self,schema=None):
   schema=self.schema if schema is None else schema
   with self.transaction() as c:
@@ -264,14 +290,16 @@ CREATE TABLE IF NOT EXISTS models (model_id TEXT PRIMARY KEY,kind TEXT NOT NULL,
 CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT NOT NULL,payload_json TEXT NOT NULL,created_at TEXT NOT NULL,FOREIGN KEY(image_id) REFERENCES images(image_id));''')
    c.execute("INSERT OR REPLACE INTO project(key,value) VALUES (?,?)",("schema_sha256",schema_hash(self.schema_path)))
   self.ensure_schema()
- def scan_originals(self,hashes=False,source_types=None):
+ def scan_originals(self,hashes=False,source_types=None,progress=None):
+  if progress:progress("Scanning source photographs…")
   self.ensure_schema(); items=self._source_items(); root=self.source_root
   with self.transaction() as c:
    c.execute("UPDATE images SET active=0,source_available=0")
    totals={}; positions={}
    for _,_,loc,_,_ in items: totals[loc]=totals.get(loc,0)+1
-   for p,rel,loc,_,_ in items:
+   for index,(p,rel,loc,_,_) in enumerate(items,1):
     positions[loc]=positions.get(loc,0)+1; st=p.stat(); ident=hashlib.sha256(f"orig_photos/{rel}".encode()).hexdigest()[:16]; digest=sha256(p) if hashes else None
+    if progress and (index%100==0 or index==len(items)):progress(f"Indexing photographs: {index} / {len(items)} · {p.name}",index,len(items))
     c.execute("INSERT INTO images(image_id,specimen_id,original_name,relative_path,sample_id,locality,index_in_locality,total_in_locality,file_size,mtime_ns,source_sha256,active,source_available,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(image_id) DO UPDATE SET specimen_id=COALESCE(images.specimen_id,excluded.specimen_id),original_name=excluded.original_name,relative_path=excluded.relative_path,sample_id=excluded.locality,locality=excluded.locality,index_in_locality=excluded.index_in_locality,total_in_locality=excluded.total_in_locality,file_size=excluded.file_size,mtime_ns=excluded.mtime_ns,source_sha256=COALESCE(excluded.source_sha256,images.source_sha256),active=1,source_available=1",(ident,ident,p.name,rel,loc,loc,positions[loc],totals[loc],st.st_size,st.st_mtime_ns,digest,1,1,now()))
   return len(items)
  def _refresh_source_availability(self):

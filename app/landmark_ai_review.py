@@ -27,11 +27,11 @@ def create_review_session_for_ids(project, session_id, image_ids, *, kind="revie
  review_meta={str(key):dict(value) for key,value in (metadata or {}).items() if str(key) in ids}
  doc=_load(project);session=_session(doc,session_id)
  if kind=="review_worst_v2":
-  # A fresh ranked review supersedes older unfinished ranked sessions. Keep
-  # them in history, but never let stale verified members hijack navigation.
+  # A fresh review becomes active independently. Earlier unfinished queues
+  # remain resumable until the user closes them or all their members are done.
   for item in doc.get("sessions",()):
    if item is session or item.get("complete") or item.get("kind")!="review_worst_v2":continue
-   item.update({"active":False,"complete":True,"superseded_at":_now()})
+   item.update({"active":False,"superseded_at":_now()})
  if session is None:
   session={"kind":kind,"batch_id":str(session_id),"image_ids":list(ids),"current_position":0,"current_image_id":ids[0],"complete":False,"active":False,"created_at":_now(),"review_meta":review_meta};doc.setdefault("sessions",[]).append(session)
  else:
@@ -41,7 +41,7 @@ def supersede_unfinished_reviews(project,reason=None):
  doc=_load(project);changed=False
  for item in doc.get("sessions",()):
   if item.get("complete"):continue
-  item.update({"active":False,"complete":True,"superseded_at":_now()})
+  item.update({"active":False,"superseded_at":_now()})
   if reason:item["superseded_reason"]=str(reason)
   changed=True
  if changed:_save(project,doc)
@@ -50,6 +50,9 @@ def supersede_unfinished_reviews(project,reason=None):
 def pending_review_session(project):
  doc=_load(project)
  return next((dict(item) for item in doc.get("sessions",()) if not item.get("complete") and not item.get("closed")),None)
+
+def pending_review_sessions(project):
+ return tuple(dict(item) for item in _load(project).get("sessions",()) if not item.get("complete") and not item.get("closed"))
 def active_review_session(project):
  doc=_load(project)
  return next((dict(item) for item in doc.get("sessions",()) if item.get("active") and not item.get("complete") and not item.get("closed")),None)

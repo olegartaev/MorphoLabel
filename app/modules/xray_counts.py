@@ -267,18 +267,13 @@ class OrientationSetupDialog(tk.Toplevel):
         initial=initial or {"head":"left","bottom":"down"};self.result=None
         self.head=tk.StringVar(master=self,value=str(initial.get("head") or "left"))
         self.bottom=tk.StringVar(master=self,value=str(initial.get("bottom") or "down"))
-        self.example=tk.StringVar(master=self,value="fish")
         from PIL import Image
         self._reference_images={}
-        for name in ("fish","radial"):
+        for name in ("fish",):
             with Image.open(Path(__file__).resolve().parents[1]/"resources"/"orientation"/(name+".png")) as image:self._reference_images[name]=image.convert("RGB")
         outer=ttk.Frame(self,padding=14);outer.pack(fill="both",expand=True)
         ttk.Label(outer,text="Standard orientation",style="PageTitle.TLabel").pack(anchor="w")
         ttk.Label(outer,text="Choose a consistent view for cropped animals.",style="PageSubtitle.TLabel",wraplength=600).pack(anchor="w",pady=(2,8))
-        examples=ttk.Frame(outer);examples.pack(fill="x",pady=(0,6))
-        ttk.Label(examples,text="Reference example:",style="Muted.TLabel").pack(side="left")
-        for text,value in (("Fish","fish"),("Radial object","radial")):
-            ttk.Radiobutton(examples,text=text,value=value,variable=self.example,command=self._draw).pack(side="left",padx=8)
         self.preview=tk.Canvas(outer,width=600,height=300,background="#f8fafc",highlightthickness=1,highlightbackground="#d6dbe0");self.preview.pack(fill="x")
         self.preview.bind("<Configure>",lambda _event:self._draw())
         controls=ttk.Frame(outer);controls.pack(fill="x",pady=(8,0))
@@ -300,16 +295,16 @@ class OrientationSetupDialog(tk.Toplevel):
         head=self.head.get();bottom=self.bottom.get()
         state=orientation_preview_transform(head,bottom);flip_x=state["flip_x"];flip_y=state["flip_y"]
         def point(x,y):return (cx+(x-cx)*(-1 if flip_x else 1),cy+(y-cy)*(-1 if flip_y else 1))
-        radial=self.example.get()=="radial";image=self._reference_images[self.example.get()].copy()
-        if not radial:image=image.crop((round(image.width*.06),round(image.height*.27),round(image.width*.97),round(image.height*.73)))
+        image=self._reference_images["fish"].copy()
+        image=image.crop((round(image.width*.06),round(image.height*.27),round(image.width*.97),round(image.height*.73)))
         image.thumbnail((int(w-100),int(h-90)),Image.Resampling.LANCZOS)
         if flip_x:image=ImageOps.mirror(image)
         if flip_y:image=ImageOps.flip(image)
         self._preview_photo=ImageTk.PhotoImage(image,master=c)
         c.create_image(cx,cy,image=self._preview_photo,tags="orientation_reference")
         if state["show_head"]:
-            label=point(cx-(160 if radial else 215),cy-112);tip=point(cx-205,cy-15)
-            c.create_text(*label,text="Reference direction" if radial else "Head",fill="#176fa7",font=("Segoe UI",10,"bold"))
+            label=point(cx-215,cy-112);tip=point(cx-205,cy-15)
+            c.create_text(*label,text="Head",fill="#176fa7",font=("Segoe UI",10,"bold"))
             start=point(cx-215,cy-96);c.create_line(*start,*tip,fill="#2196f3",width=2,arrow="last")
         if state["show_bottom"]:
             y=cy+79
@@ -317,7 +312,7 @@ class OrientationSetupDialog(tk.Toplevel):
             c.create_line(*line[0],*line[1],fill="#ffad1f",width=6)
             tip=point(cx,y+19);base1=point(cx-9,y+2);base2=point(cx+9,y+2)
             c.create_polygon(*tip,*base1,*base2,fill="#ffad1f",outline="#ffffff")
-            label=point(cx,y+39);c.create_text(*label,text="Reference side" if radial else "Ventral side",fill="#9a6500",font=("Segoe UI",10,"bold"))
+            label=point(cx,y+39);c.create_text(*label,text="Ventral side",fill="#9a6500",font=("Segoe UI",10,"bold"))
         notes=[]
         if not state["show_head"]:notes.append("Head: don't standardize")
         if not state["show_bottom"]:notes.append("Ventral side: don't standardize")
@@ -545,6 +540,13 @@ class XRayCountsRuntime:
                 "open":self._open_crop_queue,
                 "close":self._close_crop_queue,
             })
+        from app.crop_queues import saved_batches,close_saved_batch
+        for key,title,opener in (("xray_crop_active_batch","Crop queue",self._open_crop_queue),("xray_structure_active_batch","Structure annotation batch",self._open_structure_queue),("xray_result_review_queue","Results review",self._open_result_queue)):
+            for saved in saved_batches(self.project,key):
+                queue_id=saved["queue_id"]
+                entries.append({"title":title,"detail":f"{len(saved.get('ids') or saved.get('items') or ())} saved items",
+                    "open":lambda k=key,ident=queue_id,cb=opener:self._open_saved_xray_queue(k,ident,cb),
+                    "close":lambda k=key,ident=queue_id:(close_saved_batch(self.project,k,ident),self._rerender())})
         structure=self.project.get_ui_state("xray_structure_active_batch",{}) or {}
         structure_ids=[str(value) for value in structure.get("ids") or ()]
         if structure_ids:
@@ -567,6 +569,10 @@ class XRayCountsRuntime:
                 "close":self._close_result_queue,
             })
         return tuple(entries)
+
+    def _open_saved_xray_queue(self,key,queue_id,opener):
+        from app.crop_queues import open_saved_batch
+        return bool(open_saved_batch(self.project,key,queue_id) and opener())
 
     def _open_crop_queue(self):
         self.stage="crops";self._rerender()
@@ -676,7 +682,8 @@ class XRayCountsRuntime:
 
         from app.ui.model_transfer import model_transfer_card
         for column,(kind,title,active) in enumerate((("crop","X-ray Crop model",self.project.active_crop_model()),("structure","X-ray Structure model",self.project.active_structure_model()))):
-            card=model_transfer_card(content,title,active,getattr(self,f"_menu_import_{kind}_ai"),getattr(self,f"_menu_export_{kind}_ai"))
+            models=self.project.crop_models() if kind=="crop" else self.project.structure_models()
+            card=model_transfer_card(content,title,active,getattr(self,f"_menu_import_{kind}_ai"),getattr(self,f"_menu_export_{kind}_ai"),models=models)
             card.grid(row=2,column=column,sticky="ew",padx=4,pady=(0,7))
         traits=ttk.LabelFrame(content,text="Traits",padding=8);traits.grid(row=3,column=0,columnspan=2,sticky="nsew",padx=4)
         traits.columnconfigure(0,weight=1);traits.rowconfigure(1,weight=1)

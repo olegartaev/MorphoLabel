@@ -275,13 +275,20 @@ class LandmarksRuntime(tk.Misc):
                 "open":lambda image_id=target:self._open_core_saved_queue("crop",image_id),
                 "close":lambda:self._close_core_queue("crop"),
             })
-        from app.landmark_ai_review import pending_review_session,review_summary
-        review=pending_review_session(project)
-        if review:
-            batch_id=str(review.get("batch_id") or "")
-            closed_key=(str(project.root),"landmarks","landmark_ai_review",batch_id)
-            if closed_key in self.__dict__.get("_closed_queue_navigation",set()):review=None
-        if review:
+        from app.crop_queues import saved_batches,close_saved_batch
+        for saved in saved_batches(project,"crop_active_batch"):
+            queue_id=saved["queue_id"]
+            entries.append({"title":"Crop batch","detail":f"{len(saved.get('ids',()))} images · saved {saved.get('batch_type','Crop')} queue",
+                "open":lambda ident=queue_id:self._open_saved_crop_queue(ident),
+                "close":lambda ident=queue_id:(close_saved_batch(project,"crop_active_batch",ident),self.render())})
+        for key,title in (("landmark_attention_queue","Attention queue"),("landmark_suspicious_review","Final data QC")):
+            for saved in saved_batches(project,key):
+                queue_id=saved["queue_id"]
+                entries.append({"title":title,"detail":"Saved unfinished review",
+                    "open":lambda k=key,ident=queue_id:self._open_saved_review_queue(k,ident),
+                    "close":lambda k=key,ident=queue_id:(close_saved_batch(project,k,ident),self.render())})
+        from app.landmark_ai_review import pending_review_sessions,review_summary
+        for review in pending_review_sessions(project):
             summary=review_summary(project,review,review.get("current_image_id")) or {}
             batch_id=review.get("batch_id")
             entries.append({
@@ -317,6 +324,21 @@ class LandmarksRuntime(tk.Misc):
                 "close":lambda:self._close_core_queue("landmark"),
             })
         return entries
+
+    def _open_saved_crop_queue(self,queue_id):
+        from app.crop_queues import open_saved_batch
+        state=open_saved_batch(self.project,"crop_active_batch",queue_id)
+        if not state or not state.get("ids"):return False
+        ids=state["ids"];position=max(0,min(len(ids)-1,int(state.get("position",0))))
+        return self._open_core_saved_queue("crop",ids[position])
+
+    def _open_saved_review_queue(self,key,queue_id):
+        from app.crop_queues import open_saved_batch
+        state=open_saved_batch(self.project,key,queue_id)
+        if not state:return False
+        if key=="landmark_attention_queue":return self.open_landmark_attention()
+        issues=state.get("issues",());position=max(0,min(len(issues)-1,int(state.get("position",0))))
+        return bool(issues and self._open_core_saved_queue("landmarks",issues[position]["image_id"]))
 
 
     @staticmethod
@@ -718,7 +740,7 @@ class LandmarksRuntime(tk.Misc):
         layout,subfolder=self._source_layout(Path(source))
         def worker(progress):
             progress("Creating project and scanning source photographs…")
-            project=Project.create(name,Path(source),Path(destination),source_layout=layout,source_image_subfolder=subfolder)
+            project=Project.create(name,Path(source),Path(destination),source_layout=layout,source_image_subfolder=subfolder,progress=progress)
             progress("Reading image catalog…");rows=project.catalog_rows()
             return project,rows
         self._run_background_task("New project","Creating project…",worker,lambda result:self._attach_project(result[0],result[1]))
@@ -801,6 +823,11 @@ class LandmarksRuntime(tk.Misc):
     def export_measurement_definitions(self):
         from app.measurements_ui import transfer_measurement_definitions
         return transfer_measurement_definitions(self,self.project,"export")
+
+    def add_measurement(self):
+        dialog=self.open_measurements()
+        if dialog:dialog.after_idle(dialog.add)
+        return dialog
 
 
     def show_models(self,kind=None):
@@ -1147,16 +1174,22 @@ class LandmarksRuntime(tk.Misc):
 
 
     def _export_model(self,kind):
-        from app.model_transfer import model_package_filename
-        target=filedialog.asksaveasfilename(parent=self,title=f"Export {kind.title()} model",initialfile=model_package_filename(self.context.project.active_model(kind),kind+"_model"),defaultextension=".zip",filetypes=[("MorphoLabel model package","*.zip")])
+        from app.model_transfer import model_package_filename, registered_active_model
+        target=filedialog.asksaveasfilename(parent=self,title=f"Export {kind.title()} model",initialfile=model_package_filename(registered_active_model(self.context.project,kind),"landmarks_"+kind+"_model"),defaultextension=".zip",filetypes=[("MorphoLabel model package","*.zip")])
         if target:
             try: export_model_package(self.context.project,kind,target); messagebox.showinfo("AI Model Transfer",f"Saved: {target}",parent=self)
             except Exception as exc: messagebox.showerror("AI Model Transfer",str(exc),parent=self)
 
 
     def _import_model(self,kind):
-        from app.model_transfer import model_package_filename
-        source=filedialog.askopenfilename(parent=self,title=f"Import {kind.title()} model",initialfile=model_package_filename(self.context.project.active_model(kind),kind+"_model"),filetypes=[("MorphoLabel model package","*.zip")])
+        from app.model_transfer import model_package_filename, registered_active_model
+        source=filedialog.askopenfilename(parent=self,title=f"Import {kind.title()} model",initialfile=model_package_filename(registered_active_model(self.context.project,kind),"landmarks_"+kind+"_model"),filetypes=[("MorphoLabel model package","*.zip")])
         if source:
-            try: model=import_model_package(self.context.project,source,kind); self.context.project.set_active_model(kind,model); self.context.invalidate_counts(); messagebox.showinfo("AI Model Transfer",f"Imported and activated {kind} model: {model}",parent=self); self.render()
+            try:
+                model=import_model_package(self.context.project,source,kind);self.context.project.set_active_model(kind,model);self.context.refresh(force=True)
+                text=f"Imported and activated {kind} model: {model}"
+                if kind=="crop":
+                    from app.crop_training import rotation_supported
+                    if not rotation_supported(self.context.project,model):text+="\n\nThis older model predicts crop bounds only. Rotation requires manual review or training a new model from confirmed crops with their angles."
+                messagebox.showinfo("AI Model Transfer",text,parent=self);self.render()
             except Exception as exc: messagebox.showerror("AI Model Transfer",str(exc),parent=self)

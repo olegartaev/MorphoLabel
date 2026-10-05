@@ -112,7 +112,15 @@ def export_model_package(project, kind, target, model_id=None):
   files={"artifacts/model.npz":weights.read_bytes(),"artifacts/model_manifest.json":json.dumps(crop_manifest,indent=2,sort_keys=True).encode("utf-8")}
   metrics={"backend":crop_manifest.get("backend"),"metrics":crop_manifest.get("metrics",{}),"portable":True}
   export_metadata={"model_id":model["model_id"],"kind":"crop","schema_sha256":model.get("schema_sha256"),"created_at":model.get("created_at"),"metrics_json":json.dumps(metrics,sort_keys=True)}
- manifest={"package_format_version":2,"model_type":kind,"model_id":model["model_id"],"created_at":model.get("created_at"),"schema_sha256":model.get("schema_sha256"),"backend":metrics.get("backend"),"training_statistics":metrics,"model_metadata":export_metadata,"files":{}}
+ from .model_schemes import export_schemes
+ schemes=export_schemes(project,model)
+ # Model output identities were checked above; portable metadata binds to the
+ # exact embedded CSV, including harmless display/role changes.
+ if kind=="landmark":export_metadata["schema_sha256"]=schema_hash(project.schema_path)
+ if kind=="landmark":
+  portable_info=json.loads(files["artifacts/model.json"]);portable_info["schema_sha256"]=export_metadata["schema_sha256"]
+  files["artifacts/model.json"]=json.dumps(portable_info,indent=2,sort_keys=True).encode("utf-8")
+ manifest={"package_format_version":2,"model_type":kind,"model_id":model["model_id"],"created_at":model.get("created_at"),"schema_sha256":export_metadata.get("schema_sha256"),"backend":metrics.get("backend"),"training_statistics":metrics,"model_metadata":export_metadata,"project_schemes":schemes,"files":{}}
  with zipfile.ZipFile(Path(target),"w",zipfile.ZIP_DEFLATED) as z:
   for name,data in files.items():_zip_bytes(z,name,data,manifest["files"])
   z.writestr("manifest.json",json.dumps(manifest,indent=2,sort_keys=True))
@@ -125,25 +133,46 @@ def import_model_package(project, source, expected_kind):
   try:m=json.loads(z.read("manifest.json"))
   except Exception as exc:raise AIPackageError("invalid model manifest") from exc
   if m.get("package_format_version")!=2 or m.get("model_type")!=expected_kind:raise AIPackageError("wrong model package type")
-  if expected_kind=="landmark" and m.get("schema_sha256")!=schema_hash(project.schema_path):raise AIPackageError("Landmark model incompatible with current schema")
+  required={"artifacts/model.npz","artifacts/model_manifest.json"} if expected_kind=="crop" else {"artifacts/config.py","artifacts/best_engineering_validation.pth","artifacts/model.json"}
+  if set(m.get("files",{}))!=required:raise AIPackageError("Model package has an incomplete or unexpected artifact set.")
+  bundle=m.get("project_schemes")
+  if bundle is not None:
+   from .model_schemes import validate_schemes
+   try:validate_schemes(bundle,expected_kind,m.get("schema_sha256"))
+   except (ValueError,TypeError,KeyError) as exc:raise AIPackageError(str(exc)) from exc
+  elif expected_kind=="landmark" and m.get("schema_sha256")!=schema_hash(project.schema_path):raise AIPackageError("Landmark model incompatible with current schema")
   for name,digest in m.get("files",{}).items():
    if not name.startswith("artifacts/") or name == "artifacts/" or ".." in Path(name).parts:raise AIPackageError(f"unsafe artifact path: {name}")
    try:data=z.read(name)
    except KeyError as exc:raise AIPackageError(f"missing package artifact: {name}") from exc
    if hashlib.sha256(data).hexdigest()!=digest:raise AIPackageError(f"checksum mismatch: {name}")
-  original=m["model_id"];local=original;counter=1
-  while project.model_metadata(local):counter+=1;local=f"imported_{original}_{counter}"
+  if expected_kind=="crop":
+   import io,numpy as np
+   try:
+    with np.load(io.BytesIO(z.read("artifacts/model.npz")),allow_pickle=False) as arrays:weights=arrays["weights"]
+    if weights.shape not in {(769,4),(769,6)} or not np.isfinite(weights).all():raise ValueError("Invalid Crop weight dimensions or values.")
+   except Exception as exc:raise AIPackageError(f"Invalid Crop weights: {exc}") from exc
+  original=str(m.get("model_id") or "")
+  reserved={"CON","PRN","AUX","NUL",*(f"COM{i}" for i in range(1,10)),*(f"LPT{i}" for i in range(1,10))}
+  if not original or len(original)>160 or original in {".",".."} or original.rstrip(" .")!=original or any(ch in '<>:"/\\|?*' or ord(ch)<32 for ch in original) or original.split('.')[0].upper() in reserved:raise AIPackageError("Unsafe model ID: model files must stay inside this project's model folder.")
+  local=original;counter=1
+  while project.model_metadata(local) or (project.models_root/expected_kind/local).exists():counter+=1;local=f"imported_{original}_{counter}"
   destination=project.models_root/expected_kind/local
-  tmp=destination.with_name(destination.name+".importing")
-  if tmp.exists():shutil.rmtree(tmp)
+  import uuid
+  tmp=destination.with_name(destination.name+".importing."+uuid.uuid4().hex)
   try:
    for name in m["files"]:
     out=tmp/name[len("artifacts/"):];out.parent.mkdir(parents=True,exist_ok=True);out.write_bytes(z.read(name))
    tmp.parent.mkdir(parents=True,exist_ok=True);tmp.replace(destination)
    metadata=m.get("model_metadata",{});metrics=json.loads(metadata.get("metrics_json") or "{}") if isinstance(metadata.get("metrics_json"),str) else metadata.get("metrics_json",{})
    metrics={**metrics,"origin":"imported","original_model_id":original,"imported_at":__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(),"package_manifest":m}
-   project.register_model(local,expected_kind,path=destination.relative_to(project.data_root).as_posix(),metrics=metrics,active=expected_kind=="crop",schema_digest=m.get("schema_sha256"),parent_model_id=None)
+   with project.atomic_model_import():
+    if bundle is not None:
+     from .model_schemes import apply_schemes
+     apply_schemes(project,bundle)
+    project.register_model(local,expected_kind,path=destination.relative_to(project.data_root).as_posix(),metrics=metrics,active=expected_kind=="crop",schema_digest=m.get("schema_sha256"),parent_model_id=None)
   except Exception:
    if tmp.exists():shutil.rmtree(tmp)
+   if destination.exists():shutil.rmtree(destination)
    raise
  return local

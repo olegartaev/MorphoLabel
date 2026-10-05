@@ -56,7 +56,8 @@ class SeparateModelPackageTests(unittest.TestCase):
         target.set_active_model("crop", local)
         prediction, used = __import__("app.crop_training", fromlist=["predict"]).predict(Image.new("RGB", (64, 48)), image_id="test", project=target)
         self.assertEqual(local, used)
-        self.assertEqual({"bounds", "rotation_degrees", "output_count"}, set(prediction))
+        self.assertEqual({"bounds", "rotation_degrees", "output_count", "rotation_supported"}, set(prediction))
+        self.assertFalse(prediction['rotation_supported'])
         self.assertGreaterEqual(prediction["output_count"], 4)
 
     def test_landmark_package_imports_as_local_parent_candidate(self):
@@ -75,8 +76,12 @@ class SeparateModelPackageTests(unittest.TestCase):
         self.assertEqual("imported_crop_model_v001_2", local)
         self.assertEqual(existing.relative_to(target.data_root).as_posix(), target.model_metadata("crop_model_v001")["path"])
 
-    def test_landmark_schema_mismatch_rejected_without_registration(self):
+    def test_legacy_landmark_schema_mismatch_rejected_without_registration(self):
         package = self.temp / "landmark.zip"; export_model_package(self.project, "landmark", package)
+        with zipfile.ZipFile(package) as archive:entries={name:archive.read(name) for name in archive.namelist()}
+        manifest=json.loads(entries['manifest.json']);manifest.pop('project_schemes');entries['manifest.json']=json.dumps(manifest).encode()
+        with zipfile.ZipFile(package,'w') as archive:
+            for name,data in entries.items():archive.writestr(name,data)
         other = self.temp / "other.csv"; other.write_text("id,abbr,name,role\n1,A,Alpha,BOTH\n2,B,Beta,GM\n", encoding="utf-8")
         target = self.target(other)
         with self.assertRaises(AIPackageError): import_model_package(target, package, "landmark")

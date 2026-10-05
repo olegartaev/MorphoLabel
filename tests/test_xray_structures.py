@@ -204,6 +204,8 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         moved,finished=move_result_review_queue(self.project,1)
         self.assertFalse(finished);self.assertEqual(1,moved["position"])
         moved,finished=complete_result_review_item(self.project)
+        self.assertFalse(finished);self.assertEqual(0,moved['position'])
+        moved,finished=complete_result_review_item(self.project)
         self.assertTrue(finished);self.assertIsNone(result_review_queue(self.project))
         clear_result_review_queue(self.project);self.assertIsNone(result_review_queue(self.project))
 
