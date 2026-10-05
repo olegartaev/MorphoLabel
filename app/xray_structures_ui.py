@@ -1191,6 +1191,13 @@ class XRayStructureWorkspace:
             parent=self.root,
         )
 
+    def _refresh_imported_scheme(self):
+        self.display_settings=load_xray_structure_display(self.project,self.project.scheme.get("structures",()))
+        self.specimen_list.refresh(preserve_scroll=True)
+        if self.selected_specimen_id:self._load_specimen(self.selected_specimen_id)
+        else:self._build_marker_buttons();self._update_counts();self._refresh_workflow();self._refresh_summary()
+        self.on_changed()
+
     def import_structure_ai_file(self):
         source=filedialog.askopenfilename(
             parent=self.root,title="Import trained Structure AI",initialfile=model_package_filename(self.project.active_structure_model(),"xray_structure_model"),
@@ -1201,7 +1208,7 @@ class XRayStructureWorkspace:
             model_id=import_structure_model_package(self.project,source)
             self.project.activate_structure_model(model_id)
         except Exception as exc:messagebox.showerror("Import trained AI",str(exc),parent=self.root);return
-        self._refresh_workflow();self._refresh_summary()
+        self._refresh_imported_scheme()
         messagebox.showinfo(
             "Import trained AI",
             f"Imported and activated {model_id}. The file contained the trained model only; project X-rays were not changed.",
@@ -1268,8 +1275,8 @@ class XRayStructureWorkspace:
             if not source:return
             try:model_id=import_structure_model_package(self.project,source)
             except Exception as exc:messagebox.showerror("Import Structure AI",str(exc),parent=dialog);return
-            reload(model_id);self._refresh_workflow()
-            messagebox.showinfo("Import Structure AI",f"Imported {model_id}. Select it and choose Make active before prediction or continued training.",parent=dialog)
+            reload(model_id);self._refresh_imported_scheme()
+            messagebox.showinfo("Import Structure AI",f"Imported {model_id} and applied its trait scheme. Select it and choose Make active before prediction or continued training.",parent=dialog)
         def compare_human():
             model_id=selected()
             if not model_id:

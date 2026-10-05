@@ -67,13 +67,10 @@ class FinalUXHardeningTests(unittest.TestCase):
         bundle=Path(self.temp.name)/"diagnostic.zip";bundle.write_bytes(b"synthetic")
         with patch("app.diagnostics.create_diagnostic_bundle",return_value=bundle),patch.object(shell,"_show_diagnostic_report_dialog") as show:
             support.invoke(0);show.assert_called_once()
-        models=submenu("AI models · import / export")
         runtime=shell._active_module_runtime
-        project=runtime.context.project
-        runtime.context.project=None;models.tk.call(models.cget("postcommand"))
-        self.assertEqual("disabled",models.entrycget(0,"state"))
-        runtime.context.project=project;models.tk.call(models.cget("postcommand"))
-        self.assertEqual("normal",models.entrycget(0,"state"));self.assertEqual([],errors)
+        self.assertEqual((),runtime.standard_menu_entries())
+        labels=[menu.entrycget(i,"label") for i in range(menu.index("end")+1) if menu.type(i)=="cascade"]
+        self.assertNotIn("AI models · import / export",labels);self.assertEqual([],errors)
         from app.ai_delivery import ensure_ai_runtime,AIDeliveryError
         ai=submenu("AI support")
         self.assertTrue(ai.entrycget(0,"label").startswith("Set up AI support"))

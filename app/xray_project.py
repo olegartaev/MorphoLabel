@@ -267,6 +267,24 @@ class XRayProject:
             c.execute("INSERT INTO meta(key,value) VALUES('orientation_policy',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(_json(policy),))
         return policy
 
+    def _apply_imported_orientation_policy(self,c,value):
+        """Change a portable model's canonical view only if saved point frames stay valid."""
+        policy=normalize_orientation_policy(value)
+        if not isinstance(value,dict) or value!=policy:raise ValueError("Invalid imported orientation policy.")
+        row=c.execute("SELECT value FROM meta WHERE key='orientation_policy'").fetchone()
+        previous=normalize_orientation_policy(json.loads(row[0]) if row else None)
+        if policy==previous:return
+        from .xray_crop import canonical_orientation_flips
+        crops=c.execute("""SELECT s.crop_json FROM specimens s WHERE EXISTS(
+          SELECT 1 FROM annotation_runs r WHERE r.specimen_id=s.specimen_id AND (
+            EXISTS(SELECT 1 FROM annotations a WHERE a.run_id=r.run_id) OR
+            EXISTS(SELECT 1 FROM annotation_roles a WHERE a.run_id=r.run_id)))""").fetchall()
+        for row in crops:
+            crop=apply_orientation_defaults(json.loads(row[0]),previous)
+            if canonical_orientation_flips(crop,previous)!=canonical_orientation_flips(crop,policy):
+                raise ValueError("The model's canonical orientation would move existing annotations. Import it into a new project with its orientation, or use a model matching this project's orientation.")
+        c.execute("INSERT INTO meta(key,value) VALUES('orientation_policy',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(_json(policy),))
+
     def make_self_contained(self):
         """Import a legacy external source once; hard-link on the same volume, copy otherwise."""
         if self.is_self_contained:return {"changed":False,"files":len(self.source_images()),"hardlinked":0,"copied":0,"bytes":0}
@@ -751,9 +769,11 @@ class XRayProject:
             except Exception:row["metrics"]={}
         return rows
 
-    def register_crop_model(self,model_id,path,config_path,parent_model_id,metrics,training_plate_ids,training_specimen_count,activate=True):
+    def register_crop_model(self,model_id,path,config_path,parent_model_id,metrics,training_plate_ids,training_specimen_count,activate=True,*,trait_scheme=None,orientation_policy=None):
         now=_now()
         with _db_connection(self.db_path) as c:
+            if trait_scheme is not None:self.save_scheme(trait_scheme,f"Trait scheme imported with Crop model {model_id}",_connection=c)
+            if orientation_policy is not None:self._apply_imported_orientation_policy(c,orientation_policy)
             if activate:c.execute("UPDATE xray_crop_models SET active=0")
             c.execute("""INSERT INTO xray_crop_models(model_id,created_at,path,config_path,parent_model_id,metrics_json,training_plate_count,training_specimen_count,active)
                          VALUES(?,?,?,?,?,?,?,?,?)""",
@@ -828,13 +848,15 @@ class XRayProject:
 
     def register_structure_model(
         self,model_id,path,metadata_path,parent_model_id,schema_digest,backend,metrics,membership=(),
-        training_specimen_count=None,validation_specimen_count=None,activate=True,
+        training_specimen_count=None,validation_specimen_count=None,activate=True,trait_scheme=None,orientation_policy=None,
     ):
         model_id=str(model_id);rows=[dict(item) for item in membership]
         train_count=sum(str(item.get("split"))=="train" for item in rows) if training_specimen_count is None else int(training_specimen_count)
         val_count=sum(str(item.get("split"))=="val" for item in rows) if validation_specimen_count is None else int(validation_specimen_count)
         now=_now()
         with _db_connection(self.db_path) as c:
+            if trait_scheme is not None:self.save_scheme(trait_scheme,f"Trait scheme imported with Structure model {model_id}",_connection=c)
+            if orientation_policy is not None:self._apply_imported_orientation_policy(c,orientation_policy)
             if parent_model_id and not c.execute(
                 "SELECT 1 FROM xray_structure_models WHERE model_id=?",(str(parent_model_id),)
             ).fetchone():
@@ -1136,9 +1158,10 @@ class XRayProject:
             "uncropped_plates","specimens","confirmed","review",
         )}
 
-    def save_scheme(self,scheme,note="Scheme update"):
+    def save_scheme(self,scheme,note="Scheme update",*,_connection=None):
         normalized=normalize_scheme(scheme);digest=scheme_hash(normalized)
-        with _db_connection(self.db_path) as c:
+        from contextlib import nullcontext
+        with (nullcontext(_connection) if _connection is not None else _db_connection(self.db_path)) as c:
             existing=c.execute("SELECT version_id FROM schema_versions WHERE scheme_hash=? ORDER BY created_at DESC LIMIT 1",(digest,)).fetchone()
             if existing:
                 c.execute("UPDATE schema_versions SET active=CASE WHEN version_id=? THEN 1 ELSE 0 END",(existing[0],));return existing[0]

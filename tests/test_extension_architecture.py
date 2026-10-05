@@ -131,13 +131,9 @@ class ExtensionArchitectureTests(unittest.TestCase):
                 self.assertIsInstance(runtime,LandmarksRuntime)
                 with patch.object(runtime,"_landmark_queue_entries",return_value=({"title":"saved queue"},)):
                     self.assertEqual(({"title":"saved queue"},),runtime.queue_entries())
-                self.assertEqual("disabled",runtime.standard_menu_entries()[0]["state"])
+                self.assertEqual((),runtime.standard_menu_entries())
                 runtime.context.project=object()
-                with patch.object(runtime,"show_model_transfer") as models:
-                    entries=runtime.standard_menu_entries()
-                    self.assertEqual("Import / export models…",entries[0]["label"])
-                    self.assertEqual("normal",entries[0]["state"])
-                    entries[0]["command"]();models.assert_called_once()
+                self.assertEqual((),runtime.standard_menu_entries())
                 shell.show_module_hub()
         finally:self._destroy_shell(shell)
 

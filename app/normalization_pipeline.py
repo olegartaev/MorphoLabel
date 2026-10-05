@@ -118,7 +118,8 @@ def prepare_crop_result(source:Path, *, project=None, force=False, image_id_valu
  digest=dev["source_sha256"];params={"development":dev["parameters_sha256"],"localization":LOCALIZATION};param_hash=_hash(params)
  if standard.exists() and meta_path.exists() and not force:
   old=json.loads(meta_path.read_text(encoding="utf-8"));
-  if old.get("source_sha256")==digest and old.get("parameters_sha256")==param_hash:return old
+  from .crop_training import current_label
+  if old.get("source_sha256")==digest and old.get("parameters_sha256")==param_hash and old.get("crop_model_version")==current_label(project):return old
  started=time.perf_counter();prediction_started=time.perf_counter();predicted,model_version=crop_predict(full,image_id=ident,project=project);prediction_s=time.perf_counter()-prediction_started
  if predicted is None and not developed_materialized:
   # Rule-based localization remains on the established materialized path.
@@ -141,7 +142,7 @@ def prepare_crop_result(source:Path, *, project=None, force=False, image_id_valu
  if proposal_only:
   output_width,output_height=right-left,bottom-top
  else:
-  write_started=time.perf_counter();master=full.crop((left,top,right,bottom));atomic_save_png(master,standard,ident);write_s=time.perf_counter()-write_started;output_width,output_height=master.width,master.height
+  write_started=time.perf_counter();frame=full.rotate(angle,resample=Image.Resampling.BICUBIC,expand=False,fillcolor=(255,255,255)) if predicted is not None else full;master=frame.crop((left,top,right,bottom));atomic_save_png(master,standard,ident);write_s=time.perf_counter()-write_started;output_width,output_height=master.width,master.height
  transform=Transform(full.width,full.height,angle if predicted is not None else 0.,full.width/2,full.height/2,left,top,output_width,output_height)
  result={"image_id":ident,"source_relpath":source.relative_to(project.source_root).as_posix() if project else require_relative(source),"source_sha256":digest,"developed_full_relpath":str(developed.relative_to(project.data_root)).replace('\\','/') if project else dev["developed_full_relpath"],"standardized_relpath":str(standard.relative_to(project.data_root)).replace('\\','/') if project else require_relative(standard),"mask_relpath":None if proposal_only else (str(mask_path.relative_to(project.data_root)).replace('\\','/') if project else require_relative(mask_path)),"proposal_only":proposal_only,"developed_cache_materialized":bool(developed_materialized),"original_width":int(full.width),"original_height":int(full.height),"normalization_status":"FAIL" if failed else "REVIEW","normalization_algorithm":LOCALIZATION["version"],"crop_model_version":qc.get("crop_model_version","rule-based"),"parameters_sha256":param_hash,"crop_bounds":[left,top,right,bottom],"mirrored":False,"rotation_degrees":angle if predicted is not None else 0.,"interpolation":"none","transform":asdict(transform),"qc":qc,"timings":{"prepare_s":time.perf_counter()-started,"developed_open_s":open_s,"prediction_s":prediction_s,"mask_s":mask_s,"standardized_write_s":write_s}}
  atomic_json_write(meta_path,result);return result

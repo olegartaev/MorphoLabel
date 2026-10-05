@@ -142,7 +142,7 @@ def import_model_package(project, source, expected_kind):
    tmp.parent.mkdir(parents=True,exist_ok=True);tmp.replace(destination)
    metadata=m.get("model_metadata",{});metrics=json.loads(metadata.get("metrics_json") or "{}") if isinstance(metadata.get("metrics_json"),str) else metadata.get("metrics_json",{})
    metrics={**metrics,"origin":"imported","original_model_id":original,"imported_at":__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(),"package_manifest":m}
-   project.register_model(local,expected_kind,path=destination.relative_to(project.data_root).as_posix(),metrics=metrics,active=False,schema_digest=m.get("schema_sha256"),parent_model_id=None)
+   project.register_model(local,expected_kind,path=destination.relative_to(project.data_root).as_posix(),metrics=metrics,active=expected_kind=="crop",schema_digest=m.get("schema_sha256"),parent_model_id=None)
   except Exception:
    if tmp.exists():shutil.rmtree(tmp)
    raise

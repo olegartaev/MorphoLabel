@@ -357,7 +357,7 @@ class ReleaseTortureTests(unittest.TestCase):
         remember_xray_project(self.xray.root)
         with patch("app.ui.shell.first_run_setup_required", return_value=False), \
              patch("app.extensions.discovery.entry_points", return_value=EntryPoints()):
-            shell = ProductionShell(module_states={"landmarks": {"context": UIContext(self.landmark)}})
+            shell = ProductionShell(module_states={"landmarks": {"context": UIContext(self.landmark)},"xray_counts":{"project":self.xray}})
         shell.withdraw()
         shell.update_idletasks()
         shell.module_states["landmarks"]["context"].refresh()

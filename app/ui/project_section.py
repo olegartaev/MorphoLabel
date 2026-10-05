@@ -37,7 +37,7 @@ class ProjectSection(SectionView):
   host=ttk.Frame(canvas,padding=(18,12));window=canvas.create_window((0,0),window=host,anchor="nw")
   self.scroll_canvas=canvas
   def layout(_event=None):
-   canvas.itemconfigure(window,width=max(1,canvas.winfo_width()))
+   canvas.itemconfigure(window,width=max(1,canvas.winfo_width()),height=max(host.winfo_reqheight(),canvas.winfo_height()))
    canvas.configure(scrollregion=canvas.bbox("all"))
   canvas.bind("<Configure>",layout);host.bind("<Configure>",layout)
   project=self.context.project
@@ -52,7 +52,7 @@ class ProjectSection(SectionView):
   ttk.Label(host,text="Project setup",style="PageTitle.TLabel").pack(anchor="w")
   ttk.Label(host,text="Project, source photos, landmark scheme and image-preparation workflow.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,10))
   content=ttk.Frame(host);content.pack(fill="both",expand=True)
-  content.columnconfigure(0,weight=1,uniform="project_cards");content.columnconfigure(1,weight=1,uniform="project_cards");content.rowconfigure(3,weight=1)
+  content.columnconfigure(0,weight=1,uniform="project_cards");content.columnconfigure(1,weight=1,uniform="project_cards");content.rowconfigure(4,weight=1)
 
   # Project identity is deliberately a separate full-width strip. Opening or
   # creating a project changes the whole workspace; the cards below edit that
@@ -86,6 +86,13 @@ class ProjectSection(SectionView):
    ttk.Label(scheme,text="Landmark scheme needs attention",style="SectionTitle.TLabel").pack(anchor="w")
    ttk.Label(scheme,text=project.schema_error or "No landmark scheme is defined yet.",style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,8))
   self.button(scheme,"Edit scheme..." if defined else "Create scheme...",self.shell.open_schema,"Open the active project landmark scheme in the established editor.").pack(anchor="w")
+  definitions=ttk.LabelFrame(scheme,text="Measurement definitions",padding=6);definitions.pack(fill="x",pady=(8,0))
+  from .design import FlowRow
+  actions=FlowRow(definitions);actions.pack(fill="x")
+  state="normal" if defined else "disabled"
+  self.button(actions,"Edit…",self.shell.open_measurements,"Define distances between landmarks.",state=state).pack(side="left")
+  self.button(actions,"Import…",self.shell.import_measurement_definitions,"Apply measurement definitions by landmark abbreviation.",state=state).pack(side="left",padx=4)
+  self.button(actions,"Export…",self.shell.export_measurement_definitions,"Save measurement definitions for another project.",state=state).pack(side="left")
 
   workflow=ttk.LabelFrame(content,text="Image preparation",padding=10);workflow.grid(row=2,column=0,columnspan=2,sticky="ew",padx=4,pady=(0,7))
   ttk.Label(workflow,text="Before landmarks",style="SectionTitle.TLabel").pack(anchor="w")
@@ -99,7 +106,11 @@ class ProjectSection(SectionView):
   self.shell.tip.bind(skip,"Go directly to landmarks while keeping existing crop data.")
 
   sample_rows=project_sample_rows(project,self.context.rows)
-  lower=ttk.Frame(content);lower.grid(row=3,column=0,columnspan=2,sticky="nsew",padx=4);lower.rowconfigure(0,weight=1)
+  from .model_transfer import model_transfer_card
+  for column,(kind,title) in enumerate((("crop","Crop model"),("landmark","Landmark model"))):
+   card=model_transfer_card(content,title,project.active_model(kind),lambda k=kind:self.shell._import_model(k),lambda k=kind:self.shell._export_model(k))
+   card.grid(row=3,column=column,sticky="ew",padx=4,pady=(0,7))
+  lower=ttk.Frame(content);lower.grid(row=4,column=0,columnspan=2,sticky="nsew",padx=4);lower.rowconfigure(0,weight=1)
   lower.columnconfigure(0,weight=4,uniform="project_lower");lower.columnconfigure(1,weight=1,uniform="project_lower")
 
   samples=ttk.LabelFrame(lower,text="Samples",padding=8);samples.grid(row=0,column=0,sticky="nsew",padx=(0,7))
@@ -137,17 +148,21 @@ class ProjectSection(SectionView):
 
   def wheel(event):
    canvas.yview_scroll(-1 if event.delta>0 else 1,"units");return "break"
-  def reveal(event):
-   top=event.widget.winfo_rooty()-host.winfo_rooty();bottom=top+event.widget.winfo_height()
+  def reveal_widget(widget):
+   top=widget.winfo_rooty()-host.winfo_rooty();bottom=top+widget.winfo_height()
    visible=canvas.canvasy(0);height=canvas.winfo_height();total=max(1,host.winfo_height())
    if top<visible:canvas.yview_moveto(top/total)
    elif bottom>visible+height:canvas.yview_moveto((bottom-height)/total)
+  def reveal(event):reveal_widget(event.widget)
+  def resized(event):
+   if event.widget.focus_get() is event.widget:reveal(event)
   def bind_navigation(widget):
    # Keep the sample table's own wheel behavior and release all callbacks with
    # this view, without adding bindings to the durable application root.
    if not isinstance(widget,(ttk.Treeview,ttk.Scrollbar)):
     widget.bind("<MouseWheel>",wheel,add="+")
    widget.bind("<FocusIn>",reveal,add="+")
+   widget.bind("<Configure>",resized,add="+")
    for child in widget.winfo_children():bind_navigation(child)
   bind_navigation(host)
 

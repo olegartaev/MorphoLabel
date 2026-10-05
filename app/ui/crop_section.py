@@ -129,7 +129,7 @@ class CropSection(SectionView):
       dialog.destroy();messagebox.showerror("Crop training batch",str(value[0]),parent=self.shell);return
      else:
       dialog.destroy();data,prepared=value
-      ids=list(prepared["prepared_ids"]);self.context.project.set_ui_state("crop_active_batch",{"batch_id":data["batch_id"],"batch_type":"training","ids":ids,"prepared_ids":ids,"completed_ids":[],"position":0,"proposals":prepared.get("proposals",{})})
+      ids=list(prepared["prepared_ids"]);self.context.project.set_ui_state("crop_active_batch",{"batch_id":data["batch_id"],"batch_type":"training","ids":ids,"prepared_ids":ids,"completed_ids":[],"position":0,"proposals":prepared.get("proposals",{}),"proposal_rotations":prepared.get("proposal_rotations",{})})
       if ids:self.context.selected=next(i for i,row in enumerate(self.context.rows) if row["image_id"]==ids[0])
       messagebox.showinfo("Crop training batch",f"Prepared {len(ids)} image(s). Correct them, then use Confirm & Next or Enter to move through this batch.",parent=self.shell);self.shell.render();return
    except queue.Empty:self.shell.after(100,poll)

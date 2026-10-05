@@ -111,8 +111,7 @@ class LandmarksRuntime(tk.Misc):
         return self._host.run_background_task(title, initial_text, worker, done)
 
     def standard_menu_entries(self):
-        return ({'label': 'Import / export models…', 'command': self.show_model_transfer, 'group': 'models',
-                 'state': 'normal' if self.project is not None else 'disabled'},)
+        return ()
 
     def queue_entries(self):
         return tuple(self._landmark_queue_entries())
@@ -794,6 +793,14 @@ class LandmarksRuntime(tk.Misc):
         callback=getattr(view,"refresh_definitions",self.render)
         select_callback=getattr(view,"select_measurement",None)
         dialog=MeasurementsWindow(self,self.context.project,on_saved=callback,on_selection=select_callback); center(self,dialog); return dialog
+
+    def import_measurement_definitions(self):
+        from app.measurements_ui import transfer_measurement_definitions
+        return transfer_measurement_definitions(self,self.project,"import",self.render)
+
+    def export_measurement_definitions(self):
+        from app.measurements_ui import transfer_measurement_definitions
+        return transfer_measurement_definitions(self,self.project,"export")
 
 
     def show_models(self,kind=None):

@@ -327,7 +327,19 @@ class ProductionShell(tk.Tk):
         frame=ttk.Frame(dialog,padding=14);frame.pack(fill="both",expand=True)
         label=ttk.Label(frame,text=initial_text,justify="left");label.pack(anchor="w")
         bar=ttk.Progressbar(frame,mode="indeterminate",length=360);bar.pack(fill="x",pady=(8,0));bar.start()
-        events=queue.Queue();center(self,dialog)
+        destroy_dialog=dialog.destroy
+        def close():
+            try:bar.stop()
+            except tk.TclError:pass
+            destroy_dialog()
+        dialog.destroy=close;dialog.protocol("WM_DELETE_WINDOW",close)
+        events=queue.Queue();center(self,dialog);poll_state={"job":None}
+        def release(event):
+            if event.widget is dialog and poll_state["job"] is not None:
+                try:self.after_cancel(poll_state["job"])
+                except tk.TclError:pass
+                poll_state["job"]=None
+        dialog.bind("<Destroy>",release,add="+")
         def progress(text,done=None,total=None):events.put(("progress",str(text),done,total))
         def run():
             try:events.put(("done",worker(progress)))
@@ -340,6 +352,8 @@ class ProductionShell(tk.Tk):
                 events.put(("error",exc))
         threading.Thread(target=run,daemon=True,name="production-background-task").start()
         def poll():
+            poll_state["job"]=None
+            if not dialog.winfo_exists():return
             try:
                 while True:
                     kind,*value=events.get_nowait()
@@ -351,7 +365,7 @@ class ProductionShell(tk.Tk):
                         dialog.destroy();messagebox.showerror(title,str(value[0]),parent=self);return
                     else:
                         dialog.destroy();on_done(value[0]);return
-            except queue.Empty:self.after(100,poll)
+            except queue.Empty:poll_state["job"]=self.after(100,poll)
         poll();return dialog
 
 

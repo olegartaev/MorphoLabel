@@ -1,9 +1,24 @@
 """Friendly measurement definition manager."""
 import tkinter as tk
-from tkinter import ttk,messagebox
+from tkinter import ttk,messagebox,filedialog
 
 from .measurements import load_measurements,save_measurements,validate_measurement
 from .ui.dialogs import center,info
+
+
+def transfer_measurement_definitions(parent,project,action,on_saved=None):
+ from .measurements import export_measurement_definitions,import_measurement_definitions,schema_path
+ if not project.schema:return False
+ options={"parent":parent,"filetypes":[("Measurement definitions","*.csv")],"initialfile":"measurement_definitions.csv"}
+ path=filedialog.askopenfilename(title="Import measurement definitions",**options) if action=="import" else filedialog.asksaveasfilename(title="Export measurement definitions",defaultextension=".csv",**options)
+ if not path:return False
+ if action=="import" and schema_path(project).is_file() and load_measurements(project):
+  if not messagebox.askyesno("Import measurement definitions","Replace the current measurement definitions? A backup keeps the previous definitions. Landmark coordinates and calibration stay unchanged.",parent=parent,default=messagebox.NO):return False
+ try:
+  (import_measurement_definitions if action=="import" else export_measurement_definitions)(project,path)
+ except Exception as exc:messagebox.showerror("Measurement definitions",str(exc),parent=parent);return False
+ if action=="import" and on_saved:on_saved()
+ return True
 
 
 class MeasurementsWindow(tk.Toplevel):
@@ -37,7 +52,15 @@ class MeasurementsWindow(tk.Toplevel):
   self.edit_button=ttk.Button(actions,text="Edit selected",command=self.edit);self.edit_button.grid(row=0,column=1,sticky="w",padx=(6,0))
   self.delete_button=ttk.Button(actions,text="Delete",command=self.delete);self.delete_button.grid(row=0,column=2,sticky="w",padx=(6,0))
   ttk.Button(actions,text="Close",command=self.destroy).grid(row=0,column=4,sticky="e")
+  from .ui.design import FlowRow
+  transfer=FlowRow(root);transfer.grid(row=4,column=0,sticky="ew",pady=(8,0))
+  ttk.Button(transfer,text="Import definitions…",command=lambda:self.transfer("import"),state="normal" if project.schema else "disabled").pack(side="left")
+  ttk.Button(transfer,text="Export definitions…",command=lambda:self.transfer("export"),state="normal" if project.schema else "disabled").pack(side="left",padx=6)
   self.refresh();center(parent,self)
+
+ def transfer(self,action):
+  def saved():self.rows=load_measurements(self.project);self.refresh();self._done()
+  return transfer_measurement_definitions(self,self.project,action,saved)
 
  def _help(self):
   info(self,"Measurements — quick guide",

@@ -262,7 +262,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         project=(root/"app"/"ui"/"project_section.py").read_text(encoding="utf-8")
         self.assertIn('text="Current project"',project)
         self.assertIn('columnspan=2,sticky="ew"',project)
-        self.assertIn('row=3,column=0,columnspan=2',project)
+        self.assertIn('row=4,column=0,columnspan=2',project)
 
     def test_core_context_and_queue_share_xray_visual_language(self):
         root=Path(__file__).parents[1]

@@ -98,7 +98,8 @@ class FinalModelTransferTests(unittest.TestCase):
         self.assertEqual(local,XRayProject(target.root).active_structure_model()["model_id"])
         changed=copy.deepcopy(explicit);changed["structures"].reverse()
         other=XRayProject.create("incompatible",self.source,self.root,changed)
-        with self.assertRaises(XRayStructurePackageError):import_structure_model_package(other,package)
+        import_structure_model_package(other,package)
+        self.assertEqual(self.xray.scheme,other.scheme)
 
     def test_structure_versioned_legacy_proof_and_digest_disagreement_rejection(self):
         from app.xray_structure_ai import _legacy_structure_schema_contract, structure_schema_contract
@@ -114,7 +115,9 @@ class FinalModelTransferTests(unittest.TestCase):
             if case.startswith("legacy"):
                 manifest["schema_digest"]=meta["schema_digest"]=legacy_digest
                 if case=="legacy_proven":manifest["schema_contract"]=meta["schema_contract"]=legacy
-                else:manifest.pop("schema_contract",None);meta.pop("schema_contract",None)
+                else:
+                    manifest.pop("schema_contract",None);meta.pop("schema_contract",None)
+                    manifest.pop("trait_scheme",None);manifest.pop("trait_scheme_sha256",None)
             if case=="disagreement":meta["schema_digest"]="different"
             if case in {"topology","targets"}:
                 contract=copy.deepcopy(manifest["schema_contract"])
@@ -144,7 +147,7 @@ class FinalModelTransferTests(unittest.TestCase):
         self.structure_package()
         runtime=XRayCountsRuntime();runtime.project=self.xray
         runtime.host=SimpleNamespace(container=SimpleNamespace(winfo_toplevel=lambda:None))
-        self.assertEqual(["Import / export AI models…"],[e["label"] for e in runtime.standard_menu_entries()])
+        self.assertEqual((),runtime.standard_menu_entries())
         for kind,ident in (("crop","current_crop_7"),("structure","structure_test")):
             with patch("app.modules.xray_counts.filedialog.askopenfilename",return_value="") as dialog:
                 getattr(runtime,f"_menu_import_{kind}_ai")()

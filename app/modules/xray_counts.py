@@ -267,10 +267,19 @@ class OrientationSetupDialog(tk.Toplevel):
         initial=initial or {"head":"left","bottom":"down"};self.result=None
         self.head=tk.StringVar(master=self,value=str(initial.get("head") or "left"))
         self.bottom=tk.StringVar(master=self,value=str(initial.get("bottom") or "down"))
+        self.example=tk.StringVar(master=self,value="fish")
+        from PIL import Image
+        self._reference_images={}
+        for name in ("fish","radial"):
+            with Image.open(Path(__file__).resolve().parents[1]/"resources"/"orientation"/(name+".png")) as image:self._reference_images[name]=image.convert("RGB")
         outer=ttk.Frame(self,padding=14);outer.pack(fill="both",expand=True)
         ttk.Label(outer,text="Standard orientation",style="PageTitle.TLabel").pack(anchor="w")
         ttk.Label(outer,text="Choose a consistent view for cropped animals.",style="PageSubtitle.TLabel",wraplength=600).pack(anchor="w",pady=(2,8))
-        self.preview=tk.Canvas(outer,width=600,height=220,background="#f8fafc",highlightthickness=1,highlightbackground="#d6dbe0");self.preview.pack(fill="x")
+        examples=ttk.Frame(outer);examples.pack(fill="x",pady=(0,6))
+        ttk.Label(examples,text="Reference example:",style="Muted.TLabel").pack(side="left")
+        for text,value in (("Fish","fish"),("Radial object","radial")):
+            ttk.Radiobutton(examples,text=text,value=value,variable=self.example,command=self._draw).pack(side="left",padx=8)
+        self.preview=tk.Canvas(outer,width=600,height=300,background="#f8fafc",highlightthickness=1,highlightbackground="#d6dbe0");self.preview.pack(fill="x")
         self.preview.bind("<Configure>",lambda _event:self._draw())
         controls=ttk.Frame(outer);controls.pack(fill="x",pady=(8,0))
         head_box=ttk.LabelFrame(controls,text="Head faces",padding=9);head_box.pack(side="left",fill="x",expand=True,padx=(0,5))
@@ -286,32 +295,29 @@ class OrientationSetupDialog(tk.Toplevel):
         self._draw();self.grab_set()
 
     def _draw(self):
-        c=self.preview;c.delete("all");w=max(600,c.winfo_width());h=max(220,c.winfo_height());cx=w/2;cy=h/2
+        from PIL import Image,ImageOps,ImageTk
+        c=self.preview;c.delete("all");w=max(600,c.winfo_width());h=max(300,c.winfo_height());cx=w/2;cy=h/2
         head=self.head.get();bottom=self.bottom.get()
         state=orientation_preview_transform(head,bottom);flip_x=state["flip_x"];flip_y=state["flip_y"]
         def point(x,y):return (cx+(x-cx)*(-1 if flip_x else 1),cy+(y-cy)*(-1 if flip_y else 1))
-        if not state["show_head"]:
-            c.create_oval(cx-142,cy-35,cx+142,cy+35,fill="#edf2f5",outline="#71818d",width=2)
-            c.create_line(cx-95,cy,cx+95,cy,fill="#a7b2ba",width=2)
-        else:
-            # Rounded snout at the left; tapering body and forked tail at right.
-            body=[(cx-160,cy),(cx-146,cy-23),(cx-110,cy-34),(cx-50,cy-39),(cx+40,cy-28),(cx+114,cy-12),(cx+114,cy+12),(cx+40,cy+29),(cx-70,cy+33),(cx-136,cy+23)]
-            tail=[(cx+108,cy-18),(cx+182,cy-50),(cx+160,cy),(cx+182,cy+50),(cx+108,cy+18)]
-            coords=[v for p in body for v in point(*p)];c.create_polygon(*coords,fill="#edf2f5",outline="#71818d",width=2)
-            coords=[v for p in tail for v in point(*p)];c.create_polygon(*coords,fill="#edf2f5",outline="#71818d",width=2)
-            eye=point(cx-134,cy-10);c.create_oval(eye[0]-4,eye[1]-4,eye[0]+4,eye[1]+4,fill="#344955",outline="")
-            gill=[point(cx-113,cy-24),point(cx-107,cy),point(cx-113,cy+23)]
-            c.create_line(*gill[0],*gill[1],*gill[2],fill="#8d9da8",width=2,smooth=True)
-            label=point(cx-205,cy-55);tip=point(cx-148,cy-17)
-            c.create_text(*label,text="Head",fill="#176fa7",font=("Segoe UI",10,"bold"))
-            start=point(cx-202,cy-39);c.create_line(*start,*tip,fill="#2196f3",width=2,arrow="last")
+        radial=self.example.get()=="radial";image=self._reference_images[self.example.get()].copy()
+        if not radial:image=image.crop((round(image.width*.06),round(image.height*.27),round(image.width*.97),round(image.height*.73)))
+        image.thumbnail((int(w-100),int(h-90)),Image.Resampling.LANCZOS)
+        if flip_x:image=ImageOps.mirror(image)
+        if flip_y:image=ImageOps.flip(image)
+        self._preview_photo=ImageTk.PhotoImage(image,master=c)
+        c.create_image(cx,cy,image=self._preview_photo,tags="orientation_reference")
+        if state["show_head"]:
+            label=point(cx-(160 if radial else 215),cy-112);tip=point(cx-205,cy-15)
+            c.create_text(*label,text="Reference direction" if radial else "Head",fill="#176fa7",font=("Segoe UI",10,"bold"))
+            start=point(cx-215,cy-96);c.create_line(*start,*tip,fill="#2196f3",width=2,arrow="last")
         if state["show_bottom"]:
-            y=cy+38
+            y=cy+79
             line=[point(cx-62,y),point(cx+62,y)]
             c.create_line(*line[0],*line[1],fill="#ffad1f",width=6)
             tip=point(cx,y+19);base1=point(cx-9,y+2);base2=point(cx+9,y+2)
             c.create_polygon(*tip,*base1,*base2,fill="#ffad1f",outline="#ffffff")
-            label=point(cx,y+39);c.create_text(*label,text="Ventral side",fill="#9a6500",font=("Segoe UI",10,"bold"))
+            label=point(cx,y+39);c.create_text(*label,text="Reference side" if radial else "Ventral side",fill="#9a6500",font=("Segoe UI",10,"bold"))
         notes=[]
         if not state["show_head"]:notes.append("Head: don't standardize")
         if not state["show_bottom"]:notes.append("Ventral side: don't standardize")
@@ -393,12 +399,15 @@ class XRayCountsRuntime:
         if self.project is not None:return True
         remembered=last_xray_project()
         if remembered is None:return False
-        try:
-            self.project=XRayProject(remembered)
-            self.project.compact_disposable_ai_artifacts()
-        except Exception:
-            self.project=None;return False
-        self.stage="project";return True
+        def worker(progress):
+            progress("Reading the last X-ray project and image catalog…")
+            try:
+                project=XRayProject(remembered);project.compact_disposable_ai_artifacts();return project
+            except Exception:return None
+        def done(project):
+            if project is not None:self._attach_loaded_project(project)
+        self._background_project_task("Open X-ray project","Loading the last X-ray project…",worker,done)
+        return False
 
     def render(self,host):
         if self.host is None:self.project=host.state.get("project")
@@ -427,10 +436,7 @@ class XRayCountsRuntime:
         return self._images[key]
     def standard_menu_entries(self):
         """Module-owned commands injected into MorphoLabel's top-right Menu."""
-        available=bool(self.project)
-        return (
-            {"label":"Import / export AI models…","command":self.show_model_transfer,"group":"models","state":"normal" if available else "disabled"},
-        )
+        return ()
 
     def show_model_transfer(self):
         if self.project is None:return
@@ -459,7 +465,7 @@ class XRayCountsRuntime:
         try:
             local=import_crop_model_package(self.project,source);self.project.activate_crop_model(local)
         except Exception as exc:messagebox.showerror("Import Crop AI",str(exc),parent=root);return
-        if self._workspace is not None and hasattr(self._workspace,"_refresh_workflow"):self._workspace._refresh_workflow()
+        self._rerender()
         messagebox.showinfo("Import Crop AI",f"Imported and activated {local}.",parent=root)
 
     def _menu_export_crop_ai(self):
@@ -488,8 +494,7 @@ class XRayCountsRuntime:
             self.project.activate_structure_model(model_id)
         except Exception as exc:
             messagebox.showerror("Import Structure AI",str(exc),parent=root);return
-        if self._workspace is not None and hasattr(self._workspace,"_refresh_workflow"):
-            self._workspace._refresh_workflow();self._workspace._refresh_summary()
+        self._rerender()
         messagebox.showinfo("Import Structure AI",f"Imported and activated {model_id}.",parent=root)
 
     def _menu_export_structure_ai(self):
@@ -636,7 +641,7 @@ class XRayCountsRuntime:
 
         record=self.project.active_scheme_record();scheme=record["scheme"];model=_scheme_display_model(scheme,record.get("note") or "Project scheme")
         content=ttk.Frame(parent);content.pack(fill="both",expand=True)
-        content.columnconfigure(0,weight=1,uniform="project_cards");content.columnconfigure(1,weight=1,uniform="project_cards");content.rowconfigure(2,weight=1)
+        content.columnconfigure(0,weight=1,uniform="project_cards");content.columnconfigure(1,weight=1,uniform="project_cards");content.rowconfigure(3,weight=1)
 
         # Project identity is intentionally separate from source/schema settings.
         project_box=ttk.LabelFrame(content,text="Current project",padding=14,style="ProjectIdentity.TLabelframe",borderwidth=2,relief="groove");project_box.grid(row=0,column=0,columnspan=2,sticky="ew",padx=4,pady=(4,12))
@@ -669,7 +674,11 @@ class XRayCountsRuntime:
         actions=ttk.Frame(scheme_box);actions.pack(anchor="w",pady=(8,0))
         self._button(actions,"Traits...",self._choose_scheme,"Choose what to measure, how to count it, and which marks are used on the X-ray.",True).pack(side="left")
 
-        traits=ttk.LabelFrame(content,text="Traits",padding=8);traits.grid(row=2,column=0,columnspan=2,sticky="nsew",padx=4)
+        from app.ui.model_transfer import model_transfer_card
+        for column,(kind,title,active) in enumerate((("crop","X-ray Crop model",self.project.active_crop_model()),("structure","X-ray Structure model",self.project.active_structure_model()))):
+            card=model_transfer_card(content,title,active,getattr(self,f"_menu_import_{kind}_ai"),getattr(self,f"_menu_export_{kind}_ai"))
+            card.grid(row=2,column=column,sticky="ew",padx=4,pady=(0,7))
+        traits=ttk.LabelFrame(content,text="Traits",padding=8);traits.grid(row=3,column=0,columnspan=2,sticky="nsew",padx=4)
         traits.columnconfigure(0,weight=1);traits.rowconfigure(1,weight=1)
         if not scheme.get("traits"):
             ttk.Label(traits,text="No traits are defined in the active scheme.",style="SectionTitle.TLabel").grid(row=0,column=0,sticky="w")
@@ -842,36 +851,47 @@ class XRayCountsRuntime:
         if not source or not dest:return
         dialog=OrientationSetupDialog(root);root.wait_window(dialog)
         if dialog.result is None:return
-        try:self.project=XRayProject.create(name,source,dest,blank_scheme(),scheme_note="Blank scheme created with project",orientation_policy=dialog.result)
-        except Exception as exc:messagebox.showerror("New X-ray project",str(exc),parent=root);return
-        remember_xray_project(self.project.root)
+        policy=dict(dialog.result)
+        def worker(progress):
+            progress("Creating project and indexing source X-rays…")
+            return XRayProject.create(name,source,dest,blank_scheme(),scheme_note="Blank scheme created with project",orientation_policy=policy)
+        self._background_project_task("New X-ray project","Loading source X-rays…",worker,self._attach_loaded_project)
+
+    def _background_project_task(self,title,text,worker,on_done):
+        host=self.host
+        def done(value):
+            if self.host is host:on_done(value)
+        return host.run_background_task(title,text,worker,done)
+
+    def _attach_loaded_project(self,project):
+        self.project=project;remember_xray_project(self.project.root)
         self.stage="project";self._rerender()
 
     def _make_self_contained(self):
         root=self.host.container.winfo_toplevel()
         if not messagebox.askyesno("Make project self-contained","Import the indexed X-rays into this project?\n\nOn the same disk MorphoLabel uses hard links when possible, so this normally does not duplicate image data. On another disk the originals are copied once.",parent=root,default="yes"):return
-        try:result=self.project.make_self_contained()
-        except Exception as exc:messagebox.showerror("Make project self-contained",str(exc),parent=root);return
-        messagebox.showinfo("Project source",f"Project is self-contained.\nImages: {result['files']}\nHard-linked: {result['hardlinked']}\nCopied: {result['copied']}",parent=root);self._rerender()
+        project=self.project
+        def done(result):
+            messagebox.showinfo("Project source",f"Project is self-contained.\nImages: {result['files']}\nHard-linked: {result['hardlinked']}\nCopied: {result['copied']}",parent=root);self._rerender()
+        self._background_project_task("Project source","Importing source X-rays…",lambda progress:project.make_self_contained(),done)
 
     def _compact_project(self):
         result=self.project.compact_disposable_ai_artifacts()
         messagebox.showinfo("Project cache",f"Removed {result['removed_files']} reproducible file(s).\nFreed {result['removed_bytes']/1024/1024:.1f} MB.\n\nSource X-rays, SQLite data and final models were not touched.",parent=self.host.container.winfo_toplevel());self._rerender()
 
     def _rescan_source(self):
-        try:self.project.scan_source()
-        except Exception as exc:messagebox.showerror("Rescan source X-rays",str(exc),parent=self.host.container.winfo_toplevel());return
-        self._rerender()
+        project=self.project
+        def worker(progress):
+            progress("Scanning source X-rays…");return project.scan_source()
+        self._background_project_task("Rescan source X-rays","Loading source X-rays…",worker,lambda result:self._rerender())
 
     def _open_project(self):
         root=self.host.container.winfo_toplevel();folder=filedialog.askdirectory(parent=root,title="Select X-ray project folder")
         if not folder:return
-        try:
-            self.project=XRayProject(folder)
-            self.project.compact_disposable_ai_artifacts()
-        except Exception as exc:messagebox.showerror("Open X-ray project",str(exc),parent=root);return
-        remember_xray_project(self.project.root)
-        self.stage="project";self._rerender()
+        def worker(progress):
+            progress("Reading X-ray project and image catalog…");project=XRayProject(folder)
+            progress("Checking reproducible caches…");project.compact_disposable_ai_artifacts();return project
+        self._background_project_task("Open X-ray project","Loading X-ray project…",worker,self._attach_loaded_project)
 class MarkerSettingsDialog(tk.Toplevel):
     """Optional second depth: appearance and keyboard shortcuts only."""
     def __init__(self,parent,scheme):

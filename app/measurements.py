@@ -47,10 +47,49 @@ def validate_measurement(value, schema, existing=(), editing_index=None):
  return {"use":bool(value.get("use",True)),"abbr":abbr,"name":name,"point1":p1,"point2":p2,"point1_abbr":next(x["abbr"] for x in schema if int(x.get("id",x.get("landmark_id")))==p1),"point2_abbr":next(x["abbr"] for x in schema if int(x.get("id",x.get("landmark_id")))==p2)}
 def save_measurements(project, values):
  rows=[validate_measurement(v,project.schema,values,index) for index,v in enumerate(values)]
+ _atomic(schema_path(project),_definitions_csv(rows)); return rows
+
+def _definitions_csv(rows):
  out=io.StringIO(newline=""); w=csv.DictWriter(out,fieldnames=FIELDS,lineterminator="\n");w.writeheader()
  for row in rows:w.writerow({"Use":"1" if row["use"] else "0","Abbr":row["abbr"],"Name":row["name"],"Point1":row["point1"],"Point2":row["point2"],"Point1Abbr":row["point1_abbr"],"Point2Abbr":row["point2_abbr"]})
- _atomic(schema_path(project),out.getvalue()); return rows
+ return out.getvalue()
 def active_measurements(project):return [x for x in load_measurements(project) if x["use"]]
+
+def export_measurement_definitions(project,target):
+ """Portable definitions bind endpoints to abbreviations, never display numbers."""
+ if not project.schema:raise ValueError("Apply a landmark scheme before exporting measurement definitions.")
+ source=ensure_schema(project);target=Path(target);values=[]
+ with source.open(encoding="utf-8-sig",newline="") as stream:
+  reader=csv.DictReader(stream)
+  if not {"Use","Abbr","Name","Point1","Point2"}<=set(reader.fieldnames or ()):raise ValueError("Invalid measurement definitions file.")
+  for row in reader:
+   if not any(row.values()):continue
+   a=(row.get("Point1Abbr") or "").strip() or project.historical_abbr_for_numeric(row.get("Point1") or 0)
+   b=(row.get("Point2Abbr") or "").strip() or project.historical_abbr_for_numeric(row.get("Point2") or 0)
+   p1,p2=project.active_landmark_id_for_abbr(a),project.active_landmark_id_for_abbr(b)
+   if p1 is None or p2 is None:raise ValueError("A measurement refers to an unresolved landmark; restore its scheme before exporting definitions.")
+   values.append(validate_measurement({"use":_used(row.get("Use")),"abbr":row.get("Abbr") or "","name":row.get("Name") or "","point1":p1,"point2":p2},project.schema,values))
+ _atomic(target,_definitions_csv(values))
+ return target
+
+def import_measurement_definitions(project,source):
+ if not project.schema:raise ValueError("Apply a landmark scheme before importing measurement definitions.")
+ with Path(source).open(encoding="utf-8-sig",newline="") as stream:
+  reader=csv.DictReader(stream)
+  if not {"Use","Abbr","Name","Point1Abbr","Point2Abbr"}<=set(reader.fieldnames or ()):raise ValueError("Portable definitions must include landmark abbreviations; export them from Measurement definitions first.")
+  values=[]
+  for row in reader:
+   if not any(row.values()):continue
+   a,b=(row.get("Point1Abbr") or "").strip(),(row.get("Point2Abbr") or "").strip()
+   p1,p2=project.active_landmark_id_for_abbr(a),project.active_landmark_id_for_abbr(b)
+   if p1 is None or p2 is None:raise ValueError(f"Measurement refers to landmarks absent from this scheme: {a}, {b}.")
+   value={"use":_used(row.get("Use")),"abbr":row.get("Abbr") or "","name":row.get("Name") or "","point1":p1,"point2":p2}
+   values.append(validate_measurement(value,project.schema,values))
+ path=schema_path(project)
+ if path.exists():
+  import shutil,uuid
+  backup=project.root/"backups"/"measurement_definitions"/(uuid.uuid4().hex+".csv");backup.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(path,backup)
+ return save_measurements(project,values)
 def _mm_per_pixel(project, locality):
  cal=project.locality_calibration(locality)
  if not cal:return None

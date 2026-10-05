@@ -277,7 +277,8 @@ class XRayModuleContractTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]
         module=(root/"app/modules/xray_counts.py").read_text(encoding="utf-8")
         self.assertIn("def standard_menu_entries",module)
-        self.assertIn('"Import / export AI models…"',module)
+        self.assertIn("model_transfer_card",module)
+        self.assertNotIn('"Import / export AI models…"',module)
         self.assertIn('"X-ray Crop model"',module)
         self.assertIn('"X-ray Structure model"',module)
         self.assertNotIn('"Import X-ray Structure AI…"',module)

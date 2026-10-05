@@ -108,7 +108,8 @@ class CropCanvasController:
   return entry
  def _crop_state(self,project,image_id,base):
   active=project.get_ui_state("crop_active_batch",{});record=project.crop_record(image_id) or {};proposal=(active.get("proposals",{}) or {}).get(image_id)
-  return record.get("crop_json") or proposal or [0,0,base.width,base.height],float(record.get("rotation_degrees") or 0)
+  angle=record.get("rotation_degrees") if record.get("crop_json") else (active.get("proposal_rotations",{}) or {}).get(image_id,0)
+  return record.get("crop_json") or proposal or [0,0,base.width,base.height],float(angle or 0)
  def _activate_loaded(self,row,entry,bounds,angle,token):
   image_id=str(row["image_id"])
   if self._closed or token!=self._load_token or image_id!=self.requested_image_id or image_id!=((self.context.current() or {}).get("image_id")):return False
@@ -170,7 +171,7 @@ class CropCanvasController:
   def worker():
    try:
     active=project.get_ui_state("crop_active_batch",{});record=project.crop_record(image_id) or {}
-    base,proxy=load_project_developed(project,image_id);proposal=(active.get('proposals',{}) or {}).get(image_id);events.put(('ok',base,proxy,record.get('crop_json') or proposal or [0,0,base.width,base.height],float(record.get('rotation_degrees') or 0)))
+    base,proxy=load_project_developed(project,image_id);proposal=(active.get('proposals',{}) or {}).get(image_id);angle=record.get('rotation_degrees') if record.get('crop_json') else (active.get('proposal_rotations',{}) or {}).get(image_id,0);events.put(('ok',base,proxy,record.get('crop_json') or proposal or [0,0,base.width,base.height],float(angle or 0)))
    except Exception as exc:events.put(('error',exc))
   self._worker=threading.Thread(target=worker,daemon=True,name='production-main-crop-load');self._worker.start()
   def poll():

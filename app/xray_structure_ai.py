@@ -904,6 +904,9 @@ def export_structure_model_package(project, target, model_id=None):
         "backend": str(model.get("backend") or STRUCTURE_BACKEND),
         "schema_digest": str(model["schema_digest"]),
         "schema_contract": contract,
+        "trait_scheme": project.scheme,
+        "trait_scheme_sha256": _sha256_bytes(_canonical(project.scheme).encode("utf-8")),
+        "orientation_policy": project.orientation_policy,
         "training_statistics": {
             "training_specimen_count": int(model.get("training_specimen_count") or 0),
             "validation_specimen_count": int(model.get("validation_specimen_count") or 0),
@@ -935,7 +938,15 @@ def import_structure_model_package(project, source, *, registry=None):
             raise XRayStructurePackageError("Unsupported X-ray structure model package format.")
         provider_id = str(manifest.get("backend") or "")
         _structure_provider_spec(provider_id, registry, XRayStructurePackageError)
-        current_digest = structure_schema_digest(project.scheme)
+        imported_scheme=manifest.get("trait_scheme")
+        compatibility_scheme=project.scheme
+        if imported_scheme is not None:
+            from .xray_schema import normalize_scheme
+            try:
+                if _sha256_bytes(_canonical(imported_scheme).encode("utf-8"))!=manifest.get("trait_scheme_sha256"):raise ValueError("Trait scheme checksum mismatch")
+                compatibility_scheme=normalize_scheme(imported_scheme)
+            except (ValueError,TypeError,KeyError) as exc:raise XRayStructurePackageError(f"Invalid embedded trait scheme: {exc}") from exc
+        current_digest = structure_schema_digest(compatibility_scheme)
         expected = dict(manifest.get("files") or {})
         if set(expected) != {"artifacts/model.pth", "artifacts/model.json"}:
             raise XRayStructurePackageError("Structure model package has an unexpected artifact set.")
@@ -960,10 +971,10 @@ def import_structure_model_package(project, source, *, registry=None):
         contract=manifest.get("schema_contract")
         if contract is not None:
             try:
-                proven=metadata.get("schema_contract")==contract and _sha256_bytes(_canonical(contract).encode("utf-8"))==package_digest and _normalized_structure_contract(contract)==structure_schema_contract(project.scheme)
+                proven=metadata.get("schema_contract")==contract and _sha256_bytes(_canonical(contract).encode("utf-8"))==package_digest and _normalized_structure_contract(contract)==structure_schema_contract(compatibility_scheme)
             except (ValueError,KeyError,TypeError):proven=False
             if not proven:raise XRayStructurePackageError("This structure model was trained for a different X-ray structure scheme or has an invalid scientific contract.")
-        elif package_digest!=current_digest and package_digest!=_sha256_bytes(_canonical(_legacy_structure_schema_contract(project.scheme)).encode("utf-8")):
+        elif package_digest!=current_digest and package_digest!=_sha256_bytes(_canonical(_legacy_structure_schema_contract(compatibility_scheme)).encode("utf-8")):
             raise XRayStructurePackageError("This structure model was trained for a different X-ray structure scheme; embedded information cannot prove equivalence.")
         if str(metadata.get("backend") or STRUCTURE_BACKEND) != provider_id:
             raise XRayStructurePackageError("Imported model metadata backend does not match the package provider.")
@@ -987,7 +998,7 @@ def import_structure_model_package(project, source, *, registry=None):
             metadata["imported_from_model_id"] = original
             metadata["original_schema_digest"]=package_digest
             metadata["schema_digest"]=current_digest
-            metadata["schema_contract"]=structure_schema_contract(project.scheme)
+            metadata["schema_contract"]=structure_schema_contract(compatibility_scheme)
             (staging / "model.json").write_text(
                 json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True),
                 encoding="utf-8",
@@ -999,6 +1010,7 @@ def import_structure_model_package(project, source, *, registry=None):
                 "origin": "imported",
                 "original_model_id": original,
                 "portable_package_format": MODEL_PACKAGE_FORMAT,
+                "previous_orientation_policy": project.orientation_policy,
             })
             project.register_structure_model(
                 local,
@@ -1012,6 +1024,8 @@ def import_structure_model_package(project, source, *, registry=None):
                 training_specimen_count=int(stats.get("training_specimen_count") or 0),
                 validation_specimen_count=int(stats.get("validation_specimen_count") or 0),
                 activate=False,
+                trait_scheme=imported_scheme,
+                orientation_policy=manifest.get("orientation_policy"),
             )
         except Exception:
             if staging.exists():

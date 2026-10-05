@@ -165,7 +165,7 @@ def prepare_crop_training_images(project, rows, progress=None, ensure_developed=
         prepare_proposal = lambda source, image_id: prepare_crop_result(source, project=project, force=True, image_id_value=image_id)
     from .crop_parallel import auto_config, bounded_map
     from .project_runtime import scoped_project
-    prepared, skipped, proposal_failures, proposals = [], [], [], {}
+    prepared, skipped, proposal_failures, proposals, proposal_rotations = [], [], [], {}, {}
     total = len(rows)
     def prepare(row):
         # Context variables do not cross executor threads. The established cache
@@ -198,10 +198,12 @@ def prepare_crop_training_images(project, rows, progress=None, ensure_developed=
             prepared.append(image_id)
             if item.get("proposal_failure"):
                 reason = item["proposal_failure"]; proposal_failures.append({"image_id": image_id, "reason": reason})
-            elif isinstance(item.get("proposal"), dict) and item["proposal"].get("crop_bounds"): proposals[image_id] = item["proposal"]["crop_bounds"]
+            elif isinstance(item.get("proposal"), dict) and item["proposal"].get("crop_bounds"):
+                proposals[image_id] = item["proposal"]["crop_bounds"]
+                proposal_rotations[image_id] = float(item["proposal"].get("rotation_degrees") or 0)
             if diagnostics: diagnostics.end("crop_batch_prepare_image", image_id=image_id, path=str(source or cache_path), batch_index=index, batch_total=total, detail=f"result=prepared proposal_failure={bool(item.get('proposal_failure'))}")
         if progress is not None: progress(index, total, image_id, reason)
-    return {"selected": total, "prepared_ids": tuple(prepared), "skipped": tuple(skipped), "proposal_failures": tuple(proposal_failures), "proposals": proposals}
+    return {"selected": total, "prepared_ids": tuple(prepared), "skipped": tuple(skipped), "proposal_failures": tuple(proposal_failures), "proposals": proposals, "proposal_rotations":proposal_rotations}
 
 def create_crop_training_batch(project, count, seed=None):
     """Persist the deterministic selection without modifying source images or crops."""

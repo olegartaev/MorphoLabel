@@ -66,6 +66,9 @@ def export_crop_model_package(project,target,model_id=None):
     safe_metrics={k:v for k,v in metrics.items() if not str(k).endswith(("_path","/model_path","/meta_path")) and k not in {"training_membership","validation_membership"}}
     safe_metrics["orientation/enabled"]=has_orientation
     manifest={"package_format":PACKAGE_FORMAT,"model_id":model["model_id"],"backend":BACKEND,"inference_contract":INFERENCE_CONTRACT,"orientation":has_orientation,"parent_model_id":model.get("parent_model_id"),"training_specimen_count":model.get("training_specimen_count",0),"training_plate_count":model.get("training_plate_count",0),"metrics":safe_metrics,"files":{n:_hash(d) for n,d in files.items()}}
+    manifest["trait_scheme"]=project.scheme
+    manifest["trait_scheme_sha256"]=_hash(json.dumps(project.scheme,ensure_ascii=False,sort_keys=True,separators=(",",":")).encode("utf-8"))
+    manifest["orientation_policy"]=project.orientation_policy
     target=Path(target);target.parent.mkdir(parents=True,exist_ok=True)
     with zipfile.ZipFile(target,"w",zipfile.ZIP_DEFLATED) as archive:
         for name,data in files.items():archive.writestr(name,data)
@@ -79,6 +82,11 @@ def import_crop_model_package(project,source):
             manifest=json.loads(archive.read("manifest.json"))
             if manifest.get("package_format")!=PACKAGE_FORMAT or manifest.get("backend")!=BACKEND:raise XRayCropPackageError("Wrong X-ray Crop model package type/backend.")
             if manifest.get("inference_contract")!=INFERENCE_CONTRACT:raise XRayCropPackageError("Unsupported Crop inference contract.")
+            scheme=manifest.get("trait_scheme")
+            if scheme is not None:
+                from .xray_schema import normalize_scheme
+                if _hash(json.dumps(scheme,ensure_ascii=False,sort_keys=True,separators=(",",":")).encode("utf-8"))!=manifest.get("trait_scheme_sha256"):raise XRayCropPackageError("Trait scheme checksum mismatch.")
+                normalize_scheme(scheme)
             if bool((manifest.get("metrics") or {}).get("orientation/enabled"))!=bool(manifest.get("orientation")):raise XRayCropPackageError("Orientation metadata and artifact declaration disagree.")
             names={"artifacts/model.pth","artifacts/config.py"}
             if manifest.get("orientation"):names|={"artifacts/orientation_model.pth","artifacts/orientation.json"}
@@ -106,11 +114,11 @@ def import_crop_model_package(project,source):
     staging.mkdir(parents=True)
     try:
         for name,data in payload.items():(staging/Path(name).name).write_bytes(data)
-        metrics={**dict(manifest.get("metrics") or {}),"origin":"imported","original_model_id":original,"original_parent_model_id":manifest.get("parent_model_id"),"package_manifest":manifest}
+        metrics={**dict(manifest.get("metrics") or {}),"origin":"imported","original_model_id":original,"original_parent_model_id":manifest.get("parent_model_id"),"package_manifest":manifest,"previous_orientation_policy":project.orientation_policy}
         if manifest.get("orientation"):
             metrics.update({"orientation/enabled":True,"orientation/model_path":str((destination/"orientation_model.pth").relative_to(project.root)),"orientation/meta_path":str((destination/"orientation.json").relative_to(project.root))})
         staging.replace(destination)
-        project.register_crop_model(local,str((destination/"model.pth").relative_to(project.root)),str((destination/"config.py").relative_to(project.root)),None,metrics,(),int(manifest.get("training_specimen_count") or 0),activate=False)
+        project.register_crop_model(local,str((destination/"model.pth").relative_to(project.root)),str((destination/"config.py").relative_to(project.root)),None,metrics,(),int(manifest.get("training_specimen_count") or 0),activate=True,trait_scheme=scheme,orientation_policy=manifest.get("orientation_policy"))
     except Exception:
         shutil.rmtree(staging,ignore_errors=True);shutil.rmtree(destination,ignore_errors=True);raise
     return local
