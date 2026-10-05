@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import ttk,messagebox
 from app.photo_list import PhotoListCanvas
 from app.ui.icons import tk_icon, CONTROL_ICON_SIZE
+from .tk_lifecycle import trace_for_widget
 
 DEFAULT_SHOW_EXCLUDED = True
 
@@ -41,7 +42,7 @@ class PhotoListPanel(ttk.Frame):
   self._build_legend()
   list_host=ttk.Frame(self);list_host.pack(fill='both',expand=True);self.canvas=PhotoListCanvas(list_host,height=24,bg='white');self.scrollbar=ttk.Scrollbar(list_host,orient='vertical',command=self.canvas.yview);self.canvas.configure(yscrollcommand=self.scrollbar.set);self.canvas.pack(side='left',fill='both',expand=True);self.scrollbar.pack(side='right',fill='y');self.canvas.bind('<<ListboxSelect>>',self._selected);self.visible_indices=[];self._cache=()
   action=ttk.Frame(self,padding=(0,5,0,0));action.pack(fill='x');self.exclude_button=ttk.Button(action,text='Exclude',image=self._action_icon('exclude'),compound='left',style='Icon.TButton',command=self.exclude_or_restore);self.exclude_button.pack(side='left');tooltip.bind(self.exclude_button,'Exclude this image from active workflows and review queues without deleting its scientific data. Restore keeps the data but does not silently re-add the image to a finite review queue.')
-  for variable in (self.image_query,self.locality_query,self.show_excluded):variable.trace_add('write',lambda *_:self.refresh())
+  for variable in (self.image_query,self.locality_query,self.show_excluded):trace_for_widget(self,variable,'write',lambda *_:self.refresh())
  def _action_icon(self,name):
   key=(name,CONTROL_ICON_SIZE)
   if key not in self._icons:self._icons[key]=tk_icon(self,name,CONTROL_ICON_SIZE)

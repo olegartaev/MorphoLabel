@@ -29,6 +29,7 @@ from .design import FlowRow, model_selector_width
 from .workflow import add_command_separator
 from .landmark_canvas import LandmarkCanvasController
 from .dialogs import center
+from .tk_lifecycle import trace_for_widget
 from .landmark_display import load_display_settings, save_display_settings, SYMBOL_LABELS, SYMBOL_NAMES, LABEL_LABELS, LABEL_NAMES, HALO_LABELS, HALO_NAMES
 from .complex_qc_dialog import open_complex_qc
 
@@ -360,7 +361,7 @@ class LandmarksSection(SectionView):
    preview=tk.Canvas(colors,width=30,height=18,highlightthickness=1,highlightbackground='#9aa3aa');preview.grid(row=row,column=1,sticky='w',padx=(10,8),pady=4)
    def paint(*_):
     preview.delete('all');preview.create_rectangle(0,0,32,20,fill=var.get(),outline=var.get())
-   var.trace_add('write',paint);paint()
+   trace_for_widget(preview,var,'write',paint);paint()
    def choose():
     value=colorchooser.askcolor(color=var.get(),parent=dialog,title=label)[1]
     if value:var.set(value)

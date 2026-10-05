@@ -23,7 +23,7 @@ from app.xray_crop_ui import XRayCropWorkspace
 from app.xray_structures_ui import XRayStructureWorkspace
 from app.xray_structure_ai import export_structure_model_package,import_structure_model_package
 from app.xray_schema import (
-    MARKER_COLORS,METHOD_BY_ID,SCHEME_RESOURCE_DIR,SHAPES,TRAIT_METHODS,blank_scheme,bundled_scheme,normalize_scheme,
+    MARKER_COLORS,METHOD_BY_ID,SCHEME_RESOURCE_DIR,SHAPES,TRAIT_METHODS,blank_scheme,normalize_scheme,
     compatible_reference_roles,load_scheme_file,save_scheme_file,scheme_change_impact,structure_usage,
 )
 
@@ -317,6 +317,7 @@ class XRayCountsRuntime:
         if callable(flush):
             try:flush()
             except Exception:pass
+        if self._tip is not None:self._tip.close()
         self.host=None;self._workspace=None;self._images.clear();self._tip=None
     def _selection(self):
         return self.project.current_selection() if self.project is not None else {"image_id":"","specimen_id":""}
@@ -389,8 +390,9 @@ class XRayCountsRuntime:
     def render(self,host):
         self.host=host;self._restore_last_project();parent=host.container
         for child in parent.winfo_children():child.destroy()
-        self._workspace=None;self._images={};self._tip=Tooltip(parent.winfo_toplevel())
+        self._workspace=None;self._images={}
         outer=ttk.Frame(parent,padding=(8,6));outer.pack(fill="both",expand=True)
+        self._tip=Tooltip(parent.winfo_toplevel(),owner=outer)
         self._header(outer);body=ttk.Frame(outer);body.pack(fill="both",expand=True,pady=(7,0));getattr(self,f"_render_{self.stage}")(body)
     def _icon(self,master,name,size=XRAY_ICON_SIZE):
         key=(name,size)

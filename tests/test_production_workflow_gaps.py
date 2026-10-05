@@ -520,7 +520,7 @@ class ProductionWorkflowGapTests(unittest.TestCase):
   self.assertFalse(section.navigate_training_batch(1));self.assertFalse(self.p.annotation_status(image_id)['verified'])
  def test_human_window_is_native_and_launcher_is_direct(self):
   ui=(Path(__file__).parents[1]/'app'/'human_baseline_ui.py').read_text(encoding='utf8');section=(Path(__file__).parents[1]/'app'/'ui'/'landmarks_section.py').read_text(encoding='utf8')
-  self.assertNotIn('self.transient(parent)',ui);self.assertIn("'Confirm & Finish' if final",ui);self.assertIn("'Edit repeat annotations...',self.open_repeat",section)
+  self.assertNotIn('self.transient(parent)',ui);self.assertIn("'Confirm & Finish' if final",ui);self.assertIn("'Human Repeatability…',self.open_repeat",section)
  def test_section_specific_counts_are_authoritative(self):
   self.assertEqual(0,self.p.landmark_counts()['New/changed'])
   self.assertEqual(0,self.p.crop_section_counts()['Train ready'])

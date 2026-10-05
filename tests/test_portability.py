@@ -5,7 +5,7 @@ from app.workflow import stable_image_id
 
 class PortabilityTests(unittest.TestCase):
     def test_root_is_discovered_from_code_location(self):
-        self.assertEqual(ROOT.name,"MorphoLabel")
+        self.assertEqual(ROOT,Path(__file__).resolve().parents[1])
         self.assertEqual(require_relative(ORIGINALS),"orig_photos")
     def test_ids_depend_on_relative_not_drive_path(self):
         rel="orig_photos/sample/image.nef"

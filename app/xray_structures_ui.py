@@ -18,6 +18,7 @@ from app.ui.workflow import WorkflowDock, add_command_separator
 from types import SimpleNamespace
 from app.ui.photo_list_panel import DEFAULT_SHOW_EXCLUDED, filtered_photo_indices
 from app.ui.tooltips import Tooltip
+from app.ui.tk_lifecycle import trace_for_widget, unbind_callback
 from .xray_crop import oriented_crop
 from .xray_icons import VISIBILITY_ICON_SIZE, tk_visibility_icon, tk_xray_icon
 from .xray_structure_ai import (
@@ -32,7 +33,7 @@ from .xray_structure_display import (
 )
 from .xray_result_qc import (
     clear_result_review_queue, complete_result_review_item,
-    move_result_review_queue, remove_result_review_image, remove_result_review_specimen, result_review_queue,
+    move_result_review_queue, remove_result_review_specimen, result_review_queue,
 )
 
 
@@ -167,7 +168,7 @@ class XRaySpecimenListPanel(ttk.Frame):
             self.exclude_button,
             "Exclude only this specimen from active Structure, AI and export workflows without deleting its crop, annotations or history. Select an excluded row and use Restore to bring it back.",
         )
-        for variable in (self.sample_query,self.specimen_query,self.show_excluded):variable.trace_add("write",lambda *_:self.refresh(preserve_scroll=True))
+        for variable in (self.sample_query,self.specimen_query,self.show_excluded):trace_for_widget(self,variable,"write",lambda *_:self.refresh(preserve_scroll=True))
 
     def _action_icon(self,name):
         key=(name,CONTROL_ICON_SIZE)
@@ -281,7 +282,7 @@ class XRayStructureWorkspace:
         self.parent=parent;self.root=parent.winfo_toplevel();self.project=project;self.on_changed=on_changed or (lambda:None)
         self.on_selection=on_selection or (lambda _image_id,_specimen_id:None);self.on_open_results=on_open_results or (lambda:None)
         self.on_check_results=on_check_results or (lambda:None)
-        self.tip=Tooltip(self.root);self.pass_no=tk.IntVar(value=1);self.batch_size=tk.IntVar(value=24)
+        self.tip=Tooltip(self.root,owner=self.parent);self.pass_no=tk.IntVar(value=1);self.batch_size=tk.IntVar(value=24)
         self.prediction_batch_size=tk.IntVar(value=24);self._busy=False
         self.selected_specimen_id=str(initial_specimen_id or "");self.preferred_image_id=str(initial_image_id or "")
         self.active_structure_id=None;self.selected_annotation_id=None
@@ -506,7 +507,7 @@ class XRayStructureWorkspace:
     def _destroy(self,event):
         if event.widget is not self.outer:return
         if self._key_bind_id:
-            try:self.root.unbind("<KeyPress>",self._key_bind_id)
+            try:unbind_callback(self.root,"<KeyPress>",self._key_bind_id)
             except tk.TclError:pass
             self._key_bind_id=None
         self._source_cache=None;self._source_cache_id=""

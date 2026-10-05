@@ -219,11 +219,11 @@ class MorphoLabelUIContractTests(unittest.TestCase):
     def test_landmark_batch_navigation_uses_verify_next_with_green_verify_icon(self):
         root=Path(__file__).parents[1]
         shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
-        self.assertIn("'Verify & Next'",shell)
-        self.assertIn("self.ui_icon('verify' if landmark_confirm or crop_confirm",shell)
+        self.assertIn('"Verify & Next"',shell)
+        self.assertIn('self.ui_icon("verify" if landmark_confirm or crop_confirm',shell)
         self.assertIn('icon="previous"',shell)
         self.assertNotIn("'Checked & Next ›'",shell)
-        self.assertIn("kind in {'landmark','landmark_ai_review','landmark_suspicious'}",shell)
+        self.assertIn('kind in {"landmark","landmark_ai_review","landmark_suspicious"}',shell)
 
     def test_package_entrypoint_uses_same_morpholabel_shell(self):
         root=Path(__file__).parents[1]
@@ -266,11 +266,12 @@ class MorphoLabelUIContractTests(unittest.TestCase):
     def test_core_context_and_queue_share_xray_visual_language(self):
         root=Path(__file__).parents[1]
         shell=(root/"app"/"ui"/"shell.py").read_text(encoding="utf-8")
-        self.assertIn('text="Sample:",style="ContextKey.TLabel"',shell)
-        self.assertIn('text="Image:",style="ContextKey.TLabel"',shell)
+        self.assertIn('build_context_row(left,("Sample","Specimen"))',shell)
+        design=(root/"app"/"ui"/"design.py").read_text(encoding="utf-8")
+        self.assertIn('style="ContextKey.TLabel"',design)
         self.assertIn("self.status_queue_title",shell)
-        self.assertIn("'landmark':'Annotation batch'",shell)
-        self.assertIn("'landmark_ai_review':'AI review'",shell)
+        self.assertIn('"landmark":"Annotation batch"',shell)
+        self.assertIn('"landmark_ai_review":"AI review"',shell)
 
     def test_user_facing_core_files_no_longer_brand_the_app_as_simm(self):
         root=Path(__file__).parents[1]

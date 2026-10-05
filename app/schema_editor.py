@@ -5,6 +5,7 @@ from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 from .profile import read_schema_csv
 from .identity import apply_window_identity
+from .ui.tk_lifecycle import trace_for_widget
 
 LEGEND=("# ROLE LEGEND:","# BOTH = used for classical and geometric morphometrics","# GM = geometric morphometrics only","# CLASSICAL = classical morphometrics only","# Lines beginning with # are comments and are ignored by MorphoLabel.")
 ROLE_CODES={"BT":"BOTH","GM":"GM","CL":"CLASSICAL"}
@@ -16,7 +17,7 @@ class SchemaEditor(tk.Toplevel):
   super().__init__(parent);apply_window_identity(self,short=True);self.geometry("760x520");self.path=Path(path) if path else None;self.rows=[];self.delimiter=";";self.dirty=False;self._editor=None;self._editor_row=None;self._editor_key=None
   namebar=ttk.Frame(self,padding=5);namebar.pack(fill="x")
   ttk.Label(namebar,text="Scheme name:").pack(side="left")
-  self.scheme_name=tk.StringVar();ttk.Entry(namebar,textvariable=self.scheme_name,width=44).pack(side="left",padx=6);self.scheme_name.trace_add("write",lambda *_: setattr(self,"dirty",True))
+  self.scheme_name=tk.StringVar();ttk.Entry(namebar,textvariable=self.scheme_name,width=44).pack(side="left",padx=6);trace_for_widget(self,self.scheme_name,"write",lambda *_: setattr(self,"dirty",True))
   bar=ttk.Frame(self,padding=5);bar.pack(fill="x")
   for text,cmd in (("New",self.new_schema),("Open...",self.open_schema),("Save",self.save),("Save As...",self.save_as)) : ttk.Button(bar,text=text,command=cmd).pack(side="left",padx=2)
   frame=ttk.Frame(self,padding=5);frame.pack(fill="both",expand=True)

@@ -348,7 +348,7 @@ class XRayDetectorContractTests(unittest.TestCase):
         for text in (
             "Apply crops","1. Training data","Start first batch","Add next batch","2. Train model",'"Train",self.train_model',
             "3. Predict & review","Predict next","Predict all","Review AI crops","Confirm & Next",
-            "Drag empty space","<Delete>","WorkflowDock","PhotoListCanvas","Sample","Plate","Show excluded",
+            "Drag empty image space","<Delete>","WorkflowDock","PhotoListCanvas","Sample","Plate","Show excluded",
             "NavPrimary.TButton","apply_and_confirm_plate",
         ):self.assertIn(text,ui)
         self.assertNotIn("Selected specimen",ui)
@@ -366,17 +366,17 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn('style="CropApply.TButton",icon="verify"',ui)
         self.assertIn('"Delete",self.delete_selected',ui)
         self.assertIn('"Clear all…",self.clear_plate_crops',ui)
-        self.assertIn("self.batch_actions.grid",ui)
+        self.assertIn('self.batch_actions.pack(side="right")',ui)
         self.assertIn('"<MouseWheel>"',ui)
         self.assertIn("flip_selected_horizontal",ui)
         self.assertIn("flip_selected_vertical",ui)
         self.assertNotIn("rotate_selected_180",ui)
         self.assertIn('"Clear all…",self.clear_plate_crops',ui)
         self.assertIn('"Delete",self.delete_selected',ui)
-        toolbar=ui[ui.index("self.crop_actions="):ui.index("self.instruction=ElidedLabel")]
+        toolbar=ui[ui.index("self.crop_actions="):ui.index("self.queue_banner=ttk.Frame")]
         self.assertLess(toolbar.index("self.delete_crop_button"),toolbar.index("self.clear_plate_button"))
         self.assertLess(toolbar.index("self.flip_h_button"),toolbar.index("self.flip_v_button"))
-        self.assertIn("self.apply_group.pack(side=\"right\")",ui)
+        self.assertIn("self.apply_group.pack(side=\"left\")",ui)
         self.assertIn("self.actions.relayout()",ui)
         self.assertIn("excluded rows stay inspectable/selectable",ui)
         self.assertIn('self.queue_banner=ttk.Frame(main,style="Attention.TFrame"',ui)

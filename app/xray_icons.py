@@ -7,7 +7,7 @@ stages are recognisable at a glance.
 from __future__ import annotations
 
 from PIL import Image, ImageDraw, ImageFont, ImageTk
-from app.ui.icons import OUTLINE, MUTED, PALE, PALE_BLUE, BLUE, GREEN, RED, YELLOW, render_icon
+from app.ui.icons import OUTLINE, MUTED, PALE_BLUE, BLUE, GREEN, RED, render_icon
 
 XRAY_ICON_SIZE=26
 TRAIT_ICON_SIZE=20

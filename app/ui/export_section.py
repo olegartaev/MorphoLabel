@@ -5,6 +5,7 @@ from app.export_formats import available_groups, selected_groups, export_landmar
 from app.measurements import export_measurements
 from .icons import WORKFLOW_ICON_SIZE
 from .section_base import SectionView
+from .tk_lifecycle import trace_for_widget
 
 class ExportSection(SectionView):
  def render(self):
@@ -37,7 +38,7 @@ class ExportSection(SectionView):
    ttk.Label(line,text='No landmark groups are defined; use All landmarks.',style='Muted.TLabel').pack(anchor='w')
   def update(*_):
    for check in checks:check.state(['!disabled'] if mode.get()=='groups' else ['disabled'])
-  mode.trace_add('write',update);update()
+  trace_for_widget(panel,mode,'write',update);update()
   self.button(land,'Export landmark coordinates…',lambda:self.landmarks(mode.get(),selected_groups(tuple(chosen),{name:var.get() for name,var in chosen.items()})),'Choose an output format and destination.',style='Primary.TButton').grid(row=4,column=0,columnspan=3,sticky='w',pady=(12,0))
 
   measurement=ttk.LabelFrame(cards,labelwidget=card_header('export_measurements','Measurements'),padding=14);measurement.grid(row=0,column=1,sticky='nsew',padx=(5,0))

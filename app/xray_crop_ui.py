@@ -14,6 +14,7 @@ from PIL import Image, ImageTk
 from app.photo_list import PhotoListCanvas
 from app.ui.dialogs import center
 from app.ui.icons import CONTROL_ICON_SIZE, WORKFLOW_ICON_SIZE, tk_icon
+from app.ui.tk_lifecycle import trace_for_widget, unbind_callback
 from app.ui.photo_list_panel import filtered_photo_indices, photo_search_cache
 from app.ui.tooltips import Tooltip
 from app.ui.design import ElidedLabel, FlowRow, action_icon, build_context_row, model_selector_width, prediction_stamp, sidebar_width_for_window, dialog_width_for_columns
@@ -177,7 +178,7 @@ class XRayPlateListPanel(ttk.Frame):
         tooltip.bind(self.exclude_button,"Exclude this plate from active X-ray workflows without deleting crops, models or provenance.")
 
         for variable in (self.sample_query,self.image_query,self.show_excluded):
-            variable.trace_add("write",lambda *_:self.refresh(preserve_scroll=True))
+            trace_for_widget(self,variable,"write",lambda *_:self.refresh(preserve_scroll=True))
 
     def _action_icon(self,name):
         key=(name,CONTROL_ICON_SIZE)
@@ -308,12 +309,22 @@ class XRayCropWorkspace:
         self.preview=self.photo=None;self.preview_original_size=(1,1);self.display_scale=1.0;self.offset=(0,0);self._photo_key=None
         self.zoom=1.0;self.pan=None;self.pan_drag=None
         self._busy=False;self._queue_active=False;self._drag_mode=None;self._drag_anchor=None;self._drag_initial=None;self._drag_changed=False;self._drawing_crop=None
-        self._icons={};self.training_batch_size=tk.IntVar(value=6);self.prediction_batch_size=tk.IntVar(value=6);self._tip=Tooltip(self.root)
+        self._icons={};self.training_batch_size=tk.IntVar(value=6);self.prediction_batch_size=tk.IntVar(value=6);self._tip=Tooltip(self.root,owner=self.parent)
         self._build();self.refresh(preserve_plate=False)
-        self.root.bind("<Return>",self._enter_batch,add="+")
+        self._enter_bind_id=self.root.bind("<Return>",self._enter_batch,add="+")
 
     @property
     def selected_specimen_id(self):return self.session.selected_id
+
+    def _destroy(self,event):
+        if event.widget is not self.outer:return
+        binding=getattr(self,"_enter_bind_id",None)
+        if binding:
+            try:unbind_callback(self.root,"<Return>",binding)
+            except tk.TclError:pass
+            self._enter_bind_id=None
+        self._tip.close()
+        self.preview=self.photo=None
 
     def _button(self,parent,text,command,help_text="",style=None,icon=None):
         icon=icon or action_icon(text)
@@ -338,6 +349,7 @@ class XRayCropWorkspace:
 
     def _build(self):
         outer=ttk.Frame(self.parent,padding=(0,0));outer.pack(fill="both",expand=True)
+        self.outer=outer;outer.bind("<Destroy>",self._destroy,add="+")
         panes=ttk.Panedwindow(outer,orient="horizontal");panes.pack(fill="both",expand=True)
         sidebar_host=ttk.Frame(panes,width=320,height=400);sidebar_host.pack_propagate(False);main=ttk.Frame(panes)
         main.grid_propagate(False)

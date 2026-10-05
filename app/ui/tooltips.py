@@ -5,6 +5,7 @@ import ctypes
 import sys
 import tkinter as tk
 from tkinter import ttk
+from .tk_lifecycle import unbind_callback
 
 
 def work_area(root):
@@ -71,11 +72,21 @@ def place_popup(window, root, x, y, *, above_y=None):
 
 
 class Tooltip:
- def __init__(self,root):
+ def __init__(self,root,*,owner=None):
   self.root=root;self.job=None;self.window=None;self.owner=None;self.anchor=None
   self._texts={};self._bound=set()
-  root.bind("<Destroy>",self._root_destroyed,add="+")
-  root.bind("<ButtonPress>",lambda _e:self.hide(),add="+")
+  self._root_bindings={"<ButtonPress>":root.bind("<ButtonPress>",lambda _e:self.hide(),add="+")}
+  if owner is None or owner is root:
+   self._root_bindings["<Destroy>"]=root.bind("<Destroy>",self._root_destroyed,add="+")
+  if owner is not None and owner is not root:
+   owner.bind("<Destroy>",lambda event:self.close() if event.widget is owner else None,add="+")
+ def close(self):
+  """Release root callbacks when a transient view leaves the durable shell."""
+  self.hide()
+  for sequence,binding in self._root_bindings.items():
+   try:unbind_callback(self.root,sequence,binding)
+   except tk.TclError:pass
+  self._root_bindings.clear();self._texts.clear();self._bound.clear()
  def bind(self,widget,text):
   key=str(widget);self._texts[key]=(widget,text)
   if key in self._bound:return

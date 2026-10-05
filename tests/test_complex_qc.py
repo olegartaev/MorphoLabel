@@ -138,7 +138,7 @@ class ComplexQCTests(unittest.TestCase):
         self.assertIn("'Final data QC'",landmarks)
         self.assertIn("'Review AI predictions'",landmarks)
         self.assertNotIn("'Review pending'",landmarks)
-        self.assertIn("ReviewAction.TButton",shell)
+        self.assertIn("ReviewAction.TButton",landmarks)
         self.assertIn('"Review flagged — worst first"',dialog)
         self.assertIn("human-verified",dialog)
         self.assertNotIn('"Review selected"',dialog)
