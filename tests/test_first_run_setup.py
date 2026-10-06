@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app import first_run_setup
+from tests.test_installer_hardening import ready_fixture
 
 
 class FirstRunSetupTests(unittest.TestCase):
@@ -22,15 +23,11 @@ class FirstRunSetupTests(unittest.TestCase):
 
     def test_completed_setup_requires_runtime_and_bootstrap_to_still_exist(self):
         with tempfile.TemporaryDirectory() as td, patch.dict("os.environ",{"LOCALAPPDATA":td},clear=False), patch("app.first_run_setup.is_frozen",return_value=True):
-            runtime=Path(td)/"runtime.exe";runtime.write_bytes(b"x")
-            bootstrap=Path(td)/"bootstrap.pth";bootstrap.write_bytes(b"x")
-            first_run_setup.setup_state_path().write_text(json.dumps({
-                "setup_contract_version":first_run_setup.SETUP_CONTRACT_VERSION,
-                "status":"PASS","runtime_python":str(runtime),"bootstrap_checkpoint":str(bootstrap),
-            }),encoding="utf-8")
-            self.assertFalse(first_run_setup.first_run_setup_required())
-            bootstrap.unlink()
-            self.assertTrue(first_run_setup.first_run_setup_required())
+            state,specs=ready_fixture(td)
+            with patch("app.ai_starters.STARTERS",specs),patch("app.first_run_setup.read_setup_state",return_value=state),patch("app.ai_runtime_resolver.validate_ai_runtime"):
+                self.assertFalse(first_run_setup.first_run_setup_required())
+                Path(state["bootstrap_checkpoint"]).unlink()
+                self.assertTrue(first_run_setup.first_run_setup_required())
 
     def test_setup_installs_ai_tests_inference_and_training_and_persists_defaults(self):
         hardware=SimpleNamespace(
@@ -51,9 +48,13 @@ class FirstRunSetupTests(unittest.TestCase):
                  "training_default":{"device":"cuda:0","batch_size":4},
                  "inference_default":{"device":"cuda:0","batch_size":4},
              }) as persist, \
+             patch("app.ai_starters.install_starter") as starters, \
+             patch("app.verified_download.sha256_file",return_value="a"*64), \
              patch("app.self_test.run_ai_self_test",return_value=ai_result) as self_test:
             events=[]
             result=first_run_setup.run_first_run_setup(progress=lambda stage,detail:events.append((stage,detail)))
+            self.assertEqual(3,starters.call_count)
+            self.assertFalse(first_run_setup.ai_setup_download_active())
             ensure.assert_called_once()
             resolve_bootstrap.assert_called_once()
             self.assertTrue(first_run_setup.ai_download_consent_granted())
@@ -83,6 +84,7 @@ class FirstRunSetupTests(unittest.TestCase):
              patch("app.landmark_bootstrap.resolve_landmark_bootstrap",return_value=SimpleNamespace(checkpoint_path=Path("bootstrap.pth"))), \
              patch("app.ai_hardware.refresh_hardware_profile",return_value=hardware), \
              patch("app.ai_hardware.persist_machine_profile",return_value={"training_default":{},"inference_default":{}}), \
+             patch("app.ai_starters.install_starter"), \
              patch("app.self_test.run_ai_self_test",return_value=bad):
             with self.assertRaises(RuntimeError):
                 first_run_setup.run_first_run_setup()

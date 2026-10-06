@@ -1,3 +1,6 @@
+#if VER < EncodeVer(7,0,0)
+  #error Inno Setup 7 or newer is required to remove managed AI files with extended-length paths.
+#endif
 #ifndef MyAppVersion
   #define MyAppVersion "0.5.0-beta.9"
 #endif
@@ -7,10 +10,19 @@
 #ifndef MyOutputDir
   #define MyOutputDir "..\..\dist\installer"
 #endif
+#ifndef MyAppId
+  #define MyAppId "{{B1BB76C4-FF12-4FF4-8A27-0CB1BBA5513A}"
+#endif
+#ifndef MyStateDir
+  #define MyStateDir "{localappdata}\MorphoLabel"
+#endif
+#ifndef MyLegacyStateDir
+  #define MyLegacyStateDir "{localappdata}\SIMM"
+#endif
 [Setup]
 SetupIconFile=..\..\build\brand\MorphoLabel.ico
 UninstallDisplayIcon={app}\MorphoLabel.exe
-AppId={{B1BB76C4-FF12-4FF4-8A27-0CB1BBA5513A}
+AppId={#MyAppId}
 AppName=MorphoLabel
 AppVersion={#MyAppVersion}
 AppPublisher=Oleg Artaev
@@ -45,10 +57,10 @@ Filename: "{app}\MorphoLabel.exe"; Description: "Start MorphoLabel (AI support i
 ; MorphoLabel-owned per-user state: managed AI runtime/model, setup state,
 ; hardware/UI settings, caches and diagnostics. Scientific projects are stored
 ; wherever the user created them and are never placed here automatically.
-Type: filesandordirs; Name: "{localappdata}\MorphoLabel"
+Type: filesandordirs; Name: "{#MyStateDir}"
 ; Remove the exact legacy SIMM machine-tuning cache left by older builds.
 ; Do not remove the whole SIMM directory because it may contain unrelated legacy data.
-Type: files; Name: "{localappdata}\SIMM\performance_engine_tuning.json"
-Type: files; Name: "{localappdata}\SIMM\performance_engine_tuning.json.lock"
+Type: files; Name: "{#MyLegacyStateDir}\performance_engine_tuning.json"
+Type: files; Name: "{#MyLegacyStateDir}\performance_engine_tuning.json.lock"
 ; Remove any app-owned leftovers not tracked by the installer manifest.
 Type: filesandordirs; Name: "{app}"

@@ -17,6 +17,7 @@ from PIL import Image
 
 from .process_utils import hidden_window_kwargs
 from .runtime_paths import resource_path
+from .ai_starters import local_starter
 from .xray_crop import aligned_crop, apply_orientation_defaults, normalize_orientation_policy
 
 ORIENTATION_BACKEND="mobilenet_v3_small_imagenet_transfer_v1"
@@ -111,6 +112,7 @@ def train_orientation_model(project,model_id,directory,runtime,settings,seed=42,
             }
         if progress:progress("ORIENTATION",f"Learning head / ventral side from {dataset['training_specimens']} verified crops…")
         result=_run(runtime,"train_orientation",{
+            "pretrained_checkpoint":local_starter("orientation"),
             "manifest":str(dataset["manifest"]),"work_dir":str(scratch/"work"),
             "device":settings["device"],"seed":int(seed),"epochs":20,
             "mixed_precision":bool(settings.get("mixed_precision")),

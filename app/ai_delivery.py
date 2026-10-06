@@ -15,6 +15,7 @@ from .ai_component import install_component_archive
 from .ai_runtime_resolver import resolve_ai_runtime
 from .runtime_paths import app_state_dir, is_frozen
 from .version import __version__
+from .verified_download import byte_detail
 
 _RELEASE_ROOT = "https://github.com/olegartaev/MorphoLabel/releases/download"
 _MANIFEST_NAME = "MorphoLabel-AI-Windows-x64.json"
@@ -187,7 +188,7 @@ def _download_archive(manifest, base_url, *, progress=None):
     received = _validated_partial_size(part, manifest["parts"], manifest["archive_bytes"])
     if received:
         pct=min(100,int(received*100/manifest["archive_bytes"]))
-        _progress(progress,"AI ENGINE",f"Resuming AI engine download… {pct}%")
+        _progress(progress,"AI ENGINE",f"Resuming AI engine download… {byte_detail(received, manifest['archive_bytes'])}")
 
     free = shutil.disk_usage(cache).free
     remaining = max(0, manifest["archive_bytes"] - received)
@@ -228,7 +229,7 @@ def _download_archive(manifest, base_url, *, progress=None):
                             if not block:break
                             output.write(block);received+=len(block)
                             pct=min(100,int(received*100/manifest["archive_bytes"]))
-                            _progress(progress,"AI ENGINE",f"Downloading AI engine… {pct}%")
+                            _progress(progress,"AI ENGINE",f"Downloading AI engine… {byte_detail(received, manifest['archive_bytes'])}")
                         output.flush()
             except transient as exc:
                 if attempts>=_DOWNLOAD_RETRIES:
@@ -315,8 +316,8 @@ def ensure_ai_runtime(*, project=None, explicit=None, configured=None, runner_pa
     # may download the managed component only after explicit user consent.
     if not is_frozen() or explicit is not None or configured is not None:
         return runtime, runner
-    from .first_run_setup import ai_download_consent_granted
-    if not ai_download_consent_granted():
+    from .first_run_setup import ai_setup_download_active
+    if not ai_setup_download_active():
         raise AIDeliveryError(
             "AI support is not installed yet. Open Menu → AI support → Set up AI support… "
             "to review and approve the required downloads."

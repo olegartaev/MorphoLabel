@@ -362,8 +362,8 @@ def main():
   if set(check['state_dict'])!=set(state) or any(not torch.equal(check['state_dict'][k],normalized[k]) for k in state):raise SystemExit('EMA inference checkpoint verification failed')
   print(json.dumps({'status':'ok','output_checkpoint':str(target),'parameter_count':len(normalized)}));return
  if operation=='info':
-  import torch,torchvision,mmengine,mmcv,mmpose,cv2,numpy
-  print(json.dumps({'python':sys.version,'torch':torch.__version__,'torchvision':torchvision.__version__,'mmengine':mmengine.__version__,'mmcv':mmcv.__version__,'mmpose':mmpose.__version__,'opencv':cv2.__version__,'numpy':numpy.__version__,'cuda_available':torch.cuda.is_available(),'cuda_runtime':torch.version.cuda,'device':torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}));return
+  import torch,torchvision,mmengine,mmcv,mmpose,mmdet,cv2,numpy
+  print(json.dumps({'python':sys.version,'torch':torch.__version__,'torchvision':torchvision.__version__,'mmengine':mmengine.__version__,'mmcv':mmcv.__version__,'mmpose':mmpose.__version__,'mmdet':mmdet.__version__,'opencv':cv2.__version__,'numpy':numpy.__version__,'cuda_available':torch.cuda.is_available(),'cuda_runtime':torch.version.cuda,'device':torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}));return
  if operation=='probe_many':
   import threading
   startup_total=max(1,len(request.get("candidates",())))

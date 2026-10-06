@@ -39,7 +39,7 @@ jobs:
       - name: Packaged GUI process smoke
         shell: pwsh
         run: |
-          $p = Start-Process -FilePath ".\dist\MorphoLabel\MorphoLabel.exe" -PassThru
+          $p = Start-Process -FilePath ".\dist\MorphoLabel\MorphoLabel.exe" -WindowStyle Hidden -PassThru
           Start-Sleep -Seconds 6
           if ($p.HasExited) { throw "Packaged GUI exited during startup with code $($p.ExitCode)" }
           Stop-Process -Id $p.Id -Force
@@ -73,18 +73,23 @@ jobs:
           $setup = Get-ChildItem dist\installer\MorphoLabel-*-Setup-x64.exe | Select-Object -First 1
           if (-not $setup) { throw "Installer was not produced" }
           $target = Join-Path $env:RUNNER_TEMP "MorphoLabel-installed"
-          $proc = Start-Process -FilePath $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=$target" -Wait -PassThru
+          $proc = Start-Process -FilePath $setup.FullName -WindowStyle Hidden -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=$target" -Wait -PassThru
           if ($proc.ExitCode -ne 0) { throw "Installer failed with code $($proc.ExitCode)" }
           $exe = Join-Path $target "MorphoLabel.exe"
           if (-not (Test-Path $exe)) { throw "Installed executable missing" }
           & $exe --self-test
-          $gui = Start-Process -FilePath $exe -PassThru
+          if ($LASTEXITCODE -ne 0) { throw "Installed core self-test failed" }
+          $gui = Start-Process -FilePath $exe -WindowStyle Hidden -PassThru
           Start-Sleep -Seconds 6
           if ($gui.HasExited) { throw "Installed GUI exited during startup with code $($gui.ExitCode)" }
           Stop-Process -Id $gui.Id -Force
+          $state = Join-Path $env:LOCALAPPDATA "MorphoLabel"
+          foreach ($name in @("components", "downloads", "starters", "first_run_setup.json")) {
+            if (Test-Path -LiteralPath (Join-Path $state $name)) { throw "Silent smoke unexpectedly started AI setup: $name" }
+          }
           $uninstaller = Join-Path $target "unins000.exe"
           if (-not (Test-Path $uninstaller)) { throw "Uninstaller missing" }
-          $un = Start-Process -FilePath $uninstaller -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          $un = Start-Process -FilePath $uninstaller -WindowStyle Hidden -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
           if ($un.ExitCode -ne 0) { throw "Uninstall failed with code $($un.ExitCode)" }
       - name: Record sizes and SHA256
         shell: pwsh

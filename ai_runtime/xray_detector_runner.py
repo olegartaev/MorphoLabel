@@ -50,6 +50,17 @@ def _best_validation_metrics(work):
     return best
 
 
+def _configure_initial_checkpoint(cfg, checkpoint):
+    """The full detector checkpoint supplies the backbone as well as the neck.
+
+    Upstream Tiny config otherwise downloads a second ImageNet backbone during
+    init_weights(), before MMEngine loads our local full detector checkpoint.
+    """
+    cfg.model.backbone.init_cfg = None
+    cfg.model.init_cfg = None
+    cfg.load_from = checkpoint
+
+
 def train(payload):
     import torch
     from mmengine.config import Config
@@ -87,7 +98,7 @@ def train(payload):
     cfg.model.data_preprocessor.pad_size_divisor=32
     initial_checkpoint=str(payload.get("initial_checkpoint") or "").strip()
     if not initial_checkpoint:raise ValueError("X-ray detector training requires an initial pretrained or parent checkpoint")
-    cfg.load_from=initial_checkpoint
+    _configure_initial_checkpoint(cfg,initial_checkpoint)
     cfg.work_dir=str(work);cfg.randomness=dict(seed=int(payload.get("seed",42)))
     pin_memory=bool(payload.get("pin_memory"));persistent=bool(payload.get("persistent_workers")) and bool(workers)
     cfg.train_dataloader.batch_size=batch;cfg.train_dataloader.num_workers=workers;cfg.train_dataloader.persistent_workers=persistent;cfg.train_dataloader.pin_memory=pin_memory

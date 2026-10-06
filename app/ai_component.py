@@ -1,6 +1,5 @@
 """Atomic installation and activation of versioned MorphoLabel AI components."""
 from __future__ import annotations
-import hashlib
 import json
 import os
 import shutil
@@ -8,6 +7,7 @@ import zipfile
 from pathlib import Path
 from .io import atomic_json_write
 from .runtime_paths import app_state_dir
+from .verified_download import sha256_file
 
 _COMPONENT_FILE = "component.json"
 _ACTIVE_FILE = "active.json"
@@ -114,7 +114,7 @@ def _validate_tree(component_dir: Path, manifest, *, run_runtime_check=True):
     if not url.startswith("https://download.openmmlab.com/"):
         raise AIComponentError("AI component bootstrap checkpoint URL is missing or untrusted")
     if checkpoint.is_file():
-        actual = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+        actual = sha256_file(checkpoint)
         if actual != expected:
             raise AIComponentError("AI component bootstrap checkpoint checksum mismatch")
     if run_runtime_check:
@@ -169,7 +169,7 @@ def install_component_archive(source, *, expected_sha256=None, activate=True, ru
     if not source.is_file():
         raise AIComponentError(f"AI component archive is unavailable: {source}")
     if expected_sha256:
-        actual = hashlib.sha256(source.read_bytes()).hexdigest()
+        actual = sha256_file(source)
         if actual.lower() != str(expected_sha256).lower():
             raise AIComponentError("AI component archive checksum mismatch")
     root = components_root(create=True)

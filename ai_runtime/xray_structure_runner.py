@@ -22,7 +22,7 @@ def _input():
     return json.loads(raw) if raw else {}
 
 
-def _model(channels, pretrained=False):
+def _model(channels, pretrained=False, pretrained_checkpoint=None):
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
@@ -46,8 +46,10 @@ def _model(channels, pretrained=False):
     class HeatmapNet(nn.Module):
         def __init__(self):
             super().__init__()
-            weights = ResNet18_Weights.DEFAULT if pretrained else None
+            weights = ResNet18_Weights.DEFAULT if pretrained and not pretrained_checkpoint else None
             encoder = resnet18(weights=weights)
+            if pretrained_checkpoint:
+                encoder.load_state_dict(torch.load(str(pretrained_checkpoint), map_location="cpu", weights_only=True))
             self.stem = nn.Sequential(encoder.conv1, encoder.bn1, encoder.relu)
             self.pool = encoder.maxpool
             self.layer1 = encoder.layer1
@@ -426,7 +428,8 @@ def train(payload):
     input_size = tuple(manifest.get("input_size") or (768, 256))
     stride = 2
     initial = str(payload.get("initial_checkpoint") or "").strip()
-    model = _model(len(structures), pretrained=not bool(initial))
+    model = _model(len(structures), pretrained=not bool(initial),
+                   pretrained_checkpoint=payload.get("pretrained_checkpoint") if not initial else None)
     if initial:
         state = torch.load(initial, map_location="cpu", weights_only=True)
         model.load_state_dict(state)

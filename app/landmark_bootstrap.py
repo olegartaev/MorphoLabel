@@ -1,16 +1,13 @@
 """Resolve and cache the official OpenMMLab AP-10K RTMPose bootstrap."""
 from __future__ import annotations
 
-import hashlib
-import os
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
 from .ai_component import component_manifest, component_root_for_runtime
 from .ai_delivery import ensure_ai_runtime
 from .runtime_paths import is_frozen
+from .verified_download import download_verified, sha256_file
 
 LANDMARK_BOOTSTRAP_ARCHITECTURE = "RTMPose-M"
 LANDMARK_BOOTSTRAP_DATASET = "AP-10K"
@@ -32,11 +29,7 @@ def _progress(callback, detail):
 
 
 def _sha256(path):
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
+    return sha256_file(path)
 
 
 def _download_verified_checkpoint(url, target, expected_sha256, progress_callback=None):
@@ -52,47 +45,19 @@ def _download_verified_checkpoint(url, target, expected_sha256, progress_callbac
         if _sha256(target) == expected:
             _progress(progress_callback,"RTMPose-M AP-10K is already installed and verified.")
             return target
-        target.unlink()
 
     if is_frozen():
-        from .first_run_setup import ai_download_consent_granted
-        if not ai_download_consent_granted():
+        from .first_run_setup import ai_setup_download_active
+        if not ai_setup_download_active():
             raise RuntimeError(
                 "AI bootstrap model is not installed yet. Open Menu → AI support → Set up AI support… "
                 "to review and approve the required download."
             )
 
-    temporary = target.with_suffix(target.suffix + ".part")
-    temporary.unlink(missing_ok=True)
-    digest = hashlib.sha256()
-    received = 0
-    request = urllib.request.Request(
-        str(url),
-        headers={"User-Agent": "MorphoLabel managed bootstrap"},
-    )
-    _progress(progress_callback, "Downloading RTMPose-M AP-10K from OpenMMLab…")
-    try:
-        with urllib.request.urlopen(request, timeout=60) as response, temporary.open("wb") as output:
-            total = response.headers.get("Content-Length") if getattr(response, "headers", None) else None
-            total = int(total) if total and str(total).isdigit() else 0
-            while True:
-                block = response.read(1024 * 1024)
-                if not block:
-                    break
-                output.write(block)
-                digest.update(block)
-                received += len(block)
-                if total:
-                    _progress(progress_callback, f"Downloading RTMPose-M AP-10K… {min(100, int(received * 100 / total))}%")
-    except (OSError, urllib.error.URLError, urllib.error.HTTPError) as exc:
-        temporary.unlink(missing_ok=True)
-        raise RuntimeError(f"Could not download the official RTMPose bootstrap model: {exc}") from exc
-    if digest.hexdigest() != expected:
-        temporary.unlink(missing_ok=True)
-        raise RuntimeError("Downloaded RTMPose bootstrap checkpoint failed SHA256 verification")
-    os.replace(temporary, target)
+    result = download_verified(url, target, expected, name="RTMPose-M AP-10K",
+                               progress=lambda detail: _progress(progress_callback, detail))
     _progress(progress_callback, "RTMPose-M AP-10K downloaded and verified.")
-    return target
+    return result
 
 
 def resolve_landmark_bootstrap(project, progress_callback=None):

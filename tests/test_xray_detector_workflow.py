@@ -398,7 +398,7 @@ class XRayDetectorContractTests(unittest.TestCase):
         self.assertIn("num_classes=1",runner)
         self.assertIn('type="CocoDataset"',runner)
         self.assertIn('save_best="coco/bbox_mAP"',runner)
-        self.assertIn("cfg.load_from=initial_checkpoint",runner)
+        self.assertIn("_configure_initial_checkpoint(cfg,initial_checkpoint)",runner)
         self.assertIn("ratio_range=(0.8,1.0)",runner)
         self.assertNotIn("ratio_range=(0.8,1.2)",runner)
         self.assertIn('cfg.optim_wrapper.type="AmpOptimWrapper"',runner)

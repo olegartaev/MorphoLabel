@@ -11,11 +11,14 @@ def _input():
     raw=sys.stdin.read().strip();return json.loads(raw) if raw else {}
 
 
-def _model(pretrained=False):
+def _model(pretrained=False, pretrained_checkpoint=None):
+    import torch
     import torch.nn as nn
     from torchvision.models import MobileNet_V3_Small_Weights, mobilenet_v3_small
-    weights=MobileNet_V3_Small_Weights.DEFAULT if pretrained else None
+    weights=MobileNet_V3_Small_Weights.DEFAULT if pretrained and not pretrained_checkpoint else None
     model=mobilenet_v3_small(weights=weights)
+    if pretrained_checkpoint:
+        model.load_state_dict(torch.load(str(pretrained_checkpoint),map_location="cpu",weights_only=True))
     for parameter in model.features.parameters():parameter.requires_grad=False
     for block in model.features[-2:]:
         for parameter in block.parameters():parameter.requires_grad=True
@@ -78,7 +81,7 @@ def train_orientation(payload):
     if torch.cuda.is_available():torch.cuda.manual_seed_all(seed)
     device=str(payload.get("device") or ("cuda:0" if torch.cuda.is_available() else "cpu"))
     axes=dict(manifest.get("axes") or {});epochs=max(8,int(payload.get("epochs",20)))
-    model=_model(pretrained=True).to(device)
+    model=_model(pretrained=True,pretrained_checkpoint=payload.get("pretrained_checkpoint")).to(device)
     train_loader=DataLoader(_Dataset(train_rows,True),batch_size=min(32,max(4,len(train_rows))),shuffle=True,num_workers=0)
     val_loader=DataLoader(_Dataset(val_rows,False),batch_size=min(64,max(4,len(val_rows))),shuffle=False,num_workers=0)
     params=[p for p in model.parameters() if p.requires_grad]

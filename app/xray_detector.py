@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 
 from .ai_delivery import ensure_ai_runtime
+from .ai_starters import local_starter
 from .ai_hardware import get_hardware_profile, get_inference_config, get_training_config, is_cuda_oom
 from .process_utils import hidden_window_kwargs
 from .runtime_paths import resource_path
@@ -103,7 +104,7 @@ def train_detector(project,seed=42,epochs=80,progress=None,parent_model_id=None)
     model_id=project.next_crop_model_id();directory=project.models_root/model_id
     performance=detector_performance_settings();hardware_settings=performance["hardware"];settings=performance["training"]
     runtime,_=ensure_ai_runtime(project=project,progress=progress)
-    parent_checkpoint=(str(project.root/parent["path"]) if parent else RTMDET_TINY_COCO_URL)
+    parent_checkpoint=(str(project.root/parent["path"]) if parent else (local_starter("detector") or RTMDET_TINY_COCO_URL))
     with tempfile.TemporaryDirectory(prefix=f"morpholabel_xray_train_{model_id}_") as scratch:
         scratch=Path(scratch)
         dataset=prepare_training_dataset(project,model_id,seed=seed,workspace_root=scratch)

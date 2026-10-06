@@ -191,11 +191,10 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         self.assertIn('"Install AI support"',shell)
         self.assertIn('"Continue without AI"',shell)
         self.assertIn('"Nothing will be downloaded until you choose Install AI support."',shell)
-        self.assertIn('"1. AI runtime"',shell)
-        self.assertIn('"2. Pretrained landmark model"',shell)
-        self.assertIn("Python 3.11.9 with PyTorch 2.1.0 (CUDA 12.1), MMPose 1.3.2 / RTMPose",shell)
-        self.assertIn("RTMPose-M AP-10K from OpenMMLab",shell)
-        self.assertIn("does not change your system Python",shell)
+        from app.setup_progress import COMPONENTS
+        self.assertEqual(8,len(COMPONENTS))
+        self.assertIn("COMPONENTS",shell)
+        self.assertIn("Shared AI engine",[item.name for item in COMPONENTS])
         self.assertIn("Project images and data are not uploaded",shell)
         self.assertIn('mode="determinate"',shell)
         self.assertIn('bar.configure(value=100)',shell)
@@ -204,18 +203,18 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         setup=shell[shell.index("    def _show_first_run_setup"):shell.index("    def _warm_ai_hardware")]
         self.assertIn("initial_actions();poll()",setup)
         self.assertNotIn("start_setup();poll()",setup)
-        self.assertIn("ai_download_consent_granted",delivery)
+        self.assertIn("ai_setup_download_active",delivery)
         self.assertIn("review and approve the required downloads",delivery)
 
     def test_first_run_progress_is_monotonic_and_finishes_at_100(self):
         value,title=_first_run_progress_state("AI ENGINE","Downloading AI engine… 50%",0)
         self.assertGreater(value,3)
-        self.assertIn("Step 1 of 4",title)
+        self.assertEqual("Shared AI engine",title)
         model,title=_first_run_progress_state("PRETRAINED MODEL","Downloading RTMPose-M AP-10K… 50%",value)
         self.assertGreater(model,value)
         ready,title=_first_run_progress_state("READY","First-time AI setup completed.",model)
         self.assertEqual(100,ready)
-        self.assertEqual("Setup complete",title)
+        self.assertEqual("MorphoLabel is ready",title)
 
     def test_landmark_batch_navigation_uses_verify_next_with_green_verify_icon(self):
         root=Path(__file__).parents[1]

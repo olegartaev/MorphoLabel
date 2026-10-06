@@ -29,12 +29,15 @@ class WindowsBrandBuildTests(unittest.TestCase):
     def test_uninstaller_removes_only_app_owned_install_and_state_directories(self):
         installer=(ROOT/"packaging"/"windows"/"MorphoLabel.iss").read_text(encoding="utf-8")
         self.assertIn("[UninstallDelete]",installer)
-        self.assertIn('Type: filesandordirs; Name: "{localappdata}\\MorphoLabel"',installer)
+        self.assertIn('#if VER < EncodeVer(7,0,0)',installer)
+        self.assertIn('#define MyStateDir "{localappdata}\\MorphoLabel"',installer)
+        self.assertIn('Type: filesandordirs; Name: "{#MyStateDir}"',installer)
         self.assertIn('Type: filesandordirs; Name: "{app}"',installer)
         self.assertNotIn("{userdocs}",installer)
         self.assertNotIn("{commondocs}",installer)
-        self.assertIn('Type: files; Name: "{localappdata}\\SIMM\\performance_engine_tuning.json"',installer)
-        self.assertIn('Type: files; Name: "{localappdata}\\SIMM\\performance_engine_tuning.json.lock"',installer)
+        self.assertIn('#define MyLegacyStateDir "{localappdata}\\SIMM"',installer)
+        self.assertIn('Type: files; Name: "{#MyLegacyStateDir}\\performance_engine_tuning.json"',installer)
+        self.assertIn('Type: files; Name: "{#MyLegacyStateDir}\\performance_engine_tuning.json.lock"',installer)
         self.assertNotIn('Type: filesandordirs; Name: "{localappdata}\\SIMM"',installer)
 
     def test_brand_asset_script_runs_directly_from_repository_root(self):

@@ -19,6 +19,7 @@ from .ai_delivery import ensure_ai_runtime
 from .ai_hardware import get_hardware_profile, get_inference_config, get_training_config, is_cuda_oom
 from .process_utils import hidden_window_kwargs
 from .runtime_paths import resource_path
+from .ai_starters import local_starter
 from .xray_crop import oriented_crop
 from .xray_schema import calculate_trait_values, compatible_reference_roles, spatial_series_order
 from .extensions.api import StructureBackend, StructureBackendContext
@@ -394,6 +395,7 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
                 "manifest": str(dataset["manifest"]),
                 "work_dir": str(scratch / f"work_b{batch_size}"),
                 "initial_checkpoint": initial,
+                "pretrained_checkpoint": local_starter("structure") if not initial and provider_id == STRUCTURE_BACKEND else None,
                 "device": settings["device"],
                 "batch_size": batch_size,
                 "workers": int(settings.get("workers") or 0),
