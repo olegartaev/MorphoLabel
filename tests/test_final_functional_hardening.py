@@ -326,7 +326,7 @@ class FinalTkHardeningTests(unittest.TestCase):
                 def walk(widget):
                     for child in widget.winfo_children():yield child; yield from walk(child)
                 samples = next(w for w in walk(runtime.current_view.parent) if w.winfo_class() == "TLabelframe" and w.cget("text") == "Samples")
-                self.assertGreater(samples.winfo_width(), width * .38)
+                self.assertGreater(samples.winfo_width(), shell.winfo_width() * .38)
         shell.module_states.setdefault("xray_counts", {})["project"] = self.xray
         shell.open_module("xray_counts"); xruntime = shell._active_module_runtime
         for scale in (1.0, 1.25, 1.5):

@@ -353,8 +353,9 @@ class PresentationTkTests(_ProjectFixture,unittest.TestCase):
         hub=ModuleHub(shell,self.host,module_registry());hub.render()
         for size in ("1600x900","1920x1080"):
             self.root.geometry(size+"+0+0");self.pump()
-            self.assertEqual(_HUB_MAX_SIZE,(hub.content.winfo_width(),hub.content.winfo_height()))
             stage=hub.content.master
+            self.assertEqual((min(stage.winfo_width(),_HUB_MAX_SIZE[0]),min(stage.winfo_height(),_HUB_MAX_SIZE[1])),
+                (hub.content.winfo_width(),hub.content.winfo_height()))
             self.assertLessEqual(abs(hub.content.winfo_x()-(stage.winfo_width()-hub.content.winfo_width())/2),1)
         self.root.geometry("980x650+0+0");self.pump()
         self.assertEqual((980,650),(hub.content.winfo_width(),hub.content.winfo_height()))

@@ -52,7 +52,7 @@ class ArchitectureCompatibilityTests(unittest.TestCase):
         for name, p in (("landmark", self.landmark), ("xray", self.xray)):
             path = p.path if name == "landmark" else p.db_path
             # Only disposable test projects are overwritten, never repository data.
-            self.assertTrue(path.is_relative_to(self.root))
+            self.assertTrue(path.resolve().is_relative_to(self.root.resolve()))
             path.unlink()
             sql = bundle[name]["sql"].replace("<TEMP>", str(self.root))
             with closing(sqlite3.connect(path)) as db:
