@@ -12,6 +12,7 @@ ROOT=Path(__file__).resolve().parents[1]
 class AIComponentContractTests(unittest.TestCase):
     def test_build_spec_is_pinned_to_verified_upstream_compatibility_family(self):
         spec=json.loads((ROOT/"ai_runtime"/"windows-cu121-component.json").read_text(encoding="utf-8"))
+        self.assertEqual("1.0.0-rc.1",spec["component_version"])
         self.assertEqual("3.11.9",spec["python"]["version"])
         self.assertEqual("2.1.0",spec["packages"]["torch"])
         self.assertEqual("0.16.0",spec["packages"]["torchvision"])

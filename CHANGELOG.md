@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0-rc.1 — 2026-10-06
+
+- Unified the MorphoLabel application around two production modules: Landmarks & Measurements and X-ray Traits.
+- Kept each module's scientific state, models and work queues independent while sharing the managed AI runtime.
+- Added portable trained-model import and export with project provenance.
+- Hardened Crop and Landmark coordinate frames and preserved project source, correction and model history.
+- Added quality-control and repeatability workflows across both modules.
+- Completed first-run AI setup for Landmarks and X-ray, including verified component downloads with resume and retry.
+- Added CPU/GPU/CUDA qualification and disposable prediction/training checks.
+- Prepared the standalone Windows installer and validated release, architecture and compatibility contracts.
+
 ## 0.5.0-beta.8
 
 - landmark training from legacy MorphoLabel RTMPose parents no longer inherits obsolete project-local `rtmpose_augmentations` imports;

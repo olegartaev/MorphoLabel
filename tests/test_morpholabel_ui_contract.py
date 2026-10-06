@@ -41,13 +41,13 @@ class MorphoLabelUIContractTests(unittest.TestCase):
     def test_package_and_identity_versions_are_consistent(self):
         self.assertEqual(PACKAGE_VERSION, APP_VERSION)
         root=Path(__file__).parents[1]
-        self.assertIn(f"Development beta · {PACKAGE_VERSION}",(root/"README.md").read_text(encoding="utf-8"))
+        self.assertIn(f"**Release: {PACKAGE_VERSION}**",(root/"README.md").read_text(encoding="utf-8"))
         self.assertIn(f'version: "{PACKAGE_VERSION}"',(root/"CITATION.cff").read_text(encoding="utf-8"))
 
-    def test_identity_is_development_morpholabel_with_supplied_png(self):
+    def test_identity_is_release_candidate_morpholabel_with_supplied_png(self):
         self.assertEqual("MorphoLabel",APP_NAME)
         self.assertEqual(PACKAGE_VERSION,APP_VERSION)
-        self.assertEqual("Development beta",APP_STATUS)
+        self.assertEqual("Release candidate",APP_STATUS)
         self.assertEqual("morpholabel@olegartaev.com",CONTACT_EMAIL)
         self.assertEqual("https://github.com/olegartaev/MorphoLabel",PUBLIC_REPOSITORY)
         self.assertEqual("Apache-2.0",LICENSE_NAME)

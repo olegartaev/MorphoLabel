@@ -2,7 +2,7 @@
   #error Inno Setup 7 or newer is required to remove managed AI files with extended-length paths.
 #endif
 #ifndef MyAppVersion
-  #define MyAppVersion "0.5.0-beta.9"
+  #define MyAppVersion "1.0.0-rc.1"
 #endif
 #ifndef MySourceDir
   #define MySourceDir "..\..\dist\MorphoLabel"

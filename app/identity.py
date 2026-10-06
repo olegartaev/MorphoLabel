@@ -5,7 +5,7 @@ from .version import __version__
 APP_NAME="MorphoLabel"
 APP_FULL_NAME="Biological morphology annotation"
 APP_VERSION=__version__
-APP_STATUS="Development beta"
+APP_STATUS="Release candidate"
 APP_TITLE=f"{APP_NAME} — {APP_FULL_NAME} — v{APP_VERSION}"
 APP_SHORT_TITLE=f"{APP_NAME} — v{APP_VERSION}"
 COPYRIGHT="© 2026 Oleg Artaev"
