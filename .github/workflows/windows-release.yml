@@ -77,8 +77,12 @@ jobs:
           if ($proc.ExitCode -ne 0) { throw "Installer failed with code $($proc.ExitCode)" }
           $exe = Join-Path $target "MorphoLabel.exe"
           if (-not (Test-Path $exe)) { throw "Installed executable missing" }
-          & $exe --self-test
-          if ($LASTEXITCODE -ne 0) { throw "Installed core self-test failed" }
+          $selfTestOut = Join-Path $env:RUNNER_TEMP "MorphoLabel-self-test.json"
+          $selfTestErr = Join-Path $env:RUNNER_TEMP "MorphoLabel-self-test.stderr.txt"
+          $selfTest = Start-Process -FilePath $exe -WindowStyle Hidden -ArgumentList "--self-test" -Wait -PassThru -RedirectStandardOutput $selfTestOut -RedirectStandardError $selfTestErr
+          if ($selfTest.ExitCode -ne 0) { throw "Installed core self-test exited with code $($selfTest.ExitCode): $(Get-Content -Raw $selfTestErr)" }
+          $selfTestReport = Get-Content -Raw -LiteralPath $selfTestOut | ConvertFrom-Json
+          if ($selfTestReport.status -ne "PASS") { throw "Installed core self-test did not report PASS" }
           $gui = Start-Process -FilePath $exe -WindowStyle Hidden -PassThru
           Start-Sleep -Seconds 6
           if ($gui.HasExited) { throw "Installed GUI exited during startup with code $($gui.ExitCode)" }
