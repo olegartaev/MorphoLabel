@@ -70,7 +70,7 @@ In MorphoLabel it means that the repetitive parts of a large project are structu
 5. predict new images in batches;
 6. focus human effort on review and correction;
 7. keep already verified work protected;
-8. export the scientifically appropriate subset.
+8. export a deliberately selected dataset for downstream analysis while keeping review and provenance information in the project.
 
 This is especially useful when most new images are routine but a minority are difficult, unusual or ambiguous.
 
@@ -120,7 +120,9 @@ A useful rule is:
 
 **AI prediction = proposal**
 
-**Human verification = accepted scientific annotation**
+**Human verification = annotation reviewed and accepted within the current project**
+
+A **Verified** state records a human decision under the current annotation scheme. It does **not** by itself prove that the biological definition is homologous, that the image contains enough information, or that the observation is free of measurement error.
 
 The software protects verified human annotations from routine batch prediction so that completed work is not silently replaced.
 
@@ -166,11 +168,13 @@ Queues keep review work explicit. Closing a queue leaves saved scientific data i
 
 ## 2.9 Repeatability
 
-Repeatability workflows measure how consistently a human annotator can repeat the same task.
+Repeatability workflows evaluate how consistently a human annotator repeats the same task.
 
-This is different from AI accuracy.
+This is different from AI accuracy and should not automatically be interpreted as a formal statistical repeatability coefficient.
 
-Human repeatability is useful because even a perfect computational pipeline cannot remove ambiguity in the biological definition or in the underlying image.
+For **Landmarks**, the current Human Repeatability report compares two independent annotation passes on the same images. Point displacement is expressed relative to the reference configuration span, with summaries such as median and upper error percentiles. This is a practical estimate of within-operator placement error; it is not the same as an ICC, Procrustes ANOVA or a complete analysis of all sources of measurement error.
+
+Human repeatability is useful because even a perfect computational pipeline cannot remove ambiguity in the biological definition, specimen presentation or the underlying image.
 
 ## 2.10 Quality control
 
@@ -357,7 +361,7 @@ The Crop workflow is:
 
 Use **Start first batch**.
 
-The current interface recommends approximately **20–30 images** for a Crop training batch. Correct and confirm them by hand.
+The current interface suggests approximately **20–30 images** as a convenient starting Crop batch. This is a workflow default, **not a biologically or statistically validated universal minimum**. Use more examples when specimen diversity, imaging conditions, orientations or Crop difficulty are greater. Correct and confirm the selected examples by hand.
 
 ### B. Train
 
@@ -407,7 +411,7 @@ Before scaling up annotation, use **Human Repeatability…** when the project re
 
 MorphoLabel creates two independent annotation passes on the same control images.
 
-The current interface recommends a default sample of **10 eligible images** when available.
+The current interface starts with a default sample of **10 eligible images** when available. This is a practical starting size, **not a universal statistical requirement**. Increase the sample when landmark ambiguity, specimen diversity or the biological effect being studied requires a more precise estimate of measurement error.
 
 The purpose is to estimate how much landmark position changes when the human repeats the task.
 
@@ -434,7 +438,7 @@ Training examples should cover the real variation that the model will encounter,
 - difficult but valid examples;
 - biological variation.
 
-A large number of nearly identical easy examples is usually less informative than a smaller but representative training set.
+Training-set **quality, diversity, sample size and similarity to the target images all matter**. Many nearly identical easy examples may add little information, but a diverse training set can still be too small. Increase the sample until performance is adequate across the biological and imaging variation that matters for the project.
 
 ## 5.9 Train a Landmark model
 
@@ -503,9 +507,11 @@ Measurement definitions can be imported and exported as portable definitions.
 
 Pixel distance becomes a physical distance only after calibration.
 
-Use **Calibrate samples** and supply a known reference distance for each sample where physical units are required.
+Use **Calibrate samples** and supply a known reference distance where physical units are required.
 
-Do not interpret uncalibrated pixel measurements as millimetres.
+In the current Landmarks implementation, calibration is stored at the **sample/locality grouping level** and then applied to images in that group. This is valid only when those images share the same effective image scale. If camera distance, focal length, scanning resolution or other scale-setting conditions vary within a group, use appropriately separated groups or otherwise ensure that each applied calibration is valid for the images to which it is assigned.
+
+Do not interpret uncalibrated pixel measurements as millimetres, and do not reuse a calibration across images whose scale is not actually the same.
 
 ## 5.15 Export landmark data
 
@@ -520,6 +526,10 @@ You can export all landmarks or selected landmark groups.
 
 Choose the format based on the downstream software rather than on appearance.
 
+**Important:** the current landmark export commands do not enforce a **Verified only** filter by default. They export eligible non-excluded records according to the selected format and its missing-data rules. Before using an export as a final scientific dataset, check the review state in the project and make sure that the included records meet your study's acceptance criteria.
+
+MorphoLabel exports coordinates for downstream geometric morphometrics; it does not perform Generalized Procrustes Analysis or the subsequent statistical analysis of shape.
+
 ## 5.16 Export measurements
 
 Measurements can be exported as:
@@ -527,13 +537,13 @@ Measurements can be exported as:
 - CSV;
 - tab-delimited text.
 
-The export contains the active measurement definitions and calculated values for eligible images.
+The export contains the active measurement definitions and calculated values for eligible non-excluded images. It does not currently apply a verified-only filter by default, and values can be missing when landmarks or calibration are unavailable. Treat review status and calibration validity as separate scientific checks before analysis.
 
 ---
 
 # 6. X-ray Traits: complete workflow
 
-The X-ray module is designed for radiographs in which one image may contain multiple specimens and the scientific output is a set of counts, positions, distances, angles or derived traits.
+The X-ray module is designed for radiographs in which one image may contain multiple specimens and the scientific output is a set of counts, positions, image-space distances, angles or derived traits.
 
 ## 6.1 Create an X-ray project
 
@@ -549,6 +559,8 @@ Define:
 The orientation preview uses **blue for the head** and **orange for the ventral side**.
 
 A consistent standard orientation makes later review and model training more reliable.
+
+The trait scheme is configurable and is not hard-coded to one taxon, but the current orientation workflow assumes that **head direction and ventral side are meaningful descriptors**. The present X-ray workflow is therefore best suited to oriented specimens and ordered anatomical structures for which those concepts are appropriate.
 
 ## 6.2 Source X-rays and self-contained projects
 
@@ -595,6 +607,10 @@ Supported trait methods are:
 - **Measure distance**
 - **Measure angle**
 - **Calculated from other traits**
+
+For **Measure distance**, the current X-ray implementation calculates Euclidean distance in the normalized coordinate system of the oriented specimen Crop. The value is therefore an **image-space relative distance**, not millimetres or another physical unit. X-ray distance traits should not be interpreted as absolute morphometric measurements unless an appropriate calibration method is added outside the current calculation.
+
+**Measure angle** is calculated from the annotated points in degrees.
 
 The trait scheme therefore separates raw image annotation from the biological variable that will be exported.
 
@@ -668,7 +684,7 @@ The X-ray Crop model can learn to find specimens and their orientation.
 
 The workflow is:
 
-1. **Start first batch** — the current interface recommends **6–10 different plates**;
+1. **Start first batch** — the current interface suggests **6–10 different plates** as a practical starting batch, not as a universal minimum; use more when plate layout, specimen form, orientation or image quality are more variable;
 2. correct and confirm Crops and directions;
 3. **Train**;
 4. choose the active model;
@@ -684,7 +700,9 @@ Open **Structures**.
 
 Choose a marker type and click each anatomical structure.
 
-For repeated structures, MorphoLabel numbers points in spatial series order.
+For repeated structures, MorphoLabel numbers points in spatial series order. The current ordering algorithm follows the **main spatial axis of the marked series**, which works well for approximately linear ordered structures such as a vertebral column in a standardized radiograph.
+
+For strongly curved, U-shaped, circular, radial or otherwise non-linear series, the automatically inferred order may not match anatomical order. In such cases, inspect the numbering carefully before using position- or boundary-based traits.
 
 You can:
 
@@ -839,7 +857,7 @@ The preferred cycle is:
 
 This is a human-in-the-loop workflow.
 
-## 7.2 Training data quality matters more than raw quantity
+## 7.2 Training data quality, coverage and sample size all matter
 
 Training examples should represent the real range of the project.
 
@@ -1041,6 +1059,8 @@ MorphoLabel exports data; it does not replace statistical analysis software.
 
 Available formats include TPS, CSV and MorphoJ-compatible text.
 
+These files are inputs to downstream analyses; exporting them does not by itself establish that every row has passed human verification. Review the project state before final analysis.
+
 Typical downstream uses include:
 
 - geometric morphometrics;
@@ -1148,15 +1168,17 @@ A landmark is useful only if the same biological structure is identified consist
 
 A model can reproduce a definition. It cannot establish whether that definition is biologically homologous.
 
-## 13.2 AI quality is bounded by the reference annotations
+## 13.2 AI performance depends on reference quality and data match
 
-If training annotations are inconsistent, the model will learn that inconsistency.
+Inconsistent or biologically ambiguous training annotations can introduce inconsistency or bias into the model. Performance also depends on training-set size, coverage of biological and imaging variation, and how similar the target images are to the training data.
+
+Automation can be highly consistent under suitable conditions, but consistency is not the same as biological validity. Validate model output against an appropriate human reference and against the precision required by the scientific question.
 
 For this reason, repeatability and review are part of validating the measurement process in high-precision studies.
 
 ## 13.3 Image quality sets an upper limit
 
-If a structure cannot be resolved in the source image, the correct scientific state may be **missing**, **partial** or **not visible**, not a guessed coordinate or marker.
+If a structure cannot be resolved in the source image, the appropriate project state may be **missing**, **partial** or **not visible**, depending on the module and trait definition, rather than a guessed coordinate or marker.
 
 ## 13.4 Avoid silent scheme drift
 

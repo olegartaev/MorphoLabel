@@ -1,10 +1,10 @@
 # MorphoLabel
 
-**Open-source software for scalable and reproducible extraction of morphological data from biological images.**
+**Open-source software for scalable extraction of morphological data from biological images, with human review, provenance and reproducibility support.**
 
 MorphoLabel is designed for research projects in which large image collections must be converted into structured morphological data without losing the connection between the original image, the human decision, the AI model and the final exported result.
 
-The central idea is **human-in-the-loop mass annotation**: the researcher defines the biological task, creates and verifies reference annotations, optionally trains project-specific AI models, reviews AI suggestions and exports results that have passed the required scientific checks. MorphoLabel is intended to reduce the annotation bottleneck in image-based morphology while keeping the workflow inspectable and reproducible.
+The central idea is **human-in-the-loop mass annotation**: the researcher defines the biological task, creates and reviews reference annotations, optionally trains project-specific AI models, reviews AI suggestions and exports structured data while retaining the project state needed to understand how those data were produced. MorphoLabel is intended to reduce the annotation bottleneck in image-based morphology while supporting inspectable, provenance-aware and reproducible workflows.
 
 **Current release:** [MorphoLabel 1.0.0-rc.1](https://github.com/olegartaev/MorphoLabel/releases/tag/v1.0.0-rc.1) · Windows 10/11 x64 · Apache-2.0
 
@@ -14,7 +14,7 @@ The central idea is **human-in-the-loop mass annotation**: the researcher define
 
 ## Why MorphoLabel
 
-Modern imaging can produce photographs and radiographs much faster than a researcher can turn them into measurements, landmark coordinates or anatomical counts. The limiting step is often not image acquisition but **consistent annotation, review and conversion of images into analysis-ready data**.
+Modern imaging can produce photographs and radiographs much faster than a researcher can turn them into measurements, landmark coordinates or anatomical counts. The limiting step is often not image acquisition but **consistent annotation, review and conversion of images into structured data for downstream analysis**.
 
 MorphoLabel addresses that bottleneck by combining:
 
@@ -26,7 +26,7 @@ MorphoLabel addresses that bottleneck by combining:
 - repeatability assessment;
 - targeted quality-control queues;
 - model and annotation provenance;
-- reproducible export for downstream analysis.
+- transparent export formats for downstream analysis, with review and provenance retained in the project.
 
 AI is optional. The software remains usable as a manual annotation system, and AI predictions are treated as proposals that can be corrected and verified by the researcher.
 
@@ -70,8 +70,8 @@ Key workflows:
 - specimen detection and Crop on X-ray plates;
 - standardized head/ventral orientation;
 - repeated-element and reference-marker annotation;
-- trait schemes independent of a single taxon;
-- counts, positions, distances, angles and derived traits;
+- configurable trait schemes that are not hard-coded to a single taxon;
+- counts, positions, normalized image-space distances, angles and derived traits;
 - structure visibility states;
 - human repeatability;
 - Crop AI and Structure AI;
@@ -87,25 +87,26 @@ Key workflows:
 1. **Create a project** and connect the source image collection.
 2. **Define the biological scheme**: landmarks and measurements, or X-ray structures and traits.
 3. **Prepare images** with Crop when standardization is needed.
-4. **Create verified human annotations** that act as the scientific reference.
+4. **Create human-reviewed reference annotations** for the project.
 5. **Optionally train AI** from those verified examples.
 6. **Predict larger batches**, then review and correct the AI proposals.
 7. **Run repeatability and QC** to identify inconsistent or suspicious records.
-8. **Export analysis-ready data** while preserving project and model provenance.
+8. **Export structured data for downstream analysis**, choosing the appropriate reviewed subset where the module provides that option and retaining provenance in the project.
 
 For a complete step-by-step workflow, see the **[MorphoLabel User Guide](docs/USER_GUIDE.md)**.
 
 ## Human verification is the core of the workflow
 
-MorphoLabel distinguishes between a prediction and a scientific observation.
+MorphoLabel distinguishes between a machine-generated draft and data that a researcher has reviewed and accepted within the current project.
 
 - AI predictions remain reviewable until the user confirms them.
+- A **Verified** state means that the annotation has been human-reviewed within the current scheme; it is not, by itself, proof that the landmark definition, homology, image quality or biological interpretation is correct.
 - Verified human annotations are protected from routine batch prediction.
 - Manual corrections remain part of the project history.
 - Review queues help direct attention to pending or suspicious cases rather than forcing the user to re-check the whole dataset.
 - Repeatability workflows estimate the consistency of the human annotation process itself.
 
-This design is intended for scientific datasets where traceability is more important than maximizing unattended automation.
+This design is intended for scientific datasets where traceability and explicit review are more important than maximizing unattended automation.
 
 ## AI support
 
@@ -124,7 +125,7 @@ AI setup and processing are local. The setup process does **not** upload project
 
 Trained models can be selected, compared, imported and exported so that a validated model can be reused on another compatible project or computer.
 
-## Scientific reproducibility and data safety
+## Reproducibility support and data safety
 
 MorphoLabel is built around persistent project state rather than one-off image editing.
 
@@ -171,6 +172,8 @@ Depending on the module and project configuration, MorphoLabel can produce:
 - portable trained-model packages;
 - diagnostic ZIP reports for technical support.
 
+**Export note:** the current X-ray exporter provides a **Verified only** option. Landmark and linear-measurement exports do not currently enforce a verified-only filter by default, so a generated file should not be treated as proof that every included row has been human-verified. Review state should be checked in the project before preparing a final scientific dataset.
+
 ## Intended use
 
 MorphoLabel is intended for researchers working with repeatable morphology-from-image workflows, including:
@@ -184,6 +187,8 @@ MorphoLabel is intended for researchers working with repeatable morphology-from-
 - projects where annotation consistency and auditability are important.
 
 It is not a substitute for biological definition of landmarks or traits. The researcher remains responsible for defining homologous structures, choosing an appropriate sampling design, reviewing annotations and interpreting the resulting data.
+
+For geometric morphometrics, MorphoLabel prepares landmark-coordinate data; it does not replace downstream procedures such as Generalized Procrustes Analysis, shape statistics or biological interpretation in software such as MorphoJ, R or other analytical environments.
 
 ## Release status
 
