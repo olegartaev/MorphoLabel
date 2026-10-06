@@ -82,6 +82,22 @@ Key workflows:
 </tr>
 </table>
 
+## Interface
+
+The screenshots below show the current **v1.0.0-rc.1** interface on real biological image workflows.
+
+### Landmarks & Measurements
+
+<img src="docs/images/landmarks-workspace.webp" alt="MorphoLabel Landmarks and Measurements workspace showing a fish specimen with anatomical landmarks and the human-in-the-loop prediction and review workflow" width="100%">
+
+*Landmark annotation workspace: specimen navigation, anatomical landmark scheme, human verification, AI prediction/review and final data QC.*
+
+### X-ray Traits
+
+<img src="docs/images/xray-structures-workspace.webp" alt="MorphoLabel X-ray Traits Structures workspace showing numbered vertebrae, reference markers, pterygiophores and the prediction and review workflow" width="100%">
+
+*X-ray Structures workspace: repeated-element annotation, anatomical reference markers, human-reviewed AI output, prediction/review controls and result checking.*
+
 ## Typical workflow
 
 1. **Create a project** and connect the source image collection.

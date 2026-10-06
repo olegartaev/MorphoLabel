@@ -405,6 +405,12 @@ Useful controls include:
 
 Do not verify an image until all required landmarks are either placed or explicitly marked missing.
 
+### Interface example
+
+<img src="images/landmarks-workspace.webp" alt="MorphoLabel Landmarks and Measurements workspace with a fish specimen and anatomical landmarks" width="100%">
+
+*Landmarks workspace in v1.0.0-rc.1. The image area, landmark scheme, specimen list, verification state and human-in-the-loop AI workflow remain visible together so large datasets can be reviewed without separating annotation from project state.*
+
 ## 5.7 Human Repeatability
 
 Before scaling up annotation, use **Human Repeatability…** when the project requires a quantified estimate of placement consistency.
@@ -716,6 +722,12 @@ You can:
 The marker dock shows the current count for each structure type.
 
 When numeric shortcuts are available, marker types can be selected with their displayed number keys.
+
+### Interface example
+
+<img src="images/xray-structures-workspace.webp" alt="MorphoLabel X-ray Structures workspace with numbered vertebrae, pterygiophores and anatomical reference markers" width="100%">
+
+*X-ray Structures workspace in v1.0.0-rc.1. Repeated structures are numbered on the specimen, reference markers remain visually distinct, and verification, AI review and result-checking controls are available in the same workflow.*
 
 ## 6.11 Reference roles and counting boundaries
 
