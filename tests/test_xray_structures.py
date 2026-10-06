@@ -409,7 +409,7 @@ class XRayStructurePersistenceTests(unittest.TestCase):
     def test_new_schema_version_does_not_overwrite_old_annotation_run(self):
         self._complete_pass_one()
         first=self.project.annotation_run(self.specimen_id,1);first_id=first["run_id"]
-        edited=self.project.scheme;edited["description"]="new annotation semantics"
+        edited=self.project.scheme;edited["structures"][0]["required"]=False
         self.project.save_scheme(edited,"schema edit")
         self.assertIsNone(self.project.annotation_run(self.specimen_id,1))
         new_id=self.project.ensure_annotation_run(self.specimen_id,1)

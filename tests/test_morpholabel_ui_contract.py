@@ -41,7 +41,8 @@ class MorphoLabelUIContractTests(unittest.TestCase):
     def test_package_and_identity_versions_are_consistent(self):
         self.assertEqual(PACKAGE_VERSION, APP_VERSION)
         root=Path(__file__).parents[1]
-        self.assertIn(f"**Release: {PACKAGE_VERSION}**",(root/"README.md").read_text(encoding="utf-8"))
+        from tests.documentation_contract import assert_public_readme_contract
+        assert_public_readme_contract(self,(root/"README.md").read_text(encoding="utf-8"))
         self.assertIn(f'version: "{PACKAGE_VERSION}"',(root/"CITATION.cff").read_text(encoding="utf-8"))
 
     def test_identity_is_release_candidate_morpholabel_with_supplied_png(self):

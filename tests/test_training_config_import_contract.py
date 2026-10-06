@@ -86,7 +86,8 @@ class TrainingConfigImportContractTests(unittest.TestCase):
             text=child.read_text(encoding="utf-8")
             self.assertIn('backbone=dict(init_cfg=dict(_delete_=True, type="Pretrained"',text)
             self.assertIn("checkpoint=dict(type='CheckpointHook'",text)
-            self.assertIn("train_cfg = dict(_delete_=True, type='EpochBasedTrainLoop'",text)
+            self.assertIn("if 'train_cfg' in _base_:",text)
+            self.assertIn("train_cfg['_delete_'] = True",text)
             if importlib.util.find_spec("mmengine") is not None:
                 from mmengine.config import Config
                 from mmengine.hooks import CheckpointHook

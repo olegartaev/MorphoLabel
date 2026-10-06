@@ -22,6 +22,7 @@ from .runtime_paths import resource_path
 from .ai_starters import local_starter
 from .xray_crop import oriented_crop
 from .xray_schema import calculate_trait_values, compatible_reference_roles, spatial_series_order
+from .model_publication import staged_model_directory
 from .extensions.api import StructureBackend, StructureBackendContext
 from .extensions.builtins import backend_registry
 
@@ -441,13 +442,6 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
             "validation_plates": dataset["validation_plates"],
         })
         metadata.write_text(json.dumps(model_meta, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-        staging = target.with_name(target.name + ".training")
-        if staging.exists():
-            shutil.rmtree(staging)
-        staging.mkdir(parents=True)
-        shutil.copy2(checkpoint, staging / "model.pth")
-        shutil.copy2(metadata, staging / "model.json")
-        staging.replace(target)
         metrics = {
             **dict(result.get("metrics") or {}),
             "backend": provider_id,
@@ -459,19 +453,20 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
             "training_plates": dataset["training_plates"],
             "validation_plates": dataset["validation_plates"],
         }
-        project.register_structure_model(
-            model_id,
-            str((target / "model.pth").relative_to(project.root)),
-            str((target / "model.json").relative_to(project.root)),
-            (parent or {}).get("model_id"),
-            schema_digest,
-            provider_id,
-            metrics,
-            dataset["membership"],
-            training_specimen_count=dataset["training_specimens"],
-            validation_specimen_count=dataset["validation_specimens"],
-            activate=True,
-        )
+        with staged_model_directory(target) as (staging,publish):
+            shutil.copy2(checkpoint, staging / "model.pth")
+            shutil.copy2(metadata, staging / "model.json")
+            if not (staging/"model.pth").stat().st_size:raise XRayStructureAIError("Empty structure model checkpoint")
+            if any(item["model_id"]==model_id for item in project.structure_models()):raise FileExistsError(model_id)
+            publish()
+            project.register_structure_model(
+                model_id,
+                str((target / "model.pth").relative_to(project.root)),
+                str((target / "model.json").relative_to(project.root)),
+                (parent or {}).get("model_id"),schema_digest,provider_id,metrics,dataset["membership"],
+                training_specimen_count=dataset["training_specimens"],
+                validation_specimen_count=dataset["validation_specimens"],activate=True,
+            )
     return {
         "trained": True, "model_id": model_id, "metrics": metrics,
         "training_specimens": dataset["training_specimens"],
@@ -706,11 +701,12 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
                         if error==0:stat["role_exact"]+=1;role_exact+=1
         unknown={sid for sid,state in visibility.items() if str(state) in {"partial","not_visible"}}
         absent={sid for sid,state in visibility.items() if str(state)=="absent"}
-        human_values=calculate_trait_values(scheme,human,unknown_structures=unknown,absent_structures=absent)
+        crop_size=specimen.get("crop_size",(1,1))
+        human_values=calculate_trait_values(scheme,human,unknown_structures=unknown,absent_structures=absent,crop_size=crop_size)
         # No model detections is a predicted zero, compared against known human
         # values. Unmarked human categories remain missing observations.
         predicted_absent={str(item["id"]) for item in structures if not pred_group.get(str(item["id"]))}
-        predicted_values=calculate_trait_values(scheme,predicted,unknown_structures=unknown,absent_structures=predicted_absent)
+        predicted_values=calculate_trait_values(scheme,predicted,unknown_structures=unknown,absent_structures=predicted_absent,crop_size=crop_size)
         specimen_total=specimen_ok=0;specimen_all_terms=specimen_all_ok=0
         for trait in traits:
             tid=str(trait["id"]);method=str(trait.get("method") or "");truth=human_values.get(tid);prediction=predicted_values.get(tid)
@@ -843,6 +839,7 @@ def compare_structure_model_to_human(project,model_id=None,split="val",progress=
             "human":project.effective_annotations(specimen_id,1,"human"),
             "predicted":predictions[specimen_id],
             "visibility":project.structure_visibility_states(specimen_id,1,"human"),
+            "crop_size":project.specimen_crop_size(specimen_id),
         })
     report=summarize_structure_ai_human_comparison(project.scheme,rows)
     report["summary"].update({
@@ -990,11 +987,7 @@ def import_structure_model_package(project, source, *, registry=None):
             local = f"imported_{original}_{counter}"
             counter += 1
         destination = project.models_root / local
-        staging = destination.with_name(destination.name + ".importing")
-        if staging.exists():
-            shutil.rmtree(staging)
-        staging.mkdir(parents=True)
-        try:
+        with staged_model_directory(destination) as (staging,publish):
             (staging / "model.pth").write_bytes(payload["artifacts/model.pth"])
             metadata["model_id"] = local
             metadata["imported_from_model_id"] = original
@@ -1005,7 +998,8 @@ def import_structure_model_package(project, source, *, registry=None):
                 json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True),
                 encoding="utf-8",
             )
-            staging.replace(destination)
+            if any(item["model_id"]==local for item in project.structure_models()):raise FileExistsError(local)
+            publish()
             stats = dict(manifest.get("training_statistics") or {})
             metrics = dict(stats.get("metrics") or {})
             metrics.update({
@@ -1029,10 +1023,4 @@ def import_structure_model_package(project, source, *, registry=None):
                 trait_scheme=imported_scheme,
                 orientation_policy=manifest.get("orientation_policy"),
             )
-        except Exception:
-            if staging.exists():
-                shutil.rmtree(staging)
-            if destination.exists():
-                shutil.rmtree(destination)
-            raise
     return local

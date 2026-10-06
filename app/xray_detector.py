@@ -15,6 +15,7 @@ from .process_utils import hidden_window_kwargs
 from .runtime_paths import resource_path
 from .xray_crop import HYBRID_ALGORITHM_VERSION, detect_specimens, display_preview, merge_detector_proposals, proposals_from_detector_boxes
 from .xray_orientation import predict_orientation_batch, train_orientation_model
+from .model_publication import staged_model_directory
 
 DETECTOR_BACKEND="rtmdet_tiny_mmdet_3_2"
 RTMDET_TINY_COCO_URL="https://download.openmmlab.com/mmdetection/v3.0/rtmdet/rtmdet_tiny_8xb32-300e_coco/rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth"
@@ -132,17 +133,30 @@ def train_detector(project,seed=42,epochs=80,progress=None,parent_model_id=None)
         if result is None or used_batch is None:raise RuntimeError("X-ray detector training did not complete.")
         checkpoint=Path(result["checkpoint"]);config=Path(result["config"])
         if not checkpoint.is_file() or not config.is_file():raise RuntimeError("X-ray detector training finished without a loadable model artifact.")
-        directory.mkdir(parents=True,exist_ok=True)
-        final_checkpoint=directory/"model.pth";final_config=directory/"config.py"
-        shutil.copy2(checkpoint,final_checkpoint);shutil.copy2(config,final_config)
-        metrics={"backend":DETECTOR_BACKEND,"epochs":int(epochs),"device":settings["device"],"train_plates":dataset["train_plates"],"val_plates":dataset["val_plates"],
-                 "initialization":(parent or {}).get("model_id") or "rtmdet_tiny_coco_pretrained","batch_size":used_batch,
-                 "workers":int(settings.get("workers") or 0),"mixed_precision":bool(settings.get("mixed_precision")),
-                 "hardware":hardware_settings,**dict(result.get("metrics") or {})}
-        metrics.update(train_orientation_model(project,model_id,directory,runtime,settings,seed=seed,progress=progress))
-        training_plate_ids=list(dataset["plate_ids"]);training_specimens=int(dataset["training_specimens"])
-    project.register_crop_model(model_id,str(final_checkpoint.relative_to(project.root)),str(final_config.relative_to(project.root)),
-                                (parent or {}).get("model_id"),metrics,training_plate_ids,training_specimens,activate=True)
+        with staged_model_directory(directory) as (staging,publish):
+            final_checkpoint=staging/"model.pth";final_config=staging/"config.py"
+            shutil.copy2(checkpoint,final_checkpoint);shutil.copy2(config,final_config)
+            metrics={"backend":DETECTOR_BACKEND,"epochs":int(epochs),"device":settings["device"],"train_plates":dataset["train_plates"],"val_plates":dataset["val_plates"],
+                     "initialization":(parent or {}).get("model_id") or "rtmdet_tiny_coco_pretrained","batch_size":used_batch,
+                     "workers":int(settings.get("workers") or 0),"mixed_precision":bool(settings.get("mixed_precision")),
+                     "hardware":hardware_settings,**dict(result.get("metrics") or {})}
+            metrics.update(train_orientation_model(project,model_id,staging,runtime,settings,seed=seed,progress=progress))
+            training_plate_ids=list(dataset["plate_ids"]);training_specimens=int(dataset["training_specimens"])
+            # Validate the complete child before publishing. Orientation paths
+            # refer to its final identity, never the temporary staging name.
+            for artifact in (final_checkpoint,final_config):
+                if not artifact.stat().st_size:raise RuntimeError("Empty trained model artifact")
+            compile(final_config.read_text(encoding="utf-8"),str(final_config),"exec")
+            if metrics.get("orientation/enabled"):
+                for key,name in (("orientation/model_path","orientation_model.pth"),("orientation/meta_path","orientation.json")):
+                    artifact=staging/name
+                    if not artifact.is_file() or not artifact.stat().st_size:raise RuntimeError("Incomplete orientation artifact")
+                    metrics[key]=str((directory/name).relative_to(project.root))
+                json.loads((staging/"orientation.json").read_text(encoding="utf-8"))
+            if any(item["model_id"]==model_id for item in project.crop_models()):raise FileExistsError(model_id)
+            publish()
+            project.register_crop_model(model_id,str((directory/"model.pth").relative_to(project.root)),str((directory/"config.py").relative_to(project.root)),
+                                        (parent or {}).get("model_id"),metrics,training_plate_ids,training_specimens,activate=True)
     project.compact_disposable_ai_artifacts()
     return {"trained":True,"model_id":model_id,"metrics":metrics,"training_plates":len(training_plate_ids),"training_specimens":training_specimens}
 

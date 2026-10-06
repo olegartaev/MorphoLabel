@@ -101,7 +101,7 @@ def prepare_orientation_dataset(project,root,seed=42):
 
 
 def train_orientation_model(project,model_id,directory,runtime,settings,seed=42,progress=None):
-    directory=Path(directory);scratch=directory.parent/f".{model_id}_orientation_tmp"
+    directory=Path(directory);scratch=directory/"orientation_tmp"
     shutil.rmtree(scratch,ignore_errors=True);scratch.mkdir(parents=True,exist_ok=True)
     try:
         dataset=prepare_orientation_dataset(project,scratch,seed)

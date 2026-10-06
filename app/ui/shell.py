@@ -204,18 +204,17 @@ class ProductionShell(tk.Tk):
         detail.grid(row=4,column=0,sticky="w",pady=(4,8))
         bar=ttk.Progressbar(frame,mode="determinate",maximum=100,value=0,length=580)
         component_bar=ttk.Progressbar(frame,mode="determinate",maximum=100,length=580)
-        component_bar.grid(row=5,column=0,sticky="ew")
-        bar.grid(row=6,column=0,sticky="ew",pady=(8,0))
-        summary=ttk.Label(frame,text="1 of 8 components ready · 5%")
+        summary=ttk.Label(frame,text="Ready to install AI support · 7 AI components waiting")
         summary.grid(row=7,column=0,sticky="w",pady=(4,0))
         def refresh_overview():
             for key,label in status_labels.items():
                 status=model.status[key]
                 color="#18783a" if status=="✓ Ready" else "#b42318" if status=="⚠ Failed" else "#555555"
                 label.configure(text=status,foreground=color)
-            bar.configure(value=model.overall)
-            component_bar.configure(value=model.component_percent)
-            summary.configure(text=f"{model.ready_count} of 8 components ready · {int(model.overall)}%")
+            if model.started:
+                bar.configure(value=model.overall)
+                component_bar.configure(value=model.component_percent)
+                summary.configure(text=f"{model.ready_count} of 8 components ready · {int(model.overall)}%")
         refresh_overview()
         result_label=ttk.Label(frame,text="",justify="left",wraplength=620);result_label.grid(row=8,column=0,sticky="w",pady=(10,0))
         actions=ttk.Frame(frame);actions.grid(row=9,column=0,sticky="e",pady=(14,0))
@@ -231,7 +230,10 @@ class ProductionShell(tk.Tk):
 
         def start_setup():
             if working["value"]:return
-            working["value"]=True;model.retry();refresh_overview()
+            working["value"]=True;model.start();model.retry()
+            component_bar.grid(row=5,column=0,sticky="ew")
+            bar.grid(row=6,column=0,sticky="ew",pady=(8,0))
+            refresh_overview()
             for child in actions.winfo_children():child.destroy()
             result_label.configure(text="")
             stage.configure(text="Starting AI setup…")

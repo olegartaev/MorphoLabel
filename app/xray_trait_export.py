@@ -32,7 +32,7 @@ def export_trait_rows(project,target,verified_only=False):
         writer=csv.DictWriter(stream,fieldnames=fields,extrasaction="ignore");writer.writeheader()
         for row in rows:
             values={field:row.get(field,"") for field in fields[:5]}
-            values["schema_version_id"]=scheme_record["version_id"]
+            values["schema_version_id"]=scheme_record["scientific_version_id"]
             values["specimen_code"]=specimen_display_id(row)
             trait_values=row.get("trait_values") or {}
             values.update({label:trait_values.get(trait_id) for trait_id,label in trait_columns})

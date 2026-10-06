@@ -7,6 +7,7 @@ import re
 import shutil
 import zipfile
 from pathlib import Path
+from .model_publication import staged_model_directory
 
 PACKAGE_FORMAT="morpholabel-xray-crop-model-v1"
 BACKEND="rtmdet_tiny_mmdet_3_2"
@@ -109,16 +110,13 @@ def import_crop_model_package(project,source):
     if not _SAFE_ID.fullmatch(original) or original.endswith("."):raise XRayCropPackageError("Unsafe Crop model ID.")
     existing={m["model_id"] for m in project.crop_models()};local=original;counter=2
     while local in existing or (project.models_root/local).exists():local=f"imported_{original}_{counter}";counter+=1
-    destination=project.models_root/local;staging=destination.with_name(destination.name+".importing")
-    if staging.exists():raise XRayCropPackageError("A Crop import with this ID is already pending.")
-    staging.mkdir(parents=True)
-    try:
+    destination=project.models_root/local
+    with staged_model_directory(destination) as (staging,publish):
         for name,data in payload.items():(staging/Path(name).name).write_bytes(data)
         metrics={**dict(manifest.get("metrics") or {}),"origin":"imported","original_model_id":original,"original_parent_model_id":manifest.get("parent_model_id"),"package_manifest":manifest,"previous_orientation_policy":project.orientation_policy}
         if manifest.get("orientation"):
             metrics.update({"orientation/enabled":True,"orientation/model_path":str((destination/"orientation_model.pth").relative_to(project.root)),"orientation/meta_path":str((destination/"orientation.json").relative_to(project.root))})
-        staging.replace(destination)
+        if any(item["model_id"]==local for item in project.crop_models()):raise FileExistsError(local)
+        publish()
         project.register_crop_model(local,str((destination/"model.pth").relative_to(project.root)),str((destination/"config.py").relative_to(project.root)),None,metrics,(),int(manifest.get("training_specimen_count") or 0),activate=True,trait_scheme=scheme,orientation_policy=manifest.get("orientation_policy"))
-    except Exception:
-        shutil.rmtree(staging,ignore_errors=True);shutil.rmtree(destination,ignore_errors=True);raise
     return local

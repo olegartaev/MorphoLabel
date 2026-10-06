@@ -33,6 +33,10 @@ class SetupProgress:
         self.current = None
         self.overall = 5.0
         self.component_percent = 0
+        self.started = False
+
+    def start(self):
+        self.started = True
 
     def retry(self):
         for stage, value in self.status.items():
@@ -40,6 +44,7 @@ class SetupProgress:
                 self.status[stage] = "○ Waiting"
 
     def update(self, stage, detail):
+        self.started = True
         if stage == "READY":
             for item in COMPONENTS:
                 self.status[item.stage] = "✓ Ready"

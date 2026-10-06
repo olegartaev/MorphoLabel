@@ -13,7 +13,7 @@ import uuid
 
 from .xray_crop import apply_orientation_defaults, normalize_orientation_policy
 from .xray_specimen_identity import next_specimen_ordinal, specimen_display_id, validate_specimen_code
-from .xray_schema import bundled_scheme, calculate_trait_values, compatible_reference_roles, normalize_scheme, scheme_hash, spatial_series_order
+from .xray_schema import bundled_scheme, calculate_trait_values, compatible_reference_roles, normalize_scheme, scheme_hash, scientific_scheme_hash, spatial_series_order
 
 IMAGE_EXTENSIONS={".png",".jpg",".jpeg",".tif",".tiff",".bmp"}
 STRUCTURE_VISIBILITY_STATES=("complete","partial","not_visible","absent")
@@ -210,6 +210,15 @@ class XRayProject:
     def _ensure_schema(self):
         with _db_connection(self.db_path) as c:
             self._create_tables(c)
+            self._ensure_columns(c,"schema_versions",{
+                "scientific_version_id":"TEXT NOT NULL DEFAULT ''",
+                "scientific_hash":"TEXT NOT NULL DEFAULT ''",
+            })
+            # Existing runs keep their original version and provenance. New
+            # cosmetic versions explicitly link to that scientific identity.
+            for version_id,payload in c.execute("SELECT version_id,payload_json FROM schema_versions WHERE scientific_version_id=''").fetchall():
+                c.execute("UPDATE schema_versions SET scientific_version_id=?,scientific_hash=? WHERE version_id=?",
+                          (version_id,scientific_scheme_hash(json.loads(payload)),version_id))
             self._ensure_columns(c,"source_images",{
                 "crop_reviewed":"INTEGER NOT NULL DEFAULT 0",
                 "crop_reviewed_at":"TEXT NOT NULL DEFAULT ''",
@@ -749,8 +758,12 @@ class XRayProject:
 
     def next_crop_model_id(self):
         with _db_connection(self.db_path) as c:
-            count=c.execute("SELECT COUNT(*) FROM xray_crop_models").fetchone()[0]
-        return f"xray_crop_model_v{int(count)+1:03d}"
+            existing={str(row[0]) for row in c.execute("SELECT model_id FROM xray_crop_models")}
+        number=1
+        while True:
+            candidate=f"xray_crop_model_v{number:03d}"
+            if candidate not in existing and not (self.models_root/candidate).exists():return candidate
+            number+=1
 
     def active_crop_model(self):
         with _db_connection(self.db_path) as c:
@@ -940,7 +953,7 @@ class XRayProject:
         )
 
     def structure_ai_review_ids(self):
-        schema_id=self.active_scheme_record()["version_id"]
+        schema_id=self.active_scheme_record()["scientific_version_id"]
         with _db_connection(self.db_path) as c:
             rows=c.execute(
                 """SELECT r.specimen_id,e.event_id
@@ -1159,15 +1172,18 @@ class XRayProject:
         )}
 
     def save_scheme(self,scheme,note="Scheme update",*,_connection=None):
-        normalized=normalize_scheme(scheme);digest=scheme_hash(normalized)
+        normalized=normalize_scheme(scheme);digest=scheme_hash(normalized);scientific_digest=scientific_scheme_hash(normalized)
         from contextlib import nullcontext
         with (nullcontext(_connection) if _connection is not None else _db_connection(self.db_path)) as c:
             existing=c.execute("SELECT version_id FROM schema_versions WHERE scheme_hash=? ORDER BY created_at DESC LIMIT 1",(digest,)).fetchone()
             if existing:
                 c.execute("UPDATE schema_versions SET active=CASE WHEN version_id=? THEN 1 ELSE 0 END",(existing[0],));return existing[0]
-            version_id=str(uuid.uuid4());c.execute("UPDATE schema_versions SET active=0")
-            c.execute("INSERT INTO schema_versions(version_id,created_at,scheme_hash,note,payload_json,active) VALUES(?,?,?,?,?,1)",
-                      (version_id,_now(),digest,str(note),json.dumps(normalized,ensure_ascii=False,sort_keys=True)))
+            current=c.execute("SELECT scientific_version_id,scientific_hash FROM schema_versions WHERE active=1").fetchone()
+            version_id=str(uuid.uuid4())
+            scientific_id=current[0] if current and current[1]==scientific_digest else version_id
+            c.execute("UPDATE schema_versions SET active=0")
+            c.execute("INSERT INTO schema_versions(version_id,created_at,scheme_hash,note,payload_json,active,scientific_version_id,scientific_hash) VALUES(?,?,?,?,?,1,?,?)",
+                      (version_id,_now(),digest,str(note),json.dumps(normalized,ensure_ascii=False,sort_keys=True),scientific_id,scientific_digest))
         return version_id
 
     def active_scheme_record(self):
@@ -1179,6 +1195,11 @@ class XRayProject:
 
     @property
     def scheme(self):return self.active_scheme_record()["scheme"]
+
+    def specimen_crop_size(self,specimen_id):
+        """Pixel dimensions of the oriented annotation frame (flips keep size)."""
+        crop=self.specimen(specimen_id)["crop"]
+        return tuple(max(2,int(round(float(crop[key])))) for key in ("length","width"))
 
     def ensure_initial_bundled_scheme(self,scheme_id="phoxinus_vertebral_counts"):
         """Upgrade only the untouched program-created blank placeholder, preserving its history."""
@@ -1230,7 +1251,7 @@ class XRayProject:
         workflow_no is assigned before exclusion/filtering and is therefore the
         same number in Structures, Export and later review screens.
         """
-        schema_id=self.active_scheme_record()["version_id"];pass_no=int(pass_no)
+        schema_id=self.active_scheme_record()["scientific_version_id"];pass_no=int(pass_no)
         sql="""
             SELECT s.*,i.relative_path,i.crop_reviewed,i.excluded AS image_excluded,
                    r.run_id,r.status AS annotation_status,r.updated_at AS annotation_updated_at
@@ -1264,7 +1285,7 @@ class XRayProject:
         specimen=self.specimen(specimen_id);image=self.source_image(specimen["image_id"])
         if specimen["excluded"] or specimen["crop_status"]!="confirmed" or image["excluded"] or not image["crop_reviewed"]:
             raise ValueError("Structures can be annotated only on human-confirmed specimen crops.")
-        record=self.active_scheme_record();schema_id=record["version_id"];pass_no=int(pass_no);now=_now()
+        record=self.active_scheme_record();schema_id=record["scientific_version_id"];pass_no=int(pass_no);now=_now()
         if pass_no>1:
             first=self.annotation_run(specimen_id,1,source,False)
             if not first or first.get("status")!="verified":
@@ -1285,7 +1306,7 @@ class XRayProject:
         return run_id
 
     def annotation_run(self,specimen_id,pass_no=1,source="human",create=False):
-        schema_id=self.active_scheme_record()["version_id"]
+        schema_id=self.active_scheme_record()["scientific_version_id"]
         with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row;row=c.execute(
                 "SELECT * FROM annotation_runs WHERE specimen_id=? AND pass_no=? AND source=? AND schema_version_id=?",
@@ -1533,13 +1554,13 @@ class XRayProject:
         return str(value)
 
     def recalculate_trait_results(self,specimen_id):
-        record=self.active_scheme_record();scheme=record["scheme"];schema_id=record["version_id"]
+        record=self.active_scheme_record();scheme=record["scheme"];schema_id=record["scientific_version_id"]
         run=self.annotation_run(specimen_id,1,"human",False);status=str((run or {}).get("status") or "not_started")
         annotations=self.effective_annotations(specimen_id,1,"human") if run and not status.startswith("stale") else []
         visibility=self.structure_visibility_states(specimen_id,1,"human") if run and not status.startswith("stale") else {}
         unknown={sid for sid,value in visibility.items() if value in {"partial","not_visible"}}
         absent={sid for sid,value in visibility.items() if value=="absent"}
-        values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations,unknown_structures=unknown,absent_structures=absent))
+        values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations,unknown_structures=unknown,absent_structures=absent,crop_size=self.specimen_crop_size(specimen_id)))
         qc="" if status=="verified" else status
         now=_now()
         with _db_connection(self.db_path) as c:
@@ -1562,7 +1583,7 @@ class XRayProject:
             visibility=self.structure_visibility_states(item["specimen_id"],1,"human") if run and not status.startswith("stale") else {}
             unknown={sid for sid,value in visibility.items() if value in {"partial","not_visible"}}
             absent={sid for sid,value in visibility.items() if value=="absent"}
-            values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations,unknown_structures=unknown,absent_structures=absent))
+            values=({trait["id"]:None for trait in scheme.get("traits",())} if status.startswith("stale") else calculate_trait_values(scheme,annotations,unknown_structures=unknown,absent_structures=absent,crop_size=self.specimen_crop_size(item["specimen_id"])))
             rows.append({**item,"trait_values":values,"result_status":status})
         return rows
 
@@ -1720,7 +1741,7 @@ class XRayProject:
 
     def structure_repeatability(self,run_id=None):
         """Latest persisted Human repeatability run and both blind-pass progress values."""
-        schema_id=self.active_scheme_record()["version_id"]
+        schema_id=self.active_scheme_record()["scientific_version_id"]
         with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row
             if run_id:
@@ -1765,7 +1786,7 @@ class XRayProject:
 
     def start_structure_repeatability(self,count,seed=42):
         """Create a random control sample with two dedicated blind manual annotations."""
-        count=max(1,int(count));seed=int(seed);schema_id=self.active_scheme_record()["version_id"]
+        count=max(1,int(count));seed=int(seed);schema_id=self.active_scheme_record()["scientific_version_id"]
         active=self.structure_repeatability()
         if active and active.get("status")=="in_progress":return active
         candidates=[row for row in self.structure_specimens(1) if str(row.get("annotation_status") or "")=="verified"]

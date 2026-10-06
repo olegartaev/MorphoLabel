@@ -158,12 +158,12 @@ def import_model_package(project, source, expected_kind):
   local=original;counter=1
   while project.model_metadata(local) or (project.models_root/expected_kind/local).exists():counter+=1;local=f"imported_{original}_{counter}"
   destination=project.models_root/expected_kind/local
-  import uuid
-  tmp=destination.with_name(destination.name+".importing."+uuid.uuid4().hex)
-  try:
+  from .model_publication import staged_model_directory
+  with staged_model_directory(destination) as (tmp,publish):
    for name in m["files"]:
     out=tmp/name[len("artifacts/"):];out.parent.mkdir(parents=True,exist_ok=True);out.write_bytes(z.read(name))
-   tmp.parent.mkdir(parents=True,exist_ok=True);tmp.replace(destination)
+   if project.model_metadata(local):raise FileExistsError(local)
+   publish()
    metadata=m.get("model_metadata",{});metrics=json.loads(metadata.get("metrics_json") or "{}") if isinstance(metadata.get("metrics_json"),str) else metadata.get("metrics_json",{})
    metrics={**metrics,"origin":"imported","original_model_id":original,"imported_at":__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(),"package_manifest":m}
    with project.atomic_model_import():
@@ -171,8 +171,4 @@ def import_model_package(project, source, expected_kind):
      from .model_schemes import apply_schemes
      apply_schemes(project,bundle)
     project.register_model(local,expected_kind,path=destination.relative_to(project.data_root).as_posix(),metrics=metrics,active=expected_kind=="crop",schema_digest=m.get("schema_sha256"),parent_model_id=None)
-  except Exception:
-   if tmp.exists():shutil.rmtree(tmp)
-   if destination.exists():shutil.rmtree(destination)
-   raise
  return local

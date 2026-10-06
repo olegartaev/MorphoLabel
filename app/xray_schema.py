@@ -153,7 +153,7 @@ def spatial_series_order(points):
     )
 
 
-def calculate_trait_values(scheme,annotations,unknown_structures=None,absent_structures=None):
+def calculate_trait_values(scheme,annotations,unknown_structures=None,absent_structures=None,*,crop_size=(1,1)):
     """Missing marks give missing values; explicit absence can give a real zero."""
     scheme=normalize_scheme(scheme);grouped={};unknown={str(value) for value in (unknown_structures or ())}
     absent={str(value) for value in (absent_structures or ())}
@@ -170,7 +170,10 @@ def calculate_trait_values(scheme,annotations,unknown_structures=None,absent_str
         if not series or not reference:return None
         rx=float(reference["x"]);ry=float(reference["y"])
         return min(range(len(series)),key=lambda i:(float(series[i]["x"])-rx)**2+(float(series[i]["y"])-ry)**2)
+    # Base observations are independent of presentation order. Resolve the
+    # derived graph only after every observation has been calculated.
     for trait in scheme["traits"]:
+        if trait["method"]=="derived":continue
         ident=trait["id"];method=trait["method"];ids=list(trait.get("structures") or ());rule=trait.get("rule") or {};value=None
         if any(str(structure_id) in unknown for structure_id in ids):
             values[ident]=None
@@ -199,17 +202,35 @@ def calculate_trait_values(scheme,annotations,unknown_structures=None,absent_str
         elif method=="angle" and len(ids)>=3:
             a=points(ids[0]);b=points(ids[1]);c=points(ids[2])
             if a and b and c:
-                ax=float(a[0]["x"])-float(b[0]["x"]);ay=float(a[0]["y"])-float(b[0]["y"])
-                cx=float(c[0]["x"])-float(b[0]["x"]);cy=float(c[0]["y"])-float(b[0]["y"])
+                width,height=map(float,crop_size)
+                if not all(math.isfinite(v) and v>0 for v in (width,height)):
+                    raise ValueError("Angle geometry requires positive crop pixel dimensions")
+                ax=(float(a[0]["x"])-float(b[0]["x"]))*width;ay=(float(a[0]["y"])-float(b[0]["y"]))*height
+                cx=(float(c[0]["x"])-float(b[0]["x"]))*width;cy=(float(c[0]["y"])-float(b[0]["y"]))*height
                 denom=max(1e-12,math.hypot(ax,ay)*math.hypot(cx,cy))
                 value=math.degrees(math.acos(max(-1.0,min(1.0,(ax*cx+ay*cy)/denom))))
-        elif method=="derived":
-            if any(values.get(str(dependency)) is None for dependency in rule.get("depends_on",())):
-                values[ident]=None
-                continue
-            try:value=_safe_derived(rule.get("expression",""),values)
-            except (ValueError,TypeError,ZeroDivisionError):value=None
         values[ident]=value
+    pending={trait["id"]:trait for trait in scheme["traits"] if trait["method"]=="derived"}
+    while pending:
+        resolved=[]
+        for ident,trait in pending.items():
+            rule=trait.get("rule") or {};expression=rule.get("expression","")
+            try:
+                # Expression names also participate in the graph, even for old
+                # schemes whose declared depends_on list was incomplete.
+                names={node.id for node in ast.walk(ast.parse(str(expression),mode="eval")) if isinstance(node,ast.Name)}
+            except (SyntaxError,ValueError,TypeError):
+                values[ident]=None;resolved.append(ident);continue
+            dependencies=names|{str(item) for item in rule.get("depends_on",())}
+            if dependencies & pending.keys():continue
+            value=None
+            if not any(str(sid) in unknown for sid in trait.get("structures",())) and all(values.get(dep) is not None for dep in dependencies):
+                try:value=_safe_derived(expression,values)
+                except (SyntaxError,ValueError,TypeError,ZeroDivisionError,OverflowError):pass
+            values[ident]=value;resolved.append(ident)
+        if not resolved:
+            values.update({ident:None for ident in pending});break
+        for ident in resolved:del pending[ident]
     return values
 
 
@@ -265,6 +286,29 @@ preset_scheme=bundled_scheme
 
 def scheme_hash(scheme):
     payload=json.dumps(normalize_scheme(scheme),ensure_ascii=False,sort_keys=True,separators=(",",":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def scientific_scheme_contract(scheme):
+    """Annotation/calculation contract, separate from saved presentation history.
+
+    Exclude only known presentation fields. Unknown extensions, reference
+    provenance, identities, requiredness, relationships and complete rules are
+    retained conservatively. Structure order defines model channels; trait
+    display order does not define calculations.
+    """
+    value=normalize_scheme(scheme)
+    for key in ("name","description"):value.pop(key,None)
+    for item in value["structures"]:
+        for key in ("name","description","shape","color","hotkey","icon"):item.pop(key,None)
+    for item in value["traits"]:
+        for key in ("name","description","icon","color"):item.pop(key,None)
+    value["traits"].sort(key=lambda item:item["id"])
+    return value
+
+
+def scientific_scheme_hash(scheme):
+    payload=json.dumps(scientific_scheme_contract(scheme),ensure_ascii=False,sort_keys=True,separators=(",",":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 

@@ -171,6 +171,13 @@ class ArchitectureCompatibilityTests(unittest.TestCase):
             rows = persisted_rows(p)
             output = self.export_bytes(p)
             if name == "xray":
+                # RC1 adds explicit scientific identity metadata. Prove the
+                # legacy version retains its own identity and exact contract,
+                # then compare every original column with the frozen oracle.
+                from app.xray_schema import scientific_scheme_hash
+                for row in rows["schema_versions"]:
+                    self.assertEqual(row["version_id"],row.pop("scientific_version_id"))
+                    self.assertEqual(scientific_scheme_hash(json.loads(row["payload_json"])),row.pop("scientific_hash"))
                 # The frozen oracle predates user-assigned IDs. Prove that the
                 # additive field has its legacy default, then compare every
                 # original column and export byte against the unchanged oracle.

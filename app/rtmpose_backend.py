@@ -280,6 +280,8 @@ def train_project(project,dataset_id,backend:RTMPoseBackend,*,parent_model_id=No
   state=_read_finalization(artifact)
   if state.get('training_completed') and not state.get('registered'): return _finalize_trained_artifact(project,artifact,backend,state,progress_callback)
   raise FileExistsError(f'immutable model artifact already exists: {backend.model_id}')
+ if project.model_metadata(backend.model_id):
+  raise FileExistsError(f'immutable registered model already exists: {backend.model_id}')
  artifact.mkdir(parents=True);settings=dict(settings or {})
  if parent_model_id:
   parent=project.model_metadata(parent_model_id)

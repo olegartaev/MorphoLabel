@@ -10,7 +10,7 @@ SCALE_DECIMALS=6
 
 def _atomic_text(path:Path,text:str):
  path.parent.mkdir(parents=True,exist_ok=True)
- with tempfile.NamedTemporaryFile("w",encoding="ascii",newline="",dir=path.parent,delete=False) as stream:
+ with tempfile.NamedTemporaryFile("w",encoding="utf-8",newline="",dir=path.parent,delete=False) as stream:
   stream.write(text);temporary=Path(stream.name)
  os.replace(temporary,path)
 
@@ -54,7 +54,7 @@ def export_project_results(project):
 
 def parse_tps(path):
  """Small standards-oriented test reader; preserves LM coordinate ordering."""
- blocks=[];lines=Path(path).read_text(encoding="ascii").splitlines();i=0
+ blocks=[];lines=Path(path).read_text(encoding="utf-8").splitlines();i=0
  while i<len(lines):
   if not lines[i].startswith("LM="):i+=1;continue
   count=int(lines[i].split("=",1)[1]);i+=1;coords=[]

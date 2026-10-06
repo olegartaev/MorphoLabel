@@ -61,7 +61,7 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         return specimens
 
     def test_predict_current_is_available_on_any_selected_manual_pass_with_active_model(self):
-        model={"model_id":"m"}
+        model={"model_id":"m","schema_digest":structure_schema_digest(self.project.scheme)}
         self.assertTrue(_current_prediction_allowed(self.project,"specimen",model,1))
         self.assertTrue(_current_prediction_allowed(self.project,"specimen",model,7))
         self.assertTrue(_current_prediction_allowed(self.project,"specimen",model,999))
@@ -194,7 +194,7 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         specimen_id=self._add_specimen(image_id,450);self.project.confirm_plate(image_id)
         self._verify_structure_truth(specimen_id)
         run=self.project.start_structure_repeatability(1,seed=7)
-        model={"model_id":"test-model"};p1=int(run["annotation1_pass_no"]);p2=int(run["annotation2_pass_no"])
+        model={"model_id":"test-model","schema_digest":structure_schema_digest(self.project.scheme)};p1=int(run["annotation1_pass_no"]);p2=int(run["annotation2_pass_no"])
         self.assertTrue(_current_prediction_allowed(self.project,specimen_id,model,p1))
         self.assertTrue(_current_prediction_allowed(self.project,specimen_id,model,p2))
         predictions=[
@@ -452,7 +452,7 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertIn("_current_prediction_allowed(self.project,self.selected_specimen_id,model,self.pass_no.get())",ui)
         self.assertIn("not self.current_specimen_excluded",ui)
         helper=ui[ui.index("def _current_prediction_allowed"):ui.index("_VISIBILITY_LABELS=")]
-        self.assertIn("return bool(specimen_id and model)",helper)
+        self.assertIn("_scheme_matches_model(project,model)",helper)
         self.assertNotIn("annotation1_verified",helper)
         load=ui[ui.index("    def _load_specimen(self,specimen_id):"):ui.index("    def _clear(self):")]
         self.assertIn("self._refresh_summary()",load)

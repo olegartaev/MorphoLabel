@@ -106,8 +106,8 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         detector=source("app/xray_detector.py")
         structure_ai=source("app/xray_structure_ai.py")
         self.assertIn('parent_values=("RTMDet pretrained",)+prediction_values',crop)
-        self.assertIn('parent_values=("ImageNet ResNet18",)+tuple(item["model_id"] for item in structure_models)',structures)
-        self.assertIn('prediction_values=tuple(item["model_id"] for item in structure_models if str(item.get("schema_digest") or "")==current_digest)',structures)
+        self.assertIn('parent_values=("ImageNet ResNet18",)+prediction_values',structures)
+        self.assertIn('prediction_values=tuple(item["model_id"] for item in structure_models if _scheme_matches_model(self.project,item))',structures)
         self.assertIn("parent_model_id=parent_model_id",crop)
         self.assertIn("parent_model_id=parent_model_id",structures)
         self.assertIn("def train_detector(project,seed=42,epochs=80,progress=None,parent_model_id=None):",detector)
@@ -267,7 +267,7 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn("self.project.activate_crop_model(model_id)",xcrop)
         self.assertIn("self.prediction_model_box=ttk.Combobox",structures)
         self.assertIn("self.project.activate_structure_model(model_id)",structures)
-        self.assertIn("structure_schema_digest(self.project.scheme)",structures)
+        self.assertIn("_scheme_matches_model(self.project,item)",structures)
 
     def test_section_switch_alignment_runs_after_section_layout_is_built(self):
         shell=source("app/ui/shell.py")

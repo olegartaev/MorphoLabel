@@ -25,7 +25,7 @@ from .xray_specimen_identity import specimen_display_id
 from .xray_icons import VISIBILITY_ICON_SIZE, tk_visibility_icon, tk_xray_icon
 from .xray_structure_ai import (
     compare_structure_model_to_human, export_structure_model_package, import_structure_model_package,
-    predict_structures, structure_schema_digest, train_structure_model,
+    predict_structures, _scheme_matches_model, train_structure_model,
 )
 from .xray_schema import compatible_reference_roles, spatial_series_order
 from .xray_structure_display import (
@@ -88,7 +88,7 @@ def _current_prediction_allowed(project,specimen_id,model,pass_no):
     explicit one-specimen action. Any selected confirmed crop in any annotation
     pass may use AI as a starting point, then becomes human-verified only after Apply.
     """
-    return bool(specimen_id and model)
+    return bool(specimen_id and model and _scheme_matches_model(project,model))
 
 
 _VISIBILITY_LABELS={
@@ -825,15 +825,14 @@ class XRayStructureWorkspace:
         self.training_summary.configure(text=f"Ready: {p1['verified']} human-verified")
         active_id=(model or {}).get("model_id") or "none"
         self.structure_model_label.configure(text=f"Active: {active_id}")
-        current_digest=structure_schema_digest(self.project.scheme)
         structure_models=tuple(self.project.structure_models())
-        prediction_values=tuple(item["model_id"] for item in structure_models if str(item.get("schema_digest") or "")==current_digest)
-        compatible_active=bool(model and str(model.get("schema_digest") or "")==current_digest)
+        prediction_values=tuple(item["model_id"] for item in structure_models if _scheme_matches_model(self.project,item))
+        compatible_active=bool(model and _scheme_matches_model(self.project,model))
         self.prediction_model_box.configure(values=prediction_values,width=model_selector_width(prediction_values,minimum=22),state="readonly" if prediction_values else "disabled")
         self.prediction_model_choice.set(active_id if compatible_active else "")
-        parent_values=("ImageNet ResNet18",)+tuple(item["model_id"] for item in structure_models)
+        parent_values=("ImageNet ResNet18",)+prediction_values
         current_parent=self.training_parent_choice.get()
-        preferred_parent=(model or {}).get("model_id") or "ImageNet ResNet18"
+        preferred_parent=active_id if compatible_active else "ImageNet ResNet18"
         if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:
             self.training_parent_choice.set(preferred_parent)
         self.training_parent_box.configure(values=parent_values,width=model_selector_width(parent_values,minimum=22))
@@ -1246,7 +1245,7 @@ class XRayStructureWorkspace:
                     "","end",iid=model["model_id"],values=(
                         model["model_id"],str(model.get("created_at") or "").replace("T"," ")[:16],source,
                         f"{int(model.get('training_specimen_count') or 0)} / {int(model.get('validation_specimen_count') or 0)}",
-                        quality_text,"Active" if model.get("active") else "Available",
+                        quality_text,("Active" if model.get("active") else "Available") if _scheme_matches_model(self.project,model) else "Incompatible scheme",
                     ),
                 )
             if select and tree.exists(select):tree.selection_set(select);tree.see(select)

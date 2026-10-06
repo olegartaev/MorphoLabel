@@ -199,7 +199,12 @@ WHERE provenance='manual'
   return digest
  def get_ui_state(self,key,default=None):
   with self.transaction() as c:r=c.execute("SELECT value FROM project WHERE key=?",("ui."+key,)).fetchone()
-  return json.loads(r[0]) if r else default
+  if not r:return default
+  try:return json.loads(r[0])
+  except (json.JSONDecodeError,TypeError):
+   import logging
+   logging.getLogger(__name__).warning("Ignoring malformed UI state: ui.%s",key)
+   return default
  def set_ui_state(self,key,value):
   with self.transaction() as c:c.execute("INSERT INTO project(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",("ui."+key,json.dumps(value)))
  def sync_results(self):
@@ -483,10 +488,13 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
   from .landmark_state import landmark_needs_ai_review
   pending_ai=any(landmark_needs_ai_review(row) for row in rows.values())
   with self.transaction() as c:
-   crop_review=c.execute("SELECT 1 FROM image_attributes WHERE image_id=? AND attribute_key IN ('landmark_crop_review_required','landmark_scheme_review_required') AND lower(value)='true'",(image_id,)).fetchone()
-   if crop_review or pending_ai:return False
+   if image_id in self._unfinished_human_review_ids(c) or pending_ai:return False
    c.execute("INSERT INTO image_review(image_id,human_verified,updated_at) VALUES (?,?,?) ON CONFLICT(image_id) DO UPDATE SET human_verified=1,updated_at=excluded.updated_at",(image_id,1,now()))
   return True
+ @staticmethod
+ def _unfinished_human_review_ids(connection):
+  """Persisted workflow state outranks coordinate completeness for backfill."""
+  return {row[0] for row in connection.execute("SELECT image_id FROM annotation_drafts UNION SELECT image_id FROM image_attributes WHERE attribute_key IN ('landmark_crop_review_required','landmark_scheme_review_required') AND lower(value)='true'")}
  def _sync_auto_verified_images(self):
   """Backfill positive legacy Checked state without destructively rewriting human history.
 
@@ -507,8 +515,7 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
     if row["image_id"] not in by_image or row["landmark_abbr"] not in required:continue
     item=dict(row);by_image[row["image_id"]][row["landmark_abbr"]]=item
     if landmark_needs_ai_review(item):pending_ai.add(row["image_id"])
-   crop_review={row["image_id"] for row in c.execute("SELECT image_id FROM image_attributes WHERE attribute_key IN ('landmark_crop_review_required','landmark_scheme_review_required') AND lower(value)='true'")}
-   blocked=crop_review|pending_ai;stamp=now()
+   blocked=self._unfinished_human_review_ids(c)|pending_ai;stamp=now()
    for image_id,rows in by_image.items():
     if image_id in blocked or existing_review.get(image_id)==1:continue
     if all((row:=rows.get(abbr)) and row.get("provenance") in human and (row.get("state")=="missing" or (row.get("x_standardized") is not None and row.get("y_standardized") is not None)) for abbr in required):
