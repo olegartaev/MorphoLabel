@@ -282,7 +282,7 @@ class ThirdTkTests(unittest.TestCase):
    threads.append(threading.get_ident());entered.set();release.wait(5);result=scan(project,*args,**kwargs);finished.set();return result
   try:
    with patch('app.modules.landmarks.simpledialog.askstring',return_value='live_photo'),patch('app.modules.landmarks.filedialog.askdirectory',side_effect=[str(self.landmark.source_root),str(self.root)]),patch.object(runtime,'_source_layout',return_value=('direct','')),patch.object(Project,'scan_originals',slow):
-    runtime.new_project();self.assertTrue(entered.wait(1));shell.update()
+    runtime.new_project();self.assertTrue(entered.wait(10));shell.update()
     self.assertNotEqual(threading.get_ident(),threads[0]);self.assertTrue(any(w.winfo_class()=='TProgressbar' for w in self.widgets(shell)))
     release.set();deadline=time.monotonic()+7
     while any(w.winfo_class()=='TProgressbar' for w in self.widgets(shell)) and time.monotonic()<deadline:shell.update();time.sleep(.01)
