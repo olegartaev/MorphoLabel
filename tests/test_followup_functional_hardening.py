@@ -203,9 +203,8 @@ class FollowupTkTests(unittest.TestCase):
                     view=runtime.current_view
                     samples=next(w for w in self.widgets(runtime.section_host) if w.winfo_class()=="TLabelframe" and w.cget("text")=="Samples")
                     bottom=samples.winfo_rooty()+samples.winfo_height()
-                    host=view.scroll_canvas.winfo_children()[0]
-                    self.assertGreaterEqual(host.winfo_height(),view.scroll_canvas.winfo_height())
-                    self.assertLessEqual(abs(bottom-(host.winfo_rooty()+host.winfo_height()-12)),4)
+                    viewport=view.scroll_canvas
+                    self.assertLessEqual(abs(bottom-(viewport.winfo_rooty()+viewport.winfo_height())),4)
 
     def test_measurement_actions_disabled_until_scheme_and_cancel_preserves_definitions(self):
         from app.measurements import save_measurements

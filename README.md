@@ -36,7 +36,12 @@ RAW decoding is bundled in the Windows application. On first launch, MorphoLabel
 
 ### Development from source
 
-For development, use Python 3.11 on Windows 10/11 x64. The quickest supported source launch is:
+For development, use Python 3.11 on Windows 10/11 x64.
+
+Double-click `START_APP.vbs` to open the application without a console window.
+`START_APP.cmd` also delegates to this windowless launcher. Startup errors are
+reported in a dialog with the log location (`%TEMP%\MorphoLabel-startup.log`).
+For development diagnostics with a visible console, use:
 
 ```text
 RUN_CANONICAL.cmd shell

@@ -1,3 +1,4 @@
 @echo off
-call "%~dp0RUN_CANONICAL.cmd" shell
-if errorlevel 1 pause
+rem START_APP.vbs calls "RUN_CANONICAL.cmd" shell in a hidden console.
+start "" "%SystemRoot%\System32\wscript.exe" "%~dp0START_APP.vbs"
+exit /b

@@ -4,7 +4,7 @@
 
 `START_APP.cmd` starts `app.ui.shell.ProductionShell` directly.  The shell supports `project=None`: Project is active and contains **New Project...** and **Open Project...**.  Creating or opening a project attaches it to that same Tk window; no second main application is launched.
 
-The supported launcher is `START_APP.cmd`, which starts the production shell through `RUN_CANONICAL.cmd`. All routes use the same portable `Project` storage and never migrate scientific data merely to open a UI.
+The desktop source launcher is `START_APP.vbs` (also invoked by `START_APP.cmd`). It starts the production shell through `RUN_CANONICAL.cmd` with a hidden console, logs startup output and reports failures in a dialog. `RUN_CANONICAL.cmd` remains the visible developer diagnostics route. All routes use the same portable `Project` storage and never migrate scientific data merely to open a UI.
 
 ## Shell and shared state
 

@@ -623,9 +623,18 @@ class XRayCountsRuntime:
         if self.project is not None and key in {"structures","results","export"}:self._ensure_working_scheme()
         self.stage=key;self._rerender()
 
-    def _render_reference(self,parent,model,wraplength=650):
+    def _render_reference(self,parent,model,wraplength=650,*,stacked=False):
         if not model.get("reference_text"):return
         row=ttk.Frame(parent);row.pack(anchor="w",fill="x",pady=(3,0))
+        if stacked:
+            from app.ui.project_layout import wrapped_label
+            citation=wrapped_label(row,f"Reference: {model['reference_text']}")
+            if model.get("reference_note"):self._tip.bind(citation,model["reference_note"])
+            if model.get("reference_doi"):
+                link=wrapped_label(row,f"DOI {model['reference_doi']}",foreground="#256d9e",cursor="hand2")
+                link.bind("<Button-1>",lambda _e,doi=model["reference_doi"]:webbrowser.open("https://doi.org/"+doi))
+                if model.get("reference_note"):self._tip.bind(link,model["reference_note"])
+            return
         ttk.Label(row,text="Reference:",style="Muted.TLabel").pack(side="left")
         citation=ttk.Label(row,text=model["reference_text"],style="Muted.TLabel",wraplength=wraplength);citation.pack(side="left",padx=(4,0))
         if model.get("reference_note"):self._tip.bind(citation,model["reference_note"])
@@ -645,47 +654,54 @@ class XRayCountsRuntime:
             self._button(actions,"Open Project...",self._open_project,"Open an existing X-ray project.").pack(side="left",padx=6)
             return
 
+        from app.ui.project_layout import project_columns,bind_settings_navigation,wrapped_label
         record=self.project.active_scheme_record();scheme=record["scheme"];model=_scheme_display_model(scheme,record.get("note") or "Project scheme")
         content=ttk.Frame(parent);content.pack(fill="both",expand=True)
-        content.columnconfigure(0,weight=1,uniform="project_cards");content.columnconfigure(1,weight=1,uniform="project_cards");content.rowconfigure(3,weight=1)
+        content.columnconfigure(0,weight=1);content.rowconfigure(1,weight=1)
 
         # Project identity is intentionally separate from source/schema settings.
-        project_box=ttk.LabelFrame(content,text="Current project",padding=14,style="ProjectIdentity.TLabelframe",borderwidth=2,relief="groove");project_box.grid(row=0,column=0,columnspan=2,sticky="ew",padx=4,pady=(4,12))
-        ttk.Label(project_box,text=self.project.name,style="SectionTitle.TLabel").pack(anchor="w")
-        ttk.Label(project_box,text=str(self.project.root),style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,8))
-        actions=ttk.Frame(project_box);actions.pack(anchor="w")
+        project_box=ttk.LabelFrame(content,text="Current project",padding=(10,6),style="ProjectIdentity.TLabelframe",borderwidth=2,relief="groove");project_box.grid(row=0,column=0,columnspan=2,sticky="ew",pady=(0,10))
+        project_box.columnconfigure(0,weight=1)
+        identity=ttk.Frame(project_box);identity.grid(row=0,column=0,sticky="ew",padx=(0,12))
+        wrapped_label(identity,self.project.name,style="SectionTitle.TLabel")
+        wrapped_label(identity,self.project.root)
+        actions=ttk.Frame(project_box);actions.grid(row=0,column=1,sticky="e")
         self._button(actions,"Open",self._open_project,"Open another X-ray project in this same MorphoLabel window.").pack(side="left")
         self._button(actions,"New project...",self._new_project,"Create another X-ray project.").pack(side="left",padx=(6,0))
+        body=ttk.Frame(content);body.grid(row=1,column=0,columnspan=2,sticky="nsew")
+        settings,catalog,canvas=project_columns(body)
 
-        source_box=ttk.LabelFrame(content,text="Source X-rays",padding=10);source_box.grid(row=1,column=0,sticky="nsew",padx=(4,6),pady=(0,7))
+        source_box=ttk.LabelFrame(settings,text="Source X-rays",padding=10);source_box.pack(fill="x",pady=(0,8))
         storage=self.project.storage_summary();policy=self.project.orientation_policy
         ttk.Label(source_box,text=f"{len(self.project.source_images())} indexed images",style="SectionTitle.TLabel").pack(anchor="w")
         storage_text="Self-contained project source" if storage["self_contained"] else "Legacy external source"
         ttk.Label(source_box,text=f"{storage_text} · {storage['source_bytes']/1024/1024:.1f} MB",style="Muted.TLabel").pack(anchor="w",pady=(2,0))
-        ttk.Label(source_box,text=str(self.project.source),style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,4))
+        wrapped_label(source_box,self.project.source)
         head={"left":"left","right":"right","none":"not standardized"}[policy["head"]];bottom={"down":"down","up":"up","none":"not standardized"}[policy["bottom"]]
-        ttk.Label(source_box,text=f"Canonical view: head {head} · bottom {bottom}",style="Muted.TLabel").pack(anchor="w",pady=(0,8))
-        source_actions=ttk.Frame(source_box);source_actions.pack(anchor="w")
+        wrapped_label(source_box,f"Canonical view: head {head} · bottom {bottom}")
+        source_actions=FlowRow(source_box);source_actions.pack(fill="x")
         self._button(source_actions,"Rescan for images",self._rescan_source,"Scan the project source X-ray folder for new images without changing existing project work.").pack(side="left")
         if not storage["self_contained"]:
             self._button(source_actions,"Make self-contained…",self._make_self_contained,"Keep a local copy of the source X-rays so this project can open without the original folder.").pack(side="left",padx=(6,0))
         if storage["cache_bytes"]:
             self._button(source_actions,"Clear reproducible cache",self._compact_project,"Free space by removing temporary files. Images, annotations and trained models are kept.").pack(side="left",padx=(6,0))
 
-        scheme_box=ttk.LabelFrame(content,text="Trait definition",padding=10);scheme_box.grid(row=1,column=1,sticky="nsew",padx=(6,4),pady=(0,7))
-        ttk.Label(scheme_box,text=model["name"],style="SectionTitle.TLabel").pack(anchor="w")
-        if model["description"]:ttk.Label(scheme_box,text=model["description"],style="Muted.TLabel",wraplength=1250).pack(anchor="w",pady=(2,0))
+        scheme_box=ttk.LabelFrame(settings,text="Trait definition",padding=10);scheme_box.pack(fill="x",pady=(0,8))
+        wrapped_label(scheme_box,model["name"],style="SectionTitle.TLabel")
+        if model["description"]:wrapped_label(scheme_box,model["description"])
         ttk.Label(scheme_box,text=f"{model['trait_count']} traits",style="Muted.TLabel").pack(anchor="w",pady=(2,0))
-        self._render_reference(scheme_box,model,1200)
+        self._render_reference(scheme_box,model,250,stacked=True)
         actions=ttk.Frame(scheme_box);actions.pack(anchor="w",pady=(8,0))
         self._button(actions,"Traits...",self._choose_scheme,"Choose what to measure, how to count it, and which marks are used on the X-ray.",True).pack(side="left")
 
         from app.ui.model_transfer import model_transfer_card
-        for column,(kind,title,active) in enumerate((("crop","X-ray Crop model",self.project.active_crop_model()),("structure","X-ray Structure model",self.project.active_structure_model()))):
+        for kind,title,active in (("crop","X-ray Crop model",self.project.active_crop_model()),("structure","X-ray Structure model",self.project.active_structure_model())):
             models=self.project.crop_models() if kind=="crop" else self.project.structure_models()
-            card=model_transfer_card(content,title,active,getattr(self,f"_menu_import_{kind}_ai"),getattr(self,f"_menu_export_{kind}_ai"),models=models)
-            card.grid(row=2,column=column,sticky="ew",padx=4,pady=(0,7))
-        traits=ttk.LabelFrame(content,text="Traits",padding=8);traits.grid(row=3,column=0,columnspan=2,sticky="nsew",padx=4)
+            card=model_transfer_card(settings,title,active,getattr(self,f"_menu_import_{kind}_ai"),getattr(self,f"_menu_export_{kind}_ai"),models=models)
+            card.pack(fill="x",pady=(0,8))
+        bind_settings_navigation(settings,canvas)
+        catalog.columnconfigure(0,weight=1);catalog.rowconfigure(0,weight=1)
+        traits=ttk.LabelFrame(catalog,text="Traits",padding=8);traits.grid(row=0,column=0,sticky="nsew")
         traits.columnconfigure(0,weight=1);traits.rowconfigure(1,weight=1)
         if not scheme.get("traits"):
             ttk.Label(traits,text="No traits are defined in the active scheme.",style="SectionTitle.TLabel").grid(row=0,column=0,sticky="w")
@@ -707,6 +723,8 @@ class XRayCountsRuntime:
         table.tag_configure("alternate",background="#f7f7f7")
         self._tip.bind(table,"Each row shows the biological trait, how it is obtained, and which image annotations it requires.")
         scroll=ttk.Scrollbar(traits,orient="vertical",command=table.yview);table.configure(yscrollcommand=scroll.set)
+        horizontal=ttk.Scrollbar(traits,orient="horizontal",command=table.xview);horizontal.grid(row=2,column=0,sticky="ew")
+        table.configure(xscrollcommand=horizontal.set)
         table.grid(row=1,column=0,sticky="nsew");scroll.grid(row=1,column=1,sticky="ns")
 
     def _render_crops(self,parent):

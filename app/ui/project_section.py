@@ -30,16 +30,8 @@ def sorted_project_samples(rows, column="sample", descending=False):
 
 class ProjectSection(SectionView):
  def render(self):
-  viewport=self.frame();viewport.pack(fill="both",expand=True)
-  canvas=tk.Canvas(viewport,highlightthickness=0,background=ttk.Style(viewport).lookup("TFrame","background") or "#f0f0f0")
-  scroll=ttk.Scrollbar(viewport,orient="vertical",command=canvas.yview)
-  canvas.configure(yscrollcommand=scroll.set);canvas.pack(side="left",fill="both",expand=True);scroll.pack(side="right",fill="y")
-  host=ttk.Frame(canvas,padding=(18,12));window=canvas.create_window((0,0),window=host,anchor="nw")
-  self.scroll_canvas=canvas
-  def layout(_event=None):
-   canvas.itemconfigure(window,width=max(1,canvas.winfo_width()),height=max(host.winfo_reqheight(),canvas.winfo_height()))
-   canvas.configure(scrollregion=canvas.bbox("all"))
-  canvas.bind("<Configure>",layout);host.bind("<Configure>",layout)
+  host=self.frame(padding=(18,12));host.pack(fill="both",expand=True)
+  from .design import FlowRow
   project=self.context.project
   if not project:
    ttk.Label(host,text="Project",style="PageTitle.TLabel").pack(anchor="w")
@@ -51,43 +43,43 @@ class ProjectSection(SectionView):
 
   ttk.Label(host,text="Project setup",style="PageTitle.TLabel").pack(anchor="w")
   ttk.Label(host,text="Project, source photos, landmark scheme and image-preparation workflow.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,10))
+  from .project_layout import project_columns,bind_settings_navigation,wrapped_label
   content=ttk.Frame(host);content.pack(fill="both",expand=True)
-  content.columnconfigure(0,weight=1,uniform="project_cards");content.columnconfigure(1,weight=1,uniform="project_cards");content.rowconfigure(4,weight=1)
+  content.columnconfigure(0,weight=1);content.rowconfigure(1,weight=1)
 
   # Project identity is deliberately a separate full-width strip. Opening or
   # creating a project changes the whole workspace; the cards below edit that
   # project's settings and therefore must not look like peer actions.
-  def path_label(parent,text,style="Muted.TLabel"):
-   label=ttk.Label(parent,text=str(text),style=style,wraplength=320)
-   label.pack(anchor="w",fill="x",pady=(2,8))
-   label.bind("<Configure>",lambda event:label.configure(wraplength=max(120,event.width)))
-   return label
-  project_box=ttk.LabelFrame(content,text="Current project",padding=14,style="ProjectIdentity.TLabelframe",borderwidth=2,relief="groove");project_box.grid(row=0,column=0,columnspan=2,sticky="ew",padx=4,pady=(4,12))
-  path_label(project_box,project.config.get("name",project.root.name),"SectionTitle.TLabel")
-  path_label(project_box,project.root)
-  actions=ttk.Frame(project_box);actions.pack(anchor="w")
+  path_label=wrapped_label
+  project_box=ttk.LabelFrame(content,text="Current project",padding=(10,6),style="ProjectIdentity.TLabelframe",borderwidth=2,relief="groove");project_box.grid(row=0,column=0,columnspan=2,sticky="ew",pady=(0,10))
+  project_box.columnconfigure(0,weight=1)
+  identity=ttk.Frame(project_box);identity.grid(row=0,column=0,sticky="ew",padx=(0,12))
+  path_label(identity,project.config.get("name",project.root.name),"SectionTitle.TLabel")
+  path_label(identity,project.root)
+  actions=ttk.Frame(project_box);actions.grid(row=0,column=1,sticky="e")
   self.button(actions,"Open",self.shell.open_project,"Open another project in this same MorphoLabel window.").pack(side="left")
   self.button(actions,"New project...",self.shell.new_project,"Create another MorphoLabel project.").pack(side="left",padx=(6,0))
+  body=ttk.Frame(content);body.grid(row=1,column=0,columnspan=2,sticky="nsew")
+  settings,catalog,canvas=project_columns(body);self.scroll_canvas=canvas
 
-  source=ttk.LabelFrame(content,text="Source photos",padding=10);source.grid(row=1,column=0,sticky="nsew",padx=(4,6),pady=(0,7))
+  source=ttk.LabelFrame(settings,text="Source photos",padding=10);source.pack(fill="x",pady=(0,8))
   ttk.Label(source,text="Photo folder",style="SectionTitle.TLabel").pack(anchor="w")
   path_label(source,project.source_root)
-  actions=ttk.Frame(source);actions.pack(anchor="w")
+  actions=FlowRow(source);actions.pack(fill="x")
   self.button(actions,"Change folder...",self.shell.relink_source,"Choose the photo folder and safely match it to the existing catalog.").pack(side="left")
   self.button(actions,"Rescan for images",self.shell.add_samples,"Scan the source photo folder for new samples/images. Existing project work is preserved.").pack(side="left",padx=(6,0))
 
-  scheme=ttk.LabelFrame(content,text="Landmark scheme",padding=10);scheme.grid(row=1,column=1,sticky="nsew",padx=(6,4),pady=(0,7))
+  scheme=ttk.LabelFrame(settings,text="Landmark scheme",padding=10);scheme.pack(fill="x",pady=(0,8))
   defined=bool(project.schema)
   groups=sorted({str(item.get("category") or item.get("role") or item.get("morphometry_role") or "") for item in project.schema if item.get("category") or item.get("role") or item.get("morphometry_role")})
   if defined:
    ttk.Label(scheme,text=f"{len(project.schema)} landmarks",style="SectionTitle.TLabel").pack(anchor="w")
-   ttk.Label(scheme,text=f"{project.schema_path.name} · {', '.join(groups) or 'No groups'}",style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,8))
+   path_label(scheme,f"{project.schema_path.name} · {', '.join(groups) or 'No groups'}")
   else:
    ttk.Label(scheme,text="Landmark scheme needs attention",style="SectionTitle.TLabel").pack(anchor="w")
-   ttk.Label(scheme,text=project.schema_error or "No landmark scheme is defined yet.",style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,8))
+   path_label(scheme,project.schema_error or "No landmark scheme is defined yet.")
   self.button(scheme,"Edit scheme..." if defined else "Create scheme...",self.shell.open_schema,"Open the active project landmark scheme in the established editor.").pack(anchor="w")
   definitions=ttk.LabelFrame(scheme,text="Measurement definitions",padding=6);definitions.pack(fill="x",pady=(8,0))
-  from .design import FlowRow
   actions=FlowRow(definitions);actions.pack(fill="x")
   state="normal" if defined else "disabled"
   self.button(actions,"+ Add",self.shell.add_measurement,"Add a distance between two landmarks.",state=state).pack(side="left")
@@ -95,9 +87,9 @@ class ProjectSection(SectionView):
   self.button(actions,"Import…",self.shell.import_measurement_definitions,"Apply measurement definitions by landmark abbreviation.",state=state).pack(side="left",padx=4)
   self.button(actions,"Save…",self.shell.export_measurement_definitions,"Save measurement definitions as a portable CSV.",state=state).pack(side="left")
 
-  workflow=ttk.LabelFrame(content,text="Image preparation",padding=10);workflow.grid(row=2,column=0,columnspan=2,sticky="ew",padx=4,pady=(0,7))
+  workflow=ttk.LabelFrame(source,text="Image preparation",padding=10);workflow.pack(fill="x",pady=(8,0))
   ttk.Label(workflow,text="Before landmarks",style="SectionTitle.TLabel").pack(anchor="w")
-  ttk.Label(workflow,text="Standardize each specimen with Crop, or go directly to landmarks.",style="Muted.TLabel",wraplength=650).pack(anchor="w",pady=(2,6))
+  path_label(workflow,"Standardize each specimen with Crop, or go directly to landmarks.")
   crop=tk.BooleanVar(value=self.context.crop_enabled())
   def changed(): self.context.set_crop_enabled(crop.get());self.shell.render()
   choices=ttk.Frame(workflow);choices.pack(anchor="w")
@@ -108,14 +100,12 @@ class ProjectSection(SectionView):
 
   sample_rows=project_sample_rows(project,self.context.rows)
   from .model_transfer import model_transfer_card
-  for column,(kind,title) in enumerate((("crop","Crop model"),("landmark","Landmark model"))):
+  for kind,title in (("crop","Crop model"),("landmark","Landmark model")):
    models=project.models(kind);active=next((model for model in models if model.get("active")),None)
-   card=model_transfer_card(content,title,active,lambda k=kind:self.shell._import_model(k),lambda k=kind:self.shell._export_model(k),models=models)
-   card.grid(row=3,column=column,sticky="ew",padx=4,pady=(0,7))
-  lower=ttk.Frame(content);lower.grid(row=4,column=0,columnspan=2,sticky="nsew",padx=4);lower.rowconfigure(0,weight=1)
-  lower.columnconfigure(0,weight=4,uniform="project_lower");lower.columnconfigure(1,weight=1,uniform="project_lower")
-
-  samples=ttk.LabelFrame(lower,text="Samples",padding=8);samples.grid(row=0,column=0,sticky="nsew",padx=(0,7))
+   card=model_transfer_card(settings,title,active,lambda k=kind:self.shell._import_model(k),lambda k=kind:self.shell._export_model(k),models=models)
+   card.pack(fill="x",pady=(0,8))
+  lower=ttk.Frame(catalog);lower.pack(fill="both",expand=True);lower.rowconfigure(1,weight=1);lower.columnconfigure(0,weight=1)
+  samples=ttk.LabelFrame(lower,text="Samples",padding=8);samples.grid(row=1,column=0,sticky="nsew")
   samples.rowconfigure(1,weight=1);samples.columnconfigure(0,weight=1)
   ttk.Label(samples,text=f"{len(sample_rows)} samples · click a column title to sort",style="Muted.TLabel").grid(row=0,column=0,columnspan=2,sticky="w",pady=(0,5))
   columns=("sample","images","calibrated");table=ttk.Treeview(samples,columns=columns,show="headings",selectmode="browse",height=6)
@@ -138,33 +128,12 @@ class ProjectSection(SectionView):
   scroll=ttk.Scrollbar(samples,orient="vertical",command=table.yview);table.configure(yscrollcommand=scroll.set)
   table.grid(row=1,column=0,sticky="nsew");scroll.grid(row=1,column=1,sticky="ns");populate()
 
-  details=ttk.Frame(lower);details.grid(row=0,column=1,sticky="nsew");details.columnconfigure(0,weight=1)
-  overview=ttk.LabelFrame(details,text="Project overview",padding=(12,10));overview.grid(row=0,column=0,sticky="ew")
-  overview.columnconfigure(0,weight=1);overview.columnconfigure(1,weight=1)
+  overview=ttk.LabelFrame(lower,text="Project overview",padding=(8,4));overview.grid(row=0,column=0,sticky="ew",pady=(0,8))
   calibrated=sum(1 for item in sample_rows if item["calibrated"])
   metrics=((str(len(self.context.rows)),"Images"),(str(len(sample_rows)),"Samples"),(f"{calibrated}/{len(sample_rows)}","Calibrated"),(str(len(project.schema)),"Landmarks"))
   for index,(value,label) in enumerate(metrics):
-   block=ttk.Frame(overview,padding=(4,3));block.grid(row=index//2,column=index%2,sticky="nsew",padx=(0 if index%2==0 else 8,0),pady=(0,8))
-   ttk.Label(block,text=value,font=("Segoe UI",17,"bold")).pack(anchor="w")
+   overview.columnconfigure(index,weight=1)
+   block=ttk.Frame(overview,padding=(4,2));block.grid(row=0,column=index,sticky="ew")
+   ttk.Label(block,text=value,font=("Segoe UI",13,"bold")).pack(anchor="w")
    ttk.Label(block,text=label,style="Muted.TLabel").pack(anchor="w")
-
-  def wheel(event):
-   canvas.yview_scroll(-1 if event.delta>0 else 1,"units");return "break"
-  def reveal_widget(widget):
-   top=widget.winfo_rooty()-host.winfo_rooty();bottom=top+widget.winfo_height()
-   visible=canvas.canvasy(0);height=canvas.winfo_height();total=max(1,host.winfo_height())
-   if top<visible:canvas.yview_moveto(top/total)
-   elif bottom>visible+height:canvas.yview_moveto((bottom-height)/total)
-  def reveal(event):reveal_widget(event.widget)
-  def resized(event):
-   if event.widget.focus_get() is event.widget:reveal(event)
-  def bind_navigation(widget):
-   # Keep the sample table's own wheel behavior and release all callbacks with
-   # this view, without adding bindings to the durable application root.
-   if not isinstance(widget,(ttk.Treeview,ttk.Scrollbar)):
-    widget.bind("<MouseWheel>",wheel,add="+")
-   widget.bind("<FocusIn>",reveal,add="+")
-   widget.bind("<Configure>",resized,add="+")
-   for child in widget.winfo_children():bind_navigation(child)
-  bind_navigation(host)
-
+  bind_settings_navigation(settings,canvas)
