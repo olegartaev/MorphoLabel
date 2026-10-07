@@ -48,7 +48,8 @@ class HardwareProfile:
 
 
 def _run(command, *, input_text=None, timeout=8):
-    return subprocess.run(command, input=input_text, text=True, capture_output=True, check=False, timeout=timeout, **hidden_window_kwargs())
+    working_dir = str(Path(command[0]).resolve().parent) if len(command)>2 and command[2]=="info" else None
+    return subprocess.run(command, cwd=working_dir, input=input_text, text=True, capture_output=True, check=False, timeout=timeout, **hidden_window_kwargs())
 
 
 def _ram_bytes():

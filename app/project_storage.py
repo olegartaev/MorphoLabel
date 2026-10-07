@@ -200,11 +200,8 @@ WHERE provenance='manual'
  def get_ui_state(self,key,default=None):
   with self.transaction() as c:r=c.execute("SELECT value FROM project WHERE key=?",("ui."+key,)).fetchone()
   if not r:return default
-  try:return json.loads(r[0])
-  except (json.JSONDecodeError,TypeError):
-   import logging
-   logging.getLogger(__name__).warning("Ignoring malformed UI state: ui.%s",key)
-   return default
+  from .ui_state import decode_ui_state
+  return decode_ui_state(key,r[0],default,__name__)
  def set_ui_state(self,key,value):
   with self.transaction() as c:c.execute("INSERT INTO project(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",("ui."+key,json.dumps(value)))
  def sync_results(self):
@@ -426,11 +423,12 @@ CREATE TABLE IF NOT EXISTS qc (qc_id INTEGER PRIMARY KEY,image_id TEXT,kind TEXT
      skipped+=1;continue
     x=float(point["x"]);y=float(point["y"])
     same=bool(old) and old.get("state")!="missing" and old.get("x_standardized") is not None and old.get("y_standardized") is not None and float(old["x_standardized"])==x and float(old["y_standardized"])==y
-    reviewed=int(bool(old.get("reviewed"))) if same else 0
-    scientific_changed=scientific_changed or not same
+    same_observation=same and old.get("provenance")=="machine" and old.get("model_id")==model_id and old.get("prediction_run_id")==prediction_run_id
+    reviewed=int(bool(old.get("reviewed"))) if same_observation else 0
+    scientific_changed=scientific_changed or not same_observation
     stored_id=int(old["landmark_id"]) if old else self._persistent_landmark_id(c,abbr)
     c.execute('''INSERT INTO landmarks(image_id,landmark_id,landmark_abbr,x_standardized,y_standardized,state,provenance,model_id,predicted_x,predicted_y,confidence,prediction_run_id,reviewed,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(image_id,landmark_id) DO UPDATE SET landmark_abbr=excluded.landmark_abbr,x_standardized=excluded.x_standardized,y_standardized=excluded.y_standardized,state=excluded.state,provenance=excluded.provenance,model_id=excluded.model_id,predicted_x=excluded.predicted_x,predicted_y=excluded.predicted_y,confidence=excluded.confidence,prediction_run_id=excluded.prediction_run_id,reviewed=excluded.reviewed,updated_at=excluded.updated_at''',(image_id,stored_id,abbr,x,y,"auto","machine",model_id,x,y,point.get("confidence"),prediction_run_id,reviewed,timestamp))
-    if not same:c.execute("INSERT INTO corrections(image_id,landmark_id,landmark_abbr,kind,previous_json,accepted_json,created_at) VALUES (?,?,?,?,?,?,?)",(image_id,stored_id,abbr,"landmark",json.dumps(old or None),json.dumps({"landmark_abbr":abbr,"x":x,"y":y,"state":"auto","provenance":"machine"}),timestamp))
+    if not same_observation:c.execute("INSERT INTO corrections(image_id,landmark_id,landmark_abbr,kind,previous_json,accepted_json,created_at) VALUES (?,?,?,?,?,?,?)",(image_id,stored_id,abbr,"landmark",json.dumps(old or None),json.dumps({"landmark_abbr":abbr,"x":x,"y":y,"state":"auto","provenance":"machine","model_id":model_id,"prediction_run_id":prediction_run_id}),timestamp))
     saved+=1
    if scientific_changed:c.execute("INSERT INTO image_review(image_id,human_verified,updated_at) VALUES (?,?,?) ON CONFLICT(image_id) DO UPDATE SET human_verified=0,updated_at=excluded.updated_at",(image_id,0,timestamp))
   return saved,skipped
@@ -1049,9 +1047,9 @@ WHERE o.image_id IN ({marks})
   active={str(row["abbr"]) for row in self.schema}
   return [dict(row) for row in connection.execute("SELECT * FROM landmarks WHERE image_id=?",(image_id,)) if str(row["landmark_abbr"]) in active and (row["provenance"]=="machine" or row["model_id"] is not None or row["prediction_run_id"] is not None)]
  def landmark_ai_review_ready(self,image_id):
+  return bool(self.annotation_status(image_id)["verified"])
+ def _landmark_ai_confirmation_matches(self,image_id):
   """True only when the current AI-origin final state has an explicit matching human confirmation."""
-  status=self.annotation_status(image_id)
-  if not status["complete"]: return False
   identity=landmark_schema_identity(self.schema);digest=schema_hash(self.schema_path)
   with self.transaction() as c:
    ai_rows=self._active_ai_rows(c,image_id)
@@ -1091,9 +1089,8 @@ LEFT JOIN image_review r ON r.image_id=l.image_id
 WHERE COALESCE(i.active,1)=1
   AND COALESCE(i.excluded,0)=0
   AND l.landmark_abbr IN ({placeholders})
-  AND COALESCE(r.human_verified,0)=0
 ORDER BY l.image_id""",active).fetchall()
-  return tuple(str(row["image_id"]) for row in rows)
+  return tuple(str(row["image_id"]) for row in rows if not self.annotation_status(row["image_id"])["verified"])
 
  def landmark_prediction_locked(self,image_id):
   """Lock only the currently valid human-confirmed landmark state.

@@ -94,9 +94,11 @@ def ensure_control_set(project,state=None,create_missing=True):
  return save_state(project,state)
 
 def refresh_stage(project,state=None,create_missing=True):
- state=repair_excluded_stage_members(project,ensure_control_set(project,load_state(project) if state is None else state,create_missing))
+ state=load_state(project) if state is None else state
+ # A persisted first annotation batch does not depend on a repeatability holdout.
+ state=repair_excluded_stage_members(project,ensure_control_set(project,state,create_missing and not bool(state["initial_image_ids"])))
  controls=tuple(state["control_image_ids"])
- if not controls:state["stage"]="CONTROL_SET";return save_state(project,state)
+ if not controls and not state["initial_image_ids"]:state["stage"]="CONTROL_SET";return save_state(project,state)
  if _verified(project,controls)<len(controls):state["stage"]="CONTROL_SET";return save_state(project,state)
  initial=tuple(state["initial_image_ids"])
  if not initial:

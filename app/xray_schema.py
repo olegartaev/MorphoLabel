@@ -40,15 +40,19 @@ def blank_scheme(name="Untitled X-ray trait scheme"):
 
 
 def normalize_scheme(scheme):
+    if not isinstance(scheme,dict):raise ValueError("X-ray scheme must be an object")
     value=deepcopy(scheme)
     if int(value.get("format_version",0)) != SCHEMA_FORMAT_VERSION:
         raise ValueError("Unsupported X-ray trait scheme format")
     value.setdefault("reference",{});value.setdefault("description","");value.setdefault("structures",[]);value.setdefault("traits",[])
+    for key in ("structures","traits"):
+        if not isinstance(value[key],list) or not all(isinstance(item,dict) for item in value[key]):raise ValueError(f"Scheme {key} must be a list of objects")
     structure_ids=set();hotkeys=set()
     for index,structure in enumerate(value["structures"]):
         ident=str(structure.get("id","")).strip()
         if not ident or ident in structure_ids:raise ValueError("Every structure needs a unique id")
         structure_ids.add(ident)
+        structure["name"]=str(structure.get("name") or structure.get("abbr") or ident)
         structure.setdefault("annotation","point");structure.setdefault("repeated",False);structure.setdefault("required",True)
         structure.setdefault("reuse_from",[])
         structure["reuse_from"]=[str(item) for item in (structure.get("reuse_from") or ()) if str(item)]
@@ -71,8 +75,16 @@ def normalize_scheme(scheme):
         ident=str(trait.get("id","")).strip()
         if not ident or ident in trait_ids:raise ValueError("Every trait needs a unique id")
         trait_ids.add(ident)
+        trait["name"]=str(trait.get("name") or trait.get("abbr") or ident)
         method=trait.get("method")
         if method not in METHOD_BY_ID:raise ValueError(f"Unsupported trait method: {method}")
+        ids=trait.get("structures",[])
+        if not isinstance(ids,list) or not all(isinstance(item,str) for item in ids):raise ValueError(f"Trait {ident} structures must be a list of IDs")
+        if method!="derived" and not ids:raise ValueError(f"Trait {ident} requires structures")
+        rule=trait.get("rule",{})
+        if not isinstance(rule,dict):raise ValueError(f"Trait {ident} rule must be an object")
+        dependencies=rule.get("depends_on",[])
+        if not isinstance(dependencies,list) or not all(isinstance(item,str) for item in dependencies):raise ValueError(f"Trait {ident} dependencies must be a list of IDs")
         missing=set(trait.get("structures",()))-structure_ids
         if missing:raise ValueError(f"Trait {ident} refers to missing structures: {sorted(missing)}")
     for trait in value["traits"]:

@@ -675,8 +675,8 @@ class XRayProject:
     def get_ui_state(self,key,default=None):
         with _db_connection(self.db_path) as c:row=c.execute("SELECT payload_json FROM ui_state WHERE key=?",(str(key),)).fetchone()
         if row is None:return {} if default is None else default
-        try:return json.loads(row[0])
-        except Exception:return {} if default is None else default
+        from .ui_state import decode_ui_state
+        return decode_ui_state(key,row[0],default,__name__)
 
     def set_ui_state(self,key,value):
         with _db_connection(self.db_path) as c:

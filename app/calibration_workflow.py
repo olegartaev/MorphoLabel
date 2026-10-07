@@ -9,8 +9,8 @@ from .project_runtime import scoped_project
 from .ui.dialogs import center,info
 
 class CalibrationWorkflow(tk.Toplevel):
- def __init__(self,parent,project):
-  super().__init__(parent);self.parent=parent;self.project=project;self.title("Sample calibration");self.geometry("1180x820");self.minsize(900,620);self.resizable(True,True)
+ def __init__(self,parent,project,on_saved=None):
+  super().__init__(parent);self.parent=parent;self.project=project;self.on_saved=on_saved;self.title("Sample calibration");self.geometry("1180x820");self.minsize(900,620);self.resizable(True,True)
   self.rows=[r for r in project.catalog_rows() if not r.get("excluded")];self.localities=[]
   for row in self.rows:
    key=row.get("locality") or row.get("sample_id")
@@ -77,14 +77,15 @@ class CalibrationWorkflow(tk.Toplevel):
  def row(self):return self.by_locality[self.locality()][self.image_index]
  def dirty(self):return self.points!=self.saved_points or self.mm.get()!=getattr(self,"saved_mm","10.0")
  def ready_for(self,image_id):return bool(image_id and self.requested_image_id==self.displayed_image_id==image_id)
- def load(self):
+ def load(self,use_saved_reference=True):
   self._load_token+=1;token=self._load_token;self._pending_confirm=None
   self.points=[];self.image=self.photo=None;self.requested_image_id=None;self.displayed_image_id=None;self.saved_points=[];self.zoom=1.;self.offset=(0,0);self._positioned=False;row=self.row();saved=self.project.locality_calibration(self.locality());self.saved_mm="10.0"
   if saved:
    try:
-    data=__import__("json").loads(saved.get("calibration_data") or "{}") if isinstance(saved.get("calibration_data"),str) else saved.get("calibration_data") or {};self.points=[tuple(p) for p in data.get("points_original",[])];self.saved_points=list(self.points);self.saved_mm=str(data.get("physical_length_mm",10.0));self.mm.set(self.saved_mm);ref=saved.get("calibration_reference_image_id")
+    data=__import__("json").loads(saved.get("calibration_data") or "{}") if isinstance(saved.get("calibration_data"),str) else saved.get("calibration_data") or {};self.saved_mm=str(data.get("physical_length_mm",10.0));self.mm.set(self.saved_mm);ref=saved.get("calibration_reference_image_id")
     for i,item in enumerate(self.by_locality[self.locality()]):
-     if item.get("image_id")==ref:self.image_index=i;row=item;break
+     if use_saved_reference and item.get("image_id")==ref:self.image_index=i;row=item;break
+    if row.get("image_id")==ref:self.points=[tuple(p) for p in data.get("points_original",[])];self.saved_points=list(self.points)
    except Exception:pass
   else:self.mm.set(getattr(self,"last_mm","10.0"))
   image_id=row['image_id'];self.requested_image_id=image_id;source=self.project.image_path(image_id);target=self.project.cache_root/"developed"/f"{row['image_id']}.png";self.title_text.config(text=f"Sample: {self.locality()}")
@@ -142,7 +143,7 @@ class CalibrationWorkflow(tk.Toplevel):
  def reset(self):self.points=[];self.render()
  def other_image(self):
   if self.dirty() and not messagebox.askyesno("Calibration","Discard unconfirmed calibration changes?",parent=self):return
-  self.last_mm=self.mm.get();self.image_index=(self.image_index+1)%len(self.by_locality[self.locality()]);self.load()
+  self.last_mm=self.mm.get();self.image_index=(self.image_index+1)%len(self.by_locality[self.locality()]);self.load(use_saved_reference=False)
  def navigate_locality(self,step):
   if self.dirty() and not messagebox.askyesno("Calibration","Discard unconfirmed calibration changes?",parent=self):return
   self.last_mm=self.mm.get();self.index=(self.index+step)%len(self.localities);self.image_index=0;self.load()
@@ -154,7 +155,9 @@ class CalibrationWorkflow(tk.Toplevel):
   if distance<=0:messagebox.showwarning("Calibration","The calibration points must be different.",parent=self);return False
   row=self.row()
   if not self.ready_for(row['image_id']):self._pending_confirm=(self.requested_image_id,self._load_token,False);self.progress.config(text='Preparing image…');return False
-  row={'image_id':self.displayed_image_id};data={"physical_length_mm":mm,"points_original":[list(p) for p in self.points],"pixels_per_mm":distance/mm,"mm_per_pixel":mm/distance,"reference_image_id":row["image_id"],"state":"manual"};self.project.set_locality_calibration(self.locality(),row["image_id"],distance/mm,"mm",data);self.last_mm=self.mm.get();self.saved_points=list(self.points);self.saved_mm=self.mm.get();self.progress.config(text=f"{self.index+1} / {len(self.localities)} samples   ·   Calibrated {sum(bool(self.project.locality_calibration(x)) for x in self.localities)} / {len(self.localities)}");self.render();return True
+  row={'image_id':self.displayed_image_id};data={"physical_length_mm":mm,"points_original":[list(p) for p in self.points],"pixels_per_mm":distance/mm,"mm_per_pixel":mm/distance,"reference_image_id":row["image_id"],"state":"manual"};self.project.set_locality_calibration(self.locality(),row["image_id"],distance/mm,"mm",data);self.last_mm=self.mm.get();self.saved_points=list(self.points);self.saved_mm=self.mm.get();self.progress.config(text=f"{self.index+1} / {len(self.localities)} samples   ·   Calibrated {sum(bool(self.project.locality_calibration(x)) for x in self.localities)} / {len(self.localities)}");self.render()
+  if self.on_saved:self.on_saved()
+  return True
  def confirm(self):
   if not self.ready_for(self.requested_image_id):self._pending_confirm=(self.requested_image_id,self._load_token,False);self.progress.config(text="Preparing image…");return
   self._save_current()

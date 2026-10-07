@@ -80,7 +80,7 @@ def validate_ai_runtime(runtime_python, runner_path, *, require_cuda=False, time
     runtime_python, runner_path = Path(runtime_python), Path(runner_path)
     if not runtime_python.is_file() or not runner_path.is_file():
         raise RuntimeError(f"AI runtime files are unavailable: {runtime_python}, {runner_path}")
-    result = subprocess.run([str(runtime_python), str(runner_path), "info"], input="{}", text=True, capture_output=True, check=False, timeout=timeout, **hidden_window_kwargs())
+    result = subprocess.run([str(runtime_python), str(runner_path), "info"], input="{}", text=True, capture_output=True, check=False, timeout=timeout, cwd=str(runtime_python.resolve().parent), **hidden_window_kwargs())
     if result.returncode:
         raise RuntimeError(f"AI runtime info failed (return code {result.returncode}): {result.stderr}")
     try:

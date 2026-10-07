@@ -1,7 +1,7 @@
 """Thin GUI-independent coordinator over the existing immutable RTMPose pipeline."""
 from __future__ import annotations
 
-import re
+import re, json
 from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -109,9 +109,10 @@ def _architecture_tuning_identity(backend, landmark_count):
   config_digest=hashlib.sha256("|".join(fields).encode("utf-8")).hexdigest()[:16]
  except OSError: config_digest=config.name
  return f"rtmpose_arch_v2:{config.name}:{config_digest}:landmarks={int(landmark_count)}"
-def prepare_landmark_training(project, *, parent_model_id=None, seed=None, experimental_photometric_augmentation=False, batch_size=None, epochs=210, progress_callback=None):
+def prepare_landmark_training(project, *, parent_model_id=None, seed=None, experimental_photometric_augmentation=False, batch_size=None, epochs=210, progress_callback=None, cancel_event=None):
     """Read-only preflight; no dataset/model artifact is created until Start."""
     def progress(stage, detail):
+        if cancel_event is not None and cancel_event.is_set():raise RuntimeError("Landmark training preparation cancelled")
         if progress_callback:
             progress_callback(stage, detail)
     progress("MODEL", "Resolving selected training parent...")
@@ -124,6 +125,7 @@ def prepare_landmark_training(project, *, parent_model_id=None, seed=None, exper
         bootstrap = resolve_landmark_bootstrap(project, progress_callback=progress)
         backend = RTMPoseBackend(RTMPoseModelSpec("bootstrap", schema_hash(project.schema_path), bootstrap.config_path, bootstrap.checkpoint_path, bootstrap.input_size))
         progress("MODEL", "First-model bootstrap resolved.")
+    backend.cancel_event = cancel_event
     import time
     timings = {}
     progress("TRAINING IMAGES", "Scanning eligible human-verified images...")
@@ -222,13 +224,14 @@ def prepare_landmark_training(project, *, parent_model_id=None, seed=None, exper
     progress("AI RUNTIME", "Checking Python, runner, torch, MMPose/MMEngine and CUDA...")
     started = time.perf_counter()
     architecture = _architecture_tuning_identity(backend, len(project.schema))
-    selected = dict(auto_performance_config(project, workload="landmark_training", model=architecture, input_size=tuple(backend.spec.input_size), training=True, hardware=hardware, probe=probe if batch_size is None and hardware.cuda_available and hasattr(backend, "_invoke") else None, probe_many=probe_many if batch_size is None and hardware.cuda_available and hasattr(backend, "benchmark_training_configurations") else None, probe_configurations=batch_size is None, candidate_configurations=tuning_candidates if batch_size is None else None, staged_worker_candidates=worker_values if batch_size is None else None, tuning_variant="landmark_training_architecture_v12:" + architecture))
+    selected = dict(auto_performance_config(project, workload="landmark_training", model=architecture, input_size=tuple(backend.spec.input_size), training=True, hardware=hardware, probe=probe if batch_size is None and hardware.cuda_available and hasattr(backend, "_invoke") else None, probe_many=probe_many if batch_size is None and hardware.cuda_available and hasattr(backend, "benchmark_training_configurations") else None, probe_configurations=batch_size is None, candidate_configurations=tuning_candidates if batch_size is None else None, staged_worker_candidates=worker_values if batch_size is None else None, tuning_variant="landmark_training_architecture_v13:" + architecture))
     timings["auto_performance"] = time.perf_counter() - started
     if selected.get("tuning_source") == "cache":
         progress("AUTO PERFORMANCE", "Using cached settings for this machine.")
     elif selected.get("tuning_source") == "probe":
         saved = "Cache saved." if selected.get("cache_saved") else "Cache could not be saved; calibration may repeat next time."
         progress("AUTO PERFORMANCE", f"Selected batch {selected['batch_size']}, workers {selected['workers']}. {saved}")
+    if selected.get("tuning_source")=="fallback":selected["workers"]=0
     if batch_size is not None: selected["batch_size"]=int(batch_size)
     issue=("; "+str((selected.get("tuning_errors") or [""])[0])) if selected.get("tuning_source")=="fallback" else ""
     progress("TRAINING PLAN", f"Auto selected: {selected.get('device')}, batch {selected.get('batch_size')}, workers {selected.get('workers')}, AMP {'on' if selected.get('mixed_precision') else 'off'}, source {selected.get('tuning_source','heuristic')}{issue}")
@@ -307,7 +310,19 @@ def activate_landmark_model(project, model_id):
     project.set_active_model("landmark", model_id)
 
 
-def validation_metrics(model):
-    metrics = model.get("engineering_validation") or model.get("result", {}).get("engineering_validation") or {}
-    result = model.get("result", {})
-    return {key: metrics.get(key) for key in ("median_error_percent", "p90_error_percent", "p95_error_percent")} | {"best_epoch": model.get("best_epoch", result.get("best_epoch")), "ema_used": model.get("ema_used", result.get("ema_used"))}
+def validation_metrics(model, project=None):
+    """Read saved engineering validation for both completion and model manager."""
+    source = model
+    if project is not None and model.get("path"):
+        try:
+            path = Path(model["path"])
+            if not path.is_absolute():path = project.data_root / path
+            source = json.loads((path / "model.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):pass
+    registry = model.get("metrics_json") or {}
+    if isinstance(registry, str):
+        try:registry = json.loads(registry)
+        except ValueError:registry = {}
+    result = source.get("result") or {}
+    metrics = source.get("engineering_validation") or result.get("engineering_validation") or registry.get("engineering_validation") or registry
+    return {key: metrics.get(key) for key in ("median_error_percent", "p90_error_percent", "p95_error_percent")} | {"best_epoch": source.get("best_epoch", result.get("best_epoch", registry.get("best_epoch"))), "ema_used": source.get("ema_used", result.get("ema_used", registry.get("ema_used")))}

@@ -37,7 +37,7 @@ def detector_performance_settings(hardware=None):
 def _run(runtime,mode,payload,timeout):
     runner=resource_path("ai_runtime","xray_detector_runner.py")
     if not runner.is_file():raise RuntimeError(f"X-ray detector runner is unavailable: {runner}")
-    result=subprocess.run([str(runtime),str(runner),str(mode)],input=json.dumps(payload),text=True,capture_output=True,check=False,timeout=timeout,**hidden_window_kwargs())
+    result=subprocess.run([str(runtime),str(runner),str(mode)],input=json.dumps(payload),text=True,capture_output=True,check=False,timeout=timeout,cwd=str(Path(runtime).resolve().parent),**hidden_window_kwargs())
     if result.returncode:
         detail=(result.stderr or result.stdout or "").strip()
         raise RuntimeError(f"X-ray detector {mode} failed: {detail[-4000:]}")

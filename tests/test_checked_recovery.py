@@ -103,20 +103,16 @@ class CheckedRecoveryTests(unittest.TestCase):
         self.assertEqual(before,after)
         self.assertFalse(self.project.annotation_status(self.image_id)["verified"])
 
-    def test_identical_ai_reapply_preserves_checked_but_coordinate_change_invalidates(self):
+    def test_identical_observation_preserves_checked_new_run_and_coordinates_invalidate(self):
         self.assertTrue(self.project.annotation_status(self.image_id)["verified"])
-        self.project.save_machine_landmarks(
-            self.image_id,
-            [{"landmark_id":1,"x":10,"y":10,"confidence":.7},{"landmark_id":2,"x":20,"y":10,"confidence":.7}],
-            model_id="m2",prediction_run_id="r2",
-        )
+        points=[{"landmark_id":1,"x":10,"y":10,"confidence":.7},{"landmark_id":2,"x":20,"y":10,"confidence":.7}]
+        self.project.save_machine_landmarks(self.image_id,points,model_id="m1",prediction_run_id="r1")
         self.assertTrue(self.project.annotation_status(self.image_id)["verified"])
-        self.assertTrue(all(bool(row.get("reviewed")) for row in self.project.load_landmarks(self.image_id).values()))
-        self.project.save_machine_landmarks(
-            self.image_id,
-            [{"landmark_id":1,"x":11,"y":10,"confidence":.7},{"landmark_id":2,"x":20,"y":10,"confidence":.7}],
-            model_id="m3",prediction_run_id="r3",
-        )
+        self.project.save_machine_landmarks(self.image_id,points,model_id="m2",prediction_run_id="r2")
+        self.assertFalse(self.project.annotation_status(self.image_id)["verified"])
+        self.assertTrue(all(not bool(row.get("reviewed")) for row in self.project.load_landmarks(self.image_id).values()))
+        self.project.mark_checked(self.image_id)
+        self.project.save_machine_landmarks(self.image_id,[{**points[0],"x":11},points[1]],model_id="m2",prediction_run_id="r2")
         self.assertFalse(self.project.annotation_status(self.image_id)["verified"])
         self.assertIn(self.image_id,self.project.pending_ai_landmark_image_ids())
 

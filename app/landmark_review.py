@@ -522,7 +522,7 @@ class _ReviewSnapshotProject:
         unresolved = self._required - present - explicit_missing
         human = {identifier for identifier in present if rows[identifier].get("provenance") in _HUMAN_PROVENANCE}
         verified = bool(self._verified.get(image_id, False))
-        return {"image_id":image_id,"placed":len(present),"resolved":len(present | explicit_missing),"expected":len(self._required),"human_placed":len(human),"verified":verified,"missing":sorted(unresolved),"missing_ids":sorted(unresolved),"unresolved_ids":sorted(unresolved),"explicitly_missing_ids":sorted(explicit_missing),"extra_ids":sorted(set(rows)-self._required),"complete":not unresolved,"color":"red" if unresolved else "green" if verified or present <= human else "yellow"}
+        return {"image_id":image_id,"placed":len(present),"resolved":len(present | explicit_missing),"expected":len(self._required),"human_placed":len(human),"verified":verified,"missing":sorted(unresolved),"missing_ids":sorted(unresolved),"unresolved_ids":sorted(unresolved),"explicitly_missing_ids":sorted(explicit_missing),"extra_ids":sorted(set(rows)-self._required),"complete":not unresolved,"color":"red" if unresolved else "green" if verified else "yellow"}
 
 
 def _review_snapshot(project):
@@ -540,7 +540,7 @@ def _review_snapshot(project):
         if display_id is None:
             continue
         points_by_image.setdefault(data["image_id"], {})[display_id] = data
-    verified = {row["image_id"]:bool(row["human_verified"]) for row in review_rows}
+    verified = {row["image_id"]:bool(project.annotation_status(row["image_id"])["verified"]) for row in review_rows}
     dimensions = {}
     for row in crop_rows:
         try:

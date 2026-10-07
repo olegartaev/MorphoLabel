@@ -97,12 +97,15 @@ class LandmarkAttentionQueueTests(unittest.TestCase):
   self.complete["a"]=True
   self.assertEqual("Review the AI landmark prediction",current(self.project)["reason"])
 
- def test_display_summary_is_persisted_and_does_not_reclassify_whole_queue(self):
+ def test_display_summary_reclassifies_current_only_without_rewriting_queue(self):
   start(self.project,("a","b","c"))
   first=current(self.project)
   self.assertEqual("a",first["image_id"])
-  with patch("app.landmark_attention_queue.classify",side_effect=AssertionError("status repaint must not classify")):
+  before=dict(self.project.ui["landmark_attention_queue"])
+  with patch("app.landmark_attention_queue.classify",wraps=classify) as classify_current:
    shown=display_summary(self.project)
+  classify_current.assert_called_once_with(self.project,"a")
+  self.assertEqual(before,self.project.ui["landmark_attention_queue"])
   self.assertEqual(("a",3),(shown["image_id"],shown["remaining"]))
   self.assertEqual("landmark_prediction",shown["source"])
   self.assertTrue(shown["generation_id"])

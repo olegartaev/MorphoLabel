@@ -3,6 +3,7 @@ import csv, math
 from pathlib import Path
 from app.landmark_state import load_current_landmark_state
 from app.results_export import MISSING_TPS
+from app.io import atomic_text_write
 
 COORDINATE_DECIMALS=5
 SCALE_DECIMALS=6
@@ -71,7 +72,7 @@ def export_landmark_tps(project,groups=(),filename='landmarks.tps',target=None):
   scale=_scale_mm_per_px_text(project,image)
   if scale:lines.append(f"SCALE={scale}")
   lines.append('')
- target.write_text('\n'.join(lines).rstrip()+'\n' if lines else '',encoding='ascii');return target
+ atomic_text_write(target,'\n'.join(lines).rstrip()+'\n' if lines else '');return target
 def export_landmark_csv_long(project,groups=(),target=None):
  schema=_allowed(project,groups);allowed={int(item['id']) for item in schema};target=Path(target) if target else Path(project.results_root)/'landmarks_long.csv';target.parent.mkdir(parents=True,exist_ok=True);fields=('image_id','locality','filename','landmark_id','category','x_standardized','y_standardized','state','provenance','model_id','confidence','updated_at')
  with target.open('w',encoding='utf-8',newline='') as stream:

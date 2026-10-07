@@ -36,25 +36,17 @@ def training_status(project):
                 "SELECT image_id, excluded FROM images WHERE COALESCE(active, 1)=1"
             )
         ]
-        points = [dict(row) for row in connection.execute("SELECT * FROM landmarks")]
-        reviews = {
-            row["image_id"]: bool(row["human_verified"])
-            for row in connection.execute("SELECT image_id, human_verified FROM image_review")
-        }
         model = connection.execute(
             "SELECT model_id, created_at FROM models WHERE kind='landmark' AND active=1"
         ).fetchone()
-    by_image = {}
-    for row in points:
-        by_image.setdefault(row["image_id"], {})[int(row["landmark_id"])] = row
     human_verified = fully_manual = ai_verified = ai_unreviewed = 0
     for image in catalog:
         if image.get("excluded"):
             continue
         image_id = image["image_id"]
-        rows = by_image.get(image_id, {})
+        rows = project.load_landmarks(image_id)
         has_landmarks = bool(rows)
-        verified = bool(reviews.get(image_id))
+        verified = bool(project.annotation_status(image_id)["verified"])
         required_rows = [rows.get(identifier) for identifier in required]
         resolved = bool(required) and all(row is not None and _resolved(row) for row in required_rows)
         manual = resolved and all(row.get("provenance") in _HUMAN for row in required_rows)

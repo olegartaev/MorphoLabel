@@ -177,7 +177,7 @@ def _run(runtime, mode, payload, timeout):
         raise XRayStructureAIError(f"X-ray structure runner is unavailable: {runner}")
     result = subprocess.run(
         [str(runtime), str(runner), str(mode)],
-        input=json.dumps(payload), text=True, capture_output=True, check=False, timeout=timeout,
+        input=json.dumps(payload), text=True, capture_output=True, check=False, timeout=timeout, cwd=str(Path(runtime).resolve().parent),
         **hidden_window_kwargs(),
     )
     if result.returncode:

@@ -807,7 +807,11 @@ class LandmarksRuntime(tk.Misc):
 
 
     def open_calibration(self):
-        dialog=CalibrationWorkflow(self,self.context.project); center(self,dialog); return dialog
+        def saved():
+            self.context.invalidate_counts()
+            refresh=getattr(getattr(self,"current_view",None),"refresh_definitions",None)
+            if refresh:refresh()
+        dialog=CalibrationWorkflow(self,self.context.project,on_saved=saved); center(self,dialog); return dialog
 
 
     def open_measurements(self):
@@ -862,12 +866,9 @@ class LandmarksRuntime(tk.Misc):
                 data=json.loads((self.context.project.data_root/path).read_text(encoding="utf-8"));return str(len(data.get("images",data.get("selected_images",()))))
             except (OSError,ValueError,TypeError):return "—"
         def landmark_details(item,metrics):
-            payload={}
-            try:
-                model_path=self.context.project.data_root/(item.get("path") or "")/"model.json";payload=json.loads(model_path.read_text(encoding="utf-8")) if model_path.is_file() else {}
-            except (OSError,ValueError,TypeError):pass
-            result=payload.get("result",{});engineering=result.get("engineering_validation",payload.get("engineering_validation",{})) or {}
-            p90=engineering.get("p90_error_percent",metrics.get("p90_error_percent"));best=result.get("best_epoch",payload.get("best_epoch",metrics.get("best_epoch")))
+            from app.landmark_training_workflow import validation_metrics
+            validation=validation_metrics(item,self.context.project)
+            p90=validation.get("p90_error_percent");best=validation.get("best_epoch")
             manual_p90=ai_p90=ratio=status=None
             if human_report is not None:
                 manual_p90=((human_report.get("human") or {}).get("aggregate") or {}).get("p90_error_percent")

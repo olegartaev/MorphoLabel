@@ -67,6 +67,11 @@ def _zip_bytes(z, name, data, manifest):
 def _portable_landmark_export(directory, model):
  portable_config=directory/"inference_config.py";checkpoint=directory/"best_engineering_validation.pth"
  if not portable_config.is_file():
+  # Existing imports used the portable package name before canonical storage.
+  try:legacy=json.loads((directory/"model.json").read_text(encoding="utf-8"))
+  except (OSError,ValueError):legacy={}
+  if (legacy.get("result") or {}).get("inference_config")=="config.py":portable_config=directory/"config.py"
+ if not portable_config.is_file():
   raise AIPackageError("landmark model has no portable inference config; finalize or retrain it with the current MorphoLabel version")
  if not checkpoint.is_file() or checkpoint.stat().st_size<=0:
   raise AIPackageError("landmark model inference checkpoint is unavailable")
@@ -162,6 +167,11 @@ def import_model_package(project, source, expected_kind):
   with staged_model_directory(destination) as (tmp,publish):
    for name in m["files"]:
     out=tmp/name[len("artifacts/"):];out.parent.mkdir(parents=True,exist_ok=True);out.write_bytes(z.read(name))
+   if expected_kind=="landmark":
+    (tmp/"config.py").rename(tmp/"inference_config.py")
+    info=json.loads((tmp/"model.json").read_text(encoding="utf-8"))
+    info.setdefault("result",{})["inference_config"]="inference_config.py"
+    atomic_json_write(tmp/"model.json",info)
    if project.model_metadata(local):raise FileExistsError(local)
    publish()
    metadata=m.get("model_metadata",{});metrics=json.loads(metadata.get("metrics_json") or "{}") if isinstance(metadata.get("metrics_json"),str) else metadata.get("metrics_json",{})

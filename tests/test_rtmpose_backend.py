@@ -60,7 +60,7 @@ class RTMPoseBackendTests(unittest.TestCase):
   self.assertEqual(backend._invoke('rank',{},no_progress_timeout=.12)['model_id'],'m')
  def test_18_rank_without_progress_reports_stall(self):
   backend=self._rank_backend("import sys,json,time\njson.load(sys.stdin)\nprint('runner started',file=sys.stderr,flush=True)\ntime.sleep(2)")
-  with self.assertRaisesRegex(RTMPoseRuntimeError,'RTMPose rank stalled: no progress for 180 seconds.') as caught:backend._invoke('rank',{},no_progress_timeout=.1)
+  with self.assertRaisesRegex(RTMPoseRuntimeError,'RTMPose rank stalled: no progress for 0.1 seconds.') as caught:backend._invoke('rank',{},no_progress_timeout=.1)
   self.assertIn('runner started',str(caught.exception))
  def test_19_rank_runner_reports_progress_only_to_stderr(self):
   text=(Path(__file__).resolve().parents[1]/'ai_runtime'/'rtmpose_runner.py').read_text(encoding='utf8');self.assertIn("print(f'RANK_PROGRESS 0 {total}',file=sys.stderr,flush=True)",text)

@@ -4,6 +4,16 @@ from __future__ import annotations
 import subprocess
 import sys
 
+def terminate_process_tree(process):
+    """Stop only this owned subprocess and its multiprocessing children."""
+    if process.poll() is not None:return
+    if sys.platform.startswith("win"):
+        subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                       capture_output=True, check=False, timeout=10, **hidden_window_kwargs())
+    else:process.terminate()
+    try:process.wait(timeout=2)
+    except subprocess.TimeoutExpired:process.kill();process.wait(timeout=2)
+
 
 def hidden_window_kwargs():
     """Return Windows-only Popen kwargs that keep internal console windows hidden.

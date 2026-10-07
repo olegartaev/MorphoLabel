@@ -54,9 +54,12 @@ class CurrentLandmarkState:
   with project.transaction() as c:
    row=c.execute("SELECT human_verified FROM image_review WHERE image_id=?",(image_id,)).fetchone()
    crop_review=c.execute("SELECT 1 FROM image_attributes WHERE image_id=? AND attribute_key IN ('landmark_crop_review_required','landmark_scheme_review_required') AND lower(value)='true'",(image_id,)).fetchone()
-  needs_review=bool(crop_review) or pending_ai
-  verified=(bool(row[0]) if row else False) and not needs_review
-  color="red" if unresolved else "yellow" if needs_review else "green" if verified or (present <= human) else "yellow"
+   draft=c.execute("SELECT 1 FROM annotation_drafts WHERE image_id=?",(image_id,)).fetchone()
+  needs_review=bool(crop_review) or pending_ai or bool(draft)
+  verified=bool(schema_ids) and not unresolved and (bool(row[0]) if row else False) and not needs_review
+  confirmation=getattr(project,"_landmark_ai_confirmation_matches",None)
+  if verified and confirmation and any(row.get("provenance")=="machine" for row in points.values()):verified=confirmation(image_id)
+  color="red" if unresolved else "green" if verified else "yellow"
   return cls(str(image_id),schema_ids,points,present,explicitly_missing,resolved,unresolved,missing,extras,human,verified,color)
 
 def load_current_landmark_state(project,image_id):

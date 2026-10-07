@@ -825,6 +825,8 @@ class LandmarksSection(SectionView):
   if int(step)<0:
    issue=move_attention_queue(self.context.project,-1);self.shell.open_landmark_attention(issue);return True
   issue=classify_attention_issue(self.context.project,current)
+  if issue.get('stage')=='resolved':
+   self.shell.open_landmark_attention(complete_attention_current(self.context.project,current));return True
   if issue.get('stage')=='prediction':
    self.predict(False,1,explicit_ids=(current,),title='Retry landmark prediction',selection_mode='attention_retry',attention_retry=True)
    return True
@@ -1139,9 +1141,14 @@ class LandmarksSection(SectionView):
   poll()
  def preflight(self,parent_model_id=None):
   dialog=tk.Toplevel(self.shell);dialog.title('Prepare landmark training');dialog.transient(self.shell);frame=ttk.Frame(dialog,padding=14);frame.pack(fill='both',expand=True);label=ttk.Label(frame,text='Checking training data and AI runtime…',justify='left');label.pack(anchor='w');bar=ttk.Progressbar(frame,mode='indeterminate');bar.pack(fill='x',pady=(8,0));bar.start();events=queue.Queue();center(self.shell,dialog)
+  cancelled=threading.Event()
+  def cancel():
+   cancelled.set();label.config(text="Cancelling preparation…");cancel_button.configure(state="disabled")
+  cancel_button=ttk.Button(frame,text="Cancel",command=cancel);cancel_button.pack(anchor="e",pady=(8,0))
+  dialog.protocol("WM_DELETE_WINDOW",cancel)
   def update(stage,detail):events.put(('progress',stage,detail))
   def worker():
-   try:events.put(('ready',prepare_landmark_training(self.context.project,parent_model_id=parent_model_id,progress_callback=update)))
+   try:events.put(('ready',prepare_landmark_training(self.context.project,parent_model_id=parent_model_id,progress_callback=update,cancel_event=cancelled)))
    except Exception as exc:events.put(('error',exc))
   threading.Thread(target=worker,daemon=True,name='production-landmark-training-preflight').start()
   def poll():
@@ -1149,8 +1156,14 @@ class LandmarksSection(SectionView):
     while True:
      kind,*value=events.get_nowait()
      if kind=='progress':label.config(text=f'{value[0]}\n{value[1]}')
-     elif kind=='error':dialog.destroy();messagebox.showwarning('Landmark training',str(value[0]),parent=self.shell);return
-     else:dialog.destroy();self._confirm_training(value[0]);return
+     elif kind=='error':
+      dialog.destroy()
+      if not cancelled.is_set():messagebox.showwarning('Landmark training',str(value[0]),parent=self.shell)
+      return
+     else:
+      dialog.destroy()
+      if not cancelled.is_set():self._confirm_training(value[0])
+      return
    except queue.Empty:self.shell.after(100,poll)
   poll()
  def _confirm_training(self,plan):
@@ -1172,7 +1185,7 @@ class LandmarksSection(SectionView):
      if kind=='progress':label.config(text=f'{value[0]}\n{value[1]}')
      elif kind=='error':dialog.destroy();messagebox.showerror('Landmark training',str(value[0]),parent=self.shell);return
      else:
-      dialog.destroy();model=self.context.project.model_metadata(plan.model_id) or value[0];p90=validation_metrics(model).get('p90_error_percent')
+      dialog.destroy();model=self.context.project.model_metadata(plan.model_id) or value[0];p90=validation_metrics(model,self.context.project).get('p90_error_percent')
       self.context.invalidate_counts()
       messagebox.showinfo('Landmark training',f"Created model: {plan.model_id}\nValidation P90 error: {_format_percent(p90)}",parent=self.shell);self.shell.render();return
    except queue.Empty:self.shell.after(100,poll)

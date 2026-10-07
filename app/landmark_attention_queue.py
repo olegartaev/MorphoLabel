@@ -168,10 +168,11 @@ def display_summary(project):
  ids=[str(v) for v in value.get("image_ids") or ()];current_id=str(value.get("current_image_id") or "")
  if current_id not in ids:return None
  completed=set(map(str,value.get("completed_ids") or ()))
+ issue=classify(project,current_id)
  return {
   "image_id":current_id,
-  "stage":value.get("current_stage"),
-  "reason":value.get("current_reason"),
+  "stage":issue.get("stage"),
+  "reason":issue.get("reason"),
   "position":ids.index(current_id)+1,
   "total":len(ids),
   "remaining":max(0,len(ids)-len(completed)),

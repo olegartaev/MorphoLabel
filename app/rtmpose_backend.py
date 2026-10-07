@@ -10,7 +10,7 @@ from .io import atomic_json_write
 from .project_storage import schema_hash, landmark_model_schema_compatible
 from .ai_runtime_resolver import validate_ai_runtime
 from .ai_delivery import ensure_ai_runtime
-from .process_utils import hidden_window_kwargs
+from .process_utils import hidden_window_kwargs, terminate_process_tree
 
 class RTMPoseRuntimeError(RuntimeError): pass
 @dataclass(frozen=True)
@@ -23,59 +23,67 @@ class RTMPoseBackend(LandmarkBackend):
   self.spec=spec;self.model_id=spec.model_id;self.schema_sha256=spec.schema_sha256;self.last_rank_batch_size=max(1,int(spec.inference_batch_size))
   self.runtime_python,self.runner_path=ensure_ai_runtime(explicit=runtime_python,runner_path=runner_path)
   self._runtime_explicit=runtime_python is not None or runner_path is not None
-  self._runtime_validated=False
+  self._runtime_validated=False;self.cancel_event=None
  def _invoke(self,operation,payload,*,progress_callback=None,no_progress_timeout=180):
   if not self._runtime_explicit and not self._runtime_validated:
    validate_ai_runtime(self.runtime_python,self.runner_path)
    self._runtime_validated=True
   if not self.runtime_python.exists(): raise RTMPoseRuntimeError(f'AI runtime is unavailable: {self.runtime_python}')
   if not self.runner_path.exists(): raise RTMPoseRuntimeError(f'RTMPose runner is unavailable: {self.runner_path}')
-  if operation in {'rank','rank_benchmark','rank_checkpoints','probe_many'}: return self._invoke_rank(payload,operation=operation,progress_callback=progress_callback,no_progress_timeout=no_progress_timeout)
-  try: run=subprocess.run([str(self.runtime_python),str(self.runner_path),operation],input=json.dumps(payload),text=True,capture_output=True,check=False,cwd=str(Path(__file__).resolve().parents[1]),**hidden_window_kwargs())
+  if operation in {'rank','rank_benchmark','rank_checkpoints','probe_many','probe'}: return self._invoke_rank(payload,operation=operation,progress_callback=progress_callback,no_progress_timeout=no_progress_timeout)
+  try: run=subprocess.run([str(self.runtime_python),str(self.runner_path),operation],input=json.dumps(payload),text=True,capture_output=True,check=False,cwd=str(self.runtime_python.resolve().parent),**hidden_window_kwargs())
   except OSError as exc: raise RTMPoseRuntimeError(f'cannot start isolated AI runtime: {exc}') from exc
   if run.returncode: raise RTMPoseRuntimeError(f"RTMPose {operation} failed (return code {run.returncode})\nFULL STDOUT:\n{run.stdout}\nFULL STDERR:\n{run.stderr}")
   try: return json.loads(next(line for line in reversed(run.stdout.splitlines()) if line.strip()))
   except (json.JSONDecodeError,StopIteration) as exc: raise RTMPoseRuntimeError(f'RTMPose {operation} emitted invalid JSON: {run.stdout[:500]}') from exc
  def _invoke_rank(self,payload,*,operation='rank',progress_callback=None,no_progress_timeout=180):
-  """Run one rank process, terminating only when its heartbeat stops."""
+  """Bound useful progress independently of runner heartbeat/liveness."""
   command=[str(self.runtime_python),str(self.runner_path),operation];events=queue.Queue();stdout=[];stderr=[]
-  try: process=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,bufsize=1,cwd=str(Path(__file__).resolve().parents[1]),**hidden_window_kwargs())
-  except OSError as exc: raise RTMPoseRuntimeError(f'cannot start isolated AI runtime: {exc}') from exc
+  try:process=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,bufsize=1,cwd=str(self.runtime_python.resolve().parent),**hidden_window_kwargs())
+  except OSError as exc:raise RTMPoseRuntimeError(f'cannot start isolated AI runtime: {exc}') from exc
   def drain(stream,kind):
    try:
     for line in iter(stream.readline,''):events.put((kind,line))
-   finally:
-    stream.close();events.put((kind,None))
+   finally:stream.close();events.put((kind,None))
   readers=[threading.Thread(target=drain,args=(process.stdout,'stdout'),daemon=True),threading.Thread(target=drain,args=(process.stderr,'stderr'),daemon=True)]
   for reader in readers:reader.start()
-  try: process.stdin.write(json.dumps(payload));process.stdin.close()
-  except (BrokenPipeError,OSError): pass
-  last_progress=time.monotonic();closed=set();stalled=False
-  while len(closed)<2:
-   try: kind,line=events.get(timeout=.25)
-   except queue.Empty:
+  # Writing stdin separately keeps cancellation/deadlines active even during startup.
+  def send():
+   try:process.stdin.write(json.dumps(payload));process.stdin.close()
+   except (BrokenPipeError,OSError):pass
+  threading.Thread(target=send,daemon=True).start()
+  last_progress=time.monotonic();best_done=0;closed=set();stalled=cancelled=False
+  try:
+   while len(closed)<2:
+    if self.cancel_event is not None and self.cancel_event.is_set():
+     cancelled=True;terminate_process_tree(process);break
     if process.poll() is None and time.monotonic()-last_progress>=no_progress_timeout:
-     stalled=True;process.terminate()
-     try:process.wait(timeout=10)
-     except subprocess.TimeoutExpired:process.kill()
+     stalled=True;terminate_process_tree(process);break
+    try:kind,line=events.get(timeout=min(.1,max(.01,no_progress_timeout/4)))
+    except queue.Empty:
+     if process.poll() is not None and not any(reader.is_alive() for reader in readers):break
      continue
-    if process.poll() is not None and not any(reader.is_alive() for reader in readers):break
-    continue
-   if line is None:closed.add(kind);continue
-   (stdout if kind=='stdout' else stderr).append(line)
-   if kind=='stderr':
-    parts=line.strip().split()
+    if line is None:closed.add(kind);continue
+    (stdout if kind=='stdout' else stderr).append(line)
+    parts=line.strip().split() if kind=='stderr' else ()
     if len(parts)==3 and parts[0]=='RANK_PROGRESS':
-     try: done,total=int(parts[1]),int(parts[2])
-     except ValueError: continue
-     last_progress=time.monotonic()
+     try:done,total=int(parts[1]),int(parts[2])
+     except ValueError:continue
+     if done>best_done:best_done=done;last_progress=time.monotonic()
      if progress_callback:progress_callback(done,total)
-  for reader in readers:reader.join(timeout=1)
+  finally:
+   if process.poll() is None:
+    if len(closed)==2:
+     try:process.wait(timeout=2)
+     except subprocess.TimeoutExpired:terminate_process_tree(process)
+    else:terminate_process_tree(process)
+   for reader in readers:reader.join(timeout=1)
   returncode=process.wait();output=''.join(stdout);errors=''.join(stderr)
-  if stalled:raise RTMPoseRuntimeError(f'RTMPose rank stalled: no progress for 180 seconds.\nFULL STDOUT:\n{output}\nFULL STDERR:\n{errors}')
-  if returncode:raise RTMPoseRuntimeError(f'RTMPose rank failed (return code {returncode})\nFULL STDOUT:\n{output}\nFULL STDERR:\n{errors}')
+  if cancelled:raise RTMPoseRuntimeError('RTMPose preflight cancelled')
+  if stalled:raise RTMPoseRuntimeError(f'RTMPose {operation} stalled: no progress for {no_progress_timeout:g} seconds.\nFULL STDOUT:\n{output}\nFULL STDERR:\n{errors}')
+  if returncode:raise RTMPoseRuntimeError(f'RTMPose {operation} failed (return code {returncode})\nFULL STDOUT:\n{output}\nFULL STDERR:\n{errors}')
   try:return json.loads(next(line for line in reversed(output.splitlines()) if line.strip()))
-  except (json.JSONDecodeError,StopIteration) as exc:raise RTMPoseRuntimeError(f'RTMPose rank emitted invalid JSON: {output[:500]}') from exc
+  except (json.JSONDecodeError,StopIteration) as exc:raise RTMPoseRuntimeError(f'RTMPose {operation} emitted invalid JSON: {output[:500]}') from exc
  def predict(self,request:InferenceRequest):
   raw=self._invoke('predict',{'image_id':request.image_id,'image_path':str(request.standardized_image_path),'schema_sha256':request.schema_sha256,'model_id':self.model_id,'config_path':str(self.spec.config_path),'checkpoint_path':str(self.spec.checkpoint_path),'input_size':list(self.spec.input_size),'device':self.spec.device,'simm_landmark_ids':[int(row['id']) for row in request.schema]})
   return ImagePrediction(raw['image_id'],raw['model_id'],raw['schema_sha256'],tuple(LandmarkPrediction(int(x['landmark_id']),float(x['x']),float(x['y']),None if x.get('confidence') is None else float(x['confidence'])) for x in raw['landmarks']))

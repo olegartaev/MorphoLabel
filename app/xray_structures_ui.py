@@ -239,6 +239,17 @@ class XRaySpecimenListPanel(ttk.Frame):
         visible=self.visible_indices.index(selected_index);self.canvas.selection_set(visible)
         if reveal:self.canvas.reveal_selection()
 
+    def refresh_specimen(self,specimen_id):
+        """Redraw a changed annotation row without rebuilding/filtering the catalog."""
+        for index,row in enumerate(self._rows):
+            if row["specimen_id"]!=specimen_id:continue
+            run=self.project.annotation_run(specimen_id,self.pass_no) or {}
+            row.update(annotation_status=run.get("status"),run_id=run.get("run_id"),annotation_updated_at=run.get("updated_at"))
+            row["status_color"]="green" if run.get("status")=="verified" else "yellow" if run.get("status") else "red"
+            if index in self.visible_indices:self.canvas.set_row(self.visible_indices.index(index),self._row_data(index,row))
+            return True
+        return False
+
     def rows(self):return list(self._rows)
     def visible_ids(self):return [self._rows[index]["specimen_id"] for index in self.visible_indices]
 
@@ -1479,6 +1490,7 @@ class XRayStructureWorkspace:
                 failures=list(result.get("failures") or ())
                 detail=str(failures[0].get("reason")) if failures else "No prediction was produced."
                 messagebox.showwarning("Predict current",detail,parent=self.root);return
+            self.specimen_list.refresh_specimen(specimen_id)
             self._load_specimen(specimen_id);self._refresh_workflow()
         dialog.after(100,poll)
 

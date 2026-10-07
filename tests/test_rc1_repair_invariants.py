@@ -164,7 +164,9 @@ class RC1RepairInvariants(unittest.TestCase):
         self.assertEqual(original,scientific_scheme_hash(cosmetic))
         for section,key,value in (("structures","required",False),("structures","annotation","polygon"),("structures","repeated",False),("structures","model_extension",2),("traits","structures",[]),("traits","rule",{"offset":2}),("traits","method","presence")):
             changed=copy.deepcopy(scheme);changed[section][0 if section=="structures" else 1][key]=value
-            self.assertNotEqual(original,scientific_scheme_hash(changed),(section,key))
+            if section=="traits" and key=="structures":
+                with self.assertRaises(ValueError):scientific_scheme_hash(changed)
+            else:self.assertNotEqual(original,scientific_scheme_hash(changed),(section,key))
         changed=copy.deepcopy(scheme);changed["traits"][0]["rule"]["expression"]="n*3"
         self.assertNotEqual(original,scientific_scheme_hash(changed))
 
