@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0-rc.3 — 2026-10-08
+
+- Revalidated the Windows installer and installed application for release candidate 3.
+
 ## 1.0.0-rc.2 — 2026-10-08
 
 - Completed deep release qualification and user-path GUI testing.

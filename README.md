@@ -6,9 +6,9 @@ MorphoLabel is designed for research projects in which large image collections m
 
 The central idea is **human-in-the-loop mass annotation**: the researcher defines the biological task, creates and reviews reference annotations, optionally trains project-specific AI models, reviews AI suggestions and exports structured data while retaining the project state needed to understand how those data were produced. MorphoLabel is intended to reduce the annotation bottleneck in image-based morphology while supporting inspectable, provenance-aware and reproducible workflows.
 
-**Current release:** [MorphoLabel 1.0.0-rc.2](https://github.com/olegartaev/MorphoLabel/releases/tag/v1.0.0-rc.2) · Windows 10/11 x64 · Apache-2.0
+**Current release:** [MorphoLabel 1.0.0-rc.3](https://github.com/olegartaev/MorphoLabel/releases/tag/v1.0.0-rc.3) · Windows 10/11 x64 · Apache-2.0
 
-[Download installer](https://github.com/olegartaev/MorphoLabel/releases/download/v1.0.0-rc.2/MorphoLabel-1.0.0-rc.2-Setup-x64.exe) · [Full User Guide](docs/USER_GUIDE.md) · [Changelog](CHANGELOG.md) · [Citation](CITATION.cff)
+[Download installer](https://github.com/olegartaev/MorphoLabel/releases/download/v1.0.0-rc.3/MorphoLabel-1.0.0-rc.3-Setup-x64.exe) · [Full User Guide](docs/USER_GUIDE.md) · [Changelog](CHANGELOG.md) · [Citation](CITATION.cff)
 
 ---
 
@@ -84,7 +84,7 @@ Key workflows:
 
 ## Interface
 
-The screenshots below show the current **v1.0.0-rc.2** interface on real biological image workflows.
+The screenshots below show the current **v1.0.0-rc.3** interface on real biological image workflows.
 
 ### Landmarks & Measurements
 
@@ -169,7 +169,7 @@ MorphoLabel currently targets **Windows 10/11 x64**.
 
 Most users only need the standalone installer:
 
-**[MorphoLabel-1.0.0-rc.2-Setup-x64.exe](https://github.com/olegartaev/MorphoLabel/releases/download/v1.0.0-rc.2/MorphoLabel-1.0.0-rc.2-Setup-x64.exe)**
+**[MorphoLabel-1.0.0-rc.3-Setup-x64.exe](https://github.com/olegartaev/MorphoLabel/releases/download/v1.0.0-rc.3/MorphoLabel-1.0.0-rc.3-Setup-x64.exe)**
 
 No separate Python or Git installation is required for normal use.
 
@@ -208,7 +208,7 @@ For geometric morphometrics, MorphoLabel prepares landmark-coordinate data; it d
 
 ## Release status
 
-1.0.0-rc.2 is the final release candidate for MorphoLabel 1.0. It contains the two production modules described above and is intended for external acceptance before the stable 1.0.0 release.
+1.0.0-rc.3 is release candidate 3 for MorphoLabel 1.0. It contains the two production modules described above and is intended for external acceptance before the stable 1.0.0 release.
 
 If you encounter a problem, use **Menu → Support → Create diagnostic report…**. The diagnostic ZIP is designed not to include research photographs or the project SQLite database.
 

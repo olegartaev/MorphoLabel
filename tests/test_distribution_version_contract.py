@@ -17,10 +17,10 @@ class DistributionVersionContractTests(unittest.TestCase):
         self.assertIn(f'version: "{__version__}"',(ROOT/"CITATION.cff").read_text(encoding="utf-8"))
         self.assertIn('date-released: "2026-10-08"',(ROOT/"CITATION.cff").read_text(encoding="utf-8"))
         installer=(ROOT/"packaging"/"windows"/"MorphoLabel.iss").read_text(encoding="utf-8")
-        self.assertIn('#define MyAppVersion "1.0.0-rc.2"',installer)
+        self.assertIn('#define MyAppVersion "1.0.0-rc.3"',installer)
         component=json.loads((ROOT/"ai_runtime"/"windows-cu121-component.json").read_text(encoding="utf-8"))
         # Managed component versions are independent of application releases
-        # when runtime contents are unchanged; RC2 retains the pinned RC1 runtime.
+        # when runtime contents are unchanged; RC3 retains the pinned RC1 runtime.
         self.assertEqual("1.0.0-rc.1",component["component_version"])
         with tempfile.TemporaryDirectory() as directory:
             folder=Path(directory)
@@ -32,7 +32,7 @@ class DistributionVersionContractTests(unittest.TestCase):
                 "installed_bytes":len(payload), "component_manifest":component,
             }),encoding="utf-8")
             manifest,_=build_release_assets(folder,__version__)
-            self.assertEqual("1.0.0-rc.2",manifest["app_version"])
+            self.assertEqual("1.0.0-rc.3",manifest["app_version"])
             self.assertEqual("1.0.0-rc.1",manifest["component_version"])
 
     def test_readme_presents_both_production_modules_and_no_beta_limitations(self):
