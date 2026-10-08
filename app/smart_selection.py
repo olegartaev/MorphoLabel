@@ -8,7 +8,7 @@ from .ai import InferenceRequest
 from .ai_batch import BatchError, active_backend
 from .io import atomic_json_write
 from .landmark_ai_service import LandmarkAIService
-from .project_storage import load_schema, schema_hash
+from .project_storage import load_schema, schema_hash, landmark_model_schema_compatible
 from .landmark_qc import stable_weak_landmark_profile
 from .landmark_frames import landmark_frame_ready
 
@@ -40,7 +40,7 @@ def _readonly_selection_snapshot(project, *, diagnostic_callback=None):
  return result
 def _candidate_pool_from_snapshot(project, model, snapshot, *, excluded_image_ids=(), diagnostic_callback=None):
  if not model or not model.get('active'): raise BatchError('requested model is not active')
- if model['schema_sha256']!=schema_hash(project.schema_path): raise BatchError('active model schema mismatch')
+ if not landmark_model_schema_compatible(project,model): raise BatchError('active model schema mismatch')
  diagnostic_callback and diagnostic_callback('CANDIDATE_FILTER_START')
  development=_model_development(project,model,diagnostic_callback=diagnostic_callback);blocked=set(excluded_image_ids);out=[]
  for row in snapshot["rows"]:
@@ -51,7 +51,7 @@ def _candidate_pool_from_snapshot(project, model, snapshot, *, excluded_image_id
 def candidate_pool(project, model_id, *, excluded_image_ids=()):
  model=project.model_metadata(model_id)
  if not model or not model.get('active'): raise BatchError('requested model is not active')
- if model['schema_sha256']!=schema_hash(project.schema_path): raise BatchError('active model schema mismatch')
+ if not landmark_model_schema_compatible(project,model): raise BatchError('active model schema mismatch')
  development=_model_development(project,model);held=project.permanent_test_image_ids();blocked=set(excluded_image_ids);out=[]
  for row in project.catalog_rows():
   image_id=row['image_id'];cache=project.cache_root/'standardized'/f'{image_id}.png'

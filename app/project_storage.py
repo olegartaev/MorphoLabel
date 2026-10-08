@@ -37,6 +37,45 @@ def landmark_is_protected_human(row,frame_changed_at=None):
 def schema_hash(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def landmark_schema_identity(rows):
  return tuple(str(row.get("abbr") or "").strip() for row in rows)
+def _model_schema_identity(value):
+ """Accept only an explicit, unambiguous ordered output contract."""
+ if not isinstance(value,(list,tuple)) or not value:return ()
+ if any(not isinstance(item,str) or not item.strip() or item!=item.strip() for item in value):return ()
+ return tuple(value) if len(set(value))==len(value) else ()
+
+def landmark_model_schema_identity(project,model):
+ """Recover model-side evidence without borrowing the current project scheme."""
+ if not model or model.get("kind")!="landmark":return ()
+ manifest_path=model.get("dataset_manifest_path")
+ if manifest_path:
+  path=Path(manifest_path);path=path if path.is_absolute() else project.data_root/path
+  try:
+   manifest=json.loads(path.read_text(encoding="utf-8"))
+   identity=_model_schema_identity(landmark_schema_identity(manifest.get("schema_landmarks") or ()))
+   if identity:return identity
+  except (OSError,ValueError,TypeError,AttributeError):pass
+ try:metrics=json.loads(model.get("metrics_json") or "{}")
+ except (ValueError,TypeError):metrics={}
+ if not isinstance(metrics,dict):metrics={}
+ identity=_model_schema_identity(model.get("schema_identity")) or _model_schema_identity(metrics.get("schema_identity"))
+ if identity:return identity
+ package=metrics.get("package_manifest")
+ if isinstance(package,dict):
+  identity=_model_schema_identity(package.get("schema_identity"))
+  if identity:return identity
+  # Current-format imports already retain this checksum-bound historical CSV.
+  if package.get("project_schemes") is not None:
+   from .model_schemes import validate_schemes
+   try:return _model_schema_identity(landmark_schema_identity(validate_schemes(package["project_schemes"],"landmark",package.get("schema_sha256"))))
+   except (ValueError,TypeError,KeyError,AttributeError):pass
+ if model.get("path"):
+  path=Path(model["path"]);path=path if path.is_absolute() else project.data_root/path
+  try:
+   info=json.loads((path/"model.json").read_text(encoding="utf-8"))
+   return _model_schema_identity(info.get("schema_identity"))
+  except (OSError,ValueError,TypeError,AttributeError):pass
+ return ()
+
 def landmark_model_schema_compatible(project, model):
  """Return whether a stored landmark model has the same ordered landmark identities.
 
@@ -46,14 +85,7 @@ def landmark_model_schema_compatible(project, model):
  """
  if not model or model.get("kind")!="landmark":return False
  if model.get("schema_sha256")==schema_hash(project.schema_path):return True
- manifest_path=model.get("dataset_manifest_path")
- if not manifest_path:return False
- path=Path(manifest_path);path=path if path.is_absolute() else project.data_root/path
- try:
-  manifest=json.loads(path.read_text(encoding="utf-8"))
-  stored=landmark_schema_identity(manifest.get("schema_landmarks") or ())
- except (OSError,json.JSONDecodeError,TypeError):
-  return False
+ stored=landmark_model_schema_identity(project,model)
  current=landmark_schema_identity(load_schema(project.schema_path))
  return bool(stored) and stored==current
 def schema_file_signature(path):
@@ -1040,32 +1072,39 @@ WHERE o.image_id IN ({marks})
   active={str(row["abbr"]) for row in self.schema}
   rows=[dict(row) for row in connection.execute("SELECT landmark_abbr,x_standardized,y_standardized,state,provenance,model_id,predicted_x,predicted_y,prediction_run_id,reviewed FROM landmarks WHERE image_id=? ORDER BY landmark_abbr",(image_id,)) if str(row["landmark_abbr"]) in active]
   crop=connection.execute("SELECT crop_json,transform_json,rotation_degrees FROM crops WHERE image_id=?",(image_id,)).fetchone()
+  return self._ai_review_state_fingerprint(rows,dict(crop) if crop else None,schema_identity=schema_identity,legacy_schema_sha256=legacy_schema_sha256)
+ def _ai_review_state_fingerprint(self,rows,crop,*,schema_identity=None,legacy_schema_sha256=None):
+  fields=("landmark_abbr","x_standardized","y_standardized","state","provenance","model_id","predicted_x","predicted_y","prediction_run_id","reviewed")
+  rows=[{key:row.get(key) for key in fields} for row in sorted(rows,key=lambda row:row["landmark_abbr"])]
   schema_part={"schema_sha256":str(legacy_schema_sha256)} if legacy_schema_sha256 is not None else {"schema_identity":tuple(schema_identity or landmark_schema_identity(self.schema))}
-  payload={**schema_part,"rows":rows,"crop":dict(crop) if crop else None}
+  payload={**schema_part,"rows":rows,"crop":crop}
   return hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode("utf-8")).hexdigest()
  def _active_ai_rows(self, connection, image_id):
   active={str(row["abbr"]) for row in self.schema}
   return [dict(row) for row in connection.execute("SELECT * FROM landmarks WHERE image_id=?",(image_id,)) if str(row["landmark_abbr"]) in active and (row["provenance"]=="machine" or row["model_id"] is not None or row["prediction_run_id"] is not None)]
  def landmark_ai_review_ready(self,image_id):
   return bool(self.annotation_status(image_id)["verified"])
- def _landmark_ai_confirmation_matches(self,image_id):
+ def _landmark_ai_confirmation_matches(self,image_id,*,snapshot=None):
   """True only when the current AI-origin final state has an explicit matching human confirmation."""
   identity=landmark_schema_identity(self.schema);digest=schema_hash(self.schema_path)
-  with self.transaction() as c:
-   ai_rows=self._active_ai_rows(c,image_id)
-   if not ai_rows:return True
-   current_machine=[row for row in ai_rows if row.get("provenance")=="machine"]
-   if not current_machine:return True
-   if any(not bool(row.get("reviewed")) for row in current_machine):return False
-   verified=c.execute("SELECT human_verified FROM image_review WHERE image_id=?",(image_id,)).fetchone()
-   if not verified or not bool(verified[0]):return False
-   fingerprint=self._ai_review_fingerprint(c,image_id,schema_identity=identity)
-   records=c.execute("SELECT payload_json FROM qc WHERE image_id=? AND kind=? ORDER BY qc_id DESC",(image_id,"landmark_ai_review_confirmation")).fetchall()
-   payloads=[]
-   for record in records:
-    try:payloads.append(json.loads(record["payload_json"]))
-    except (TypeError,json.JSONDecodeError):continue
-   legacy={str(payload.get("schema_sha256")):self._ai_review_fingerprint(c,image_id,legacy_schema_sha256=payload.get("schema_sha256")) for payload in payloads if payload.get("schema_identity") is None and payload.get("schema_sha256")}
+  if snapshot is None:
+   active={str(row["abbr"]) for row in self.schema}
+   with self.transaction() as c:
+    rows=[dict(row) for row in c.execute("SELECT * FROM landmarks WHERE image_id=?",(image_id,)) if str(row["landmark_abbr"]) in active]
+    crop=c.execute("SELECT crop_json,transform_json,rotation_degrees FROM crops WHERE image_id=?",(image_id,)).fetchone()
+    verified=c.execute("SELECT human_verified FROM image_review WHERE image_id=?",(image_id,)).fetchone()
+    records=[row[0] for row in c.execute("SELECT payload_json FROM qc WHERE image_id=? AND kind=? ORDER BY qc_id DESC",(image_id,"landmark_ai_review_confirmation"))]
+   snapshot={"rows":rows,"crop":dict(crop) if crop else None,"verified":bool(verified and verified[0]),"records":records}
+  rows=snapshot["rows"];current_machine=[row for row in rows if row.get("provenance")=="machine"]
+  if not current_machine:return True
+  if not snapshot["verified"] or any(not bool(row.get("reviewed")) for row in current_machine):return False
+  fingerprint=self._ai_review_state_fingerprint(rows,snapshot["crop"],schema_identity=identity)
+  payloads=[]
+  for record in snapshot["records"]:
+   try:payload=json.loads(record)
+   except (TypeError,json.JSONDecodeError):continue
+   if isinstance(payload,dict):payloads.append(payload)
+  legacy={str(payload.get("schema_sha256")):self._ai_review_state_fingerprint(rows,snapshot["crop"],legacy_schema_sha256=payload.get("schema_sha256")) for payload in payloads if payload.get("schema_identity") is None and payload.get("schema_sha256")}
   for payload in payloads:
    stored_identity=payload.get("schema_identity")
    if stored_identity is not None and tuple(str(value) for value in stored_identity)==identity and payload.get("state_fingerprint")==fingerprint:return True
@@ -1073,7 +1112,7 @@ WHERE o.image_id IN ({marks})
    if stored_identity is None and legacy_digest and payload.get("state_fingerprint")==legacy.get(str(legacy_digest)):
     if legacy_digest==digest:return True
     for model_id in payload.get("model_ids") or ():
-     model=self.model_metadata(str(model_id))
+     model=snapshot["models"].get(str(model_id)) if "models" in snapshot else self.model_metadata(str(model_id))
      if model and landmark_model_schema_compatible(self,model):return True
   return False
  def unverified_landmark_image_ids(self):
@@ -1210,15 +1249,23 @@ ORDER BY l.image_id""",active).fetchall()
   with self.transaction() as c:
    images=c.execute("SELECT i.*,COALESCE(r.human_verified,0) human_verified,EXISTS(SELECT 1 FROM locality_calibrations lc WHERE lc.locality_id=COALESCE(i.locality,i.sample_id)) calibrated,EXISTS(SELECT 1 FROM crops cr WHERE cr.image_id=i.image_id AND cr.crop_json IS NOT NULL AND cr.crop_json!='null' AND cr.transform_json IS NOT NULL AND cr.transform_json!='null' AND cr.provenance IN ('manual','ai_accepted','ai_corrected') AND COALESCE(cr.human_verified,0)=1) has_crop FROM images i LEFT JOIN image_review r ON r.image_id=i.image_id WHERE COALESCE(i.active,1)=1 ORDER BY locality COLLATE NOCASE,index_in_locality,relative_path").fetchall()
    image_ids={row["image_id"] for row in images}
-   review_required={row["image_id"] for row in c.execute("SELECT image_id FROM image_attributes WHERE attribute_key IN ('landmark_crop_review_required','landmark_scheme_review_required') AND lower(value)='true'") if row["image_id"] in image_ids}
+   review_required=self._unfinished_human_review_ids(c) & image_ids
    grouped={image_id:{} for image_id in image_ids}
-   for raw in c.execute("SELECT image_id,landmark_abbr,x_standardized,y_standardized,state,provenance,model_id,prediction_run_id,reviewed FROM landmarks"):
+   for raw in c.execute("SELECT * FROM landmarks"):
     image_id=raw["image_id"]
     if image_id not in grouped:continue
     abbr=str(raw["landmark_abbr"] or "")
     display=schema_by_abbr.get(abbr)
     if display is None:continue
     grouped[image_id][display]=dict(raw)
+   confirmation_ids={row["image_id"] for row in images if row["human_verified"] and any(point.get("provenance")=="machine" for point in grouped[row["image_id"]].values())}
+   confirmations={};crops={};models={}
+   if confirmation_ids:
+    for row in c.execute("SELECT image_id,payload_json FROM qc WHERE kind='landmark_ai_review_confirmation' ORDER BY qc_id DESC"):
+     if row["image_id"] in confirmation_ids:confirmations.setdefault(row["image_id"],[]).append(row["payload_json"])
+    for row in c.execute("SELECT image_id,crop_json,transform_json,rotation_degrees FROM crops"):
+     if row["image_id"] in confirmation_ids:crops[row["image_id"]]={key:row[key] for key in ("crop_json","transform_json","rotation_degrees")}
+    models={row["model_id"]:dict(row) for row in c.execute("SELECT * FROM models WHERE kind='landmark'")}
   result=[]
   for image in images:
    d=dict(image);points=grouped.get(d["image_id"],{})
@@ -1228,8 +1275,10 @@ ORDER BY l.image_id""",active).fetchall()
    human_present={ident for ident,row in points.items() if ident in present and row.get("provenance") in human}
    pending_ai=any(landmark_needs_ai_review(row) for row in points.values())
    needs_review=d["image_id"] in review_required or pending_ai
-   verified=bool(d.get("human_verified")) and not needs_review
-   color="red" if unresolved else "yellow" if needs_review else "green" if verified or present<=human_present else "yellow"
+   verified=bool(required_ids) and not unresolved and bool(d.get("human_verified")) and not needs_review
+   if verified and d["image_id"] in confirmation_ids:
+    verified=self._landmark_ai_confirmation_matches(d["image_id"],snapshot={"rows":list(points.values()),"crop":crops.get(d["image_id"]),"verified":True,"records":confirmations.get(d["image_id"],()),"models":models})
+   color="red" if unresolved else "green" if verified else "yellow"
    # load_landmarks() ignores historical abbreviations that are no longer in
    # the active schema, so the bulk catalogue must preserve the same semantics.
    d.update({"human_verified":verified,"expected_landmarks":len(required_ids),"placed":len(present),"human_placed":len(human_present),"missing_ids":sorted(unresolved),"extra_ids":[],"status_color":"excluded" if d.get("excluded") else color,"status_image_id":d["image_id"],"has_crop":bool(d.get("has_crop"))})

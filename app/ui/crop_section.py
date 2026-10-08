@@ -54,7 +54,7 @@ class CropSection(SectionView):
   source_choice=tk.StringVar(master=panel,value=parent_default)
   source_box=ttk.Combobox(model_row,textvariable=source_choice,values=parent_values,width=model_selector_width(parent_values),state="readonly");source_box.pack(side="left",padx=(4,0))
   self.shell.tip.bind(source_box,"Lineage parent recorded for this fully retrained Crop model. The training data are always all current human-verified Crop examples.")
-  ttk.Label(model_row,text=f"Ready: {len(training_rows)}",style="Muted.TLabel").pack(side="right",padx=(10,0))
+  self.crop_training_ready_label=ttk.Label(model_row,text=f"Ready: {len(training_rows)}",style="Muted.TLabel");self.crop_training_ready_label.pack(side="right",padx=(10,0))
   train_actions=ttk.Frame(two);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
   self.button(train_actions,"Train",lambda:self.train(None if source_choice.get()=="Bootstrap / first model" else source_choice.get()),"Train the Crop model from all verified examples.",style="Primary.TButton").pack(side="left")
   add_command_separator(train_actions)
@@ -96,8 +96,12 @@ class CropSection(SectionView):
    self.context.refresh_landmark_state(image_id);self.context.invalidate_counts()
   else:self.context.invalidate_counts()
   self.shell._update_status()
+  self.refresh_workflow_counts()
   panel=getattr(self.shell,'photo_panel',None)
   if panel:panel.refresh(preserve_scroll=True)
+ def refresh_workflow_counts(self):
+  label=getattr(self,'crop_training_ready_label',None)
+  if label is not None:label.configure(text=f"Ready: {len(self.context.project.crop_training_rows())}")
  def batch(self,count):
   getattr(self.shell,'resume_queue_navigation',lambda:None)()
   rows_by_id={row["image_id"]:dict(row) for row in self.context.rows}

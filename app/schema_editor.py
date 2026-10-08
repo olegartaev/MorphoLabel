@@ -102,12 +102,18 @@ class SchemaEditor(tk.Toplevel):
   writer=csv.DictWriter(out,fieldnames=fields,delimiter=d,lineterminator="\n");writer.writeheader()
   for row in self.rows:writer.writerow({key:({"id":row["id"],"abbr":row["abbr"].strip(),"name":row["name"].strip(),"role":ROLE_CODES[row["role"]],"category":row.get("category","")})[key] for key in fields})
   from .measurements import _atomic
-  _atomic(self.path,out.getvalue());self.dirty=False;return True
+  _atomic(self.path,out.getvalue());self.dirty=False;self._update_apply_button();return True
  def save_as(self):
   safe="".join(ch if ch.isalnum() or ch in " _-" else "_" for ch in self.scheme_name.get()).strip().replace(" ","_") or "landmark_schema"
   path=filedialog.asksaveasfilename(parent=self,defaultextension=".csv",initialfile=safe+".csv",filetypes=[("CSV","*.csv")])
   if not path:return False
-  self.path=Path(path);self.delimiter=";";return self.save()
+  previous_path,previous_delimiter=self.path,self.delimiter
+  self.path=Path(path);self.delimiter=";"
+  try:
+   if self.save():return True
+  except Exception:
+   self.path,self.delimiter=previous_path,previous_delimiter;raise
+  self.path,self.delimiter=previous_path,previous_delimiter;return False
  def add_row(self):
   self.close_editor();sel=self.table.selection();idx=self.table.index(sel[0])+1 if sel else len(self.rows);self.rows.insert(idx,{"id":0,"role":"BT","abbr":"","name":""});self.dirty=True;self.redraw();self.table.selection_set(str(idx+1))
  def delete_row(self):

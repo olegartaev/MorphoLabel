@@ -1490,8 +1490,7 @@ class XRayStructureWorkspace:
                 failures=list(result.get("failures") or ())
                 detail=str(failures[0].get("reason")) if failures else "No prediction was produced."
                 messagebox.showwarning("Predict current",detail,parent=self.root);return
-            self.specimen_list.refresh_specimen(specimen_id)
-            self._load_specimen(specimen_id);self._refresh_workflow()
+            self._refresh_after_prediction(success)
         dialog.after(100,poll)
 
     def predict_structure_batch(self,count):
@@ -1524,7 +1523,7 @@ class XRayStructureWorkspace:
                         self._busy=False;dialog.destroy();result=event[1]
                         success=[row["specimen_id"] for row in result.get("success") or ()]
                         failures=list(result.get("failures") or ())
-                        self._refresh_workflow()
+                        self._refresh_after_prediction(result.get("success") or ())
                         summary=f"Predicted {len(success)} specimen(s)."
                         if failures:summary+=f"\nFailed: {len(failures)}."
                         if success and messagebox.askyesno("Predict structures",summary+"\n\nReview this batch now?",parent=self.root,default="yes"):
@@ -1533,6 +1532,18 @@ class XRayStructureWorkspace:
             except queue.Empty:pass
             if dialog.winfo_exists():dialog.after(100,poll)
         dialog.after(100,poll)
+
+    def _refresh_after_prediction(self,success):
+        """Refresh persisted drafts without moving the selection or list viewport."""
+        self.specimen_list.refresh(preserve_scroll=True,reveal=False)
+        changed={str(row["specimen_id"]) for row in success}
+        if str(self.selected_specimen_id) in changed:
+            yview=self.specimen_list.canvas.yview()[0]
+            self._load_specimen(self.selected_specimen_id)
+            self.specimen_list.canvas.yview_moveto(yview)
+        else:
+            self._refresh_summary();self._refresh_workflow()
+        self.on_changed()
 
     def review_structure_ai(self):
         ids=self.project.structure_ai_review_ids()

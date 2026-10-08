@@ -7,10 +7,14 @@ from PIL import Image, ImageTk
 from .normalization_pipeline import develop_full
 from .project_runtime import scoped_project
 from .ui.dialogs import center,info
+from .ui.tooltips import work_area
 
 class CalibrationWorkflow(tk.Toplevel):
  def __init__(self,parent,project,on_saved=None):
-  super().__init__(parent);self.parent=parent;self.project=project;self.on_saved=on_saved;self.title("Sample calibration");self.geometry("1180x820");self.minsize(900,620);self.resizable(True,True)
+  super().__init__(parent);self.parent=parent;self.project=project;self.on_saved=on_saved;self.title("Sample calibration")
+  left,top,right,bottom=work_area(parent)
+  width=min(1180,right-left-40);height=min(650,bottom-top-70)
+  self.geometry(f"{width}x{height}");self.minsize(min(900,width),min(620,height));self.resizable(True,True)
   self.rows=[r for r in project.catalog_rows() if not r.get("excluded")];self.localities=[]
   for row in self.rows:
    key=row.get("locality") or row.get("sample_id")

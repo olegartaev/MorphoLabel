@@ -4,7 +4,7 @@ import hashlib, json, shutil, zipfile
 from pathlib import Path
 from .crop_training import ACTIVE, MODELS, active_info
 from .io import atomic_json_write
-from .project_storage import schema_hash
+from .project_storage import schema_hash, landmark_schema_identity, landmark_model_schema_identity
 
 class AIPackageError(ValueError): pass
 
@@ -121,11 +121,19 @@ def export_model_package(project, kind, target, model_id=None):
  schemes=export_schemes(project,model)
  # Model output identities were checked above; portable metadata binds to the
  # exact embedded CSV, including harmless display/role changes.
- if kind=="landmark":export_metadata["schema_sha256"]=schema_hash(project.schema_path)
  if kind=="landmark":
-  portable_info=json.loads(files["artifacts/model.json"]);portable_info["schema_sha256"]=export_metadata["schema_sha256"]
+  identity=landmark_model_schema_identity(project,model)
+  # Exact hash proves the historical output mapping for legacy models too.
+  if not identity and model.get("schema_sha256")==schema_hash(project.schema_path):identity=landmark_schema_identity(project.schema)
+  export_metadata["schema_sha256"]=schema_hash(project.schema_path)
+  export_metadata["schema_identity"]=list(identity)
+  metrics["schema_identity"]=list(identity)
+  export_metadata["metrics_json"]=json.dumps(metrics,sort_keys=True)
+ if kind=="landmark":
+  portable_info=json.loads(files["artifacts/model.json"]);portable_info["schema_sha256"]=export_metadata["schema_sha256"];portable_info["schema_identity"]=list(identity)
   files["artifacts/model.json"]=json.dumps(portable_info,indent=2,sort_keys=True).encode("utf-8")
  manifest={"package_format_version":2,"model_type":kind,"model_id":model["model_id"],"created_at":model.get("created_at"),"schema_sha256":export_metadata.get("schema_sha256"),"backend":metrics.get("backend"),"training_statistics":metrics,"model_metadata":export_metadata,"project_schemes":schemes,"files":{}}
+ if kind=="landmark":manifest["schema_identity"]=list(identity)
  with zipfile.ZipFile(Path(target),"w",zipfile.ZIP_DEFLATED) as z:
   for name,data in files.items():_zip_bytes(z,name,data,manifest["files"])
   z.writestr("manifest.json",json.dumps(manifest,indent=2,sort_keys=True))
@@ -143,7 +151,7 @@ def import_model_package(project, source, expected_kind):
   bundle=m.get("project_schemes")
   if bundle is not None:
    from .model_schemes import validate_schemes
-   try:validate_schemes(bundle,expected_kind,m.get("schema_sha256"))
+   try:package_schema=validate_schemes(bundle,expected_kind,m.get("schema_sha256"))
    except (ValueError,TypeError,KeyError) as exc:raise AIPackageError(str(exc)) from exc
   elif expected_kind=="landmark" and m.get("schema_sha256")!=schema_hash(project.schema_path):raise AIPackageError("Landmark model incompatible with current schema")
   for name,digest in m.get("files",{}).items():
@@ -151,6 +159,12 @@ def import_model_package(project, source, expected_kind):
    try:data=z.read(name)
    except KeyError as exc:raise AIPackageError(f"missing package artifact: {name}") from exc
    if hashlib.sha256(data).hexdigest()!=digest:raise AIPackageError(f"checksum mismatch: {name}")
+  if expected_kind=="landmark":
+   identity=landmark_schema_identity(package_schema if bundle is not None else project.schema)
+   try:portable_info=json.loads(z.read("artifacts/model.json"))
+   except (ValueError,TypeError) as exc:raise AIPackageError("Invalid Landmark model metadata.") from exc
+   for evidence in (m,m.get("model_metadata") or {},m.get("training_statistics") or {},portable_info):
+    if "schema_identity" in evidence and evidence["schema_identity"]!=list(identity):raise AIPackageError("Landmark model output identity and embedded scheme disagree.")
   if expected_kind=="crop":
    import io,numpy as np
    try:
@@ -170,12 +184,14 @@ def import_model_package(project, source, expected_kind):
    if expected_kind=="landmark":
     (tmp/"config.py").rename(tmp/"inference_config.py")
     info=json.loads((tmp/"model.json").read_text(encoding="utf-8"))
+    info["schema_identity"]=list(identity)
     info.setdefault("result",{})["inference_config"]="inference_config.py"
     atomic_json_write(tmp/"model.json",info)
    if project.model_metadata(local):raise FileExistsError(local)
    publish()
    metadata=m.get("model_metadata",{});metrics=json.loads(metadata.get("metrics_json") or "{}") if isinstance(metadata.get("metrics_json"),str) else metadata.get("metrics_json",{})
    metrics={**metrics,"origin":"imported","original_model_id":original,"imported_at":__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(),"package_manifest":m}
+   if expected_kind=="landmark":metrics["schema_identity"]=list(identity)
    with project.atomic_model_import():
     if bundle is not None:
      from .model_schemes import apply_schemes
