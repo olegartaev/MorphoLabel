@@ -3,6 +3,7 @@ import copy
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -177,6 +178,18 @@ class QA2RepairInvariants(unittest.TestCase):
             if handle:
                 try:self.assertEqual(0,ctypes.windll.kernel32.WaitForSingleObject(handle,2000))
                 finally:ctypes.windll.kernel32.CloseHandle(handle)
+
+    @unittest.skipUnless(os.name=="nt", "Windows taskkill fallback")
+    def test_preflight_cancel_terminates_owned_worker_when_taskkill_is_denied(self):
+        real_run=subprocess.run;denied=[]
+        def run(command,**kwargs):
+            if command[0]=="taskkill":
+                denied.append(command)
+                return subprocess.CompletedProcess(command,1,b"",b"ERROR: Access denied\r\n")
+            return real_run(command,**kwargs)
+        with patch("app.process_utils.subprocess.run",side_effect=run):
+            self.test_preflight_cancel_terminates_owned_worker()
+        self.assertEqual(1,len(denied))
 
     def test_QA2_P3_001_metric_reader_uses_saved_engineering_validation(self):
         p,_=self.landmark();directory=p.models_root/"m";directory.mkdir(parents=True)

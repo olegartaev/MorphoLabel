@@ -192,7 +192,7 @@ MorphoLabel currently supports **Windows 10/11 x64**.
 
 Download the current installer from the GitHub release page:
 
-[MorphoLabel 1.0.0-rc.1 installer](https://github.com/olegartaev/MorphoLabel/releases/download/v1.0.0-rc.1/MorphoLabel-1.0.0-rc.1-Setup-x64.exe)
+[MorphoLabel 1.0.0-rc.2 installer](https://github.com/olegartaev/MorphoLabel/releases/download/v1.0.0-rc.2/MorphoLabel-1.0.0-rc.2-Setup-x64.exe)
 
 Normal users do not need to install Python, Git or AI libraries manually.
 

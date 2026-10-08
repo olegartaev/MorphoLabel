@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.0-rc.2 — 2026-10-08
+
+- Completed deep release qualification and user-path GUI testing.
+- Corrected scientific X-ray calculations and persistence behavior.
+- Strengthened semantic model and scheme compatibility.
+- Improved Landmark verification, draft and queue state consistency.
+- Hardened portable Landmark and X-ray model roundtrips.
+- Added Unicode-safe scientific exports.
+- Improved frozen RTMPose training preflight isolation.
+- Synchronized workflow counters after prediction, review and calibration.
+- Applied final RC2 GUI and state fixes.
+
 ## 1.0.0-rc.1 — 2026-10-06
 
 - Unified the MorphoLabel application around two production modules: Landmarks & Measurements and X-ray Traits.
