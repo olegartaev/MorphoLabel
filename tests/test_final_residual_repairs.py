@@ -255,7 +255,7 @@ class FinalResidualRepairTests(unittest.TestCase):
             button=ttk.Button(shell,command=view.next_batch);button.pack()
             for ready in (1,2):
                 self.pump(shell,lambda:view.canvas.ready_for(context.current()["image_id"]))
-                self.click(shell,button)
+                button.invoke();shell.update()
                 self.assertEqual(f"Ready: {ready}",view.crop_training_ready_label.cget("text"))
                 self.assertEqual(ready,context.crop_counts()["Train ready"])
             self.assertTrue(p.get_ui_state("crop_active_batch")["finished"])
