@@ -1,8 +1,12 @@
 """Project-level exports backed by canonical production services."""
 import tkinter as tk
+from datetime import datetime, timezone
+from pathlib import Path
+import uuid
 from tkinter import ttk, messagebox, filedialog
 from app.export_formats import available_groups, selected_groups, export_landmark_tps, export_landmark_csv_long, export_landmark_wide, export_morphoj_text
 from app.measurements import export_measurements
+from app.analysis_export import export_analysis_bundle, SCOPE_VERIFIED, SCOPE_ALL
 from .icons import WORKFLOW_ICON_SIZE
 from .section_base import SectionView
 from .tk_lifecycle import trace_for_widget
@@ -40,6 +44,7 @@ class ExportSection(SectionView):
    for check in checks:check.state(['!disabled'] if mode.get()=='groups' else ['disabled'])
   trace_for_widget(panel,mode,'write',update);update()
   self.button(land,'Export landmark coordinates…',lambda:self.landmarks(mode.get(),selected_groups(tuple(chosen),{name:var.get() for name,var in chosen.items()})),'Choose an output format and destination.',style='Primary.TButton').grid(row=4,column=0,columnspan=3,sticky='w',pady=(12,0))
+  self.button(land,'Export analysis dataset…',self.analysis_dataset,'Create a traceable analysis bundle.',style='Primary.TButton').grid(row=5,column=0,columnspan=3,sticky='w',pady=(7,0))
 
   measurement=ttk.LabelFrame(cards,labelwidget=card_header('export_measurements','Measurements'),padding=14);measurement.grid(row=0,column=1,sticky='nsew',padx=(5,0))
   ttk.Label(measurement,text='Export the active named distances as a table for statistical analysis.',style='Muted.TLabel',wraplength=430,justify='left').pack(anchor='w',pady=(0,10))
@@ -52,7 +57,6 @@ class ExportSection(SectionView):
   """Keep the filename extension consistent with the format selected in the dialog."""
   if not target:return target
   label=str(kind or '').casefold();suffix='.tps' if 'tps' in label else '.txt' if 'morphoj' in label or 'tab-delimited' in label or '.txt' in label else '.csv'
-  from pathlib import Path
   path=Path(target)
   return str(path if path.suffix.lower()==suffix else path.with_suffix(suffix))
  def landmarks(self,mode,groups):
@@ -79,3 +83,41 @@ class ExportSection(SectionView):
    progress('Calculating and exporting measurements…')
    return export_measurements(project,target=target,delimiter=delimiter)
   self.shell._run_background_task('Export measurements','Calculating and exporting measurements…',worker,lambda result:messagebox.showinfo('Export measurements',f"Rows: {result['rows']}\nFile: {result['path']}",parent=self.shell))
+
+
+ def analysis_dataset(self):
+  dialog=tk.Toplevel(self.shell);dialog.title('Export analysis dataset');dialog.transient(self.shell);dialog.resizable(False,False)
+  body=ttk.Frame(dialog,padding=16);body.pack(fill='both',expand=True)
+  scope=tk.StringVar(master=dialog,value=SCOPE_VERIFIED);verify=tk.BooleanVar(master=dialog,value=False);destination=tk.StringVar(master=dialog,value='')
+  ttk.Label(body,text='Data scope').grid(row=0,column=0,columnspan=3,sticky='w')
+  ttk.Radiobutton(body,text='Verified only (default)',variable=scope,value=SCOPE_VERIFIED).grid(row=1,column=0,columnspan=3,sticky='w')
+  ttk.Radiobutton(body,text='All (may include unchecked or unfinished records)',variable=scope,value=SCOPE_ALL).grid(row=2,column=0,columnspan=3,sticky='w')
+  ttk.Checkbutton(body,text='Verify source files (SHA256; may take a long time)',variable=verify).grid(row=3,column=0,columnspan=3,sticky='w',pady=(6,8))
+  ttk.Label(body,text='Destination parent folder').grid(row=4,column=0,columnspan=3,sticky='w')
+  entry=ttk.Entry(body,textvariable=destination,width=52);entry.grid(row=5,column=0,columnspan=2,sticky='ew',pady=(3,8))
+  def choose():
+   value=filedialog.askdirectory(parent=dialog,title='Choose analysis bundle destination')
+   if value: destination.set(value)
+  ttk.Button(body,text='Browse…',command=choose).grid(row=5,column=2,sticky='e',padx=(7,0))
+  def start():
+   parent=destination.get().strip()
+   if not parent:
+    messagebox.showwarning('Export analysis dataset','Choose a destination folder.',parent=dialog);return
+   stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+   target=Path(parent)/('MorphoLabel_Analysis_'+stamp+'_'+uuid.uuid4().hex[:8])
+   project=self.context.project;chosen_scope=scope.get();check_sources=verify.get();dialog.destroy()
+   def worker(progress):
+    progress('Taking a consistent SQLite snapshot and building the analysis bundle…')
+    return export_analysis_bundle(project,target,scope=chosen_scope,verify_sources=check_sources)
+   def complete(result):
+    counts=result['counts'];morpho=counts['MorphoJ_omitted']
+    messagebox.showinfo('Analysis dataset exported',
+     f"Active: {counts['active_specimens']}  Selected: {counts['selected_for_scope']}\n"
+     f"Drafts: {counts['drafts']}  Excluded: {counts['excluded']}\n"
+     f"MorphoJ omitted ALL/GM/CLASSICAL: {morpho.get('ALL',0)}/{morpho.get('GM',0)}/{morpho.get('CLASSICAL',0)}\n"
+     f"Destination: {result['path']}",parent=self.shell)
+   self.shell._run_background_task('Export analysis dataset','Creating a consistent analysis bundle…',worker,complete)
+  controls=ttk.Frame(body);controls.grid(row=6,column=0,columnspan=3,sticky='e',pady=(6,0))
+  ttk.Button(controls,text='Cancel',command=dialog.destroy).pack(side='right')
+  ttk.Button(controls,text='Export',command=start).pack(side='right',padx=(0,7))
+  entry.focus_set()
