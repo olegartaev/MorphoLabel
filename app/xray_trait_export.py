@@ -20,18 +20,26 @@ def _trait_columns(traits):
     return columns
 
 
+def _sample_path(relative_path):
+    """Match the X-ray review UI: parent folder, or Root for root-level plates."""
+    parent=Path(str(relative_path or "")).parent.as_posix()
+    return "Root" if parent in {"", ".", "/"} else parent
+
+
 def export_trait_rows(project,target,verified_only=False):
     """Write current trait calculations for all specimens or verified rows only."""
     target=Path(target);target.parent.mkdir(parents=True,exist_ok=True)
     scheme_record=project.active_scheme_record();traits=list(scheme_record["scheme"].get("traits") or ())
     trait_columns=_trait_columns(traits);rows=list(project.trait_rows())
     if verified_only:rows=[row for row in rows if str(row.get("result_status") or "")=="verified"]
-    fields=("specimen_id","image_id","ordinal","relative_path","result_status","schema_version_id","specimen_code",
+    fields=("specimen_id","image_id","sample_id","filename","ordinal","relative_path","result_status","schema_version_id","specimen_code",
             *(label for _trait_id,label in trait_columns))
     with target.open("w",encoding="utf-8-sig",newline="") as stream:
         writer=csv.DictWriter(stream,fieldnames=fields,extrasaction="ignore");writer.writeheader()
         for row in rows:
-            values={field:row.get(field,"") for field in fields[:5]}
+            values={field:row.get(field,"") for field in ("specimen_id","image_id","ordinal","relative_path","result_status")}
+            values["sample_id"]=_sample_path(row.get("relative_path"))
+            values["filename"]=Path(str(row.get("relative_path") or "")).name
             values["schema_version_id"]=scheme_record["scientific_version_id"]
             values["specimen_code"]=specimen_display_id(row)
             trait_values=row.get("trait_values") or {}

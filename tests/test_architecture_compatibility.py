@@ -171,25 +171,28 @@ class ArchitectureCompatibilityTests(unittest.TestCase):
             rows = persisted_rows(p)
             output = self.export_bytes(p)
             if name == "xray":
-                # RC1 adds explicit scientific identity metadata. Prove the
+                # The X-ray export adds explicit identity metadata. Prove the
                 # legacy version retains its own identity and exact contract,
-                # then compare every original column with the frozen oracle.
+                # then compare every pre-existing column with the frozen oracle.
                 from app.xray_schema import scientific_scheme_hash
                 for row in rows["schema_versions"]:
                     self.assertEqual(row["version_id"],row.pop("scientific_version_id"))
                     self.assertEqual(scientific_scheme_hash(json.loads(row["payload_json"])),row.pop("scientific_hash"))
-                # The frozen oracle predates user-assigned IDs. Prove that the
-                # additive field has its legacy default, then compare every
-                # original column and export byte against the unchanged oracle.
+                # The frozen oracle predates user-assigned IDs, sample and
+                # filename identity columns. Prove each additive field is
+                # backwards-compatible, then compare the unchanged old columns.
                 for row in rows["specimens"]:
                     self.assertEqual("", row.pop("specimen_code"))
                 reader = csv.DictReader(io.StringIO(output.decode("utf-8-sig"), newline=""))
                 self.assertIn("specimen_code", reader.fieldnames)
                 legacy = io.StringIO(newline="")
-                writer = csv.DictWriter(legacy, fieldnames=[key for key in reader.fieldnames if key != "specimen_code"])
+                additive = {"specimen_code", "sample_id", "filename"}
+                writer = csv.DictWriter(legacy, fieldnames=[key for key in reader.fieldnames if key not in additive])
                 writer.writeheader()
                 for row in reader:
                     self.assertEqual(row["ordinal"], row.pop("specimen_code"))
+                    self.assertTrue(row.pop("sample_id"))
+                    self.assertTrue(row.pop("filename"))
                     writer.writerow(row)
                 output = legacy.getvalue().encode("utf-8-sig")
             result[name] = {"tables": {k: {"rows": len(v), "sha256": digest(v)} for k, v in rows.items()},

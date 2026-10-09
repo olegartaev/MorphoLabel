@@ -4,6 +4,7 @@ from pathlib import Path
 from app.landmark_state import load_current_landmark_state
 from app.results_export import MISSING_TPS
 from app.io import atomic_text_write
+from app.export_identity import IDENTITY_FIELDS, companion_path, export_identity, write_specimen_crosswalk
 
 COORDINATE_DECIMALS=5
 SCALE_DECIMALS=6
@@ -23,7 +24,7 @@ def _allowed(project,groups):
 
 def _morphoj_identifier(image):
  """MorphoJ text identifiers must occupy the first field and be unique."""
- return str(image.get("image_id") or image.get("specimen_id") or image.get("original_name") or "")
+ return str(image.get("image_id") or image.get("specimen_id") or "")
 
 def _scale_mm_per_px_text(project,image):
  locality=image.get("locality") or image.get("sample_id")
@@ -60,8 +61,9 @@ def _selected_tps_coordinates(project,image_id,schema):
   if not (math.isfinite(x) and math.isfinite(y)):return None
   coords.append((x,y))
  return coords
-def export_landmark_tps(project,groups=(),filename='landmarks.tps',target=None):
+def export_landmark_tps(project,groups=(),filename='landmarks.tps',target=None,*,write_companion=True):
  schema=_allowed(project,groups);target=Path(target) if target else Path(project.results_root)/filename;target.parent.mkdir(parents=True,exist_ok=True);lines=[]
+ included=[];exported_ids=[]
  for image in project.catalog_rows():
   if image.get('excluded'):continue
   coords=_selected_tps_coordinates(project,image['image_id'],schema)
@@ -69,31 +71,34 @@ def export_landmark_tps(project,groups=(),filename='landmarks.tps',target=None):
   lines.append(f'LM={len(schema)}')
   for x,y in coords:lines.append(f'{_coord(x)} {_coord(y)}')
   lines.extend((f"IMAGE={image.get('original_name','')}",f"ID={image['image_id']}"))
+  included.append(image);exported_ids.append((image['image_id'],image['image_id']))
   scale=_scale_mm_per_px_text(project,image)
   if scale:lines.append(f"SCALE={scale}")
   lines.append('')
- atomic_text_write(target,'\n'.join(lines).rstrip()+'\n' if lines else '');return target
+ atomic_text_write(target,'\n'.join(lines).rstrip()+'\n' if lines else '')
+ if write_companion:write_specimen_crosswalk(companion_path(target),included,exported_ids)
+ return target
 def export_landmark_csv_long(project,groups=(),target=None):
- schema=_allowed(project,groups);allowed={int(item['id']) for item in schema};target=Path(target) if target else Path(project.results_root)/'landmarks_long.csv';target.parent.mkdir(parents=True,exist_ok=True);fields=('image_id','locality','filename','landmark_id','category','x_standardized','y_standardized','state','provenance','model_id','confidence','updated_at')
+ schema=_allowed(project,groups);allowed={int(item['id']) for item in schema};target=Path(target) if target else Path(project.results_root)/'landmarks_long.csv';target.parent.mkdir(parents=True,exist_ok=True);fields=(*IDENTITY_FIELDS,'landmark_id','category','x_standardized','y_standardized','state','provenance','model_id','confidence','updated_at')
  with target.open('w',encoding='utf-8',newline='') as stream:
   writer=csv.DictWriter(stream,fieldnames=fields);writer.writeheader();labels={int(item['id']):group_label(item) for item in schema}
   for image in project.catalog_rows():
    if image.get('excluded'):continue
    for ident,point in sorted(project.load_landmarks(image['image_id']).items()):
-    if int(ident) in allowed:writer.writerow({'image_id':image['image_id'],'locality':image.get('locality',image.get('sample_id','')),'filename':image.get('original_name',''),'landmark_id':ident,'category':labels.get(int(ident),''),'x_standardized':'' if point.get('x_standardized') is None else _coord(point.get('x_standardized')),'y_standardized':'' if point.get('y_standardized') is None else _coord(point.get('y_standardized')),'state':point.get('state'),'provenance':point.get('provenance'),'model_id':point.get('model_id'),'confidence':point.get('confidence'),'updated_at':point.get('updated_at')})
+    if int(ident) in allowed:writer.writerow({**export_identity(image),'landmark_id':ident,'category':labels.get(int(ident),''),'x_standardized':'' if point.get('x_standardized') is None else _coord(point.get('x_standardized')),'y_standardized':'' if point.get('y_standardized') is None else _coord(point.get('y_standardized')),'state':point.get('state'),'provenance':point.get('provenance'),'model_id':point.get('model_id'),'confidence':point.get('confidence'),'updated_at':point.get('updated_at')})
  return target
 def export_landmark_wide(project,groups=(),filename='landmarks_wide.csv',delimiter=',',target=None):
- schema=_allowed(project,groups);target=Path(target) if target else Path(project.results_root)/filename;target.parent.mkdir(parents=True,exist_ok=True);fields=['specimen_id']+[item for point in schema for item in (f"x{point['id']}",f"y{point['id']}")]
+ schema=_allowed(project,groups);target=Path(target) if target else Path(project.results_root)/filename;target.parent.mkdir(parents=True,exist_ok=True);fields=[*IDENTITY_FIELDS]+[item for point in schema for item in (f"x{point['id']}",f"y{point['id']}")]
  with target.open('w',encoding='utf-8',newline='') as stream:
   writer=csv.DictWriter(stream,fieldnames=fields,delimiter=delimiter);writer.writeheader()
   for image in project.catalog_rows():
    if image.get('excluded'):continue
-   points=project.load_landmarks(image['image_id']);row={'specimen_id':image.get('specimen_id') or image['image_id']}
+   points=project.load_landmarks(image['image_id']);row=export_identity(image)
    for point in schema:
     saved=points.get(int(point['id']),{});row[f"x{point['id']}"]='' if saved.get('state')=='missing' or saved.get('x_standardized') is None else _coord(saved.get('x_standardized'));row[f"y{point['id']}"]='' if saved.get('state')=='missing' or saved.get('y_standardized') is None else _coord(saved.get('y_standardized'))
    writer.writerow(row)
  return target
-def export_morphoj_text(project,groups=(),target=None):
+def export_morphoj_text(project,groups=(),target=None,*,write_companion=True):
  """MorphoJ row/column text: unique ID first, then ordered numeric X/Y pairs.
 
  MorphoJ expects the identifier as the first entry of each specimen row and
@@ -101,7 +106,7 @@ def export_morphoj_text(project,groups=(),target=None):
  with unresolved or explicitly missing selected landmarks are omitted rather
  than emitting blanks in coordinate columns.
  """
- schema=_allowed(project,groups);target=Path(target) if target else Path(project.results_root)/'landmarks_morphoj.txt';target.parent.mkdir(parents=True,exist_ok=True)
+ schema=_allowed(project,groups);target=Path(target) if target else Path(project.results_root)/'landmarks_morphoj.txt';target.parent.mkdir(parents=True,exist_ok=True);included=[];exported_ids=[]
  fields=['ID']+[axis+str(item['id']) for item in schema for axis in ('x','y')]
  with target.open('w',encoding='utf-8',newline='') as stream:
   writer=csv.writer(stream,delimiter='\t',lineterminator='\n');writer.writerow(fields)
@@ -109,5 +114,6 @@ def export_morphoj_text(project,groups=(),target=None):
    if image.get('excluded'):continue
    coords=_selected_complete_coordinates(project,image['image_id'],schema)
    if coords is None:continue
-   writer.writerow([_morphoj_identifier(image),*[_coord(value) for value in coords]])
+   exported_id=_morphoj_identifier(image);writer.writerow([exported_id,*[_coord(value) for value in coords]]);included.append(image);exported_ids.append((image['image_id'],exported_id))
+ if write_companion:write_specimen_crosswalk(companion_path(target),included,exported_ids)
  return target

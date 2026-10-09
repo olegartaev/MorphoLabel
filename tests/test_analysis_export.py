@@ -201,6 +201,7 @@ class AnalysisExportBundleTests(unittest.TestCase):
             result=worker(lambda _progress:None);root.completed.append(result);done(result)
         root._run_background_task=run_task
         view=ExportSection(root,root);view.render();root.update_idletasks()
+        self.assertTrue(any(isinstance(w,ttk.Label) and str(w.cget("text")).startswith("Project folder:") and str(self.project.root) in str(w.cget("text")) for w in _walk(root)))
         self.assertIs(view.shell,root);self.assertIs(root._run_background_task,run_task)
         page_buttons=[w for w in _walk(root) if isinstance(w,ttk.Button)]
         self.assertTrue(any(w.cget("text")=="Export analysis dataset…" for w in page_buttons))

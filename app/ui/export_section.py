@@ -18,8 +18,9 @@ class ExportSection(SectionView):
   header=ttk.Frame(panel);header.pack(fill='x',pady=(0,14));header.columnconfigure(0,weight=1)
   ttk.Label(header,text='Export',style='PageTitle.TLabel').grid(row=0,column=0,sticky='w')
   ttk.Label(header,text=f"{cfg.get('name',self.context.project.root.name)} · {len(self.context.rows)} images",style='PageSubtitle.TLabel').grid(row=1,column=0,sticky='w',pady=(2,0))
+  ttk.Label(header,text=f"Project folder: {self.context.project.root}",style='Muted.TLabel',wraplength=700,justify='left').grid(row=2,column=0,sticky='w',pady=(2,0))
   guide='Save reviewed results for statistics or figures.\n\nLandmark coordinates\nChoose TPS, CSV or a MorphoJ-compatible format for shape analysis.\n\nMeasurements\nSave the distances you defined in Measurements as a table.'
-  self.what_to_do(header,'Export — quick guide',guide).grid(row=0,column=1,rowspan=2,sticky='ne')
+  self.what_to_do(header,'Export — quick guide',guide).grid(row=0,column=1,rowspan=3,sticky='ne')
 
   cards=ttk.Frame(panel);cards.pack(fill='x');cards.columnconfigure(0,weight=1);cards.columnconfigure(1,weight=1)
   def card_header(icon,text):
@@ -73,7 +74,12 @@ class ExportSection(SectionView):
    if kind.startswith('CSV long'):return export_landmark_csv_long(project,selected,target=target)
    if kind.startswith('MorphoJ'):return export_morphoj_text(project,selected,target=target)
    return export_landmark_tps(project,selected,target=target)
-  self.shell._run_background_task('Export landmark coordinates','Exporting landmark coordinates…',worker,lambda path:messagebox.showinfo('Export landmark coordinates',f'Created: {path}',parent=self.shell))
+  def complete(path):
+   companion=path.with_name(f"{path.stem}_specimens.csv") if kind.startswith('TPS') or kind.startswith('MorphoJ') else None
+   message=f'Created: {path}'
+   if companion is not None:message+=f'\nSpecimen crosswalk: {companion}'
+   messagebox.showinfo('Export landmark coordinates',message,parent=self.shell)
+  self.shell._run_background_task('Export landmark coordinates','Exporting landmark coordinates…',worker,complete)
 
  def measurements(self):
   types=[('CSV (*.csv)','*.csv'),('Tab-delimited text (*.txt)','*.txt')];target,kind=self._save_as('Export measurements','measurements.csv',types)

@@ -9,6 +9,7 @@ from .landmark_state import load_current_landmark_state
 from .measurements import active_measurements, export_measurements, measurement_definitions_csv, values_for_image
 from .project_storage import Project
 from .version import __version__
+from .export_identity import export_identity
 
 SCOPE_VERIFIED = "verified_only"
 SCOPE_ALL = "all"
@@ -133,9 +134,9 @@ def _group_filenames(spec):
 def _omissions(project,all_rows,selected,group_specs):
     selected_ids={r["image_id"] for r in selected};out=[];missing=[];definitions=active_measurements(project)
     def omission(row,fmt,group,reason,record_type="specimen",landmark_id="",measurement=""):
-        out.append(dict(image_id=row["image_id"],specimen_id=row.get("specimen_id") or row["image_id"],output_format=fmt,group=group,record_type=record_type,landmark_id=landmark_id,measurement=measurement,reason=reason))
+        out.append(dict(image_id=row["image_id"],specimen_id=export_identity(row)["specimen_id"],output_format=fmt,group=group,record_type=record_type,landmark_id=landmark_id,measurement=measurement,reason=reason))
     def missing_value(row,fmt,group,ident,abbr,reason,record_type="landmark",measurement=""):
-        missing.append(dict(image_id=row["image_id"],specimen_id=row.get("specimen_id") or row["image_id"],output_format=fmt,group=group,record_type=record_type,landmark_id=ident,landmark_abbreviation=abbr,measurement=measurement,reason=reason))
+        missing.append(dict(image_id=row["image_id"],specimen_id=export_identity(row)["specimen_id"],output_format=fmt,group=group,record_type=record_type,landmark_id=ident,landmark_abbreviation=abbr,measurement=measurement,reason=reason))
     for row in all_rows:
         iid=row["image_id"]
         if row.get("excluded"):
@@ -187,7 +188,7 @@ def _validate_manifest(path):
 
 def _validate_output_identities(directory, project, selected, group_specs):
     selected_ids=[row["image_id"] for row in selected]
-    specimen_ids=[row.get("specimen_id") or row["image_id"] for row in selected]
+    specimen_ids=[export_identity(row)["specimen_id"] for row in selected]
     for spec in group_specs:
         filename=_group_filenames(spec)["wide_csv"]
         with (directory/filename).open(encoding="utf-8-sig",newline="") as stream:
@@ -268,9 +269,9 @@ def export_analysis_bundle(project,destination,*,scope=SCOPE_VERIFIED,verify_sou
             selected_group=() if spec["key"]=="ALL" else (spec["label"],)
             names=_group_filenames(spec)
             exports.extend([
-            (names["TPS"],lambda p,g=selected_group:export_landmark_tps(view,groups=g,target=p)),
+            (names["TPS"],lambda p,g=selected_group:export_landmark_tps(view,groups=g,target=p,write_companion=False)),
             (names["wide_csv"],lambda p,g=selected_group:export_landmark_wide(view,groups=g,target=p)),
-            (names["MorphoJ"],lambda p,g=selected_group:export_morphoj_text(view,groups=g,target=p)),
+            (names["MorphoJ"],lambda p,g=selected_group:export_morphoj_text(view,groups=g,target=p,write_companion=False)),
             ])
         exports.extend([
             ("landmarks_long.csv",lambda p:export_landmark_csv_long(view,target=p)),
@@ -286,9 +287,7 @@ def export_analysis_bundle(project,destination,*,scope=SCOPE_VERIFIED,verify_sou
             st=load_current_landmark_state(snap,row["image_id"]); draft=snap.annotation_draft(row["image_id"])
             hs,digest=_hash_status(row,source_root,verify_sources)
             specimens.append({
-                "specimen_id":row.get("specimen_id") or row["image_id"],"image_id":row["image_id"],
-                "locality":row.get("locality") or row.get("sample_id") or "",
-                "sample_id":row.get("sample_id") or "","filename":row.get("original_name") or "","source_relative_path":row.get("relative_path") or "",
+                **export_identity(row),
                 "source_hash_status":hs,"source_sha256":digest,
                 "excluded":str(bool(row.get("excluded"))).lower(),"human_verified":str(st.human_verified).lower(),
                 "draft_status":"draft" if draft else "none","review_status":"verified" if st.human_verified else ("draft" if draft else "pending_review"),
