@@ -19,6 +19,33 @@ def _sha256(path):
         for chunk in iter(lambda:f.read(1024*1024),b""): h.update(chunk)
     return h.hexdigest()
 
+def _project_definition_files(project, destination_root=None):
+    destination_root = Path(destination_root) if destination_root is not None else Path(project.root)
+    return {
+        Path(project.config_path): destination_root / "project.yaml",
+        Path(project.schema_path): destination_root / "landmark_schema.csv",
+        Path(project.root) / "measurement_schema.csv": destination_root / "measurement_schema.csv",
+    }
+
+def _definition_fingerprints(files):
+    return {source: (_sha256(source) if source.is_file() else None) for source in files}
+
+def _copy_consistent_project_definitions(project, root, before):
+    files = _project_definition_files(project, root)
+    for source, target in files.items():
+        if source.is_file():
+            shutil.copy2(source, target)
+        elif source.name == "measurement_schema.csv":
+            target.write_text("Use,Abbr,Name,Point1,Point2,Point1Abbr,Point2Abbr\n", encoding="utf-8")
+    after = _definition_fingerprints(files)
+    copied = {source: (_sha256(target) if target.is_file() else None)
+              for source, target in files.items() if before[source] is not None}
+    copied_expected = {source: digest for source, digest in before.items() if digest is not None}
+    if after != before or copied != copied_expected:
+        raise RuntimeError(
+            "Project schema, configuration, or measurement definitions changed while preparing the export snapshot; retry the export."
+        )
+
 def _csv(path, fields, rows):
     with Path(path).open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=fields,lineterminator="\n"); w.writeheader(); w.writerows(rows)
@@ -212,6 +239,8 @@ def export_analysis_bundle(project,destination,*,scope=SCOPE_VERIFIED,verify_sou
     stage=Path(tempfile.mkdtemp(prefix=f".{destination.name}.staging-",dir=destination.parent))
     scratch=Path(tempfile.mkdtemp(prefix="morpholabel-snapshot-")); published=False
     try:
+        definition_files = _project_definition_files(project)
+        definition_fingerprints = _definition_fingerprints(definition_files)
         snapdb=scratch/"snapshot.sqlite"
         src=sqlite3.connect(project.path.resolve().as_uri()+"?mode=ro",uri=True,timeout=10)
         src.execute("PRAGMA query_only=ON"); dst=sqlite3.connect(snapdb)
@@ -219,11 +248,7 @@ def export_analysis_bundle(project,destination,*,scope=SCOPE_VERIFIED,verify_sou
         finally: dst.close(); src.close()
         source_snapshot_hash=_sha256(snapdb)
         root=scratch/"project"; (root/"project_data").mkdir(parents=True)
-        shutil.copy2(project.config_path,root/"project.yaml")
-        shutil.copy2(project.schema_path,root/"landmark_schema.csv")
-        mdef=Path(project.root)/"measurement_schema.csv"
-        if mdef.exists(): shutil.copy2(mdef,root/"measurement_schema.csv")
-        else: (root/"measurement_schema.csv").write_text("Use,Abbr,Name,Point1,Point2,Point1Abbr,Point2Abbr\n",encoding="utf-8")
+        _copy_consistent_project_definitions(project, root, definition_fingerprints)
         shutil.copy2(snapdb,root/"project_data"/"project.sqlite")
         cfg=json.loads((root/"project.yaml").read_text(encoding="utf-8")); cfg["source_root"]=str(scratch/"no_source_files")
         (root/"project.yaml").write_text(json.dumps(cfg,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")

@@ -153,6 +153,26 @@ class AnalysisExportBundleTests(unittest.TestCase):
         self.assertFalse(self.dest.exists())
         self.assertFalse(list(self.root.glob(".bundle.staging-*")))
 
+    def test_definition_change_during_snapshot_preparation_aborts_export(self):
+        real_copy = __import__("shutil").copy2
+        for filename in ("landmark_schema.csv", "measurement_schema.csv"):
+            with self.subTest(filename=filename):
+                source = self.project.root / filename
+                original = source.read_bytes()
+                destination = self.root / f"bundle_{filename.replace('.', '_')}"
+                def copy_then_mutate(src, dst, *args, **kwargs):
+                    result = real_copy(src, dst, *args, **kwargs)
+                    if Path(src).resolve() == source.resolve():
+                        source.write_bytes(original + b"\n# concurrent scientific definition change\n")
+                    return result
+                try:
+                    with patch("app.analysis_export.shutil.copy2", side_effect=copy_then_mutate):
+                        with self.assertRaisesRegex(RuntimeError, "changed while preparing the export snapshot"):
+                            export_analysis_bundle(self.project, destination, scope=SCOPE_ALL)
+                    self.assertFalse(destination.exists())
+                finally:
+                    source.write_bytes(original)
+
     def test_optional_source_hash_is_export_time_only_and_never_written_back(self):
         db_hash = self.sha(self.project.path)
         result = export_analysis_bundle(self.project, self.dest, scope=SCOPE_ALL, verify_sources=True)
