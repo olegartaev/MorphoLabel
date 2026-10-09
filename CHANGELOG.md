@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0-rc.4 — 2026-10-09
+
+- Added a consistency check that aborts an analysis export if project definitions change while its database snapshot is prepared.
+
 ## 1.0.0-rc.3 — 2026-10-08
 
 - Revalidated the Windows installer and installed application for release candidate 3.
