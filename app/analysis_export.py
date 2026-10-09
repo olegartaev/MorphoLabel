@@ -1,6 +1,6 @@
 """Consistent analysis export bundles created from one SQLite snapshot."""
 from __future__ import annotations
-import csv, hashlib, json, os, shutil, sqlite3, tempfile
+import csv, hashlib, json, math, os, re, shutil, sqlite3, tempfile, unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from .export_formats import (_selected_complete_coordinates, _selected_tps_coordinates, available_groups,
@@ -8,6 +8,7 @@ from .export_formats import (_selected_complete_coordinates, _selected_tps_coord
 from .landmark_state import load_current_landmark_state
 from .measurements import active_measurements, export_measurements, measurement_definitions_csv, values_for_image
 from .project_storage import Project
+from .version import __version__
 
 SCOPE_VERIFIED = "verified_only"
 SCOPE_ALL = "all"
@@ -61,43 +62,84 @@ def _hash_status(row, root, requested):
     if stored: return ("verified_match" if digest==stored else "verified_mismatch"),digest
     return "verified_at_export_time",digest
 
-def _reason(project,row,schema):
-    state=load_current_landmark_state(project,row["image_id"]); groups={"explicit_missing":[], "unresolved":[], "absent":[]}
-    for item in schema:
-        ident=int(item["id"]); p=state.points_by_id.get(ident)
-        if ident in state.explicitly_missing_ids: groups["explicit_missing"].append(ident)
-        elif ident in state.unresolved_ids: groups["unresolved"].append(ident)
-        elif not p or p.get("x_standardized") is None or p.get("y_standardized") is None: groups["absent"].append(ident)
-    return ";".join(f"{k}_landmark_ids="+",".join(map(str,v)) for k,v in groups.items() if v)
+def _point_reason(state,ident):
+    if ident in state.explicitly_missing_ids:return "explicitly_missing"
+    if ident in state.unresolved_ids:return "unresolved"
+    point=state.points_by_id.get(ident)
+    if not point:return "absent"
+    try:x=float(point.get("x_standardized"));y=float(point.get("y_standardized"))
+    except (TypeError,ValueError):return "coordinate_missing"
+    return "" if math.isfinite(x) and math.isfinite(y) else "non_finite_coordinate"
 
-def _omissions(project,all_rows,selected,groups):
-    selected_ids={r["image_id"] for r in selected}; out=[]
-    definitions=active_measurements(project)
+def _reason(project,row,schema):
+    state=load_current_landmark_state(project,row["image_id"])
+    groups={name:[] for name in ("explicitly_missing","unresolved","absent","coordinate_missing","non_finite_coordinate")}
+    for item in schema:
+        ident=int(item["id"]);why=_point_reason(state,ident)
+        if why:groups[why].append(ident)
+    return ";".join(f"{key}_landmark_ids="+",".join(map(str,ids)) for key,ids in groups.items() if ids)
+
+def _group_specs(project):
+    schema=list(project.schema);specs=[{"key":"ALL","label":"ALL","schema":schema,"token":"ALL"}]
+    keys={"all"};tokens={"all"}
+    for label in available_groups(project):
+        key=label
+        if key.casefold() in keys:key=f"group:{label}"
+        base=key;suffix=2
+        while key.casefold() in keys:key=f"{base}:{suffix}";suffix+=1
+        keys.add(key.casefold())
+        if label in {"GM","CLASSICAL"}:token=label
+        else:
+            normalized=unicodedata.normalize("NFKD",str(label)).encode("ascii","ignore").decode("ascii")
+            token=re.sub(r"[^A-Za-z0-9_-]+","_",normalized).strip("_-.") or "group"
+        base=token;suffix=2
+        while token.casefold() in tokens:token=f"{base}__{suffix}";suffix+=1
+        tokens.add(token.casefold())
+        specs.append({"key":key,"label":label,"schema":[item for item in schema if group_label(item)==label],"token":token})
+    return specs
+
+def _group_filenames(spec):
+    if spec["key"]=="ALL":return {"TPS":"landmarks_all.tps","wide_csv":"landmarks_wide_ALL.csv","MorphoJ":"landmarks_MorphoJ_ALL.txt"}
+    token=spec["token"]
+    return {"TPS":f"landmarks_{token}.tps","wide_csv":f"landmarks_wide_{token}.csv","MorphoJ":f"landmarks_MorphoJ_{token}.txt"}
+
+def _omissions(project,all_rows,selected,group_specs):
+    selected_ids={r["image_id"] for r in selected};out=[];missing=[];definitions=active_measurements(project)
+    def omission(row,fmt,group,reason,record_type="specimen",landmark_id="",measurement=""):
+        out.append(dict(image_id=row["image_id"],specimen_id=row.get("specimen_id") or row["image_id"],output_format=fmt,group=group,record_type=record_type,landmark_id=landmark_id,measurement=measurement,reason=reason))
+    def missing_value(row,fmt,group,ident,abbr,reason,record_type="landmark",measurement=""):
+        missing.append(dict(image_id=row["image_id"],specimen_id=row.get("specimen_id") or row["image_id"],output_format=fmt,group=group,record_type=record_type,landmark_id=ident,landmark_abbreviation=abbr,measurement=measurement,reason=reason))
     for row in all_rows:
-        iid=row["image_id"]; sid=row.get("specimen_id") or iid
+        iid=row["image_id"]
         if row.get("excluded"):
-            out.append(dict(image_id=iid,specimen_id=sid,output_format="*",group="ALL",reason="excluded")); continue
+            omission(row,"*","ALL","excluded");continue
         if iid not in selected_ids:
-            out.append(dict(image_id=iid,specimen_id=sid,output_format="*",group="ALL",reason="not_human_verified")); continue
-        for group,schema in groups.items():
-            why=_reason(project,row,schema)
-            if why:
-                for fmt in ("wide_csv","long_csv"): out.append(dict(image_id=iid,specimen_id=sid,output_format=fmt,group=group,reason=why))
-            if _selected_tps_coordinates(project,iid,schema) is None:
-                out.append(dict(image_id=iid,specimen_id=sid,output_format="TPS",group=group,reason=why or "invalid_or_nonfinite_coordinates"))
+            omission(row,"*","ALL","not_human_verified");continue
+        state=load_current_landmark_state(project,iid);saved=project.load_landmarks(iid)
+        for spec in group_specs:
+            group=spec["key"];schema=spec["schema"]
+            tps_included=_selected_tps_coordinates(project,iid,schema) is not None
+            if not tps_included:omission(row,"TPS",group,_reason(project,row,schema) or "invalid_or_nonfinite_coordinates")
             if _selected_complete_coordinates(project,iid,schema) is None:
-                out.append(dict(image_id=iid,specimen_id=sid,output_format="MorphoJ",group=group,reason=why or "invalid_or_nonfinite_coordinates"))
+                omission(row,"MorphoJ",group,_reason(project,row,schema) or "invalid_or_nonfinite_coordinates")
+            for item in schema:
+                ident=int(item["id"]);abbr=str(item.get("abbr") or "");why=_point_reason(state,ident)
+                if not why:continue
+                if tps_included:missing_value(row,"TPS",group,ident,abbr,why)
+                if spec["key"]=="ALL":
+                    if ident not in saved:omission(row,"long_csv","ALL",why,"landmark",ident)
+                    else:missing_value(row,"long_csv","ALL",ident,abbr,why)
+                missing_value(row,"wide_csv",group,ident,abbr,why)
         values,_=values_for_image(project,row,definitions)
-        state=load_current_landmark_state(project,iid)
         for item in definitions:
             if values.get(item["abbr"])=="NA":
-                missing=[ident for ident in (item["point1"],item["point2"])
-                         if ident not in state.points_by_id or ident in state.explicitly_missing_ids
-                         or state.points_by_id[ident].get("x_standardized") is None
-                         or state.points_by_id[ident].get("y_standardized") is None]
-                reason=("missing_endpoint_landmark_ids="+",".join(map(str,missing))) if missing else "calibration_unavailable"
-                out.append(dict(image_id=iid,specimen_id=sid,output_format="measurements",group=item["abbr"],reason=reason))
-    return out
+                endpoints=[int(ident) for ident in (item["point1"],item["point2"]) if _point_reason(state,int(ident))]
+                if endpoints:
+                    statuses=sorted({_point_reason(state,ident) for ident in endpoints})
+                    reason="missing_endpoint_landmark_ids="+",".join(map(str,endpoints))+";states="+",".join(statuses)
+                else:reason="calibration_unavailable"
+                missing_value(row,"measurements","ALL","","",reason,"measurement",item["abbr"])
+    return out,missing
 
 def _output_counts(directory):
     result={}
@@ -116,10 +158,11 @@ def _validate_manifest(path):
         if not p.is_file() or p.stat().st_size!=meta["size_bytes"] or _sha256(p)!=meta["sha256"]:
             raise ValueError(f"manifest validation failed for {name}")
 
-def _validate_output_identities(directory, project, selected, schemas):
+def _validate_output_identities(directory, project, selected, group_specs):
     selected_ids=[row["image_id"] for row in selected]
     specimen_ids=[row.get("specimen_id") or row["image_id"] for row in selected]
-    for filename in ("landmarks_wide_ALL.csv","landmarks_wide_GM.csv","landmarks_wide_CLASSICAL.csv"):
+    for spec in group_specs:
+        filename=_group_filenames(spec)["wide_csv"]
         with (directory/filename).open(encoding="utf-8-sig",newline="") as stream:
             ids=[row["specimen_id"] for row in csv.DictReader(stream)]
         if ids!=specimen_ids: raise ValueError(f"{filename} specimen crosswalk does not match scope")
@@ -128,7 +171,7 @@ def _validate_output_identities(directory, project, selected, schemas):
     if measurement_ids!=selected_ids: raise ValueError("measurements.csv image identities do not match scope")
     with (directory/"landmarks_long.csv").open(encoding="utf-8-sig",newline="") as stream:
         long_rows=list(csv.DictReader(stream))
-    allowed={int(item["id"]) for item in schemas["ALL"]}
+    allowed={int(item["id"]) for item in project.schema}
     expected={(row["image_id"],int(ident)) for row in selected
               for ident in project.load_landmarks(row["image_id"]) if int(ident) in allowed}
     actual=[(row["image_id"],int(row["landmark_id"])) for row in long_rows]
@@ -145,11 +188,12 @@ def _validate_output_identities(directory, project, selected, schemas):
             result.append(tags["ID"]); index+=1
         return result
     from .export_formats import _selected_tps_coordinates, _selected_complete_coordinates
-    for group, schema in (("ALL",schemas["ALL"]),("GM",schemas["GM"]),("CLASSICAL",schemas["CLASSICAL"])):
+    for spec in group_specs:
+        group,schema=spec["key"],spec["schema"]
         expected_tps=[row["image_id"] for row in selected if _selected_tps_coordinates(project,row["image_id"],schema) is not None]
-        got=tps_ids(directory/("landmarks_all.tps" if group=="ALL" else f"landmarks_{group}.tps"))
+        got=tps_ids(directory/_group_filenames(spec)["TPS"])
         if got!=expected_tps: raise ValueError(f"TPS {group} identities do not match inclusion rules")
-        file=directory/("landmarks_MorphoJ_ALL.txt" if group=="ALL" else f"landmarks_MorphoJ_{group}.txt")
+        file=directory/_group_filenames(spec)["MorphoJ"]
         with file.open(encoding="utf-8-sig",newline="") as stream: rows=list(csv.reader(stream,delimiter="\t"))
         header=rows[0] if rows else []
         expected_header=["ID"]+[axis+str(item["id"]) for item in schema for axis in ("x","y")]
@@ -193,27 +237,25 @@ def export_analysis_bundle(project,destination,*,scope=SCOPE_VERIFIED,verify_sou
         if len(specimen_ids)!=len(set(specimen_ids)): raise ValueError("duplicate specimen_id in project snapshot")
         selected=[r for r in all_rows if not r.get("excluded") and (scope==SCOPE_ALL or _verified(snap,r["image_id"]))]
         view=_ScopedProject(snap,selected)
-        schemas={"ALL":list(snap.schema)}
-        schemas.update({g:[x for x in snap.schema if group_label(x).casefold()==g.casefold()] for g in available_groups(snap)})
-        if len(schemas.get("GM",()))!=20 or len(schemas.get("CLASSICAL",()))!=5:
-            raise ValueError("active scheme must have exactly 20 GM and 5 CLASSICAL landmarks")
-        exports=[
-            ("landmarks_all.tps",lambda p:export_landmark_tps(view,target=p)),
-            ("landmarks_GM.tps",lambda p:export_landmark_tps(view,groups=("GM",),target=p)),
-            ("landmarks_CLASSICAL.tps",lambda p:export_landmark_tps(view,groups=("CLASSICAL",),target=p)),
-            ("landmarks_wide_ALL.csv",lambda p:export_landmark_wide(view,target=p)),
-            ("landmarks_wide_GM.csv",lambda p:export_landmark_wide(view,groups=("GM",),target=p)),
-            ("landmarks_wide_CLASSICAL.csv",lambda p:export_landmark_wide(view,groups=("CLASSICAL",),target=p)),
+        group_specs=_group_specs(snap)
+        exports=[]
+        for spec in group_specs:
+            selected_group=() if spec["key"]=="ALL" else (spec["label"],)
+            names=_group_filenames(spec)
+            exports.extend([
+            (names["TPS"],lambda p,g=selected_group:export_landmark_tps(view,groups=g,target=p)),
+            (names["wide_csv"],lambda p,g=selected_group:export_landmark_wide(view,groups=g,target=p)),
+            (names["MorphoJ"],lambda p,g=selected_group:export_morphoj_text(view,groups=g,target=p)),
+            ])
+        exports.extend([
             ("landmarks_long.csv",lambda p:export_landmark_csv_long(view,target=p)),
-            ("landmarks_MorphoJ_ALL.txt",lambda p:export_morphoj_text(view,target=p)),
-            ("landmarks_MorphoJ_GM.txt",lambda p:export_morphoj_text(view,groups=("GM",),target=p)),
-            ("landmarks_MorphoJ_CLASSICAL.txt",lambda p:export_morphoj_text(view,groups=("CLASSICAL",),target=p)),
             ("measurements.csv",lambda p:export_measurements(view,target=p)),
-        ]
+        ])
         for name,fn in exports: fn(stage/name)
-        _validate_output_identities(stage,view,selected,schemas)
-        omissions=_omissions(view,all_rows,selected,schemas)
-        _csv(stage/"omissions.csv",["image_id","specimen_id","output_format","group","reason"],omissions)
+        _validate_output_identities(stage,view,selected,group_specs)
+        omissions,missing_values=_omissions(view,all_rows,selected,group_specs)
+        _csv(stage/"omissions.csv",["image_id","specimen_id","output_format","group","record_type","landmark_id","measurement","reason"],omissions)
+        _csv(stage/"missing_values.csv",["image_id","specimen_id","output_format","group","record_type","landmark_id","landmark_abbreviation","measurement","reason"],missing_values)
         selected_ids={r["image_id"] for r in selected}; specimens=[]
         for row in all_rows:
             st=load_current_landmark_state(snap,row["image_id"]); draft=snap.annotation_draft(row["image_id"])
@@ -245,8 +287,7 @@ def export_analysis_bundle(project,destination,*,scope=SCOPE_VERIFIED,verify_sou
             ["landmark_id","abbreviation","name","role","category","order","coordinate_frame","coordinate_units"],
             [dict(landmark_id=int(x["id"]),abbreviation=x.get("abbr",""),name=x.get("name",""),role=x.get("role",""),category=x.get("category",""),order=i+1,coordinate_frame="standardized_crop_pixels",coordinate_units="pixel") for i,x in enumerate(snap.schema)])
         (stage/"measurement_definitions.csv").write_text(measurement_definitions_csv(snap),encoding="utf-8",newline="")
-        group_schemas={"ALL":schemas["ALL"],"GM":schemas["GM"],"CLASSICAL":schemas["CLASSICAL"]}
-        morpho_omitted={g:sum(x["output_format"]=="MorphoJ" and x["group"]==g for x in omissions) for g in group_schemas}
+        morpho_omitted={spec["key"]:sum(x["output_format"]=="MorphoJ" and x["group"]==spec["key"] for x in omissions) for spec in group_specs}
         summary=(
             "# MorphoLabel analysis export\n\n"
             f"- Scope: {scope}\n- Active specimens: {len(all_rows)}\n- Selected for scope: {len(selected)}\n"
@@ -255,27 +296,29 @@ def export_analysis_bundle(project,destination,*,scope=SCOPE_VERIFIED,verify_sou
             f"- Drafts: {sum(bool(snap.annotation_draft(r['image_id'])) for r in all_rows)}\n"
             f"- Excluded: {sum(bool(r.get('excluded')) for r in all_rows)}\n"
             f"- MorphoJ omitted by group: {json.dumps(morpho_omitted,sort_keys=True)}\n"
-            f"- Omission records: {len(omissions)}\n\n"
-            "The all scope is opt-in and may include unchecked or unfinished records. See omissions.csv for per-format reasons.\n")
+            f"- Omission records: {len(omissions)}\n- Missing-value records: {len(missing_values)}\n\n"
+            "The all scope is opt-in and may include unchecked or unfinished records. See omissions.csv and missing_values.csv for per-format completeness details.\n")
         (stage/"SUMMARY.md").write_text(summary,encoding="utf-8",newline="")
-        expected={"specimens.csv","landmarks_all.tps","landmarks_GM.tps","landmarks_CLASSICAL.tps","landmarks_wide_ALL.csv","landmarks_wide_GM.csv","landmarks_wide_CLASSICAL.csv","landmarks_long.csv","landmarks_MorphoJ_ALL.txt","landmarks_MorphoJ_GM.txt","landmarks_MorphoJ_CLASSICAL.txt","measurements.csv","omissions.csv","landmark_definitions.csv","measurement_definitions.csv","transforms.csv","SUMMARY.md"}
+        expected={"specimens.csv","landmarks_long.csv","measurements.csv","omissions.csv","missing_values.csv","landmark_definitions.csv","measurement_definitions.csv","transforms.csv","SUMMARY.md"}
+        for spec in group_specs:expected.update(_group_filenames(spec).values())
         if {p.name for p in stage.iterdir() if p.is_file()}!=expected: raise ValueError("analysis bundle file set validation failed")
         with (stage/"specimens.csv").open(encoding="utf-8",newline="") as f: cross=list(csv.DictReader(f))
         if [r["image_id"] for r in cross]!=ids: raise ValueError("specimen crosswalk IDs do not match snapshot")
         files={n:{"sha256":_sha256(stage/n),"size_bytes":(stage/n).stat().st_size} for n in sorted(expected)}
-        manifest={"format":"morpholabel_analysis_bundle_v1","app_version":"1.0.0-rc.3",
+        manifest={"format":"morpholabel_analysis_bundle_v1","app_version":__version__,
             "exported_at_utc":datetime.now(timezone.utc).isoformat(),"scope":scope,
             "warning":"All scope may include unchecked or unfinished records." if scope==SCOPE_ALL else None,
             "dataset_snapshot":{"sha256":snapshot_hash,"source_backup_sha256":source_snapshot_hash,
                 "source":"SQLite online backup; reopened by current project code before export",
                 "shared_by_all_exports":True},
-            "schema_identity_and_order":{g:[{"id":int(x["id"]),"abbreviation":x.get("abbr",""),"order":i+1} for i,x in enumerate(s)] for g,s in schemas.items()},
+            "schema_identity_and_order":{spec["key"]:[{"id":int(x["id"]),"abbreviation":x.get("abbr",""),"order":i+1} for i,x in enumerate(spec["schema"])] for spec in group_specs},
+            "group_files":{spec["key"]:{"label":spec["label"],**_group_filenames(spec)} for spec in group_specs},
             "scientific_units":{"coordinates":"pixel","measurements":"mm"},
             "coordinate_frames":{"TPS":"original_image_pixels","wide_csv":"standardized_crop_pixels","long_csv":"standardized_crop_pixels","MorphoJ":"standardized_crop_pixels","measurements":"original_image_pixels distance converted to mm"},
             "source_hash_policy":{"verification_requested":bool(verify_sources),"new_hashes_written_to_project":False,"new_hash_semantics":"verified at export time only","when_not_requested":"not_verified"},
             "counts":{"active_specimens":len(all_rows),"excluded":sum(bool(r.get("excluded")) for r in all_rows),"selected_for_scope":len(selected),
                 "drafts":sum(bool(snap.annotation_draft(r["image_id"])) for r in all_rows),"export_rows":_output_counts(stage),
-                "MorphoJ_omitted":morpho_omitted,"omission_records":len(omissions)},"files":files}
+                "MorphoJ_omitted":morpho_omitted,"omission_records":len(omissions),"missing_value_records":len(missing_values)} ,"files":files}
         (stage/"manifest.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
         _validate_manifest(stage/"manifest.json")
         if destination.exists(): raise FileExistsError(f"destination created concurrently: {destination}")

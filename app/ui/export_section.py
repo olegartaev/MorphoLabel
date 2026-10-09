@@ -1,5 +1,6 @@
 """Project-level exports backed by canonical production services."""
 import tkinter as tk
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 import uuid
@@ -114,7 +115,7 @@ class ExportSection(SectionView):
     messagebox.showinfo('Analysis dataset exported',
      f"Active: {counts['active_specimens']}  Selected: {counts['selected_for_scope']}\n"
      f"Drafts: {counts['drafts']}  Excluded: {counts['excluded']}\n"
-     f"MorphoJ omitted ALL/GM/CLASSICAL: {morpho.get('ALL',0)}/{morpho.get('GM',0)}/{morpho.get('CLASSICAL',0)}\n"
+     f"MorphoJ omitted by group: {json.dumps(morpho,ensure_ascii=False,sort_keys=True)}\n"
      f"Destination: {result['path']}",parent=self.shell)
    self.shell._run_background_task('Export analysis dataset','Creating a consistent analysis bundle…',worker,complete)
   controls=ttk.Frame(body);controls.grid(row=6,column=0,columnspan=3,sticky='e',pady=(6,0))
