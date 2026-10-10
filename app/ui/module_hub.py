@@ -45,7 +45,7 @@ class ModuleHub:
         ttk.Label(brand,image=self.logo).pack(side="left",padx=(0,22))
         copy=ttk.Frame(brand);copy.pack(side="left")
         ttk.Label(copy,text=APP_NAME,style="HubTitle.TLabel").pack(anchor="w")
-        ttk.Label(copy,text="Biological image annotation with human review and optional AI assistance",style="PageSubtitle.TLabel").pack(anchor="w",pady=(3,8))
+        ttk.Label(copy,text="Large-scale biological image annotation with human review and optional AI assistance",style="PageSubtitle.TLabel",wraplength=730,justify="left").pack(anchor="w",pady=(3,8))
         ttk.Label(copy,text=f"v{APP_VERSION} · {APP_STATUS}",style="Muted.TLabel").pack(anchor="w")
         modules=ttk.Frame(host);modules.grid(row=1,column=0,sticky="nsew");modules.rowconfigure(0,weight=1)
         modules.columnconfigure(0,weight=1,uniform="module_cards");modules.columnconfigure(1,weight=1,uniform="module_cards")

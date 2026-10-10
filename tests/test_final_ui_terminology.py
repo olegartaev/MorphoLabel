@@ -18,7 +18,7 @@ class ApprovedTerminologyTests(unittest.TestCase):
     def test_approved_scientific_ui_copy_and_stale_phrases(self):
         expected={
             "app/ui/module_hub.py":[
-                "Biological image annotation with human review and optional AI assistance",
+                "Large-scale biological image annotation with human review and optional AI assistance",
                 "Mark and count anatomical structures in X-ray images.",
             ],
             "app/ui/project_section.py":["Create a project or open an existing MorphoLabel project."],

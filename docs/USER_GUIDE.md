@@ -1168,6 +1168,14 @@ For X-ray projects, consider making the project self-contained before moving it 
 
 Use the model import/export controls rather than copying internal runtime folders manually.
 
+## 12.9 Getting help from an AI assistant
+
+Open **Menu → Help with an AI assistant…** to copy a ready-made prompt for an external AI assistant or to open the public User Guide.
+
+The prompt points to the User Guide and source code so the assistant can check MorphoLabel's actual features and explain steps for a non-programmer. Paste the prompt into an AI assistant of your choice, then add your question.
+
+MorphoLabel does not connect to an external assistant or automatically share images, project data, scientific results or logs. AI answers can be wrong: verify scientific decisions and avoid sharing confidential research data.
+
 ---
 
 # 13. Scientific limitations and good practice

@@ -7,7 +7,7 @@ import re
 import threading, queue
 import webbrowser
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, simpledialog
+from tkinter import font as tkfont, ttk, filedialog, messagebox, simpledialog
 from app.identity import APP_NAME, APP_FULL_NAME, APP_VERSION, APP_STATUS, COPYRIGHT, CONTACT_EMAIL, PUBLIC_REPOSITORY, LICENSE_NAME, apply_window_identity, icon_image
 from app.gui_crop_debug import log
 from .tooltips import Tooltip
@@ -23,6 +23,15 @@ from app.setup_progress import COMPONENTS, SetupProgress
 from app.first_run_setup import first_run_setup_required, run_first_run_setup, defer_first_run_setup, ai_setup_complete
 
 BG="#f0f0f0"; ACC="#0067c0"
+
+USER_GUIDE_URL = "https://github.com/olegartaev/MorphoLabel/blob/main/docs/USER_GUIDE.md"
+AI_HELP_PROMPT = (
+    "Help me use MorphoLabel. Consult the public User Guide and source code, then explain the steps clearly for a non-programmer. If you cannot verify a detail, say so rather than guessing.\n\n"
+    "User Guide: https://github.com/olegartaev/MorphoLabel/blob/main/docs/USER_GUIDE.md\n\n"
+    "Source code: https://github.com/olegartaev/MorphoLabel\n\n"
+    "My question:"
+)
+
 
 def _first_run_progress_state(stage,detail,current=0):
     """Compatibility mapper for component-weighted setup progress."""
@@ -409,39 +418,76 @@ class ProductionShell(tk.Tk):
 
 
 
+
+    def show_ai_assistant_help(self):
+        """Copy a public documentation prompt; never upload project content."""
+        dialog=tk.Toplevel(self);dialog.title("Help with an AI assistant")
+        dialog.transient(self);dialog.resizable(False,False)
+        frame=ttk.Frame(dialog,padding=18);frame.pack(fill="both",expand=True)
+        ttk.Label(frame,text="Need help using MorphoLabel?",style="SectionTitle.TLabel").pack(anchor="w",pady=(0,8))
+        ttk.Label(
+            frame,
+            text="An external AI assistant can help explain features, settings and workflows. The public User Guide and source code can provide context for more accurate answers.",
+            justify="left",wraplength=490,
+        ).pack(anchor="w")
+        ttk.Label(
+            frame,
+            text="AI answers may be incorrect. Verify scientific decisions and avoid sharing confidential research data.",
+            style="Muted.TLabel",justify="left",wraplength=490,
+        ).pack(anchor="w",pady=(12,4))
+        status=ttk.Label(frame,text="",style="Muted.TLabel",wraplength=490)
+        status.pack(anchor="w")
+        buttons=ttk.Frame(frame);buttons.pack(fill="x",pady=(14,0))
+        def copy_help_prompt():
+            self.clipboard_clear()
+            self.clipboard_append(AI_HELP_PROMPT)
+            self.update_idletasks()
+            status.configure(text="Prompt copied. Paste it into an external AI assistant and add your question.")
+        self.control_button(buttons,"Copy AI help prompt",copy_help_prompt,"Copy a public documentation prompt. No research data is included.",primary=True).pack(side="left")
+        self.control_button(buttons,"Open User Guide",lambda:webbrowser.open(USER_GUIDE_URL),"Open the public MorphoLabel User Guide in your browser.").pack(side="left",padx=(7,0))
+        self.control_button(buttons,"Close",dialog.destroy,"Close AI assistant help.").pack(side="right")
+        center(self,dialog)
+        return dialog
+
     def _menus(self,row):
-        button=ttk.Menubutton(row,text="Menu"); menu=tk.Menu(button,tearoff=False)
-        ai_menu=tk.Menu(menu,tearoff=False)
-        ai_menu.add_command(label="Set up AI support...",command=self._show_first_run_setup)
-        ai_menu.add_command(label="Hardware status…",command=self.show_hardware)
-        menu.add_cascade(label="AI support",menu=ai_menu)
-        provider=getattr(getattr(self,"_active_module_runtime",None),"standard_menu_entries",None)
-        if callable(provider):
-            entries=tuple(provider() or ())
+        button=ttk.Menubutton(row,text="Menu");menu=tk.Menu(button,tearoff=False)
+        # Keep the standard Tk menu font and DPI scaling, emphasizing only the
+        # optional help action rather than introducing a custom visual theme.
+        menu._ai_help_font=tkfont.nametofont("TkMenuFont").copy()
+        menu._ai_help_font.configure(weight="bold")
+
+        def populate():
+            if menu.index("end") is not None:menu.delete(0,"end")
+            # Single-level menu: most useful help first, then setup, diagnostics
+            # and project information. Preserve module actions and their states.
+            menu.add_command(label="Help with an AI assistant…",command=self.show_ai_assistant_help,font=menu._ai_help_font)
+            menu.add_command(label="User Guide",command=lambda:webbrowser.open(USER_GUIDE_URL))
+            menu.add_separator()
+            menu.add_command(label="Set up AI support...",command=self._show_first_run_setup)
+            menu.add_command(label="Hardware status…",command=self.show_hardware)
+            provider=getattr(getattr(self,"_active_module_runtime",None),"standard_menu_entries",None)
+            entries=tuple(provider() or ()) if callable(provider) else ()
             if entries:
-                models_menu=tk.Menu(menu,tearoff=False)
-                category="AI models · import / export" if all(entry.get("group")=="models" for entry in entries if entry) else "Current module"
-                menu.add_cascade(label=category,menu=models_menu)
-                def refresh_models_menu():
-                    models_menu.delete(0,"end")
-                    for entry in tuple(provider() or ()):
-                        if entry is None:models_menu.add_separator();continue
-                        models_menu.add_command(
-                            label=str(entry.get("label") or "Module action"),
-                            command=entry.get("command"),
-                            state=str(entry.get("state") or "normal"),
-                        )
-                models_menu.configure(postcommand=refresh_models_menu)
-                refresh_models_menu()
-        menu.add_separator()
-        support=tk.Menu(menu,tearoff=False)
-        support.add_command(label="Create diagnostic report…",command=self.create_diagnostic_report)
-        support.add_command(label="GitHub project",command=lambda:webbrowser.open(PUBLIC_REPOSITORY))
-        menu.add_cascade(label="Support",menu=support)
-        menu.add_separator()
-        menu.add_command(label="About MorphoLabel...",command=self.show_about)
+                menu.add_separator()
+                for entry in entries:
+                    if entry is None:
+                        menu.add_separator()
+                        continue
+                    menu.add_command(
+                        label=str(entry.get("label") or "Module action"),
+                        command=entry.get("command"),
+                        state=str(entry.get("state") or "normal"),
+                    )
+            menu.add_separator()
+            menu.add_command(label="Create diagnostic report…",command=self.create_diagnostic_report)
+            menu.add_command(label="GitHub project",command=lambda:webbrowser.open(PUBLIC_REPOSITORY))
+            menu.add_separator()
+            menu.add_command(label="About MorphoLabel...",command=self.show_about)
+
+        menu.configure(postcommand=populate)
+        populate()
         button.configure(menu=menu);button.pack(side="right",padx=2)
-        self.tip.bind(button,"AI setup, diagnostics, project links and About MorphoLabel.")
+        self.tip.bind(button,"User Guide, AI assistant help, AI setup, diagnostics and About MorphoLabel.")
         queues=ttk.Button(row,text="Queues",image=self.ui_icon("queues",TOPBAR_ICON_SIZE),compound="left",
                           command=lambda:self._show_queue_center(),style="Stage.TButton")
         queues.pack(side="right",padx=(2,6))
