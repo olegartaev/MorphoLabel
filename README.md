@@ -6,9 +6,9 @@ MorphoLabel is designed for collections of hundreds or thousands of photographs 
 
 The central idea is **stage-by-stage, human-in-the-loop mass annotation**. Instead of completing every operation for one specimen before starting the next, researchers can prepare Crops across a collection, then annotate landmarks or anatomical structures across the prepared specimens, review the resulting measurements or traits and export a controlled dataset. Manual processing is fully supported; optional AI can accelerate repetitive work within each stage.
 
-**Current release:** [MorphoLabel 1.0.0-rc.5](https://github.com/olegartaev/MorphoLabel/releases/tag/v1.0.0-rc.5) · Windows 10/11 x64 · Apache-2.0
+**Current release:** [MorphoLabel 1.0.0-rc.1](https://github.com/olegartaev/MorphoLabel/releases/tag/v1.0.0-rc.1) · Windows 10/11 x64 · Apache-2.0
 
-[Download installer](https://github.com/olegartaev/MorphoLabel/releases/download/v1.0.0-rc.5/MorphoLabel-1.0.0-rc.5-Setup-x64.exe) · [Full User Guide](docs/USER_GUIDE.md) · [Changelog](CHANGELOG.md) · [Citation](CITATION.cff)
+[Download installer](https://github.com/olegartaev/MorphoLabel/releases/download/v1.0.0-rc.1/MorphoLabel-1.0.0-rc.1-Setup-x64.exe) · [Full User Guide](docs/USER_GUIDE.md) · [Changelog](CHANGELOG.md) · [Citation](CITATION.cff)
 
 ---
 
@@ -179,7 +179,7 @@ MorphoLabel currently targets **Windows 10/11 x64**.
 
 Most users only need the standalone installer:
 
-**[MorphoLabel-1.0.0-rc.5-Setup-x64.exe](https://github.com/olegartaev/MorphoLabel/releases/download/v1.0.0-rc.5/MorphoLabel-1.0.0-rc.5-Setup-x64.exe)**
+**[MorphoLabel-1.0.0-rc.1-Setup-x64.exe](https://github.com/olegartaev/MorphoLabel/releases/download/v1.0.0-rc.1/MorphoLabel-1.0.0-rc.1-Setup-x64.exe)**
 
 No separate Python or Git installation is required for normal use.
 
@@ -219,7 +219,7 @@ For geometric morphometrics, MorphoLabel prepares landmark-coordinate data; it d
 
 ## Release status
 
-1.0.0-rc.5 is release candidate 5 for MorphoLabel 1.0. It includes unified specimen identity metadata in scientific analysis exports and is intended for external acceptance before the stable 1.0.0 release.
+1.0.0-rc.1 is the consolidated public release candidate for MorphoLabel 1.0, including both production modules, human-reviewed AI workflows, reproducible scientific exports and specimen/source identification. This candidate is intended for external acceptance before stable 1.0.0.
 
 For routine usage questions, open **Menu → Help with an AI assistant…** to copy a question template referencing the public User Guide and source code. Paste it into an external AI assistant of your choice; verify scientific advice and do not share confidential research data.
 
