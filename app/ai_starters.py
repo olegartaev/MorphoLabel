@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from .runtime_paths import app_state_dir, is_frozen
 from .verified_download import download_verified, sha256_file
 
-SETUP_HELP = "Open Menu → AI support → Set up AI support… to repair the missing or damaged AI starter."
+SETUP_HELP = "Open Menu → Set up AI support... to repair the missing or damaged AI starter."
 
 
 @dataclass(frozen=True)

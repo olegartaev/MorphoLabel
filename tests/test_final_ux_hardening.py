@@ -59,24 +59,30 @@ class FinalUXHardeningTests(unittest.TestCase):
         shell,errors=self.make_shell();shell.open_module("landmarks");self.pump(shell)
         menu_button=next(w for w in descendants(shell.root) if w.winfo_class()=="TMenubutton" and w.cget("text")=="Menu")
         menu=shell.nametowidget(str(menu_button.cget("menu")))
-        def submenu(label):
-            index=next(i for i in range(menu.index("end")+1) if menu.type(i)=="cascade" and menu.entrycget(i,"label")==label)
-            return shell.nametowidget(str(menu.entrycget(index,"menu")))
-        support=submenu("Support")
-        # Exercise the actual Tcl command, independent of punctuation spelling.
+        def command_index(label):
+            matches=[
+                i for i in range(menu.index("end")+1)
+                if menu.type(i)=="command" and menu.entrycget(i,"label")==label
+            ]
+            self.assertEqual(1,len(matches),f"Missing or duplicate menu command: {label}")
+            return matches[0]
+        # The public Menu is intentionally flat: no stale Support/AI submenus.
+        self.assertNotIn("cascade",[menu.type(i) for i in range(menu.index("end")+1)])
         bundle=Path(self.temp.name)/"diagnostic.zip";bundle.write_bytes(b"synthetic")
         with patch("app.diagnostics.create_diagnostic_bundle",return_value=bundle),patch.object(shell,"_show_diagnostic_report_dialog") as show:
-            support.invoke(0);show.assert_called_once()
+            menu.invoke(command_index("Create diagnostic report…"))
+            show.assert_called_once()
         runtime=shell._active_module_runtime
         self.assertEqual((),runtime.standard_menu_entries())
-        labels=[menu.entrycget(i,"label") for i in range(menu.index("end")+1) if menu.type(i)=="cascade"]
-        self.assertNotIn("AI models · import / export",labels);self.assertEqual([],errors)
+        labels=[menu.entrycget(i,"label") for i in range(menu.index("end")+1) if menu.type(i)=="command"]
+        self.assertNotIn("AI models · import / export",labels)
+        self.assertIn("Help with an AI assistant…",labels)
+        self.assertEqual("normal",menu.entrycget(command_index("Set up AI support..."),"state"))
+        self.assertEqual([],errors)
         from app.ai_delivery import ensure_ai_runtime,AIDeliveryError
-        ai=submenu("AI support")
-        self.assertTrue(ai.entrycget(0,"label").startswith("Set up AI support"))
         missing=Path(self.temp.name)/"missing-python.exe"
         with patch("app.ai_delivery.resolve_ai_runtime",return_value=(missing,missing)),patch("app.ai_delivery.is_frozen",return_value=True),patch("app.first_run_setup.ai_download_consent_granted",return_value=False):
-            with self.assertRaisesRegex(AIDeliveryError,"Menu → AI support → Set up AI support"):
+            with self.assertRaisesRegex(AIDeliveryError,"Menu → Set up AI support"):
                 ensure_ai_runtime()
 
     def test_large_trait_table_can_scroll_to_last_column_without_changing_export(self):
