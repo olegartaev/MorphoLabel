@@ -68,7 +68,11 @@ class AboutCreditsTkTests(unittest.TestCase):
             EXTENSION_API_VERSION,90,"available",Runtime,"external",author="Jane Smith",
         ))
         with patch("app.ui.shell.center"):
-            dialog=self.shell.show_about()
+            self.shell.show_about()
+        dialog=next(
+            child for child in self.shell.winfo_children()
+            if isinstance(child,tk.Toplevel) and child.title()=="About MorphoLabel"
+        )
         self.addCleanup(dialog.destroy)
         labels=self._label_texts(dialog)
         self.assertEqual(1,sum(text==APP_CREATOR for text in labels))
