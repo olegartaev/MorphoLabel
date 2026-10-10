@@ -61,16 +61,16 @@ class LandmarkAccuracyDialog(tk.Toplevel):
 
         self.cards=ttk.Frame(outer);self.cards.pack(fill="x",pady=(10,8))
         for col in range(3):self.cards.columnconfigure(col,weight=1)
-        self.human_value=self._card(0,"Human repeatability","P90 between two blind manual placements")
-        self.ai_value=self._card(1,"AI ↔ human","P90 distance from AI to both manual placements")
-        self.relative_value=self._card(2,"Relative size","AI ↔ human P90 / human repeatability P90")
+        self.human_value=self._card(0,"Human repeatability","P90 manual-to-manual displacement (% of configuration span)")
+        self.ai_value=self._card(1,"AI ↔ human","P90 AI-to-manual displacement (% of configuration span)")
+        self.relative_value=self._card(2,"Relative size","AI-to-manual P90 / manual-to-manual P90")
 
         note=ttk.Label(
             outer,
             text=(
                 "Human repeatability and AI ↔ human disagreement are related but not identical error quantities; "
                 "the ratio is context, not a formal accuracy score. Lower P90 means tighter point placement. "
-                "GM-only excludes landmarks whose scheme role is CLASSICAL."
+                "GM-only excludes landmarks whose scheme role is CLASSICAL. Configuration span is the greatest distance between two present landmarks in the reference configuration. GM-only comparisons use the GM landmark configuration."
             ),
             style="Muted.TLabel",justify="left",wraplength=920,
         )
@@ -117,7 +117,7 @@ class LandmarkAccuracyDialog(tk.Toplevel):
         rows=sorted(self._accuracy_rows,key=key,reverse=self.sort_descending)
         self.table.delete(*self.table.get_children())
         for ident,abbr,name,role,h,a,ratio in rows:
-            use_label={"GM":"GM","CLASSICAL":"Classical","BOTH":"Both"}.get(role,role)
+            use_label={"GM":"GM","CLASSICAL":"Linear measurements","BOTH":"Both"}.get(role,role)
             self.table.insert("", "end", values=(abbr,name,use_label,_fmt(h),_fmt(a),_ratio_text(ratio)))
         for column in columns:
             arrow=" ↓" if column==self.sort_column and self.sort_descending else " ↑" if column==self.sort_column else ""
@@ -159,9 +159,9 @@ class LandmarkAccuracyDialog(tk.Toplevel):
         if scope=="gm":
             gm_count=sum(str(row.get("role") or "BOTH").upper() in {"GM","BOTH"} for row in self.project.schema)
             total=len(self.project.schema)
-            self.scope_note.configure(text=f"GM-only uses {gm_count} of {total} landmarks (roles GM + BOTH). CLASSICAL-only landmarks are excluded, and normalization uses only the GM configuration.")
+            self.scope_note.configure(text=f"GM-only uses {gm_count} of {total} landmarks (roles GM + BOTH). Landmarks used only for linear measurements are excluded. Normalization uses the GM landmark configuration.")
         else:
-            self.scope_note.configure(text=f"All {len(self.project.schema)} landmarks are shown. Switch to GM-only to remove measurement-only / CLASSICAL landmarks from the comparison.")
+            self.scope_note.configure(text=f"All {len(self.project.schema)} landmarks are shown. Switch to GM-only to exclude landmarks used only for linear measurements.")
 
 
 def open_landmark_accuracy(shell, project, model_id):

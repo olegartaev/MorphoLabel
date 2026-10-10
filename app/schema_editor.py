@@ -7,9 +7,9 @@ from .profile import read_schema_csv
 from .identity import apply_window_identity
 from .ui.tk_lifecycle import trace_for_widget
 
-LEGEND=("# ROLE LEGEND:","# BOTH = used for classical and geometric morphometrics","# GM = geometric morphometrics only","# CLASSICAL = classical morphometrics only","# Lines beginning with # are comments and are ignored by MorphoLabel.")
+LEGEND=("# ROLE LEGEND:","# BOTH = used for linear measurements and geometric morphometrics","# GM = geometric morphometrics only","# CLASSICAL = used for linear measurements (legacy role code)","# Lines beginning with # are comments and are ignored by MorphoLabel.")
 ROLE_CODES={"BT":"BOTH","GM":"GM","CL":"CLASSICAL"}
-ROLE_NAMES={"BT":"Both","GM":"Geometric morphometrics","CL":"Classical morphometrics"}
+ROLE_NAMES={"BT":"Both","GM":"Geometric morphometrics","CL":"Linear measurements"}
 ROLE_FROM_NAME={v:k for k,v in ROLE_NAMES.items()}
 
 class SchemaEditor(tk.Toplevel):
@@ -24,7 +24,7 @@ class SchemaEditor(tk.Toplevel):
   for text,cmd in (("New",self.new_schema),("Open...",self.open_schema),("Save",self.save),("Save As...",self.save_as)) : ttk.Button(bar,text=text,command=cmd).pack(side="left",padx=2)
   frame=ttk.Frame(self,padding=5);frame.pack(fill="both",expand=True)
   self.table=ttk.Treeview(frame,columns=("id","role","abbr","name"),show="headings",selectmode="browse")
-  for c,h,w,st in (("id","#",45,False),("role","Morphometry",190,False),("abbr","Abbr",100,False),("name","Name",400,True)):
+  for c,h,w,st in (("id","#",45,False),("role","Use",190,False),("abbr","Abbr",100,False),("name","Name",400,True)):
    self.table.heading(c,text=h);self.table.column(c,width=w,minwidth=w,stretch=st,anchor="w")
   frame.rowconfigure(0,weight=1);frame.columnconfigure(0,weight=1)
   scroll=ttk.Scrollbar(frame,orient="vertical",command=self.table.yview)

@@ -211,7 +211,7 @@ class LandmarksSection(SectionView):
    repeat_total=int(repeat_run.get('actual_count',len(repeat_run.get('image_ids',()))));p1=pass_progress(self.context.project,repeat_run,1);p2=pass_progress(self.context.project,repeat_run,2);repeat_label=f'Run images: {repeat_total}'
   else:
    repeat_total=len(available_control_image_ids(self.context.project));p1={'completed':0,'total':0};p2={'completed':0,'total':0};repeat_label=f'Eligible images: {repeat_total}'
-  one=dock.add_card('1. Human Repeatability',icon='landmark_repeat',help_text='Estimate your placement error from two independent annotations of the same images.')
+  one=dock.add_card('1. Human Repeatability',icon='landmark_repeat',help_text='Estimate landmark-placement disagreement between two independent annotations of the same images.')
   self.repeat_pool_label=ttk.Label(one,text=repeat_label.replace('Run images: ','').replace('Eligible images: ','')+' images',style='Muted.TLabel');self.repeat_pool_label.grid(row=0,column=0,sticky='w')
   self.repeat_pass_label=ttk.Label(one,text=f"P1 {p1['completed']}/{p1['total']} · P2 {p2['completed']}/{p2['total']}",style='Muted.TLabel');self.repeat_pass_label.grid(row=0,column=1,sticky='e',padx=(8,0))
   one.columnconfigure(1,weight=1)
@@ -223,7 +223,7 @@ class LandmarksSection(SectionView):
   batch_actions=ttk.Frame(two);batch_actions.grid(row=0,column=0,sticky='w')
   ttk.Label(batch_actions,text='Batch').pack(side='left')
   ttk.Spinbox(batch_actions,from_=1,to=500,textvariable=batch,width=5).pack(side='left',padx=(4,0))
-  ttk.Label(batch_actions,text='20–30 recommended',style='Muted.TLabel').pack(side='left',padx=(5,0))
+  ttk.Label(batch_actions,text='Suggested start: 20–30',style='Muted.TLabel').pack(side='left',padx=(5,0))
   add_command_separator(batch_actions)
   self.button(batch_actions,label,lambda:self.start_training_batch(batch.get()),'Create or continue the persistent landmark training batch.').pack(side='left')
 
@@ -583,10 +583,10 @@ class LandmarksSection(SectionView):
     if reset_count:count.set(actual)
     spin.configure(state='normal' if available else 'disabled');new_sample.grid()
     repair_spin.configure(from_=1,to=max(1,actual));repair.grid()
-    sample_note.configure(text=f'Current run: {actual} images · recommended default: 10 · available: {available}. Change the number and use Start new sample to replace this run.')
+    sample_note.configure(text=f'Current run: {actual} images · suggested starting size: 10 · available: {available}. Change the number and use Start new sample to replace this run.')
    else:
     p1=p2={'completed':0,'total':0,'complete':False};clamp_count();spin.configure(state='normal' if available else 'disabled');new_sample.grid_remove();repair.grid_remove()
-    sample_note.configure(text=f'Recommended default: 10 · available eligible images: {available}. Choose the number before Annotation 1.')
+    sample_note.configure(text=f'Suggested starting size: 10 · available eligible images: {available}. Choose the number before Annotation 1.')
    one_status.configure(text=f"{p1['completed']} / {p1['total']} images complete" if p1['total'] else 'Not started')
    two_status.configure(text=f"{p2['completed']} / {p2['total']} images complete" if p2['total'] else 'Not started')
    controls=_repeatability_pass_controls(run,p1,p2,available)

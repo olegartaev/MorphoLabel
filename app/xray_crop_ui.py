@@ -436,7 +436,7 @@ class XRayCropWorkspace:
         adapter=SimpleNamespace(ui_icon=lambda name,size:self._icon(main,name,size),tip=self._tip)
         workflow=WorkflowDock(main,adapter,help_factory=lambda host:self._button(host,"Help",self._show_help,"Open the X-ray Crop guide."))
         workflow.grid(row=3,column=0,sticky="ew",pady=(2,0));self.workflow_dock=workflow
-        one=workflow.add_card("1. Training data",icon="crop_training",help_text="Begin with a small set of different plates. Check each crop and its head and belly direction.")
+        one=workflow.add_card("1. Training data",icon="crop_training",help_text="Begin with a small set of different plates. Check each crop, head direction and ventral orientation.")
         batch_actions=ttk.Frame(one);batch_actions.grid(row=0,column=0,sticky="w")
         ttk.Label(batch_actions,text="Batch").pack(side="left")
         ttk.Spinbox(batch_actions,from_=1,to=100,textvariable=self.training_batch_size,width=4).pack(side="left",padx=(4,0))
@@ -476,7 +476,7 @@ class XRayCropWorkspace:
         self.predict_next_button=self._button(predict_actions,"Predict next batch",lambda:self.predict_batch(self.prediction_batch_size.get()),"Suggest crops on the next plates that need them.",style="Primary.TButton");self.predict_next_button.pack(side="left")
         self.predict_all_button=self._button(predict_actions,"Predict all",lambda:self.predict_batch(None),"Suggest crops on all remaining unconfirmed plates.");self.predict_all_button.pack(side="left",padx=(4,0))
         add_command_separator(predict_actions)
-        self.review_button=self._button(predict_actions,"Review AI",self.review_ai,"Check the suggested frames, head and belly direction; then confirm.",style="ReviewAction.TButton",icon="review_worst");self.review_button.pack(side="left")
+        self.review_button=self._button(predict_actions,"Review AI",self.review_ai,"Check the suggested crop frames, head direction and ventral orientation; then confirm.",style="ReviewAction.TButton",icon="review_worst");self.review_button.pack(side="left")
 
     def _set_initial_sash(self,_event=None):
         try:
@@ -498,7 +498,7 @@ class XRayCropWorkspace:
         ttk.Label(frame,text="X-ray Crop — quick guide",font=("Segoe UI",11,"bold")).pack(anchor="w")
         ttk.Label(frame,text=(
             "1. Frame each specimen\nDrag on empty image space to add a crop. Drag a frame to move it, a corner to resize it, or the outer handle to rotate it. Delete removes the selected crop.\n\n"
-            "2. Check direction and specimen ID\nBlue shows the head; orange shows the belly. Use Flip if a direction is wrong. Click the specimen label to edit its ID (letters and numbers), then Save. F2 edits the selected specimen. Hover over a crop to see its ID above.\n\n"
+            "2. Check direction and specimen ID\nBlue indicates the head; orange indicates the ventral side. Use Flip if a direction is wrong. Click the specimen label to edit its ID (letters and numbers), then Save. F2 edits the selected specimen. Hover over a crop to see its ID above.\n\n"
             "3. Confirm the plate\nApply crops confirms all crops on this plate. In a batch, Confirm & Next also moves on. You can leave a batch and continue later.\n\n"
             "4. Use AI when ready\nConfirm several different plates, train a model, then predict crops on new plates. Check each suggestion before confirming.\n\n"
             "Mouse wheel: zoom. Right-drag: move the image."

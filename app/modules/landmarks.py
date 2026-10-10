@@ -894,7 +894,7 @@ class LandmarksRuntime(tk.Misc):
                 if selected==item["model_id"]:table.selection_set(iid)
         populate()
         if landmark_only:
-            ttk.Label(frame,text="Human P90: your repeat-placement error. AI P90: model error on the same images. AI/Human 1.00× ≈ your Human Repeatability. Validation P90 uses each model's own split. Lower is better.",style="Muted.TLabel",wraplength=1120).grid(row=1,column=0,sticky="w",pady=(7,0))
+            ttk.Label(frame,text="Human P90 measures disagreement between repeated manual placements. AI P90 measures disagreement between model predictions and human annotations. Both are normalized by landmark configuration span. The AI/Human ratio is descriptive, not a formal accuracy score. Validation P90 is calculated on each model's own validation split.",style="Muted.TLabel",wraplength=1120).grid(row=1,column=0,sticky="w",pady=(7,0))
         actions=ttk.Frame(frame);actions.grid(row=2 if landmark_only else 1,column=0,sticky="ew",pady=(8,0))
         if kinds==("crop",):
             use=self.control_button(actions,"Use selected",lambda:None,"Use this saved model for new Crop predictions.")
@@ -967,8 +967,8 @@ class LandmarksRuntime(tk.Misc):
                     if ai_p90 is None or ratio is None:
                         messagebox.showinfo("AI vs manual",f"Model: {model_id}\n\nThe same-image comparison did not contain enough comparable landmarks to calculate P90.",parent=dialog);return
                     delta=(float(ratio)-1.0)*100.0;difference=f"Difference: {delta:+.0f}%"
-                    explanation="AI error is below measured human repeatability on this control set." if delta<0 else "AI error is higher than measured human repeatability on this control set." if delta>0 else "AI error matches measured human repeatability on this control set."
-                    messagebox.showinfo("AI vs manual",f"Model: {model_id}\n\nHuman repeatability P90: {float(human_p90):.3f}%\nAI P90 on same images: {float(ai_p90):.3f}%\n\nAI / Human: {float(ratio):.2f}×\n{difference}\nStatus: {grade}\n\n{explanation}\nLower is better. Comparison uses the same control images.",parent=dialog)
+                    explanation="AI-to-human disagreement is smaller than manual-to-manual disagreement on this control set." if delta<0 else "AI-to-human disagreement is larger than manual-to-manual disagreement on this control set." if delta>0 else "AI-to-human and manual-to-manual disagreement have equal P90 values on this control set."
+                    messagebox.showinfo("AI vs manual",f"Model: {model_id}\n\nHuman repeatability P90: {float(human_p90):.3f}%\nAI P90 on same images: {float(ai_p90):.3f}%\n\nAI / Human: {float(ratio):.2f}×\n{difference}\nStatus: {grade}\n\n{explanation}\nLower P90 indicates closer point placement. Both comparisons use the same control images, but measure different types of disagreement.",parent=dialog)
                 self._run_background_task("Compare with manual","Preparing same-image comparison…",worker,done)
             set_button=self.control_button(actions,"Set active",set_active,"Use the selected compatible finalized Landmark model for prediction.")
             set_button.pack(side="left")

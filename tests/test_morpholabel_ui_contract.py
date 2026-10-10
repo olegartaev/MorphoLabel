@@ -243,7 +243,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         self.assertIn("ModuleHub(self,", shell)
         self.assertIn("class ModuleHub", hub)
         from app.extensions.builtins import module_registry
-        self.assertEqual("Landmarks & measurements", module_registry().get("landmarks").display_name)
+        self.assertEqual("Landmarks & Measurements", module_registry().get("landmarks").display_name)
         self.assertIn("spec.display_name", hub)
         legacy = ("app.gui", "app.gui_full", "app.project_gui", "app.editor_ready", "app.operator_v")
         for path in (root / "app").rglob("*.py"):
@@ -295,7 +295,7 @@ class MorphoLabelUIContractTests(unittest.TestCase):
         self.assertIn('if initial_module is not None:',shell)
         self.assertNotIn('elif remembered_path:',shell)
         from app.extensions.builtins import module_registry
-        self.assertEqual("Landmarks & measurements",module_registry().get("landmarks").display_name)
+        self.assertEqual("Landmarks & Measurements",module_registry().get("landmarks").display_name)
         self.assertIn("spec.display_name",hub)
         self.assertIn('caption=f"Open {spec.display_name}"',hub)
         self.assertIn("Landmark actions:",landmarks)

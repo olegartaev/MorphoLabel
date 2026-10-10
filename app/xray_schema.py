@@ -13,11 +13,11 @@ SCHEME_RESOURCE_DIR = Path(__file__).resolve().parent / "resources" / "xray_trai
 
 TRAIT_METHODS = (
     {"id":"count","label":"Count objects","icon":"count","help":"Count repeated anatomical elements, for example vertebrae or fin rays."},
-    {"id":"count_to","label":"Count up to a reference","icon":"count_to","help":"Count repeated elements from the start of a series up to an anatomical reference."},
-    {"id":"count_between","label":"Count between two references","icon":"count_between","help":"Count repeated elements between two anatomical references."},
+    {"id":"count_to","label":"Count up to a reference","icon":"count_to","help":"Count elements in the automatically ordered series up to a reference. Inclusion of the boundary depends on the selected rule."},
+    {"id":"count_between","label":"Count between two references","icon":"count_between","help":"Count elements between two references, including the elements associated with both boundaries."},
     {"id":"position","label":"Position in a series","icon":"position","help":"Record which numbered element in a repeated series corresponds to a reference."},
-    {"id":"presence","label":"Presence / absence","icon":"presence","help":"Record whether an anatomical feature is present on the image."},
-    {"id":"distance","label":"Measure distance","icon":"distance","help":"Measure a straight-line distance between two annotated references."},
+    {"id":"presence","label":"Presence / absence","icon":"presence","help":"Record whether the biological structure is present or absent. Use Not visible when its state cannot be assessed from the radiograph."},
+    {"id":"distance","label":"Measure distance","icon":"distance","help":"Calculate straight-line distance in normalized crop coordinates (dimensionless). This is not a physical measurement in millimetres."},
     {"id":"angle","label":"Measure angle","icon":"angle","help":"Measure an angle defined by annotated references."},
     {"id":"derived","label":"Calculated from other traits","icon":"derived","help":"Calculate this value from traits that are already part of the scheme."},
 )

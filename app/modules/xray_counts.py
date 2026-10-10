@@ -1180,7 +1180,7 @@ class TraitSchemeDialog(tk.Toplevel):
         messagebox.showinfo("Traits — quick guide",
             "1. Elements to count\nAdd the structures you mark repeatedly, such as vertebrae. Place one point on each visible element.\n\n"
             "2. Reference marks\nAdd the anatomical boundaries used by your study. If a boundary is one of the counted elements, link it to that series. During annotation, right-click its point to assign the reference. For a separate landmark, place its own mark.\n\n"
-            "3. Biological traits\nChoose the series and counting rule. Before excludes the boundary; Through includes it; From starts at the boundary and includes it. The preview shows which elements contribute. Any correction is added after counting.\n\n"
+            "3. Biological traits\nChoose the series and counting rule. Before excludes the boundary element. Through includes the boundary element. From counts from the boundary element to the end of the ordered series, including the boundary. The preview shows which elements contribute. Count between includes both boundary elements. Independent reference marks are associated with the nearest element of the ordered series. Repeated structures are numbered automatically from their spatial arrangement. Check the displayed order before interpreting direction-dependent counts or positions. A fixed numerical offset, if defined, is added to the calculated count.\n\n"
             "Save trait keeps the rule in this draft. Use these traits for project applies the whole set.",parent=self)
 
     def _build_trait_list(self,parent):
@@ -1269,7 +1269,7 @@ class TraitSchemeDialog(tk.Toplevel):
         self.stop_behavior_label=ttk.Label(self.count_options,text="At the stop mark");self.stop_behavior_label.grid(row=0,column=2,sticky="w")
         self.stop_behavior_combo=ttk.Combobox(self.count_options,textvariable=self.trait_stop_behavior,values=tuple(STOP_BEHAVIOR_VALUES),state="readonly",width=22)
         self.stop_behavior_combo.grid(row=0,column=3,columnspan=2,sticky="ew",padx=(7,0));self.stop_behavior_combo.bind("<<ComboboxSelected>>",lambda _e:self._refresh_rule_preview())
-        self._help("Choose whether the stop mark itself belongs to the count, or whether counting begins from it.",self.stop_behavior_label,self.stop_behavior_combo)
+        self._help("Choose whether the boundary element is excluded, included, or used as the starting element for counting to the end of the ordered series.",self.stop_behavior_label,self.stop_behavior_combo)
 
         self.derived_frame=ttk.LabelFrame(parent,text="Calculation",padding=8);self.derived_frame.grid(row=3,column=0,columnspan=5,sticky="ew",pady=(10,0))
         self.derived_frame.columnconfigure(1,weight=1);self.derived_frame.columnconfigure(3,weight=1)

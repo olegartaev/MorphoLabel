@@ -35,7 +35,7 @@ class ProjectSection(SectionView):
   project=self.context.project
   if not project:
    ttk.Label(host,text="Project",style="PageTitle.TLabel").pack(anchor="w")
-   ttk.Label(host,text="Create a project or open an existing portable MorphoLabel project.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(3,16))
+   ttk.Label(host,text="Create a project or open an existing MorphoLabel project.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(3,16))
    actions=ttk.Frame(host);actions.pack(anchor="w")
    self.button(actions,"New Project...",self.shell.new_project,"Create a new MorphoLabel project without changing original photographs.",primary=True).pack(side="left")
    self.button(actions,"Open Project...",self.shell.open_project,"Open an existing MorphoLabel project in this same window.").pack(side="left",padx=6)

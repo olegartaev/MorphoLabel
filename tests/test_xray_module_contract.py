@@ -27,7 +27,7 @@ class XRayModuleContractTests(unittest.TestCase):
     def test_xray_module_is_available_and_taxon_neutral(self):
         spec=module_registry().get("xray_counts")
         self.assertEqual("available",spec.status)
-        self.assertEqual("X-ray traits",spec.display_name)
+        self.assertEqual("X-ray Traits",spec.display_name)
         self.assertIsNotNone(spec.factory)
         self.assertNotIn("fish",spec.description.lower())
 
@@ -186,7 +186,7 @@ class XRayModuleContractTests(unittest.TestCase):
             "Choose one of the Elements to count defined in step 1.",
             "Choose one of the Start / stop marks defined in step 1.",
             "A fixed number added to the count.",
-            "Choose whether the stop mark itself belongs to the count",
+            "Choose whether the boundary element is excluded, included, or used as the starting element for counting to the end of the ordered series.",
         ):
             self.assertIn(help_text,source)
 

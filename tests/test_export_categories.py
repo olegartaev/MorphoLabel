@@ -44,10 +44,38 @@ class ExportCategoryTests(unittest.TestCase):
    project.set_locality_calibration('L',image_id,2.0,'mm',{'mm_per_pixel':0.5})
    block=parse_tps(export_landmark_tps(project,target=root/'coords.tps'))[0]
    self.assertEqual([(5.0,5.0),(10.0,5.0)],block['coordinates']);self.assertEqual('0.500000',block['SCALE']);self.assertEqual('fish.jpg',block['IMAGE'])
- def test_export_dialog_extension_tracks_selected_format(self):
-  section=ExportSection.__new__(ExportSection)
-  self.assertTrue(section._format_target('landmarks.tps','CSV wide (*.csv)').endswith('.csv'))
-  self.assertTrue(section._format_target('landmarks.csv','*.tps').endswith('.tps'))
-  self.assertTrue(section._format_target('landmarks.tps','MorphoJ row/column text (*.txt)').endswith('.txt'))
+ def test_save_dialog_uses_format_filename_and_preserves_custom_basename(self):
+  import tkinter as tk
+  from unittest.mock import patch
+  from app.ui.export_section import _LANDMARK_FORMATS
+  interp=tk.Tcl();section=ExportSection.__new__(ExportSection);section.shell=interp
+  for name,expected in (("Wide CSV","landmarks_wide.csv"),("TPS","landmarks.tps"),("Long CSV","landmarks_long.csv"),("MorphoJ","landmarks_morphoj.txt")):
+   self.assertEqual(expected,_LANDMARK_FORMATS[name]["initial"])
+  custom=Path(tempfile.gettempdir())/"my_shape_table.csv"
+  with patch("app.ui.export_section.filedialog.asksaveasfilename",return_value=str(custom)) as save:
+   target,kind=section._save_as("Export landmarks",_LANDMARK_FORMATS["Wide CSV"]["initial"],[("CSV wide (*.csv)","*.csv")],".csv","CSV wide (*.csv)")
+  self.assertEqual(str(custom),target);self.assertEqual("CSV wide (*.csv)",kind)
+  kwargs=save.call_args.kwargs
+  self.assertEqual("landmarks_wide.csv",kwargs["initialfile"]);self.assertEqual(".csv",kwargs["defaultextension"])
+  self.assertEqual([("CSV wide (*.csv)","*.csv")],kwargs["filetypes"])
+
+ def test_suffix_mismatch_reopens_native_dialog_before_target_changes(self):
+  import tkinter as tk
+  from unittest.mock import patch
+  interp=tk.Tcl();section=ExportSection.__new__(ExportSection);section.shell=interp
+  original=Path(tempfile.gettempdir())/"custom.name.tps"
+  corrected=Path(tempfile.gettempdir())/"custom.name.csv"
+  with patch("app.ui.export_section.filedialog.asksaveasfilename",side_effect=[str(original),str(corrected)]) as save, patch("app.ui.export_section.messagebox.showinfo") as notice:
+   target,_=section._save_as("Export landmarks","landmarks_wide.csv",[("CSV wide (*.csv)","*.csv")],".csv","CSV wide (*.csv)")
+  self.assertEqual(str(corrected),target);self.assertEqual(2,save.call_count);notice.assert_called_once()
+  self.assertEqual("custom.name.csv",save.call_args_list[1].kwargs["initialfile"])
+
+ def test_cancelled_native_dialog_returns_no_export_target(self):
+  import tkinter as tk
+  from unittest.mock import patch
+  interp=tk.Tcl();section=ExportSection.__new__(ExportSection);section.shell=interp
+  with patch("app.ui.export_section.filedialog.asksaveasfilename",return_value="") as save:
+   target,_=section._save_as("Export landmarks","landmarks_wide.csv",[("CSV wide (*.csv)","*.csv")],".csv","CSV wide (*.csv)")
+  self.assertEqual("",target);save.assert_called_once()
 
 if __name__=='__main__':unittest.main()

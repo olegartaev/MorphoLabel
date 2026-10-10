@@ -498,8 +498,8 @@ class XRayStructureWorkspace:
             "1. Mark the anatomy\nChoose a marker type, then click each element once. Drag a point to correct it; Delete removes the selected point.\n\n"
             "2. Set counting boundaries\nIf a reference is part of a counted series, right-click that element and choose its reference role. Otherwise choose the reference marker and place it separately. Traits contains a diagram and examples.\n\n"
             "3. Record what you can see\nUse visibility controls for structures that are partly visible, absent, or cannot be seen.\n\n"
-            "4. Check and confirm\nVerify specimen confirms your marks. Verify & Next also moves through a batch. Check results shows the calculated trait values.\n\n"
-            "Optional: mark control specimens twice to check consistency (Human Repeatability). Train AI on verified main annotations; review and correct its suggestions before confirming.",parent=self.root)
+            "4. Check and verify\nVerify specimen records the current annotations as human-verified. Verify & Next also moves through a batch. Check results shows the calculated trait values.\n\n"
+            "Optional: mark control specimens twice to check consistency (Human Repeatability). Train AI on verified main annotations; review and correct its suggestions before verifying the specimen.",parent=self.root)
 
     def continue_annotation_queue(self):
         state=self.project.get_ui_state("xray_structure_active_batch",{}) or {}
@@ -1652,7 +1652,7 @@ class XRayStructureWorkspace:
             if run and run.get("status")=="retired":run=None
             if run:
                 total=int(run["total"]);count.set(total);new_sample.grid()
-                sample_note.configure(text=f"Current run: {total} specimens · recommended default: 10 · eligible: {eligible}. Start new sample keeps this run in audit history.")
+                sample_note.configure(text=f"Current run: {total} specimens · suggested starting size: 10 · eligible: {eligible}. Start new sample keeps this run in audit history.")
                 a1=int(run.get("annotation1_verified") or 0);a2=int(run.get("annotation2_verified") or 0)
                 one_status.configure(text=f"{a1} / {total} specimens complete")
                 two_status.configure(text=f"{a2} / {total} specimens complete")
@@ -1661,7 +1661,7 @@ class XRayStructureWorkspace:
                 results.configure(state="normal" if a1 and a2 else "disabled")
             else:
                 clamp_count();new_sample.grid_remove()
-                sample_note.configure(text=f"Recommended default: 10 · eligible human-verified specimens: {eligible}. Choose the sample size before Annotation 1.")
+                sample_note.configure(text=f"Suggested starting size: 10 · eligible human-verified specimens: {eligible}. Choose the sample size before Annotation 1.")
                 one_status.configure(text="Not started");two_status.configure(text="Not started")
                 one_open.configure(text="Start Annotation 1",state="normal" if eligible else "disabled")
                 two_open.configure(text="Start Annotation 2",state="disabled");results.configure(state="disabled")
@@ -1709,7 +1709,7 @@ class XRayStructureWorkspace:
         ttk.Label(
             frame,text=(
                 f"Annotation 1: {run['annotation1_verified']} / {run['total']} · Annotation 2: {run['annotation2_verified']} / {run['total']}. "
-                "Counts compare two blind manual annotations; reference-role agreement compares the selected element position within its series."
+                "Counts compare two blind manual annotations; reference-role agreement compares the selected element position within its series. Marker distances are calculated between nearest unmatched markers within each structure class, using normalized crop coordinates. They are dimensionless and do not represent physical distances."
             ),
             style="PageSubtitle.TLabel",wraplength=810,
         ).grid(row=1,column=0,sticky="w",pady=(2,9))
@@ -1717,7 +1717,7 @@ class XRayStructureWorkspace:
         tree=ttk.Treeview(frame,columns=columns,show="headings")
         for key,title,width in (
             ("structure","Structure",220),("n","Compared",80),("exact","Exact count",105),
-            ("mae","Count MAE",95),("position","Mean marker difference",150),("role","Same role position",130),
+            ("mae","Count MAE",95),("position","Mean marker distance",150),("role","Same role position",130),
         ):
             tree.heading(key,text=title);tree.column(key,width=width,anchor="w",stretch=key=="structure")
         tree.grid(row=2,column=0,sticky="nsew")

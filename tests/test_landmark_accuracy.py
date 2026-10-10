@@ -47,7 +47,7 @@ class LandmarkAccuracyTests(unittest.TestCase):
         source=(Path(__file__).parents[1]/"app"/"ui"/"model_accuracy.py").read_text(encoding="utf-8")
         self.assertIn("GM landmarks only",source)
         self.assertIn("ratio is context, not a formal accuracy score",source)
-        self.assertIn("CLASSICAL-only landmarks are excluded",source)
+        self.assertIn("Landmarks used only for linear measurements are excluded.",source)
 
 
 if __name__=="__main__":

@@ -45,7 +45,7 @@ class ModuleHub:
         ttk.Label(brand,image=self.logo).pack(side="left",padx=(0,22))
         copy=ttk.Frame(brand);copy.pack(side="left")
         ttk.Label(copy,text=APP_NAME,style="HubTitle.TLabel").pack(anchor="w")
-        ttk.Label(copy,text="Annotate large image collections with AI",style="PageSubtitle.TLabel").pack(anchor="w",pady=(3,8))
+        ttk.Label(copy,text="Biological image annotation with human review and optional AI assistance",style="PageSubtitle.TLabel").pack(anchor="w",pady=(3,8))
         ttk.Label(copy,text=f"v{APP_VERSION} · {APP_STATUS}",style="Muted.TLabel").pack(anchor="w")
         modules=ttk.Frame(host);modules.grid(row=1,column=0,sticky="nsew");modules.rowconfigure(0,weight=1)
         modules.columnconfigure(0,weight=1,uniform="module_cards");modules.columnconfigure(1,weight=1,uniform="module_cards")
@@ -83,7 +83,7 @@ class ModuleHub:
             artwork.bind("<Button-1>",lambda _e,key=spec.module_id:self.shell.open_module(key))
             artwork.bind("<Return>",lambda _e,key=spec.module_id:self.shell.open_module(key))
             self.shell.tip.bind(artwork,f"Open {spec.display_name}.")
-            descriptions={"xray_counts":"Mark and count skeletal structures in X-ray images.\nTurn annotations into reviewed trait tables.",
+            descriptions={"xray_counts":"Mark and count anatomical structures in X-ray images.\nTurn annotations into reviewed trait tables.",
                           "landmarks":"Place landmarks for geometric morphometrics (GM)\nand measure biological structures."}
             description=descriptions.get(spec.module_id,spec.description)
             tk.Label(card,text=description,bg=bg,fg="#34546b",font=("Segoe UI",11),wraplength=420,justify="left").grid(row=1,column=0,sticky="w",padx=20)

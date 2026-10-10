@@ -15,8 +15,8 @@ def module_registry():
     from app.modules.xray_counts import XRayCountsRuntime
     registry = ModuleRegistry()
     for spec in (
-        ModuleSpec("landmarks", "Landmarks & measurements", "Landmarks for geometric morphometrics (GM) and measurements of biological structures.", "1", EXTENSION_API_VERSION, 10, "available", LandmarksRuntime, "builtin", last_project),
-        ModuleSpec("xray_counts", "X-ray traits", "Mark and count skeletal structures in X-ray images.", "1", EXTENSION_API_VERSION, 20, "available", XRayCountsRuntime, "builtin", last_xray_project),
+        ModuleSpec("landmarks", "Landmarks & Measurements", "Landmarks for geometric morphometrics (GM) and measurements of biological structures.", "1", EXTENSION_API_VERSION, 10, "available", LandmarksRuntime, "builtin", last_project),
+        ModuleSpec("xray_counts", "X-ray Traits", "Mark and count anatomical structures in X-ray images.", "1", EXTENSION_API_VERSION, 20, "available", XRayCountsRuntime, "builtin", last_xray_project),
         ModuleSpec("scales_meristics", "Scales & meristics", "Scales and meristics workflow", "1", EXTENSION_API_VERSION, 30, "planned", None, "builtin"),
     ):
         registry.register(spec)

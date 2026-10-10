@@ -12,80 +12,121 @@ from .icons import WORKFLOW_ICON_SIZE
 from .section_base import SectionView
 from .tk_lifecycle import trace_for_widget
 
+_LANDMARK_FORMATS={
+ 'Wide CSV':{'initial':'landmarks_wide.csv','filter':'CSV wide (*.csv)','pattern':'*.csv','extension':'.csv','description':'One specimen per row, with landmark coordinates, sample and source-file information. Suitable for R and Excel.'},
+ 'TPS':{'initial':'landmarks.tps','filter':'TPS (*.tps)','pattern':'*.tps','extension':'.tps','description':'Landmark coordinates in original-image pixels, for TPS-compatible morphometric software.'},
+ 'Long CSV':{'initial':'landmarks_long.csv','filter':'CSV long (*.csv)','pattern':'*.csv','extension':'.csv','description':'One landmark per row, including annotation state and provenance.'},
+ 'MorphoJ':{'initial':'landmarks_morphoj.txt','filter':'MorphoJ row/column text (*.txt)','pattern':'*.txt','extension':'.txt','description':'Numeric landmark coordinates for complete specimens. A companion CSV identifies samples and source files.'},
+}
+
+def _extension_for_kind(kind,filetypes,default):
+ text=str(kind or '').casefold()
+ for label,pattern in filetypes:
+  if text==label.casefold() or text==pattern.casefold() or pattern.casefold() in text:
+   return '.tps' if pattern.casefold().endswith('.tps') else '.txt' if pattern.casefold().endswith('.txt') else '.csv'
+ return default
+
 class ExportSection(SectionView):
  def render(self):
   panel=self.frame(padding=18);panel.pack(fill='both',expand=True);cfg=self.context.project.config
-  header=ttk.Frame(panel);header.pack(fill='x',pady=(0,14));header.columnconfigure(0,weight=1)
+  header=ttk.Frame(panel);header.pack(fill='x',pady=(0,12));header.columnconfigure(0,weight=1)
   ttk.Label(header,text='Export',style='PageTitle.TLabel').grid(row=0,column=0,sticky='w')
   ttk.Label(header,text=f"{cfg.get('name',self.context.project.root.name)} · {len(self.context.rows)} images",style='PageSubtitle.TLabel').grid(row=1,column=0,sticky='w',pady=(2,0))
-  ttk.Label(header,text=f"Project folder: {self.context.project.root}",style='Muted.TLabel',wraplength=700,justify='left').grid(row=2,column=0,sticky='w',pady=(2,0))
-  guide='Save reviewed results for statistics or figures.\n\nLandmark coordinates\nChoose TPS, CSV or a MorphoJ-compatible format for shape analysis.\n\nMeasurements\nSave the distances you defined in Measurements as a table.'
+  self.project_folder_label=ttk.Label(header,text=f"Project folder: {self.context.project.root}",style='Muted.TLabel',wraplength=1000,justify='left');self.project_folder_label.grid(row=2,column=0,sticky='w',pady=(2,0))
+  guide=("Export landmark coordinates and measurements for downstream analysis.\n\n"
+   "For a final reviewed dataset, choose Export analysis dataset and keep Verified only (default).\n\n"
+   "Direct landmark and measurement exports may also include eligible records that have not been human-verified.\n\n"
+   "The analysis dataset includes specimen identities, project definitions and information about missing or omitted values.")
   self.what_to_do(header,'Export — quick guide',guide).grid(row=0,column=1,rowspan=3,sticky='ne')
 
-  cards=ttk.Frame(panel);cards.pack(fill='x');cards.columnconfigure(0,weight=1);cards.columnconfigure(1,weight=1)
+  cards=ttk.Frame(panel);cards.pack(fill='both',expand=True);cards.columnconfigure(0,weight=1);cards.columnconfigure(1,weight=1)
   def card_header(icon,text):
-   header=ttk.Frame(cards)
-   ttk.Label(header,image=self.shell.ui_icon(icon,WORKFLOW_ICON_SIZE)).pack(side='left',padx=(0,6))
-   ttk.Label(header,text=text,style='WorkflowCardTitle.TLabel').pack(side='left')
-   return header
+   title=ttk.Frame(cards)
+   ttk.Label(title,image=self.shell.ui_icon(icon,WORKFLOW_ICON_SIZE)).pack(side='left',padx=(0,6))
+   ttk.Label(title,text=text,style='WorkflowCardTitle.TLabel').pack(side='left')
+   return title
 
-  land=ttk.LabelFrame(cards,labelwidget=card_header('export_landmarks','Landmark coordinates'),padding=14);land.grid(row=0,column=0,sticky='nsew',padx=(0,5))
-  ttk.Label(land,text='Export landmark positions for geometric morphometrics or other coordinate-based analyses.',style='Muted.TLabel',wraplength=430,justify='left').grid(row=0,column=0,columnspan=3,sticky='w',pady=(0,10))
-  mode=tk.StringVar(value='all');groups=available_groups(self.context.project);chosen={name:tk.BooleanVar(value=True) for name in groups};checks=[]
+  land=ttk.LabelFrame(cards,labelwidget=card_header('export_landmarks','Landmark coordinates'),padding=14);self.landmark_panel=land
+  land.grid(row=0,column=0,columnspan=2,sticky='ew',pady=(0,8))
+  ttk.Label(land,text='Export landmark coordinates as TPS, CSV or MorphoJ-compatible text. This direct export is not restricted to human-verified images.',style='Muted.TLabel',wraplength=1050,justify='left').grid(row=0,column=0,columnspan=3,sticky='w',pady=(0,8))
+  mode=tk.StringVar(master=panel,value='all');self.landmark_mode=mode;groups=available_groups(self.context.project)
+  chosen={name:tk.BooleanVar(master=panel,value=True) for name in groups};checks=[];self.group_checkboxes=checks
   ttk.Label(land,text='Landmarks to include',style='SectionTitle.TLabel').grid(row=1,column=0,columnspan=3,sticky='w')
-  all_choice=ttk.Radiobutton(land,text='All landmarks',variable=mode,value='all');all_choice.grid(row=2,column=0,sticky='w',pady=(4,0))
-  selected_choice=ttk.Radiobutton(land,text='Choose groups',variable=mode,value='groups');selected_choice.grid(row=2,column=1,sticky='w',padx=(10,0),pady=(4,0))
+  all_choice=ttk.Radiobutton(land,text='All landmarks',variable=mode,value='all');all_choice.grid(row=2,column=0,sticky='w',pady=(3,0))
+  selected_choice=ttk.Radiobutton(land,text='Choose groups',variable=mode,value='groups');selected_choice.grid(row=2,column=1,sticky='w',padx=(10,0),pady=(3,0))
   self.shell.tip.bind(all_choice,'Export every landmark in the active project scheme.');self.shell.tip.bind(selected_choice,'Export only the groups selected below.')
-  line=ttk.Frame(land);line.grid(row=3,column=0,columnspan=3,sticky='ew',pady=(6,2));line.columnconfigure(0,weight=1);line.columnconfigure(1,weight=1)
+  group_line=ttk.Frame(land);group_line.grid(row=3,column=0,columnspan=3,sticky='ew',pady=(4,2));group_line.columnconfigure(0,weight=1);group_line.columnconfigure(1,weight=1)
   if groups:
    for index,(name,var) in enumerate(chosen.items()):
-    check=ttk.Checkbutton(line,text=name,variable=var);check.grid(row=index//2,column=index%2,sticky='w',padx=(0,12),pady=(2,2));checks.append(check)
-  else:
-   ttk.Label(line,text='No landmark groups are defined; use All landmarks.',style='Muted.TLabel').pack(anchor='w')
+    check=ttk.Checkbutton(group_line,text=name,variable=var);check.grid(row=index//2,column=index%2,sticky='w',padx=(0,12),pady=(2,2));checks.append(check)
+  else:ttk.Label(group_line,text='No landmark groups are defined; use All landmarks.',style='Muted.TLabel').grid(row=0,column=0,sticky='w')
   def update(*_):
    for check in checks:check.state(['!disabled'] if mode.get()=='groups' else ['disabled'])
   trace_for_widget(panel,mode,'write',update);update()
-  self.button(land,'Export landmark coordinates…',lambda:self.landmarks(mode.get(),selected_groups(tuple(chosen),{name:var.get() for name,var in chosen.items()})),'Choose an output format and destination.',style='Primary.TButton').grid(row=4,column=0,columnspan=3,sticky='w',pady=(12,0))
-  self.button(land,'Export analysis dataset…',self.analysis_dataset,'Create a traceable analysis bundle.',style='Primary.TButton').grid(row=5,column=0,columnspan=3,sticky='w',pady=(7,0))
 
-  measurement=ttk.LabelFrame(cards,labelwidget=card_header('export_measurements','Measurements'),padding=14);measurement.grid(row=0,column=1,sticky='nsew',padx=(5,0))
-  ttk.Label(measurement,text='Export the active named distances as a table for statistical analysis.',style='Muted.TLabel',wraplength=430,justify='left').pack(anchor='w',pady=(0,10))
-  ttk.Label(measurement,text='Output contains the project measurement definitions and their values for eligible images.',wraplength=430,justify='left').pack(anchor='w')
-  self.button(measurement,'Export measurements…',self.measurements,'Choose CSV or tab-delimited text and a destination.',style='Primary.TButton').pack(anchor='w',pady=(12,0))
- def _save_as(self,title,initial,filetypes):
-  kind=tk.StringVar(master=self.shell,value=filetypes[0][0]);target=filedialog.asksaveasfilename(parent=self.shell,title=title,initialfile=initial,filetypes=filetypes,typevariable=kind)
-  return target,kind.get()
- def _format_target(self,target,kind):
-  """Keep the filename extension consistent with the format selected in the dialog."""
-  if not target:return target
-  label=str(kind or '').casefold();suffix='.tps' if 'tps' in label else '.txt' if 'morphoj' in label or 'tab-delimited' in label or '.txt' in label else '.csv'
-  path=Path(target)
-  return str(path if path.suffix.lower()==suffix else path.with_suffix(suffix))
- def landmarks(self,mode,groups):
+  self.landmark_format=tk.StringVar(master=panel,value='Wide CSV')
+  selector_row=ttk.Frame(land);selector_row.grid(row=4,column=0,columnspan=3,sticky='w',pady=(8,0))
+  ttk.Label(selector_row,text='Format',style='SectionTitle.TLabel').pack(side='left',padx=(0,8))
+  self.format_selector=ttk.Combobox(selector_row,textvariable=self.landmark_format,values=tuple(_LANDMARK_FORMATS),state='readonly',width=18)
+  self.format_selector.pack(side='left')
+  self.format_description_label=ttk.Label(land,text='',style='Muted.TLabel',wraplength=1050,justify='left')
+  self.format_description_label.grid(row=5,column=0,columnspan=3,sticky='w',pady=(4,0))
+  def describe_format(_event=None):self.format_description_label.configure(text=_LANDMARK_FORMATS.get(self.landmark_format.get(),_LANDMARK_FORMATS['Wide CSV'])['description'])
+  self.format_selector.bind('<<ComboboxSelected>>',describe_format);describe_format()
+  self.shell.tip.bind(self.format_selector,'Choose the format before selecting the output file.')
+  self.landmark_export_button=self.button(land,'Export landmarks…',lambda:self.landmarks(mode.get(),selected_groups(tuple(chosen),{name:var.get() for name,var in chosen.items()}),self.landmark_format.get()),'Save landmark coordinates in the selected format.',style='Primary.TButton')
+  self.landmark_export_button.grid(row=6,column=0,sticky='w',pady=(8,0))
+  self.analysis_export_button=self.button(land,'Export analysis dataset…',self.analysis_dataset,'Create a traceable analysis bundle.')
+  self.analysis_export_button.grid(row=7,column=0,sticky='w',pady=(4,0))
+
+  measurement=ttk.LabelFrame(cards,labelwidget=card_header('export_measurements','Measurements'),padding=(12,8));self.measurement_panel=measurement
+  measurement.grid(row=1,column=0,columnspan=2,sticky='ew')
+  ttk.Label(measurement,text='Export named linear measurements as a table. This direct export may include eligible unverified images.',style='Muted.TLabel',wraplength=1050,justify='left').grid(row=0,column=0,sticky='w',pady=(0,4))
+  ttk.Label(measurement,text='Output contains the project measurement definitions and their values for eligible images.',style='Muted.TLabel',wraplength=1050,justify='left').grid(row=1,column=0,sticky='w')
+  self.measurements_export_button=self.button(measurement,'Export measurements…',self.measurements,'Choose CSV or tab-delimited text and a destination.')
+  self.measurements_export_button.grid(row=2,column=0,sticky='w',pady=(7,0))
+
+ def _save_as(self,title,initial,filetypes,default_extension,selected_kind=None):
+  """Save through the native dialog; any corrected suffix is reconfirmed there."""
+  choices=list(filetypes);kind=tk.StringVar(master=self.shell,value=selected_kind or choices[0][0])
+  initialfile=initial;initialdir=None
+  while True:
+   target=filedialog.asksaveasfilename(parent=self.shell,title=title,initialfile=initialfile,initialdir=initialdir,
+    filetypes=choices,defaultextension=default_extension,typevariable=kind)
+   if not target:return '',kind.get()
+   selected=kind.get();extension=_extension_for_kind(selected,choices,default_extension)
+   path=Path(target)
+   if path.suffix.casefold()==extension.casefold():return str(path),selected
+   corrected=path.with_suffix(extension) if path.suffix else path.with_name(path.name+extension)
+   messagebox.showinfo(title,f'The selected format uses {extension}. The Save dialog will reopen with “{corrected.name}”; confirm the final name and any overwrite there.',parent=self.shell)
+   initialfile=corrected.name;initialdir=str(corrected.parent)
+   match=next((item for item in choices if item[1].casefold()==f'*{extension}'.casefold()),None)
+   if match:choices=[match];kind.set(match[0])
+
+ def landmarks(self,mode,groups,format_name='Wide CSV'):
   selected=groups if mode=='groups' else ()
-  if mode=='groups' and not selected:messagebox.showwarning('Export landmark coordinates','Select at least one landmark group.',parent=self.shell);return
-  types=[('TPS (*.tps)','*.tps'),('CSV wide (*.csv)','*.csv'),('CSV long (*.csv)','*.csv'),('MorphoJ row/column text (*.txt)','*.txt')];target,kind=self._save_as('Export landmark coordinates','landmarks.tps',types)
+  if mode=='groups' and not selected:messagebox.showwarning('Export landmarks','Select at least one landmark group.',parent=self.shell);return
+  fmt=_LANDMARK_FORMATS.get(format_name,_LANDMARK_FORMATS['Wide CSV'])
+  target,kind=self._save_as('Export landmarks',fmt['initial'],[(fmt['filter'],fmt['pattern'])],fmt['extension'],fmt['filter'])
   if not target:return
-  target=self._format_target(target,kind)
   project=self.context.project
+  exporters={'Wide CSV':export_landmark_wide,'TPS':export_landmark_tps,'Long CSV':export_landmark_csv_long,'MorphoJ':export_morphoj_text}
+  exporter=exporters[format_name]
   def worker(progress):
-   progress('Exporting landmark coordinates…')
-   if kind.startswith('CSV wide'):return export_landmark_wide(project,selected,target=target)
-   if kind.startswith('CSV long'):return export_landmark_csv_long(project,selected,target=target)
-   if kind.startswith('MorphoJ'):return export_morphoj_text(project,selected,target=target)
-   return export_landmark_tps(project,selected,target=target)
+   progress('Exporting landmarks…')
+   return exporter(project,selected,target=target)
   def complete(path):
-   companion=path.with_name(f"{path.stem}_specimens.csv") if kind.startswith('TPS') or kind.startswith('MorphoJ') else None
+   companion=path.with_name(f'{path.stem}_specimens.csv') if format_name in {'TPS','MorphoJ'} else None
    message=f'Created: {path}'
    if companion is not None:message+=f'\nSpecimen crosswalk: {companion}'
-   messagebox.showinfo('Export landmark coordinates',message,parent=self.shell)
-  self.shell._run_background_task('Export landmark coordinates','Exporting landmark coordinates…',worker,complete)
+   messagebox.showinfo('Export landmarks',message,parent=self.shell)
+  self.shell._run_background_task('Export landmarks','Exporting landmarks…',worker,complete)
 
  def measurements(self):
-  types=[('CSV (*.csv)','*.csv'),('Tab-delimited text (*.txt)','*.txt')];target,kind=self._save_as('Export measurements','measurements.csv',types)
+  types=[('CSV (*.csv)','*.csv'),('Tab-delimited text (*.txt)','*.txt')]
+  target,kind=self._save_as('Export measurements','measurements.csv',types,'.csv','CSV (*.csv)')
   if not target:return
-  target=self._format_target(target,kind)
-  project=self.context.project;delimiter='\t' if kind.startswith('Tab-delimited') else ','
+  project=self.context.project;delimiter='\t' if 'tab-delimited' in kind.casefold() or '.txt' in kind.casefold() or kind.endswith('*.txt') else ','
   def worker(progress):
    progress('Calculating and exporting measurements…')
    return export_measurements(project,target=target,delimiter=delimiter)

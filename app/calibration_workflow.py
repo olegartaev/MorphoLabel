@@ -24,7 +24,8 @@ class CalibrationWorkflow(tk.Toplevel):
   header=ttk.Frame(self,padding=(12,10,12,6));header.pack(fill="x");header.columnconfigure(0,weight=1)
   left=ttk.Frame(header);left.grid(row=0,column=0,sticky="w")
   ttk.Label(left,text="Sample calibration",style="PageTitle.TLabel").pack(anchor="w")
-  ttk.Label(left,text="Set a known distance once per sample to convert pixel distances to physical units.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(2,0))
+  self.calibration_subtitle=ttk.Label(left,text="Calibrate each sample group using a known reference distance in millimetres.",style="PageSubtitle.TLabel",wraplength=850,justify="left");self.calibration_subtitle.pack(anchor="w",pady=(2,0))
+  self.calibration_scale_note=ttk.Label(left,text="The same calibration is applied to every image in this group. All images must have the same effective image scale.",style="Muted.TLabel",wraplength=850,justify="left");self.calibration_scale_note.pack(anchor="w",pady=(3,0))
   ttk.Button(header,text="Help",command=self._help).grid(row=0,column=1,sticky="ne")
 
   status=ttk.Frame(self,padding=(12,0,12,6));status.pack(fill="x");status.columnconfigure(0,weight=1)
@@ -45,8 +46,8 @@ class CalibrationWorkflow(tk.Toplevel):
   actions=ttk.Frame(self,padding=(12,4,12,10));actions.pack(fill="x");actions.columnconfigure(2,weight=1)
   ttk.Button(actions,text="Use another image",command=self.other_image).grid(row=0,column=0,sticky="w")
   ttk.Button(actions,text="Reset points",command=self.reset).grid(row=0,column=1,sticky="w",padx=(6,0))
-  ttk.Button(actions,text="Save",command=self.confirm).grid(row=0,column=3,sticky="e")
-  ttk.Button(actions,text="Save & Next ›",command=self.confirm_next,style="Primary.TButton").grid(row=0,column=4,sticky="e",padx=(6,0))
+  self.save_button=ttk.Button(actions,text="Save",command=self.confirm);self.save_button.grid(row=0,column=3,sticky="e")
+  self.save_next_button=ttk.Button(actions,text="Save & Next ›",command=self.confirm_next,style="Primary.TButton");self.save_next_button.grid(row=0,column=4,sticky="e",padx=(6,0))
 
   if self.localities:self.load()
   else:messagebox.showinfo("Calibration","No active samples are available.",parent=self)
@@ -74,9 +75,9 @@ class CalibrationWorkflow(tk.Toplevel):
 
  def _help(self):
   info(self,"Calibration — quick guide",
-       "Why: calibration converts distances measured in pixels into real units such as millimetres.\n\n"
-       "For each sample, choose an image containing a known scale or reference length.\n\n"
-       "Enter that length, click its two endpoints, then Save & Next. The same calibration is used for the sample.")
+       "Calibration converts pixel distances into millimetres.\n\n"
+       "For each sample group, choose an image containing a known reference length.\n\n"
+       "Enter the reference length in millimetres, mark its two endpoints, then select Save & Next. This calibration applies to all images in the group and is valid only if their effective image scale is identical.")
  def locality(self):return self.localities[self.index]
  def row(self):return self.by_locality[self.locality()][self.image_index]
  def dirty(self):return self.points!=self.saved_points or self.mm.get()!=getattr(self,"saved_mm","10.0")

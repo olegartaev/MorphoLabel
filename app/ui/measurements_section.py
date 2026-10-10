@@ -116,11 +116,11 @@ class MeasurementsSection(SectionView):
   self.preview_host=ttk.LabelFrame(panel,text='Preview',padding=2);self.preview_host.grid(row=1,column=0,sticky='nsew')
   self.preview=MeasurementPreview(self.preview_host,self.context)
 
-  guide='Turn landmark positions into distances you can compare.\n\n1. Set the scale\nTo obtain millimetres or other physical units, calibrate each sample using a known distance.\n\n2. Define a measurement\nGive it a name and choose the two landmarks that define the distance.'
+  guide='Turn landmark positions into distances you can compare.\n\n1. Set the scale\nTo measure distances in millimetres, calibrate each sample group using a known reference distance.\n\n2. Define a measurement\nGive it a name and choose the two landmarks that define the distance.'
   dock=self.workflow_dock(panel,help_title='Measurements — quick guide',help_text=guide);dock.grid(row=2,column=0,sticky='ew',pady=(4,0))
 
-  first=dock.add_card('1. Calibrate samples',icon='measurement_calibrate',help_text='Convert pixel distances to physical units for each sample.')
-  ttk.Label(first,text='Needed for measurements in mm or other real units.',style='Muted.TLabel',wraplength=310,justify='left').pack(anchor='w')
+  first=dock.add_card('1. Calibrate samples',icon='measurement_calibrate',help_text='Convert pixel distances to millimetres using a known reference distance.')
+  ttk.Label(first,text='Required for measurements in millimetres.',style='Muted.TLabel',wraplength=310,justify='left').pack(anchor='w')
   self.button(first,'Calibrate samples',self.shell.open_calibration,'Open sample calibration and set a known reference distance.').pack(anchor='w',pady=(7,0))
 
   second=dock.add_card('2. Define measurements',icon='measurement_define',help_text='Define each measurement as the distance between two landmarks.')
