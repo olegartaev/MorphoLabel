@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0-rc.5 — 2026-10-10
+
+- Added persistent specimen, sample, locality and source-file identities to scientific CSV exports, compatible TPS/MorphoJ specimen crosswalks, and sample/filename metadata to X-ray exports.
+
 ## 1.0.0-rc.4 — 2026-10-09
 
 - Added a consistency check that aborts an analysis export if project definitions change while its database snapshot is prepared.
