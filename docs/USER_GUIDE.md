@@ -1,11 +1,11 @@
 # MorphoLabel User Guide
 
-This guide describes the scientific logic of MorphoLabel and the recommended way to use the program for large image-annotation projects.
+This guide explains how to use MorphoLabel for **standardized, stage-by-stage processing of large biological image collections**: first prepare relevant images or specimen Crops, then annotate landmarks or anatomical structures across the prepared set, then review and export the resulting morphological data.
 
 MorphoLabel has two production modules:
 
 - **Landmarks & Measurements** — landmark-based morphology, geometric morphometrics and linear measurements.
-- **X-ray Traits** — specimen crops, skeletal markers and biological traits derived from radiographs.
+- **X-ray Traits** — specimen Crops, anatomical structure markers and biological traits derived from radiographs.
 
 Both modules follow the same principle:
 
@@ -73,6 +73,23 @@ In MorphoLabel it means that the repetitive parts of a large project are structu
 8. export a deliberately selected dataset for downstream analysis while keeping review and provenance information in the project.
 
 This is especially useful when most new images are routine but a minority are difficult, unusual or ambiguous.
+
+## 1.2 Process the dataset by stage
+
+MorphoLabel is designed primarily for a **standardized workflow applied to many specimens**, not for repeatedly completing Crop → annotation → export for each individual specimen.
+
+The usual sequence is:
+
+1. **Define the scientific scheme once.** Decide which structures, landmarks or traits have consistent biological meaning across the collection.
+2. **Prepare the collection.** Work through the relevant photographs or X-ray plates in the Crop stage, confirming specimen framing, identities and orientation. In Landmarks, skip Crop when source images are already standardized.
+3. **Annotate the prepared specimens.** Move to Landmarks or X-ray Structures and work across the collection or successive batches. Use the same definitions and human-verification criteria throughout.
+4. **Review and export.** Calculate measurements or traits, examine flagged cases, and export the intended reviewed subset with identity and provenance information.
+
+**Landmarks example:** prepare Crops for the relevant photographs → place and verify the same landmark scheme across the specimens → calculate calibrated linear measurements where applicable.
+
+**X-ray example:** confirm individual specimen Crops across all relevant radiographic plates → mark and verify vertebrae or other anatomical structures for those specimens → inspect calculated meristic traits.
+
+The application allows returning to earlier stages when a particular image needs correction. The stage order is a recommended way to maintain consistency and avoid unnecessary context switching, **not a requirement to finish every image in the project before any later stage can be opened**. When AI is used, a small representative batch is annotated and verified first to train the model, after which prediction and review can proceed across the remaining images in that stage.
 
 ---
 
@@ -192,7 +209,7 @@ MorphoLabel currently supports **Windows 10/11 x64**.
 
 Download the current installer from the GitHub release page:
 
-[MorphoLabel 1.0.0-rc.2 installer](https://github.com/olegartaev/MorphoLabel/releases/download/v1.0.0-rc.2/MorphoLabel-1.0.0-rc.2-Setup-x64.exe)
+[GitHub Releases — choose the current Windows Setup-x64.exe installer](https://github.com/olegartaev/MorphoLabel/releases)
 
 Normal users do not need to install Python, Git or AI libraries manually.
 
@@ -227,7 +244,7 @@ AI setup and annotation are local operations. The AI setup process does not uplo
 
 # 4. General interface logic
 
-MorphoLabel is organized as a module hub followed by a small number of workflow stages.
+MorphoLabel is organized as a module hub followed by workflow stages designed to be used **across the collection**. The interface may display one current image or specimen, but the overall task is to apply the same procedure to a large set of them.
 
 ## 4.1 Module hub
 
@@ -291,11 +308,17 @@ The common pattern is:
 
 You do not need to use AI to use the program.
 
+## 4.6 Collection-wide stages versus per-stage batches
+
+The main sections describe **which type of work to perform across the dataset** (Crop, Landmarks/Structures, Measurements/Traits, Export). The training and prediction cards inside a section describe **how to process a batch within that stage**.
+
+A typical large project spends time completing and reviewing Crops across many images or plates before switching to the next type of annotation. Training batches do not require finishing the entire collection in advance: create representative human examples, train if helpful, then process and verify further batches. Revisit an earlier stage for individual corrections when needed; do not treat stage progression as an irreversible sequence.
+
 ---
 
 # 5. Landmarks & Measurements: complete workflow
 
-The Landmarks module is intended for anatomical landmark coordinates and distances derived from them.
+The Landmarks module is intended for standardized recording of anatomical landmark coordinates and derived distances across many specimens. The recommended stage order is **Project and scheme → Crop across the image set (optional) → Landmarks across the prepared images → Measurements and calibration → QC and Export**.
 
 ## 5.1 Create a project
 
@@ -337,9 +360,11 @@ Use Crop when specimen framing or orientation varies enough to make downstream a
 
 Skip it when the images are already standardized and an extra preparation step adds no useful information.
 
+When Crop is useful, prepare and review the relevant image collection (or a substantial working batch) in the Crop stage **before beginning mass landmark placement**. Do not assume you need to return to Crop after every individual landmark annotation.
+
 ## 5.4 Crop manually
 
-When Crop is enabled, open the Crop stage.
+When Crop is enabled, open the Crop stage and work through the relevant images or batches. Check consistent framing and orientation across specimens before switching to Landmarks.
 
 The current Crop can be moved, resized and rotated.
 
@@ -391,7 +416,7 @@ Confirmed examples become part of the human reference data.
 
 ## 5.6 Place landmarks manually
 
-Open the Landmarks stage.
+After preparing the relevant Crops (or skipping Crop for already standardized images), open the Landmarks stage. Work through the specimens using the **same landmark scheme**, verifying completed annotations across the batch instead of restarting the entire workflow for each image.
 
 Select a landmark and place it on the current specimen.
 
@@ -532,7 +557,7 @@ You can export all landmarks or selected landmark groups.
 
 Choose the format based on the downstream software rather than on appearance.
 
-**Important:** the current landmark export commands do not enforce a **Verified only** filter by default. They export eligible non-excluded records according to the selected format and its missing-data rules. Before using an export as a final scientific dataset, check the review state in the project and make sure that the included records meet your study's acceptance criteria.
+**Important:** direct landmark format exports do not restrict rows to **Verified only**. For a controlled analysis bundle, use **Export analysis dataset… → Verified only (default)**. The bundle includes specimen identities and reports missing or omitted records. Always confirm that the selected subset meets your scientific criteria.
 
 MorphoLabel exports coordinates for downstream geometric morphometrics; it does not perform Generalized Procrustes Analysis or the subsequent statistical analysis of shape.
 
@@ -543,13 +568,13 @@ Measurements can be exported as:
 - CSV;
 - tab-delimited text.
 
-The export contains the active measurement definitions and calculated values for eligible non-excluded images. It does not currently apply a verified-only filter by default, and values can be missing when landmarks or calibration are unavailable. Treat review status and calibration validity as separate scientific checks before analysis.
+The direct measurement export contains the active measurement definitions and calculated values for eligible non-excluded images; it may include unverified records, and values can be missing when landmarks or calibration are unavailable. For reviewed landmark and measurement tables together, use **Export analysis dataset… → Verified only (default)**. Calibration validity remains a separate scientific check.
 
 ---
 
 # 6. X-ray Traits: complete workflow
 
-The X-ray module is designed for radiographs in which one image may contain multiple specimens and the scientific output is a set of counts, positions, image-space distances, angles or derived traits.
+The X-ray module is designed for standardized processing of radiograph collections in which a single plate may contain multiple specimens. The recommended stage order is **Project and trait scheme → Crops and specimen identities across plates → Structures across cropped specimens → calculated Traits → QC and Export**. Supported scientific outputs include counts, positions, normalized image-space distances, angles and derived traits.
 
 ## 6.1 Create an X-ray project
 
@@ -581,6 +606,8 @@ This copies the source X-rays into the project so the project can open without t
 Use **Clear reproducible cache** to remove disposable derived files without deleting source X-rays, scientific annotations or final trained models.
 
 ## 6.3 Define the trait scheme before mass annotation
+
+Define the anatomical classes, reference markers and counting rules **before annotating large numbers of specimens**. This keeps the biological definitions stable across the radiographic series.
 
 Open **Traits…**.
 
@@ -644,7 +671,7 @@ This separation helps prevent a partially edited trait rule from silently changi
 
 ## 6.6 Crop specimens from X-ray plates
 
-Open **Crops**.
+Open **Crops** and work through the relevant radiographic plates (manually or in AI-assisted batches) before moving to mass annotation in Structures. Each plate can contain several specimens, each requiring a consistent identity and its own confirmed Crop.
 
 A plate may contain several specimens.
 
@@ -702,7 +729,7 @@ Human-reviewed plates are protected from routine prediction overwrites.
 
 ## 6.10 Annotate X-ray Structures
 
-Open **Structures**.
+Once the relevant plates have confirmed specimen Crops, open **Structures** and work through the cropped specimens in sequence or batches. Mark and verify anatomical structures using the same trait scheme throughout the collection; there is no need to return to the Crop tab after every specimen unless a correction is required.
 
 Choose a marker type and click each anatomical structure.
 
@@ -1092,7 +1119,13 @@ The X-ray CSV contains the calculated trait table.
 
 Use **Verified only** when preparing the analysis dataset after human review.
 
-## 11.4 Keep the project after publication
+## 11.4 Landmarks analysis dataset bundle
+
+For a reviewed collection-wide export from **Landmarks & Measurements**, use **Export → Export analysis dataset…** and leave the data scope at **Verified only (default)**. Unlike individual TPS, coordinate CSV, MorphoJ-compatible or measurement export commands, the analysis bundle is built from a consistent SQLite snapshot and includes specimen identity records, scheme/measurement definitions, coordinate and measurement tables, and missing-value or omission reports.
+
+Use **All** only when unfinished or unchecked records are intentionally needed. The optional source-file SHA256 check can verify source-file identity, but checking a hash does not establish biological correctness. Verify that the selected dataset and calibration match the scientific analysis.
+
+## 11.5 Keep the project after publication
 
 Do not treat the export as the only valuable output.
 
