@@ -4,7 +4,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk, ImageOps
-from app.identity import APP_NAME, APP_VERSION, APP_STATUS, icon_image
+from app.identity import APP_NAME, APP_VERSION, APP_STATUS, COPYRIGHT, LICENSE_NAME, icon_image
 from app.runtime_paths import resource_path
 from .icons import WORKFLOW_ICON_SIZE
 from app.xray_icons import tk_xray_icon
@@ -102,4 +102,5 @@ class ModuleHub:
             button.bind("<Leave>",lambda _e,b=button,color=accent:b.configure(bg=color))
             self.shell.tip.bind(button,f"Open {spec.display_name}.")
         footer=ttk.Frame(host);footer.grid(row=2,column=0,sticky="n",pady=(8,0))
-        self.shell.control_button(footer,"About MorphoLabel",self.shell.show_about,"Version, module authors, license and project link.").pack(side="left")
+        self.shell.control_button(footer,"About MorphoLabel",self.shell.show_about,"Version, module authors, license and project link.").pack()
+        ttk.Label(footer,text=f"{COPYRIGHT} · {LICENSE_NAME}",style="Muted.TLabel").pack(pady=(5,0))

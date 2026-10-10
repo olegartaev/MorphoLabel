@@ -1,10 +1,11 @@
 """Presentation metadata for independently readable MorphoLabel modules."""
 from __future__ import annotations
 import json
+from app.identity import APP_CREATOR
 
 BUILTIN_CREDITS={
-    'landmarks':('Oleg Artaev','Crop, landmarks, measurements and export'),
-    'xray_counts':('Oleg Artaev','X-ray crops, structures and calculated traits'),
+    'landmarks':(APP_CREATOR,'Crop, landmarks, measurements and export'),
+    'xray_counts':(APP_CREATOR,'X-ray crops, structures and calculated traits'),
 }
 
 _BACKEND_LABELS={
@@ -64,10 +65,19 @@ def _xray_ai(shell):
         f"Structures — {_backend_label(structure_backend,STRUCTURE_BACKEND)}."
     )
 
+def visible_module_author(author):
+    """Only display separate credits for modules with a distinct known author."""
+    value=str(author or "").strip()
+    if not value or value==APP_CREATOR or value=="See module documentation":
+        return None
+    return f"Module author: {value}"
+
+
 def module_credit_rows(registry,shell=None):
     rows=[]
     for spec in registry.available():
-        author,scope=BUILTIN_CREDITS.get(spec.module_id,('See module documentation',spec.description)) if spec.source=='builtin' else ('See module documentation',spec.description)
+        fallback,scope=BUILTIN_CREDITS.get(spec.module_id,('See module documentation',spec.description)) if spec.source=='builtin' else ('See module documentation',spec.description)
+        author=getattr(spec,'author',None) or fallback
         if spec.module_id=='landmarks':ai=_landmarks_ai(shell)
         elif spec.module_id=='xray_counts':ai=_xray_ai(shell)
         else:ai="AI: see module documentation."

@@ -48,6 +48,7 @@ class ModuleSpec:
     factory: Callable[[], ModuleRuntime] | None
     source: str
     recent_project: Callable[[], Path | None] | None = None
+    author: str | None = None  # Optional module credit; old extensions remain compatible.
 
 
 @dataclass(frozen=True)

@@ -247,7 +247,11 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         about=source("app/ui/shell.py")
         credits=source("app/ui/module_credits.py")
         self.assertIn("module_box=ttk.LabelFrame(credits,text=name",about)
-        self.assertIn('text=f"Author: {author}",style="Muted.TLabel"',about)
+        self.assertIn('text="Project creator and lead developer"',about)
+        self.assertIn('text=APP_CREATOR',about)
+        self.assertIn('author_label=visible_module_author(author)',about)
+        self.assertNotIn('text=f"Author: {author}"',about)
+        self.assertIn('text=f"License: {LICENSE_NAME}"',about)
         for text in ("RTMPose-M","RTMDet-tiny","MobileNetV3-Small","ResNet-18 heatmap","NumPy ridge image regression"):
             self.assertIn(text,credits)
 

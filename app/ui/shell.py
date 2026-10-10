@@ -8,7 +8,7 @@ import threading, queue
 import webbrowser
 import tkinter as tk
 from tkinter import font as tkfont, ttk, filedialog, messagebox, simpledialog
-from app.identity import APP_NAME, APP_FULL_NAME, APP_VERSION, APP_STATUS, COPYRIGHT, CONTACT_EMAIL, PUBLIC_REPOSITORY, LICENSE_NAME, apply_window_identity, icon_image
+from app.identity import APP_NAME, APP_FULL_NAME, APP_VERSION, APP_STATUS, APP_CREATOR, CONTACT_EMAIL, PUBLIC_REPOSITORY, LICENSE_NAME, apply_window_identity, icon_image
 from app.gui_crop_debug import log
 from .tooltips import Tooltip
 from .icons import tk_icon, TOPBAR_ICON_SIZE, CONTROL_ICON_SIZE
@@ -600,7 +600,7 @@ class ProductionShell(tk.Tk):
             return None
 
     def show_about(self):
-        from .module_credits import module_credit_rows
+        from .module_credits import module_credit_rows, visible_module_author
         dialog=tk.Toplevel(self);dialog.title("About MorphoLabel");dialog.transient(self);dialog.resizable(False,False);apply_window_identity(dialog,short=True)
         frame=ttk.Frame(dialog,padding=20);frame.pack(fill="both",expand=True)
         brand=ttk.Frame(frame);brand.pack(fill="x")
@@ -612,8 +612,8 @@ class ProductionShell(tk.Tk):
         ttk.Label(content,text="Open-source software for scalable and reproducible extraction of morphological data from biological images.",wraplength=500,justify="left").pack(anchor="w")
         ttk.Label(content,text="MorphoLabel combines annotation, human review and quality control into a structured workflow for large image datasets.",wraplength=500,justify="left",style="Muted.TLabel").pack(anchor="w",pady=(5,0))
         ttk.Separator(frame,orient="horizontal").pack(fill="x",pady=(14,10))
-        ttk.Label(frame,text="Core application",style="SectionTitle.TLabel").pack(anchor="w")
-        ttk.Label(frame,text="Concept, scientific workflow and development: Oleg Artaev.").pack(anchor="w",pady=(3,0))
+        ttk.Label(frame,text="Project creator and lead developer",style="SectionTitle.TLabel").pack(anchor="w")
+        ttk.Label(frame,text=APP_CREATOR).pack(anchor="w",pady=(3,0))
         ttk.Label(frame,text="Developed with the assistance of OpenAI Codex.",style="Muted.TLabel").pack(anchor="w",pady=(2,10))
         ttk.Label(frame,text="Modules",style="SectionTitle.TLabel").pack(anchor="w")
         credits=ttk.Frame(frame);credits.pack(fill="x",pady=(4,8))
@@ -621,9 +621,11 @@ class ProductionShell(tk.Tk):
             module_box=ttk.LabelFrame(credits,text=name,padding=(10,7));module_box.pack(fill="x",pady=(0,6))
             ttk.Label(module_box,text=scope,wraplength=600,justify="left").pack(anchor="w")
             ttk.Label(module_box,text=ai,style="Muted.TLabel",wraplength=600,justify="left").pack(anchor="w",pady=(3,0))
-            ttk.Label(module_box,text=f"Author: {author}",style="Muted.TLabel").pack(anchor="w",pady=(3,0))
+            author_label=visible_module_author(author)
+            if author_label:
+                ttk.Label(module_box,text=author_label,style="Muted.TLabel").pack(anchor="w",pady=(3,0))
         ttk.Separator(frame,orient="horizontal").pack(fill="x",pady=(4,8))
-        ttk.Label(frame,text=f"{COPYRIGHT} · {LICENSE_NAME}",style="Muted.TLabel").pack(anchor="w")
+        ttk.Label(frame,text=f"License: {LICENSE_NAME}",style="Muted.TLabel").pack(anchor="w")
         ttk.Label(frame,text="Redistributed derivative works must retain the Apache-2.0 license and applicable NOTICE attribution.",style="Muted.TLabel",justify="left",wraplength=620).pack(anchor="w",pady=(3,0))
         ttk.Label(frame,text="For scientific software or models substantially based on MorphoLabel, please identify MorphoLabel as the source and cite it.",style="Muted.TLabel",justify="left",wraplength=620).pack(anchor="w",pady=(3,0))
         ttk.Label(frame,text=CONTACT_EMAIL).pack(anchor="w",pady=(8,0))
