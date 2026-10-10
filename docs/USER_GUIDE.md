@@ -222,7 +222,7 @@ Before starting the download, the setup window lists the components. AI support 
 You have two valid choices:
 
 - **Install AI support** — use training and prediction.
-- **Continue without AI** — use MorphoLabel manually and install AI later from **Menu → AI support → Set up AI support…**.
+- **Continue without AI** — use MorphoLabel manually and install AI later from **Menu → Set up AI support...**.
 
 The AI components are several GB. The installer for the main application is much smaller because the large AI runtime is managed separately.
 
@@ -234,7 +234,7 @@ A compatible GPU can substantially improve training and prediction speed. The ap
 
 You can inspect the detected status later with:
 
-**Menu → AI support → Hardware status…**
+**Menu → Hardware status…**
 
 ## 3.4 Privacy
 
@@ -1139,7 +1139,7 @@ The project contains the provenance needed to revisit an annotation, inspect a m
 
 Open:
 
-**Menu → AI support → Set up AI support…**
+**Menu → Set up AI support...**
 
 You can install it later without recreating the project.
 
@@ -1155,7 +1155,7 @@ If the problem repeats, create a diagnostic report.
 
 Open:
 
-**Menu → Support → Create diagnostic report…**
+**Menu → Create diagnostic report…**
 
 MorphoLabel creates a diagnostic ZIP and provides controls to open its folder or copy its path.
 

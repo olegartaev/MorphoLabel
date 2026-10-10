@@ -21,7 +21,6 @@ MorphoLabel addresses that bottleneck by combining:
 - structured projects and reusable biological annotation schemes;
 - stage-by-stage and batch-oriented processing across large image collections;
 - manual scientific annotation;
-- reusable annotation and trait schemes;
 - project-specific AI training and prediction;
 - explicit human verification;
 - repeatability assessment;
@@ -94,7 +93,7 @@ Key workflows:
 
 ## Interface
 
-These screenshots illustrate real biological annotation workflows from an earlier release candidate; cosmetic details may differ in newer builds.
+These screenshots show example annotation workspaces. The appearance may vary slightly with display scaling.
 
 ### Landmarks & Measurements
 
@@ -219,7 +218,7 @@ For geometric morphometrics, MorphoLabel prepares landmark-coordinate data; it d
 
 ## Release status
 
-1.0.0-rc.1 is the consolidated public release candidate for MorphoLabel 1.0, including both production modules, human-reviewed AI workflows, reproducible scientific exports and specimen/source identification. This candidate is intended for external acceptance before stable 1.0.0.
+**1.0.0-rc.1 is the first public release candidate of MorphoLabel.** It includes Landmarks & Measurements and X-ray Traits in one Windows application, with human-verified workflows and traceable scientific exports. This candidate is available for external evaluation ahead of stable 1.0.0.
 
 For routine usage questions, open **Menu → Help with an AI assistant…** to copy a question template referencing the public User Guide and source code. Paste it into an external AI assistant of your choice; verify scientific advice and do not share confidential research data.
 
@@ -244,16 +243,6 @@ When MorphoLabel or a model substantially based on it contributes to published r
 ## License
 
 MorphoLabel is released under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attribution information.
-
-## Development
-
-Source development currently targets Python 3.11 on Windows 10/11 x64.
-
-Run START_APP.vbs, or from a Python environment use:
-
-    python -m app
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing code changes.
 
 ## Contact
 
