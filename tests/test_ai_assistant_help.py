@@ -34,12 +34,14 @@ class AIAssistantTkTests(unittest.TestCase):
         self.shell.update_idletasks()
 
     def _buttons(self,parent):
-        found=[]
+        found={}
         for child in parent.winfo_children():
             if isinstance(child,ttk.Button):
-                found.append(child)
-            found.extend(self._buttons(child))
-        return {button.cget("text"):button for button in found}
+                found[child.cget("text")]=child
+            # The recursive result is a dictionary, not an iterable of widgets:
+            # extending a list with it would insert string keys as buttons.
+            found.update(self._buttons(child))
+        return found
 
     def test_flat_menu_order_bold_help_and_original_actions(self):
         row=ttk.Frame(self.shell);row.pack()
