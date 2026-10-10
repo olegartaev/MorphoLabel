@@ -67,12 +67,15 @@ class AboutCreditsTkTests(unittest.TestCase):
             "third_science","Other research module","Example analysis","1",
             EXTENSION_API_VERSION,90,"available",Runtime,"external",author="Jane Smith",
         ))
+        before=set(self.shell.winfo_children())
         with patch("app.ui.shell.center"):
             self.shell.show_about()
-        dialog=next(
+        dialogs=[
             child for child in self.shell.winfo_children()
-            if isinstance(child,tk.Toplevel) and child.title()=="About MorphoLabel"
-        )
+            if isinstance(child,tk.Toplevel) and child not in before
+        ]
+        self.assertEqual(1,len(dialogs))
+        dialog=dialogs[0]
         self.addCleanup(dialog.destroy)
         labels=self._label_texts(dialog)
         self.assertEqual(1,sum(text==APP_CREATOR for text in labels))
