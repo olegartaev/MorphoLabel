@@ -627,7 +627,7 @@ A reference can be:
 
 Traits are the final values calculated from annotations.
 
-Supported trait methods are:
+The X-ray scientific scheme/calculation engine recognizes these methods:
 
 - **Count objects**
 - **Count up to a reference**
@@ -638,7 +638,9 @@ Supported trait methods are:
 - **Measure angle**
 - **Calculated from other traits**
 
-For **Measure distance**, the current X-ray implementation calculates Euclidean distance in the normalized coordinate system of the oriented specimen Crop. The value is therefore an **image-space relative distance**, not millimetres or another physical unit. X-ray distance traits should not be interpreted as absolute morphometric measurements unless an appropriate calibration method is added outside the current calculation.
+**Current editor limitation:** the graphical Traits builder offers **Count all**, **Count to a stop mark**, **Count between two reference marks** and **Calculate from other traits**. The other methods are recognized by the scientific scheme engine but are not all available as direct choices in that graphical editor. Do not assume a method listed here can be created through the visible builder.
+
+For **Measure distance**, the current X-ray calculation uses Euclidean distance between separately normalized Crop X/Y coordinates. This is **dimensionless**, not a distance in image pixels or millimetres; differences in Crop dimensions or aspect ratio can affect its value. It is not an absolute linear morphometric measurement.
 
 **Measure angle** is calculated from the annotated points in degrees.
 
