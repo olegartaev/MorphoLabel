@@ -1,10 +1,10 @@
 # MorphoLabel
 
-**Open-source software for standardized, large-scale processing of biological images into morphological data, with human verification and optional AI assistance.**
+**AI-powered, human-verified software for standardized, large-scale extraction of morphological data from biological images.**
 
-MorphoLabel is designed for collections of hundreds or thousands of photographs or radiographs. Its purpose is to apply **one biologically defined annotation scheme and a consistent procedure across an entire dataset**, while retaining links to specimen identity, source images, human decisions, AI models (if used) and exported results.
+MorphoLabel is built for researchers who need to process hundreds or thousands of photographs or radiographs using consistent anatomical definitions. The researcher annotates a representative set of specimens, **trains task-specific AI models**, and uses them to process the remaining images in batches. Predictions are reviewed and corrected, then converted into landmark coordinates, linear measurements or anatomical trait tables.
 
-The central idea is **stage-by-stage, human-in-the-loop mass annotation**. Instead of completing every operation for one specimen before starting the next, researchers can prepare Crops across a collection, then annotate landmarks or anatomical structures across the prepared specimens, review the resulting measurements or traits and export a controlled dataset. Manual processing is fully supported; optional AI can accelerate repetitive work within each stage.
+The software follows a **collection-wide scientific workflow**: prepare specimen images first, annotate the same structures across the collection next, and then inspect and export the data. Biological definitions, specimen identity, model provenance, human corrections and verification status remain attached to the project. Manual annotation is available, but **AI training and batch prediction are the principal means of scaling the workflow**.
 
 **Current release:** [MorphoLabel 1.0.0-rc.1](https://github.com/olegartaev/MorphoLabel/releases/tag/v1.0.0-rc.1) · Windows 10/11 x64 · Apache-2.0
 
@@ -14,82 +14,63 @@ The central idea is **stage-by-stage, human-in-the-loop mass annotation**. Inste
 
 ## Why MorphoLabel
 
-Modern imaging can produce photographs and radiographs much faster than a researcher can turn them into measurements, landmark coordinates or anatomical counts. The limiting step is often not image acquisition but **consistent annotation, review and conversion of images into structured data for downstream analysis**.
+Biological imaging can produce material much faster than it can be measured. A major obstacle in comparative morphology is not only the time required to annotate each specimen, but also the need to apply **the same anatomical definitions and review criteria** throughout a large collection. Changes in framing, observer placement, image quality or trait interpretation can otherwise make datasets difficult to compare.
 
-MorphoLabel addresses that bottleneck by combining:
+MorphoLabel addresses this with a reproducible sequence:
 
-- structured projects and reusable biological annotation schemes;
-- stage-by-stage and batch-oriented processing across large image collections;
-- manual scientific annotation;
-- project-specific AI training and prediction;
-- explicit human verification;
-- repeatability assessment;
-- targeted quality-control queues;
-- model and annotation provenance;
-- transparent export formats for downstream analysis, with review and provenance retained in the project.
+1. **Define the biological task.** Specify homologous landmarks, structures, reference marks or counting rules before mass annotation.
+2. **Create reference annotations.** A researcher checks a diverse starting set; these become training examples, not unexamined labels.
+3. **Automate the repetitive work.** Train separate AI models for image preparation and anatomical annotation, then run predictions on larger batches.
+4. **Verify the scientific result.** Correct AI drafts, quantify human repeatability where appropriate and review suspicious observations.
+5. **Export traceable data.** Retain the relationship between specimens, schemes, model predictions, corrections and calculated variables.
 
-AI is optional. The software remains usable as a manual annotation system, and AI predictions are treated as proposals that can be corrected and verified by the researcher.
+### Process one stage across many specimens
 
-## Work by stage across the collection
+For a large collection, **complete or review the relevant Crops first**, then process the Landmarks or X-ray Structures stage across the prepared specimens. This minimizes repeated changes of task and keeps anatomical decisions consistent.
 
-**The unit of work is a collection or batch, not a separate end-to-end workflow for every image.** Standardizing framing, orientation and anatomical definitions before mass annotation helps limit variation introduced by the processing procedure itself.
+- **Landmarks & Measurements:** scheme → Crop across images (if needed) → AI-assisted landmark annotation and human review → linear measurements / shape-coordinate export.
+- **X-ray Traits:** trait scheme → AI-assisted specimen Crops across radiographic plates → AI-assisted structure annotation and human review → calculated meristic traits / export.
 
-- **Landmarks & Measurements:** define one landmark scheme → prepare or confirm Crops across the relevant images (**optional** when the source images are already standardized) → place and verify landmarks across those images → define/calibrate linear measurements → run final QC and export.
-- **X-ray Traits:** define one anatomical trait scheme → identify, orient and confirm specimen Crops across the X-ray plates → mark and verify structures (for example, vertebrae) across the cropped specimens → inspect calculated traits → run final QC and export.
+Each stage can be worked through in successive batches, and individual specimens can be revisited. The sequence is a recommended workflow, not a requirement to finish every Crop in the project before making a landmark.
 
-Within a stage, work manually or train a model on a representative verified batch and use it to predict and review the remaining eligible images. This is a **recommended scientific workflow, not a rigid lock**: individual records can be revisited, and corrections made in an earlier stage remain linked to later work. For a large dataset, the practical pattern is **all relevant Crops first, then all relevant landmarks or structures**, rather than repeatedly switching stages for each specimen.
+**The AI is the automation engine; the researcher remains responsible for biological validity.** A trained model learns how to reproduce the supplied annotations. It does not establish landmark homology, decide whether a rare trait is biologically real, or make every prediction reliable. The application can also be operated manually without installing AI components.
 
 ## Production modules
 
 <table>
-<tr>
-<td width="50%" valign="top">
+  <tr>
+    <th width="50%" align="center"><strong>Landmarks &amp; Measurements</strong></th>
+    <th width="50%" align="center"><strong>X-ray Traits</strong></th>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="app/resources/module_covers/landmarks.png" alt="Landmarks and Measurements module illustration" width="100%"></td>
+    <td width="50%" valign="top"><img src="app/resources/module_covers/xray_traits.png" alt="X-ray Traits module illustration" width="100%"></td>
+  </tr>
+  <tr>
+    <td valign="top">Automated landmark placement and measurement across photographic collections.</td>
+    <td valign="top">Automated specimen detection and anatomical structure annotation across radiographic collections.</td>
+  </tr>
+</table>
 
 ### Landmarks & Measurements
 
-<img src="app/resources/module_covers/landmarks.png" alt="Landmarks and Measurements module" width="100%">
+**Scientific task.** Record the same anatomically defined 2D landmarks across large series of specimens, creating comparable coordinate datasets for geometric morphometrics and reproducibly defined linear distances for traditional morphometric analyses. Useful settings include comparative morphology, ontogenetic series, museum collections and population-level datasets.
 
-For collections of photographs or other biological images in which the same anatomical landmarks and linear measurements are recorded across many specimens.
+**Automation.** Crop can first standardize how specimens are framed and oriented. A researcher defines the landmark scheme and checks representative images; a project-trained landmark model then proposes the corresponding points on other eligible images. Batch prediction and review queues shift effort from repeatedly placing every point to finding and correcting difficult or unusual cases.
 
-Key workflows:
+**Scientific controls and outputs.** Landmark identity and order follow the project scheme; points that cannot be reliably identified can be marked missing rather than guessed. Two independent manual passes can quantify placement disagreement. Final QC helps locate suspicious configurations and measurements without treating biological outliers as automatic errors. Exports include TPS, wide/long CSV, MorphoJ-compatible coordinates, linear measurement tables and a reviewed analysis bundle with identity and omission information.
 
-- optional specimen Crop and orientation standardization;
-- manual landmark placement;
-- explicit missing-landmark states;
-- geometric-morphometric landmark sets;
-- human repeatability;
-- AI-assisted landmark prediction;
-- review of unverified AI annotations;
-- final QC of verified data;
-- calibration of linear measurements to millimetres when image scales permit;
-- landmark-to-landmark measurements;
-- TPS, CSV and MorphoJ-compatible export.
-
-</td>
-<td width="50%" valign="top">
+Linear measurements are derived from specified landmark pairs. Physical measurements in **millimetres** require a valid calibration; one calibration applies to a sample/locality group and must not be reused across images with different effective scales. MorphoLabel prepares data for geometric morphometrics but does not perform Generalized Procrustes Analysis or downstream shape statistics.
 
 ### X-ray Traits
 
-<img src="app/resources/module_covers/xray_traits.png" alt="X-ray Traits module" width="100%">
+**Scientific task.** Convert series of radiographs into specimen-level observations of repeated anatomical structures and the traits derived from them. In fish osteology, for example, a scheme may define vertebral or pterygiophore series, anatomical boundary markers and meristic counts for distinct body regions. The scheme controls which structures are annotated and how marks contribute to each trait; fish and vertebrae are examples, not hard-coded definitions of the calculation system.
 
-For radiographic collections containing one or more specimens per plate, where repeated anatomical structures and reference marks are annotated consistently to calculate biological traits. The current workflows are particularly suited to oriented specimens and skeletal counts.
+**Automation.** A radiographic plate can contain several specimens. Crop AI proposes specimen frames and orientation, which are confirmed before structure analysis. A separately trained Structure AI model proposes repeated-element and reference-marker annotations on the prepared specimens. The researcher reviews the marks, corrects counts or reference roles and verifies the specimens. Trait values are calculated from the active scheme rather than entered independently for every specimen.
 
-Key workflows:
+**Scientific controls and outputs.** The workflow distinguishes **Complete**, **Partial**, **Not visible** and **Absent**; missing evidence must not be converted into biological absence. Scheme-defined boundaries and inclusion rules determine meristic counts, while human repeatability and result review help identify inconsistencies. Results are exported as specimen-linked CSV trait tables, including a **Verified only** option.
 
-- specimen detection and Crop on X-ray plates;
-- standardized head/ventral orientation;
-- repeated-element and reference-marker annotation;
-- configurable trait schemes that are not hard-coded to a single taxon;
-- counts, positions, normalized image-space distances, angles and derived traits;
-- structure visibility states;
-- human repeatability;
-- Crop AI and Structure AI;
-- suspicious-result review;
-- verified-only trait export.
-
-</td>
-</tr>
-</table>
+The present orientation workflow is best suited to specimens for which head and ventral directions are meaningful. Numbering a repeated series follows its spatial arrangement and should be checked against anatomical order, particularly for curved or non-linear structures. Current X-ray distance values are relative to normalized Crop coordinates, **not physical lengths in millimetres**.
 
 ## Interface
 
@@ -109,46 +90,32 @@ These screenshots show example annotation workspaces. The appearance may vary sl
 
 ## Typical workflow
 
-1. **Set up the dataset:** create a project, connect the images and define stable specimen identities and a biologically meaningful scheme.
-2. **Process the Crop stage across the collection:** frame and orient the relevant specimens, using manual work or AI-assisted batches. Crop is optional for already standardized Landmarks images.
-3. **Process the annotation stage across the prepared specimens:** place and verify Landmarks or X-ray Structures according to the same scheme. Use representative human-verified batches to train optional AI, then review its predictions.
-4. **Obtain biological variables:** derive landmark-to-landmark measurements or calculate X-ray traits from the annotations.
-5. **Check consistency and quality:** use Human Repeatability where appropriate, review suspicious records and correct them at the appropriate stage.
-6. **Export the intended dataset:** select the verified subset where available, and keep specimen identities, definitions and provenance with the scientific results.
+A new project normally proceeds in this order:
 
-This is a recommended order for efficient large-scale work; incomplete batches and individual corrections can be handled without restarting the whole project.
+1. **Build the project and define the anatomy.** Import the images, check specimen identities and specify the landmark or trait scheme.
+2. **Prepare images in bulk.** Annotate a representative set of Crops, train the Crop model and use it on further images or plates. Confirm the proposed framing and orientation. Crop is optional for Landmarks images that already have suitable framing.
+3. **Annotate structures in bulk.** Verify a representative set of landmarks or X-ray structures, train the relevant annotation model and predict the remaining eligible specimens in batches.
+4. **Review and improve.** Correct AI predictions, preserve human-verified observations and, if needed, retrain with examples of recurring errors and underrepresented morphology.
+5. **Calculate and inspect traits.** Define linear measurements or evaluate X-ray trait calculations, use Human Repeatability and final QC where relevant, and resolve suspicious cases.
+6. **Export for analysis.** Select the appropriate verified subset, inspect missing values and retain specimen identity, scheme and model provenance.
 
-For a complete step-by-step workflow, see the **[MorphoLabel User Guide](docs/USER_GUIDE.md)**.
+**Within each stage, the cycle is reference annotations → train → batch prediction → review → improve.** Larger batches become practical only when the model performs adequately on representative material.
 
-## Human verification is the core of the workflow
+For button-by-button instructions, see the **[MorphoLabel User Guide](docs/USER_GUIDE.md)**.
 
-MorphoLabel distinguishes between a machine-generated draft and data that a researcher has reviewed and accepted within the current project.
+## AI automation and human verification
 
-- AI predictions remain reviewable until the user confirms them.
-- A **Verified** state means that the annotation has been human-reviewed within the current scheme; it is not, by itself, proof that the landmark definition, homology, image quality or biological interpretation is correct.
-- Verified human annotations are protected from routine batch prediction.
-- Manual corrections remain part of the project history.
-- Review queues help direct attention to pending or suspicious cases rather than forcing the user to re-check the whole dataset.
-- Repeatability workflows estimate the consistency of the human annotation process itself.
+MorphoLabel is designed to **automate the high-volume steps**, not to replace the scientist. It supports separate training and prediction workflows for Landmarks Crop, landmark placement, X-ray specimen Crop/orientation and X-ray Structures. These models learn from project-specific human reference examples; imported models can also be reused when their tasks and schemas are compatible.
 
-This design is intended for scientific datasets where traceability and explicit review are more important than maximizing unattended automation.
+After training, **Predict next batch** and **Predict all** apply a selected model to eligible records. Review tools keep unverified AI proposals distinct from annotations accepted by a person; ordinary batch prediction protects previously verified work. Models and their lineage can be inspected, selected, imported and exported.
 
-## AI support
+Human Repeatability evaluates how consistently an observer repeats annotations. AI–human comparison and final QC provide additional checks, but **neither model agreement nor a Verified status establishes biological truth**. Landmark homology, counting boundaries, anatomical absence and unusual observations remain scientific judgments.
 
-MorphoLabel can train and apply models for Crop, Landmarks and X-ray Structures.
+### AI installation and privacy
 
-On first launch, AI support can be installed through the guided setup. The application:
+The Windows installer provides the main application. The guided **AI support** setup installs the larger components needed for training and prediction, checks hardware and supports resuming interrupted downloads. A compatible GPU is useful, with CPU fallback available. AI model training and prediction are performed locally; the AI setup process does not upload project images or scientific data.
 
-- lists the AI components before download;
-- keeps one managed AI runtime shared by the production modules;
-- checks CPU, GPU, VRAM and CUDA availability;
-- verifies the installed components;
-- supports resumable downloads;
-- can run without AI if setup is deferred.
-
-AI setup and processing are local. The setup process does **not** upload project images or scientific data.
-
-Trained models can be selected, compared, imported and exported so that a validated model can be reused on another compatible project or computer.
+Users can work manually if AI support is not installed, but **training and batch prediction are the intended route for large datasets**. External general-purpose AI assistants, accessible through **Menu → Help with an AI assistant…**, are for explaining the application; they are separate from MorphoLabel's image-processing models.
 
 ## Reproducibility support and data safety
 
@@ -192,7 +159,7 @@ Depending on the module and project configuration, MorphoLabel can produce:
 - landmark coordinates in wide or long CSV;
 - MorphoJ-compatible coordinate text;
 - calibrated linear measurements in CSV or tab-delimited text;
-- a verified-only **analysis dataset bundle** with specimen identities, landmark and measurement tables, definitions and missing-value/omission reports;
+- a **Verified only** analysis dataset bundle (by default) with specimen identities, landmark and measurement tables, definitions and missing-value/omission reports;
 - X-ray trait tables in CSV;
 - verified-only X-ray trait exports;
 - portable trained-model packages;
@@ -202,7 +169,7 @@ Depending on the module and project configuration, MorphoLabel can produce:
 
 ## Intended use
 
-MorphoLabel is intended for researchers working with repeatable morphology-from-image workflows, including:
+MorphoLabel is intended for researchers building large, consistently annotated morphology-from-image datasets, including:
 
 - geometric morphometrics;
 - linear morphometrics derived from landmarks;
@@ -212,7 +179,7 @@ MorphoLabel is intended for researchers working with repeatable morphology-from-
 - taxonomic and comparative morphology;
 - projects where annotation consistency and auditability are important.
 
-It is not a substitute for biological definition of landmarks or traits. The researcher remains responsible for defining homologous structures, choosing an appropriate sampling design, reviewing annotations and interpreting the resulting data.
+The software standardizes the **annotation procedure within a defined project**; it cannot automatically remove variation introduced by different cameras, image scales, specimen positioning or observers. The researcher remains responsible for establishing anatomical homology, selecting a suitable sampling design, checking calibration and interpreting the data.
 
 For geometric morphometrics, MorphoLabel prepares landmark-coordinate data; it does not replace downstream procedures such as Generalized Procrustes Analysis, shape statistics or biological interpretation in software such as MorphoJ, R or other analytical environments.
 
