@@ -20,7 +20,7 @@ a = Analysis(
         (str(ROOT / "build" / "third_party" / "THIRD_PARTY_NOTICES.txt"), "."),
         (str(ROOT / "build" / "third_party" / "licenses"), "licenses"),
     ],
-    hiddenimports=collect_submodules("app"),
+    hiddenimports=collect_submodules("app") + ["ai_runtime.universal_multires"],
     hookspath=[], hooksconfig={}, runtime_hooks=[], excludes=["tests", "tools"], noarchive=False,
 )
 pyz = PYZ(a.pure)
