@@ -15,7 +15,11 @@ from io import BytesIO
 import json
 from pathlib import Path
 import tempfile
+import sys
 from zipfile import ZipFile,ZIP_DEFLATED
+
+ROOT=Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 
 from ai_runtime.universal_multires import pipeline_components
 from ai_runtime.universal_multires_training_data import build_tile_manifest
