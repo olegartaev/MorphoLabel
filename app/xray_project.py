@@ -915,7 +915,7 @@ class XRayProject:
                 registered=c.execute(
                     "SELECT COUNT(*) FROM xray_structure_training_membership WHERE model_id=?",
                     (parent_id,)).fetchone()[0]
-                if not registered and int(record[0] or 0)+int(record[1] or 0)>0:
+                if not registered:
                     return {"known":False,"specimens":None,"markers":None}
             result=c.execute("""
                 SELECT COUNT(DISTINCT r.specimen_id),COUNT(a.annotation_id)
