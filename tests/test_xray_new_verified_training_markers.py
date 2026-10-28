@@ -11,7 +11,11 @@ class NewVerifiedCountTests(TestCase):
         self.tmp=tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.db=Path(self.tmp.name)/"xray_project.sqlite3"
-        with sqlite3.connect(self.db) as c:
+        # sqlite3's context manager commits/rolls back but does not close the
+        # connection. Explicit close is required before TemporaryDirectory
+        # cleanup on Windows, where open SQLite handles block deletion.
+        c=sqlite3.connect(self.db)
+        try:
             c.executescript("""
                 CREATE TABLE source_images(image_id TEXT,crop_reviewed INTEGER,excluded INTEGER);
                 CREATE TABLE specimens(specimen_id TEXT,image_id TEXT,crop_status TEXT,excluded INTEGER);
@@ -38,6 +42,8 @@ class NewVerifiedCountTests(TestCase):
                 INSERT INTO xray_structure_models VALUES('imported',1,0);
                 INSERT INTO xray_structure_training_membership VALUES('known','old','train');
             """)
+        finally:
+            c.close()
         self.project=XRayProject.__new__(XRayProject)
         self.project.db_path=self.db
         patch=mock.patch.object(XRayProject,"active_scheme_record",

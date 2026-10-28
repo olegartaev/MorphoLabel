@@ -54,7 +54,9 @@ class LandmarkCanvasController:
         self.dragging = None
         self.pending = None
         self.pan_drag = None
-        self.stats = {"state_reads": 0, "photo_creations": 0, "drag_motion": 0, "drag_saves": 0, "drag_max_ms": 0.0}
+        self.stats = {"state_reads": 0, "photo_creations": 0, "drag_motion": 0, "drag_saves": 0,
+                      "drag_max_ms": 0.0, "drag_mouse_down_ms": 0.0, "press_to_first_motion_ms": None}
+        self._drag_pressed_at = None
         self.display_settings = load_display_settings(context.project)
         schema = context.project.schema
         self.operator_state = EditorState(point_ids=tuple(int(item["id"]) for item in schema) or (1,))
@@ -423,6 +425,7 @@ class LandmarkCanvasController:
             self.choice.set(ident)
 
     def place(self, event):
+        handler_started = time.perf_counter()
         if not self.ready_for(self.image_id):
             return
         self.canvas.focus_set()
@@ -441,6 +444,9 @@ class LandmarkCanvasController:
                 self.dragging = int(ident)
                 self.pending = (float(point["x_standardized"]), float(point["y_standardized"]))
                 self.stats["drag_motion"] = 0
+                self.stats["press_to_first_motion_ms"] = None
+                self.stats["drag_mouse_down_ms"] = (time.perf_counter() - handler_started) * 1000.0
+                self._drag_pressed_at = time.perf_counter()
                 return
         x, y = self._point(event)
         if 0 <= x < self.image.width and 0 <= y < self.image.height:
@@ -469,12 +475,15 @@ class LandmarkCanvasController:
         messagebox.showerror("Landmark save failed", f"Could not {action}. No landmark data was changed.\n\n{exc}", parent=self.parent)
     def drag(self, event):
         """Motion is intentionally vector-only: no state read, resize, PhotoImage, or shell render."""
+        handler_started = time.perf_counter()
         if self.dragging is None or not self.ready_for(self.image_id):
             return
         x, y = self._point(event)
         if not (0 <= x < self.image.width and 0 <= y < self.image.height):
             return
         self.pending = (x, y)
+        if self.stats["drag_motion"] == 0 and self._drag_pressed_at is not None:
+            self.stats["press_to_first_motion_ms"] = (handler_started - self._drag_pressed_at) * 1000.0
         self.stats["drag_motion"] += 1
         point = self._points.get(self.dragging)
         items = self._point_items.get(self.dragging)
@@ -486,13 +495,16 @@ class LandmarkCanvasController:
         move_marker(self.canvas, marker, sx, sy)
         offset = int(self.display_settings["size"]) + 4
         move_label(self.canvas, label, sx + offset, sy - offset)
+        self.stats["drag_max_ms"] = max(self.stats["drag_max_ms"], (time.perf_counter() - handler_started) * 1000.0)
 
     def release(self, _event):
         if self.dragging is None or not self.ready_for(self.image_id):
             self.dragging = self.pending = None
+            self._drag_pressed_at = None
             return
         ident, pending = self.dragging, self.pending
         self.dragging = self.pending = None
+        self._drag_pressed_at = None
         if pending:
             try:
                 self.context.project.save_landmark(self.image_id, ident, *pending, "corrected", "corrected_by_human")
@@ -501,7 +513,12 @@ class LandmarkCanvasController:
                 self.refresh_authoritative(notify=True)
                 return
             self.stats["drag_saves"] += 1
-        log(self.image_id, "production_landmark_drag_release", "END", path=str(self.image_path or ""), detail=f"landmark_id={ident} motions={self.stats['drag_motion']} saved={bool(pending)}")
+        first_motion = self.stats["press_to_first_motion_ms"]
+        first_motion_text = "none" if first_motion is None else f"{first_motion:.3f}"
+        log(self.image_id, "production_landmark_drag_release", "END", path=str(self.image_path or ""),
+            detail=f"landmark_id={ident} motions={self.stats['drag_motion']} saved={bool(pending)} "
+                   f"mouse_down_ms={self.stats['drag_mouse_down_ms']:.3f} "
+                   f"press_to_first_motion_ms={first_motion_text} drag_handler_max_ms={self.stats['drag_max_ms']:.3f}")
         # The drag path already holds the saved coordinates locally. Defer the
         # authoritative recount/redraw until Tk is idle so mouse release stays instant.
         self._state_fresh=False

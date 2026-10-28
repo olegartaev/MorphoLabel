@@ -1048,6 +1048,12 @@ class LandmarksSection(SectionView):
    except Exception as exc:events.put(('error',exc))
   threading.Thread(target=worker,daemon=True,name='production-landmark-predict').start()
   def poll():
+   # Prediction may outlive its progress window (for example when the user
+   # closes it, or navigates away and Tk destroys the dialog).  In that case
+   # queued status/progress events must not touch the destroyed ttk widgets.
+   try:
+    if not dialog.winfo_exists():return
+   except tk.TclError:return
    try:
     while True:
      kind,*value=events.get_nowait()
@@ -1084,7 +1090,11 @@ class LandmarksSection(SectionView):
        if current_id:record_attention_failure(self.context.project,current_id,str(value[0]))
        self.shell.open_landmark_attention();return
       messagebox.showerror('Landmark prediction',str(value[0]),parent=self.shell);return
-   except queue.Empty:self.shell.after(100,poll)
+   except queue.Empty:
+    try:
+     if dialog.winfo_exists():self.shell.after(100,poll)
+    except tk.TclError:return
+   except tk.TclError:return
   poll()
  def start_training_batch(self,count):
   """Open/create a finite Landmark batch without blocking Tk on catalogue selection."""

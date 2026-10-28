@@ -11,6 +11,7 @@ from pathlib import Path
 import random
 import shutil
 import subprocess
+import time
 
 import numpy as np
 from PIL import Image
@@ -155,7 +156,7 @@ def apply_orientation_prediction(crop,prediction,policy,model_id="",threshold=OR
     return value
 
 
-def predict_orientation_batch(project,model,items,runtime,scratch,settings):
+def predict_orientation_batch(project,model,items,runtime,scratch,settings,timing_callback=None):
     metrics=dict(model.get("metrics") or {})
     model_path=str(metrics.get("orientation/model_path") or "")
     meta_path=str(metrics.get("orientation/meta_path") or "")
@@ -163,19 +164,31 @@ def predict_orientation_batch(project,model,items,runtime,scratch,settings):
     checkpoint=project.root/model_path;meta=project.root/meta_path
     if not checkpoint.is_file() or not meta.is_file():raise RuntimeError("The active crop model is missing its orientation component.")
     image_paths=[];references=[];root=Path(scratch)/"orientation";root.mkdir(parents=True,exist_ok=True)
+    preparation_started=time.perf_counter()
     for plate_index,item in enumerate(items):
         image_id=item["image_id"];proposals=list(item.get("proposals") or ())
         with Image.open(project.source_image_path(image_id)) as source:
             source.load()
             for proposal_index,proposal in enumerate(proposals):
                 path=root/f"{plate_index:03d}_{proposal_index:03d}.png"
-                _display_ready(aligned_crop(source,proposal)).save(path,format="PNG")
+                # Orientation inputs are ephemeral; low-compression PNG keeps
+                # the pixels exact while avoiding unnecessary CPU time.
+                _display_ready(aligned_crop(source,proposal)).save(path,format="PNG",compress_level=1)
                 image_paths.append(str(path));references.append((item,proposal_index))
     if not image_paths:return items
+    preparation_seconds=time.perf_counter()-preparation_started
+    inference_started=time.perf_counter()
     result=_run(runtime,"predict_orientation_many",{
         "checkpoint":str(checkpoint),"meta":str(meta),"images":image_paths,
         "device":settings["device"],"batch_size":max(1,min(64,int(settings.get("batch_size") or 8))),
     },max(300,20*len(image_paths)))
+    run_seconds=time.perf_counter()-inference_started
+    if timing_callback:
+        child_timing=result.get("timings_seconds") or {}
+        model_load=max(0.0,float(child_timing.get("model_load") or 0.0))
+        inference=max(0.0,float(child_timing.get("inference") or 0.0))
+        timing_callback({"crop_prepare":preparation_seconds,"model_load":model_load,
+                         "inference":inference,"ai_launch":max(0.0,run_seconds-model_load-inference)})
     predictions=list(result.get("results") or ())
     if len(predictions)!=len(references):raise RuntimeError("Orientation model returned an incomplete prediction batch.")
     for prediction,(item,index) in zip(predictions,references):

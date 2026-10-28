@@ -228,6 +228,7 @@ class FinalTkHardeningTests(unittest.TestCase):
         view = runtime.current_view; panel = runtime.photo_panel
         x, y = controller._position(50, 45)
         controller.canvas.event_generate("<Button-1>", x=round(x), y=round(y)); shell.update()
+        self.assertGreaterEqual(controller.stats["drag_mouse_down_ms"], 0.0)
         photos = controller.stats["photo_creations"]
         with patch.object(self.landmark, "connect", side_effect=AssertionError("drag SQLite")), \
              patch("PIL.Image.open", side_effect=AssertionError("drag decode")), \
@@ -237,12 +238,23 @@ class FinalTkHardeningTests(unittest.TestCase):
             for i in range(100):controller.canvas.event_generate("<B1-Motion>",x=round(x+i/20),y=round(y+i/30))
             elapsed = time.perf_counter() - started
         print(f"DRAG 100 vector motions: {elapsed * 1000:.3f} ms")
+        self.assertIsNotNone(controller.stats["press_to_first_motion_ms"])
+        self.assertGreaterEqual(controller.stats["press_to_first_motion_ms"], 0.0)
+        self.assertGreaterEqual(controller.stats["drag_max_ms"], 0.0)
         with patch.object(panel, "refresh", side_effect=AssertionError("full photo refresh")), \
              patch.object(self.landmark, "save_landmark", wraps=self.landmark.save_landmark) as save:
             controller.canvas.event_generate("<ButtonRelease-1>"); shell.update()
             self.assertEqual(1, save.call_count)
         self.assertEqual(photos, controller.stats["photo_creations"])
         self.assertEqual(1, controller.choice.get())
+
+    def test_landmark_prediction_poll_ignores_events_after_dialog_close(self):
+        source=(Path(__file__).resolve().parents[1]/"app"/"ui"/"landmarks_section.py").read_text(encoding="utf-8")
+        start=source.index(" def predict(self,remaining,count")
+        end=source.index(" def start_training_batch",start)
+        poll=source[start:end]
+        self.assertIn("if not dialog.winfo_exists():return",poll)
+        self.assertIn("except tk.TclError:return",poll)
 
     def test_no_scheme_blocks_every_scientific_stage_with_warning(self):
         self.landmark.schema_path.write_text("id,abbr,name,role\n", encoding="utf-8")

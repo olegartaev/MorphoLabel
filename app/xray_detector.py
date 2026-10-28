@@ -8,11 +8,13 @@ import shutil
 import subprocess
 import tempfile
 import time
+import threading
+import queue
 
 from .ai_delivery import ensure_ai_runtime
 from .ai_starters import local_starter
 from .ai_hardware import get_hardware_profile, get_inference_config, get_training_config, is_cuda_oom
-from .process_utils import hidden_window_kwargs
+from .process_utils import hidden_window_kwargs, terminate_process_tree
 from .runtime_paths import resource_path
 from .xray_crop import HYBRID_ALGORITHM_VERSION, detect_specimens, display_preview, merge_detector_proposals, proposals_from_detector_boxes
 from .xray_orientation import predict_orientation_batch, train_orientation_model
@@ -44,6 +46,82 @@ def _run(runtime,mode,payload,timeout):
         raise RuntimeError(f"X-ray detector {mode} failed: {detail[-4000:]}")
     try:return json.loads(next(line for line in reversed(result.stdout.splitlines()) if line.strip()))
     except (ValueError,StopIteration) as exc:raise RuntimeError("X-ray detector returned invalid JSON") from exc
+
+def _stream_stdout_queue(process):
+    """Start exactly one stdout reader per child, avoiding competing reads."""
+    existing=getattr(process,"_morpholabel_stdout_queue",None)
+    if existing is not None:return existing
+    lines=queue.Queue();process._morpholabel_stdout_queue=lines
+    def read_lines():
+        try:
+            for line in process.stdout:lines.put(line)
+        except Exception as exc:lines.put(exc)
+        finally:lines.put(None)
+    process._morpholabel_stdout_thread=threading.Thread(
+        target=read_lines,daemon=True,name="xray-crop-stream-reader")
+    process._morpholabel_stdout_thread.start()
+    return lines
+
+def _stream_event(process,timeout=900):
+    """Read one JSON event while allowing runner logs on stdout."""
+    deadline=time.monotonic()+float(timeout);lines=_stream_stdout_queue(process)
+    while True:
+        if time.monotonic()>=deadline:
+            terminate_process_tree(process)
+            raise RuntimeError("X-ray crop AI timed out while streaming a batch")
+        try:line=lines.get(timeout=min(0.2,max(0.01,deadline-time.monotonic())))
+        except queue.Empty:
+            if process.poll() is None:continue
+            continue
+        if isinstance(line,BaseException):raise RuntimeError(f"Could not read X-ray crop AI response: {line}")
+        if not line:
+            detail=""
+            if process.poll() is not None:
+                try:detail=process.stderr.read().strip()
+                except Exception:pass
+            raise RuntimeError(detail[-4000:] or "X-ray crop AI stream ended before its response")
+        try:event=json.loads(line)
+        except (ValueError,TypeError):continue
+        if isinstance(event,dict) and event.get("event"):
+            if event["event"]=="error":raise RuntimeError(str(event.get("error") or "X-ray detector failed"))
+            return event
+
+def _start_prediction_stream(runtime,header,timeout=900):
+    runner=resource_path("ai_runtime","xray_detector_runner.py")
+    if not runner.is_file():raise RuntimeError(f"X-ray detector runner is unavailable: {runner}")
+    process=subprocess.Popen([str(runtime),str(runner),"predict_stream"],stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding="utf-8",errors="replace",
+        bufsize=1,cwd=str(Path(runtime).resolve().parent),**hidden_window_kwargs())
+    started=time.perf_counter()
+    try:
+        process.stdin.write(json.dumps(header)+"\n");process.stdin.flush()
+        event=_stream_event(process,timeout)
+        if event.get("event")!="ready":raise RuntimeError("X-ray crop AI did not initialize its model stream")
+        model_load=max(0.0,float((event.get("timings_seconds") or {}).get("model_load") or 0.0))
+        return process,model_load,max(0.0,time.perf_counter()-started-model_load)
+    except Exception:
+        terminate_process_tree(process)
+        raise
+
+def _predict_stream_batch(process,images,timeout=900):
+    process.stdin.write(json.dumps({"images":[str(path) for path in images]})+"\n");process.stdin.flush()
+    event=_stream_event(process,timeout)
+    if event.get("event")!="batch":raise RuntimeError("X-ray crop AI returned an unexpected stream event")
+    return event
+
+def _close_prediction_stream(process):
+    if process is None:return
+    try:
+        if process.poll() is None:
+            process.stdin.write(json.dumps({"event":"close"})+"\n");process.stdin.flush()
+            _stream_event(process,30)
+            process.wait(timeout=30)
+    except Exception:
+        terminate_process_tree(process)
+    finally:
+        for handle in (process.stdin,process.stdout,process.stderr):
+            try:handle.close()
+            except Exception:pass
 
 def runtime_info(project=None):
     runtime,_=ensure_ai_runtime(project=project)
@@ -200,69 +278,100 @@ def predict_plates(project,image_ids,cancel=None,progress=None,score_threshold=0
     started=time.perf_counter()
     ids=list(image_ids);success=[];failures=[]
     runtime,_=ensure_ai_runtime(project=project)
-    timings={"prepare":0.0,"detector":0.0,"orientation":0.0,"save":0.0,
+    timings={"prepare":0.0,"ai_launch":0.0,"model_load":0.0,"detection":0.0,
+             "detector":0.0,"proposal_postprocess":0.0,"orientation_crop_prepare":0.0,
+             "orientation_ai_launch":0.0,"orientation_model_load":0.0,"orientation_inference":0.0,
+             "orientation":0.0,"artifact_compaction":0.0,"persistence":0.0,
              "runtime_setup":time.perf_counter()-started}
     settings=detector_performance_settings()["inference"];chunk_size=max(1,int(settings.get("batch_size") or 1));index=0
+    compact_started=time.perf_counter()
     project.compact_disposable_ai_artifacts()
+    timings["artifact_compaction"]+=time.perf_counter()-compact_started
     with tempfile.TemporaryDirectory(prefix="morpholabel_xray_predict_") as scratch:
-        scratch=Path(scratch)
-        while index<len(ids):
-            if cancel is not None and cancel.is_set():break
-            chunk=ids[index:index+chunk_size];prepared=[]
-            prepare_started=time.perf_counter()
-            for image_id in chunk:
-                try:
-                    path,scale,_original=_prediction_input(project,image_id,scratch/f"{image_id}.png");prepared.append((image_id,path,scale))
-                except Exception as exc:
-                    failures.append({"image_id":image_id,"reason":f"{type(exc).__name__}: {exc}"})
-                    if progress:progress(index+len(prepared)+1,len(ids),image_id)
-            timings["prepare"]+=time.perf_counter()-prepare_started
-            if not prepared:
-                index+=len(chunk);continue
-            payload={
-                "config":str(project.root/model["config_path"]),"checkpoint":str(project.root/model["path"]),
-                "images":[str(path) for _image_id,path,_scale in prepared],"device":settings["device"],
-                "score_threshold":float(score_threshold),"mixed_precision":bool(settings.get("mixed_precision")),
-            }
-            detector_started=time.perf_counter()
-            try:
-                result=_run(runtime,"predict_many",payload,max(600,120*len(prepared)))
-            except RuntimeError as exc:
-                if is_cuda_oom(exc) and chunk_size>1:
-                    chunk_size=max(1,chunk_size//2)
-                    if progress:progress(index,len(ids),f"GPU memory limit; retrying with batch {chunk_size}")
-                    continue
-                reason=f"{type(exc).__name__}: {exc}"
-                for image_id,_path,_scale in prepared:failures.append({"image_id":image_id,"reason":reason})
-                index+=len(chunk);continue
-            finally:
-                timings["detector"]+=time.perf_counter()-detector_started
-            returned=list(result.get("results") or []);pending=[]
-            for offset,(image_id,_path,scale) in enumerate(prepared):
-                row=returned[offset] if offset<len(returned) else {"error":"missing prediction result"}
-                if row.get("error"):failures.append({"image_id":image_id,"reason":str(row["error"])})
-                else:
-                    try:pending.append({"image_id":image_id,"proposals":_prediction_proposals(project,image_id,scale,row.get("detections") or [])})
-                    except Exception as exc:failures.append({"image_id":image_id,"reason":f"{type(exc).__name__}: {exc}"})
-            if pending:
-                try:
-                    orientation_started=time.perf_counter()
+        scratch=Path(scratch);stream=None
+        try:
+            while index<len(ids):
+                if cancel is not None and cancel.is_set():break
+                chunk=ids[index:index+chunk_size];prepared=[]
+                prepare_started=time.perf_counter()
+                for image_id in chunk:
                     try:
-                        pending=predict_orientation_batch(project,model,pending,runtime,scratch,settings)
-                    finally:
-                        timings["orientation"]+=time.perf_counter()-orientation_started
-                    save_started=time.perf_counter()
+                        path,scale,_original=_prediction_input(project,image_id,scratch/f"{image_id}.png");prepared.append((image_id,path,scale))
+                    except Exception as exc:
+                        failures.append({"image_id":image_id,"reason":f"{type(exc).__name__}: {exc}"})
+                        if progress:progress(index+len(prepared)+1,len(ids),image_id)
+                timings["prepare"]+=time.perf_counter()-prepare_started
+                if not prepared:
+                    index+=len(chunk);continue
+                if stream is None:
+                    launch_started=time.perf_counter()
                     try:
-                        for item in pending:success.append(_save_prediction(project,model,item["image_id"],item["proposals"]))
-                    finally:
-                        timings["save"]+=time.perf_counter()-save_started
-                except Exception as exc:
+                        stream,model_load,launch_overhead=_start_prediction_stream(runtime,{
+                            # The long-lived child runs with its cwd at the managed
+                            # runtime directory, so model paths must be absolute.
+                            "config":str((project.root/model["config_path"]).resolve()),
+                            "checkpoint":str((project.root/model["path"]).resolve()),
+                            "device":settings["device"],"score_threshold":float(score_threshold),
+                        })
+                        timings["model_load"]+=model_load;timings["ai_launch"]+=launch_overhead
+                    except Exception as exc:
+                        reason=f"{type(exc).__name__}: {exc}"
+                        for image_id,_path,_scale in prepared:failures.append({"image_id":image_id,"reason":reason})
+                        index+=len(chunk);continue
+                detector_started=time.perf_counter()
+                try:
+                    result=_predict_stream_batch(stream,[path for _image_id,path,_scale in prepared],max(600,120*len(prepared)))
+                    timings["detector"]+=time.perf_counter()-detector_started
+                    detection=max(0.0,float((result.get("timings_seconds") or {}).get("detection") or 0.0))
+                    timings["detection"]+=detection
+                except RuntimeError as exc:
+                    timings["detector"]+=time.perf_counter()-detector_started
+                    if is_cuda_oom(exc) and chunk_size>1:
+                        chunk_size=max(1,chunk_size//2)
+                        if progress:progress(index,len(ids),f"GPU memory limit; retrying with batch {chunk_size}")
+                        continue
                     reason=f"{type(exc).__name__}: {exc}"
-                    for item in pending:failures.append({"image_id":item["image_id"],"reason":reason})
-            for offset,(image_id,_path,_scale) in enumerate(prepared):
-                if progress:progress(index+offset+1,len(ids),image_id)
-            index+=len(chunk)
+                    for image_id,_path,_scale in prepared:failures.append({"image_id":image_id,"reason":reason})
+                    index+=len(chunk);continue
+                returned=list(result.get("results") or []);pending=[]
+                for offset,(image_id,_path,scale) in enumerate(prepared):
+                    row=returned[offset] if offset<len(returned) else {"error":"missing prediction result"}
+                    if row.get("error"):failures.append({"image_id":image_id,"reason":str(row["error"])})
+                    else:
+                        try:
+                            postprocess_started=time.perf_counter()
+                            proposals=_prediction_proposals(project,image_id,scale,row.get("detections") or [])
+                            timings["proposal_postprocess"]+=time.perf_counter()-postprocess_started
+                            pending.append({"image_id":image_id,"proposals":proposals})
+                        except Exception as exc:failures.append({"image_id":image_id,"reason":f"{type(exc).__name__}: {exc}"})
+                if pending:
+                    try:
+                        orientation_started=time.perf_counter()
+                        try:
+                            def orientation_timing(parts):
+                                timings["orientation_crop_prepare"]+=float(parts.get("crop_prepare") or 0.0)
+                                timings["orientation_ai_launch"]+=float(parts.get("ai_launch") or 0.0)
+                                timings["orientation_model_load"]+=float(parts.get("model_load") or 0.0)
+                                timings["orientation_inference"]+=float(parts.get("inference") or 0.0)
+                            pending=predict_orientation_batch(project,model,pending,runtime,scratch,settings,
+                                                              timing_callback=orientation_timing)
+                        finally:
+                            timings["orientation"]+=time.perf_counter()-orientation_started
+                        save_started=time.perf_counter()
+                        try:
+                            for item in pending:success.append(_save_prediction(project,model,item["image_id"],item["proposals"]))
+                        finally:
+                            timings["persistence"]+=time.perf_counter()-save_started
+                    except Exception as exc:
+                        reason=f"{type(exc).__name__}: {exc}"
+                        for item in pending:failures.append({"image_id":item["image_id"],"reason":reason})
+                for offset,(image_id,_path,_scale) in enumerate(prepared):
+                    if progress:progress(index+offset+1,len(ids),image_id)
+                index+=len(chunk)
+        finally:
+            _close_prediction_stream(stream)
     return {"success":len(success),"successful_ids":[row["image_id"] for row in success],"failures":failures,
             "model_id":model["model_id"],"results":success,"inference_batch_size":chunk_size,
             "timings_seconds":{**{k:round(v,3) for k,v in timings.items()},
+                               "save":round(timings["persistence"],3),
                                "total":round(time.perf_counter()-started,3)}}

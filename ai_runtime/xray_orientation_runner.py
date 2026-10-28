@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import random
 import sys
+import time
 
 
 def _input():
@@ -120,16 +121,19 @@ def predict_orientation_many(payload):
     device=str(payload.get("device") or ("cuda:0" if torch.cuda.is_available() else "cpu"))
     rows=[{"path":str(path),"head":0,"bottom":0} for path in payload.get("images") or ()]
     if not rows:return {"results":[],"threshold":float(meta.get("threshold",.65))}
+    model_started=time.perf_counter()
     model=_model(pretrained=False)
     state=torch.load(str(payload["checkpoint"]),map_location="cpu",weights_only=True);model.load_state_dict(state);model.to(device);model.eval()
+    model_load_seconds=time.perf_counter()-model_started
     loader=DataLoader(_Dataset(rows,False),batch_size=max(1,int(payload.get("batch_size") or 16)),shuffle=False,num_workers=0)
-    results=[]
+    results=[];inference_started=time.perf_counter()
     with torch.no_grad():
         for images,_targets in loader:
             probs=torch.sigmoid(model(images.to(device))).cpu().numpy()
             for head,bottom in probs:
                 results.append({"head_right_probability":float(head),"bottom_down_probability":float(bottom)})
-    return {"results":results,"threshold":float(meta.get("threshold",.65))}
+    return {"results":results,"threshold":float(meta.get("threshold",.65)),
+            "timings_seconds":{"model_load":model_load_seconds,"inference":time.perf_counter()-inference_started}}
 
 
 def main():

@@ -247,7 +247,7 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         about=source("app/ui/shell.py")
         credits=source("app/ui/module_credits.py")
         self.assertIn("module_box=ttk.LabelFrame(credits,text=name",about)
-        self.assertIn('text="Project creator and lead developer"',about)
+        self.assertIn('text="Project"',about)
         self.assertIn('text=APP_CREATOR',about)
         self.assertIn('author_label=visible_module_author(author)',about)
         self.assertNotIn('text=f"Author: {author}"',about)

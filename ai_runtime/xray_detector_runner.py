@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sys
+import time
 
 def _input():
     raw=sys.stdin.read().strip()
@@ -143,31 +144,79 @@ def _detections(result,threshold):
         detections.append({"bbox":[float(x) for x in bbox.tolist()],"score":float(score)})
     return detections
 
-def predict_many(payload):
+def _init_predict_model(config,checkpoint,device):
+    from mmdet.apis import init_detector
+    return init_detector(str(config),str(checkpoint),device=device)
+
+def _predict_loaded(model,images,threshold):
     import torch
-    from mmdet.apis import init_detector, inference_detector
-    device=str(payload.get("device") or "cpu");images=[str(value) for value in payload.get("images") or ()]
+    from mmdet.apis import inference_detector
+    images=[str(value) for value in images]
     if not images:raise ValueError("X-ray prediction requires at least one image")
-    model=init_detector(str(payload["config"]),str(payload["checkpoint"]),device=device)
-    # Do not wrap detector prediction in CUDA autocast. The managed mmcv NMS
-    # extension receives RTMDet boxes/scores before this function can cast
-    # them and requires Float, not Half. Batching and cuDNN autotuning remain
-    # enabled, while training still uses AMP.
+    device=str(getattr(model,"device","cpu"))
+    # Keep the existing hardware-selected batch bound; this helper never
+    # expands a low-memory batch or retains image tensors between messages.
     if device.startswith("cuda") and torch.cuda.is_available():
         torch.backends.cudnn.benchmark=True
         try:torch.set_float32_matmul_precision("high")
         except (AttributeError,RuntimeError):pass
-    threshold=float(payload.get("score_threshold",0.25))
+    detector_started=time.perf_counter()
     raw=inference_detector(model,images if len(images)>1 else images[0])
+    detection_seconds=time.perf_counter()-detector_started
     results=raw if isinstance(raw,list) else [raw]
-    return {"results":[{"detections":_detections(result,threshold)} for result in results]}
+    return ([{"detections":_detections(result,float(threshold))} for result in results],detection_seconds)
+
+def predict_many(payload):
+    device=str(payload.get("device") or "cpu");images=[str(value) for value in payload.get("images") or ()]
+    if not images:raise ValueError("X-ray prediction requires at least one image")
+    model_started=time.perf_counter()
+    model=_init_predict_model(payload["config"],payload["checkpoint"],device)
+    model_load_seconds=time.perf_counter()-model_started
+    # Do not wrap detector prediction in CUDA autocast. The managed mmcv NMS
+    # extension receives RTMDet boxes/scores before this function can cast
+    # them and requires Float, not Half. Batching and cuDNN autotuning remain
+    # enabled, while training still uses AMP.
+    threshold=float(payload.get("score_threshold",0.25))
+    results,detection_seconds=_predict_loaded(model,images,threshold)
+    return {"results":results,
+            "timings_seconds":{"model_load":model_load_seconds,"detection":detection_seconds}}
+
+def predict_stream():
+    """Load RTMDet once and accept bounded JSONL image batches until EOF."""
+    import torch
+    first=sys.stdin.readline()
+    if not first:raise ValueError("X-ray prediction stream has no model header")
+    header=json.loads(first)
+    device=str(header.get("device") or "cpu")
+    model_started=time.perf_counter()
+    model=_init_predict_model(header["config"],header["checkpoint"],device)
+    model_load_seconds=time.perf_counter()-model_started
+    print(json.dumps({"event":"ready","timings_seconds":{"model_load":model_load_seconds}},ensure_ascii=False),flush=True)
+    threshold=float(header.get("score_threshold",0.25))
+    for line in sys.stdin:
+        if not line.strip():continue
+        message=json.loads(line)
+        if message.get("event")=="close":
+            print(json.dumps({"event":"closed"}),flush=True)
+            return
+        try:
+            results,detection_seconds=_predict_loaded(model,message.get("images") or (),threshold)
+            print(json.dumps({"event":"batch","results":results,
+                "timings_seconds":{"detection":detection_seconds}},ensure_ascii=False),flush=True)
+        except Exception as exc:
+            if device.startswith("cuda") and torch.cuda.is_available():
+                try:torch.cuda.empty_cache()
+                except RuntimeError:pass
+            print(json.dumps({"event":"error","error":f"{type(exc).__name__}: {exc}"},ensure_ascii=False),flush=True)
 
 def predict(payload):
     copy=dict(payload);copy["images"]=[str(payload["image"])]
     return {"detections":predict_many(copy)["results"][0]["detections"]}
 
 def main():
-    mode=sys.argv[1] if len(sys.argv)>1 else "info";payload=_input()
+    mode=sys.argv[1] if len(sys.argv)>1 else "info"
+    if mode=="predict_stream":predict_stream();return
+    payload=_input()
     if mode=="info":out=info()
     elif mode=="train":out=train(payload)
     elif mode=="predict":out=predict(payload)
