@@ -1004,6 +1004,10 @@ def import_structure_model_package(project, source, *, registry=None):
             raise XRayStructurePackageError("Imported model metadata backend does not match the package provider.")
         multires_candidate=metadata.get("inference_pipeline") is not None
         if multires_candidate:
+            model_channels=[str(item["id"]) for item in metadata.get("structures") or ()]
+            expected_channels=[str(item["id"]) for item in compatibility_scheme["structures"]]
+            if model_channels!=expected_channels:
+                raise XRayStructurePackageError("Multiresolution model channels do not match the exact scientific structure order.")
             # A high-resolution model is an optional interpreter of existing
             # annotations, never permission to rewrite a project's scientific
             # trait scheme or its orientation settings during import.
