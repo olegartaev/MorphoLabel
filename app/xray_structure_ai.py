@@ -860,7 +860,7 @@ def _safe_model_json(path):
         "format_version", "backend", "training_objective", "target_encoding", "input_size", "output_stride", "structures", "preprocessing",
         "thresholds", "validation", "epochs_completed", "model_id", "schema_digest",
         "dataset_hash", "parent_model_id", "training_specimens", "validation_specimens",
-        "training_plates", "validation_plates", "schema_contract",
+        "training_plates", "validation_plates", "schema_contract", "inference_pipeline",
     }
     return {key: source[key] for key in allowed if key in source}
 
@@ -892,6 +892,20 @@ def export_structure_model_package(project, target, model_id=None):
         "artifacts/model.pth": checkpoint_bytes,
         "artifacts/model.json": meta_bytes,
     }
+    if safe_meta.get("inference_pipeline") is not None:
+        from ai_runtime.universal_multires import pipeline_components,component_files
+        try:
+            for component in pipeline_components(safe_meta).values():
+                if component["checkpoint"]=="model.pth" and component["sha256"]!=_sha256_bytes(checkpoint_bytes):
+                    raise ValueError("Shared checkpoint checksum mismatch")
+            auxiliary=component_files(safe_meta)
+        except (KeyError,TypeError,ValueError) as exc:
+            raise XRayStructurePackageError("Invalid multiresolution metadata.") from exc
+        for name,expected_sha in auxiliary.items():
+            item=metadata.parent/name
+            if not item.is_file() or _sha256_file(item)!=expected_sha:
+                raise XRayStructurePackageError("Missing or modified auxiliary model component.")
+            files["artifacts/"+name]=item.read_bytes()
     metrics = dict(model.get("metrics") or {})
     safe_metrics = {
         key: value for key, value in metrics.items()
@@ -947,8 +961,19 @@ def import_structure_model_package(project, source, *, registry=None):
             except (ValueError,TypeError,KeyError) as exc:raise XRayStructurePackageError(f"Invalid embedded trait scheme: {exc}") from exc
         current_digest = structure_schema_digest(compatibility_scheme)
         expected = dict(manifest.get("files") or {})
-        if set(expected) != {"artifacts/model.pth", "artifacts/model.json"}:
-            raise XRayStructurePackageError("Structure model package has an unexpected artifact set.")
+        core={"artifacts/model.pth","artifacts/model.json"}
+        if not core.issubset(expected):
+            raise XRayStructurePackageError("Missing structure model core artifacts.")
+        from ai_runtime.universal_multires import component_files
+        try:
+            candidate=json.loads(archive.read("artifacts/model.json").decode("utf-8"))
+            auxiliary=component_files(candidate)
+        except (KeyError,UnicodeDecodeError,ValueError,TypeError) as exc:
+            raise XRayStructurePackageError("Invalid multiresolution model metadata.") from exc
+        required=core|{"artifacts/"+k for k in auxiliary}
+        members=[name for name in archive.namelist() if not name.endswith("/")]
+        if set(expected)!=required or set(members)!=required|{"manifest.json"} or len(members)!=len(set(members)):
+            raise XRayStructurePackageError("Unexpected, missing or duplicated model package files.")
         payload = {}
         for name, digest in expected.items():
             if ".." in Path(name).parts or not name.startswith("artifacts/"):
@@ -977,6 +1002,19 @@ def import_structure_model_package(project, source, *, registry=None):
             raise XRayStructurePackageError("This structure model was trained for a different X-ray structure scheme; embedded information cannot prove equivalence.")
         if str(metadata.get("backend") or STRUCTURE_BACKEND) != provider_id:
             raise XRayStructurePackageError("Imported model metadata backend does not match the package provider.")
+        multires_candidate=metadata.get("inference_pipeline") is not None
+        if multires_candidate:
+            model_channels=[str(item["id"]) for item in metadata.get("structures") or ()]
+            expected_channels=[str(item["id"]) for item in compatibility_scheme["structures"]]
+            if model_channels!=expected_channels:
+                raise XRayStructurePackageError("Multiresolution model channels do not match the exact scientific structure order.")
+            # A high-resolution model is an optional interpreter of existing
+            # annotations, never permission to rewrite a project's scientific
+            # trait scheme or its orientation settings during import.
+            if structure_schema_digest(project.scheme)!=structure_schema_digest(compatibility_scheme):
+                raise XRayStructurePackageError("Multires model needs an existing compatible structure scheme; import cannot replace it.")
+            if manifest.get("orientation_policy") != project.orientation_policy:
+                raise XRayStructurePackageError("Multires model orientation policy is incompatible with this project.")
         original = str(manifest.get("model_id") or "imported_structure_model")
         if not _SAFE_ID.fullmatch(original):
             raise XRayStructurePackageError("Imported structure model ID is unsafe.")
@@ -989,6 +1027,8 @@ def import_structure_model_package(project, source, *, registry=None):
         destination = project.models_root / local
         with staged_model_directory(destination) as (staging,publish):
             (staging / "model.pth").write_bytes(payload["artifacts/model.pth"])
+            for name in auxiliary:
+                (staging/name).write_bytes(payload["artifacts/"+name])
             metadata["model_id"] = local
             metadata["imported_from_model_id"] = original
             metadata["original_schema_digest"]=package_digest
@@ -1008,6 +1048,11 @@ def import_structure_model_package(project, source, *, registry=None):
                 "portable_package_format": MODEL_PACKAGE_FORMAT,
                 "previous_orientation_policy": project.orientation_policy,
             })
+            if metadata.get("inference_pipeline") is not None:
+                # Parent validation scores do not measure composite accuracy.
+                metrics.pop("structure/macro_f1",None)
+                metrics["inference/mode"]=metadata["inference_pipeline"]["mode"]
+                metrics["inference/unvalidated"]=True
             project.register_structure_model(
                 local,
                 str((destination / "model.pth").relative_to(project.root)),
@@ -1020,7 +1065,7 @@ def import_structure_model_package(project, source, *, registry=None):
                 training_specimen_count=int(stats.get("training_specimen_count") or 0),
                 validation_specimen_count=int(stats.get("validation_specimen_count") or 0),
                 activate=False,
-                trait_scheme=imported_scheme,
-                orientation_policy=manifest.get("orientation_policy"),
+                trait_scheme=None if multires_candidate else imported_scheme,
+                orientation_policy=None if multires_candidate else manifest.get("orientation_policy"),
             )
     return local

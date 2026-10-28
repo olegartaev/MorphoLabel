@@ -283,6 +283,84 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         self.assertEqual(imported,other.active_structure_model()["model_id"])
 
 
+    def test_high_resolution_bundle_roundtrip_keeps_scheme_and_is_inactive(self):
+        import hashlib
+        model_id="multires_example_v1"
+        directory=self.project.models_root/model_id
+        directory.mkdir(parents=True)
+        (directory/"model.pth").write_bytes(b"primary")
+        (directory/"detail.pth").write_bytes(b"detail")
+        (directory/"native.pth").write_bytes(b"native")
+        digest=structure_schema_digest(self.project.scheme)
+        meta={
+            "format_version":1,"backend":"resnet18_heatmap_v1",
+            "input_size":[768,256],"output_stride":2,
+            "structures":[{"id":s["id"],"repeated":bool(s.get("repeated"))}
+                          for s in self.project.scheme["structures"]],
+            "thresholds":{s["id"]:.3 for s in self.project.scheme["structures"]},
+            "schema_digest":digest,"model_id":model_id,
+            "inference_pipeline":{
+                "name":"multires_heatmap_v1","version":1,"mode":"tiled_native",
+                "detail":{"checkpoint":"detail.pth","sha256":hashlib.sha256(b"detail").hexdigest(),
+                          "input_size":[768,384]},
+                "native":{"checkpoint":"native.pth","sha256":hashlib.sha256(b"native").hexdigest(),
+                          "state_prefix":"base.","input_size":[1536,512]},
+                "retain_detail_structures":[self.project.scheme["structures"][0]["id"]],
+                "fusion_weight":.6,
+                "tiles":{"nx":4,"ny":2,"width_fraction":.38,"height_fraction":.62},
+            },
+        }
+        (directory/"model.json").write_text(json.dumps(meta),encoding="utf-8")
+        self.project.register_structure_model(model_id,
+            str((directory/"model.pth").relative_to(self.project.root)),
+            str((directory/"model.json").relative_to(self.project.root)),
+            None,digest,"resnet18_heatmap_v1",{},(),activate=False)
+        archive=self.root/"multires_package.zip"
+        original_scheme=json.dumps(self.project.scheme,sort_keys=True)
+        export_structure_model_package(self.project,archive,model_id)
+        with zipfile.ZipFile(archive) as z:
+            self.assertEqual(set(z.namelist()),{
+                "artifacts/model.pth","artifacts/model.json",
+                "artifacts/detail.pth","artifacts/native.pth","manifest.json"})
+        other_source=self.root/"same_scheme_source";other_source.mkdir()
+        Image.new("L",(400,200)).save(other_source/"one.png")
+        other=XRayProject.create("same_schema",other_source,self.root/"projects",
+                                 bundled_scheme("phoxinus_vertebral_counts"))
+        before_scheme=json.dumps(other.scheme,sort_keys=True)
+        imported=import_structure_model_package(other,archive)
+        self.assertEqual(before_scheme,json.dumps(other.scheme,sort_keys=True))
+        row=next(m for m in other.structure_models() if m["model_id"]==imported)
+        self.assertFalse(row["active"])
+        self.assertTrue(row["metrics"]["inference/unvalidated"])
+        self.assertTrue((other.root/row["metadata_path"]).parent.joinpath("detail.pth").is_file())
+        self.assertTrue((other.root/row["metadata_path"]).parent.joinpath("native.pth").is_file())
+        self.assertEqual(original_scheme,json.dumps(self.project.scheme,sort_keys=True))
+
+    def test_multires_corrupt_sidecar_fails_before_registration(self):
+        import hashlib
+        from app.xray_structure_ai import XRayStructurePackageError
+        model_id="multires_checksum_v1"
+        directory=self.project.models_root/model_id;directory.mkdir(parents=True)
+        (directory/"model.pth").write_bytes(b"primary")
+        (directory/"detail.pth").write_bytes(b"detail")
+        digest=structure_schema_digest(self.project.scheme)
+        meta={"backend":"resnet18_heatmap_v1","model_id":model_id,
+              "input_size":[768,256],"output_stride":2,
+              "schema_digest":digest,
+              "structures":[{"id":s["id"],"repeated":bool(s.get("repeated"))}
+                            for s in self.project.scheme["structures"]],
+              "inference_pipeline":{"name":"multires_heatmap_v1","version":1,"mode":"tiled",
+                  "detail":{"checkpoint":"detail.pth","sha256":"0"*64,
+                            "input_size":[768,384]}}}
+        (directory/"model.json").write_text(json.dumps(meta))
+        self.project.register_structure_model(
+            model_id,str((directory/"model.pth").relative_to(self.project.root)),
+            str((directory/"model.json").relative_to(self.project.root)),
+            None,digest,"resnet18_heatmap_v1",{},(),activate=False)
+        with self.assertRaises(XRayStructurePackageError):
+            export_structure_model_package(self.project,self.root/"bad.zip",model_id)
+
+
 class XRayStructureAIContractTests(unittest.TestCase):
     def test_human_comparison_scores_reference_roles_for_legacy_scheme_without_relation_field(self):
         from app.xray_schema import bundled_scheme

@@ -308,6 +308,24 @@ def _local_peaks(logits, thresholds, structures):
     return output
 
 
+def _decode_logits(logits, geometry, meta, thresholds=None):
+    """Decode heatmaps for regular, detail and full-resolution inference."""
+    structures=list(meta["structures"])
+    stride=int(meta.get("output_stride",2))
+    peaks=_local_peaks(logits,dict(thresholds or meta.get("thresholds") or {}),structures)
+    result=[]
+    for struct,points in zip(structures,peaks):
+        decoded=[]
+        for score,px,py in points:
+            x=(((px+.5)*stride-geometry["offset_x"])/max(1e-9,geometry["scale"]))/max(1,geometry["source_w"])
+            y=(((py+.5)*stride-geometry["offset_y"])/max(1e-9,geometry["scale"]))/max(1,geometry["source_h"])
+            if 0<=x<=1 and 0<=y<=1:
+                decoded.append({"x":float(x),"y":float(y),"score":float(score)})
+        decoded.sort(key=lambda p:(p["x"],p["y"]))
+        result.append({"structure_id":struct["id"],"points":decoded})
+    return result
+
+
 def _decode_one(model, path, meta, device, thresholds=None):
     import torch
     from PIL import Image
@@ -526,19 +544,49 @@ def train(payload):
 
 def predict_many(payload):
     import torch
-
-    meta = json.loads(Path(payload["metadata"]).read_text(encoding="utf-8"))
-    structures = list(meta.get("structures") or ())
-    if not structures:
-        raise ValueError("Structure model metadata has no output structures.")
-    device = str(payload.get("device") or ("cuda:0" if torch.cuda.is_available() else "cpu"))
-    model = _model(len(structures), pretrained=False)
-    state = torch.load(str(payload["checkpoint"]), map_location="cpu", weights_only=True)
-    model.load_state_dict(state); model.to(device); model.eval()
-    results = []
-    for path in payload.get("images") or ():
-        results.append({"structures": _decode_one(model, str(path), meta, device)})
-    return {"results": results}
+    meta=json.loads(Path(payload["metadata"]).read_text(encoding="utf-8"))
+    structures=list(meta.get("structures") or ())
+    if not structures:raise ValueError("Model metadata has no structure channels")
+    device=str(payload.get("device") or ("cuda:0" if torch.cuda.is_available() else "cpu"))
+    model=_model(len(structures),pretrained=False)
+    state=torch.load(str(payload["checkpoint"]),map_location="cpu",weights_only=True)
+    model.load_state_dict(state);model.to(device);model.eval()
+    pipeline=meta.get("inference_pipeline")
+    companions={}
+    if pipeline is not None:
+        # The isolated runtime may be launched by filename or as a module.
+        if __package__:
+            from .universal_multires import pipeline_components,verify_component_files,predict_one,_load_component
+        else:
+            from universal_multires import pipeline_components,verify_component_files,predict_one,_load_component
+        specs=pipeline_components(meta)
+        verify_component_files(meta,Path(payload["metadata"]).parent)
+        if payload.get("specimen_preprocessing","standard")!="standard":
+            raise ValueError("Multiresolution model requires standard preprocessing")
+        from hashlib import sha256
+        for label,spec in specs.items():
+            if spec["checkpoint"]=="model.pth" and not spec.get("state_prefix"):
+                with Path(payload["checkpoint"]).open("rb") as fd:
+                    h=sha256()
+                    for block in iter(lambda:fd.read(1<<20),b""):h.update(block)
+                if h.hexdigest()!=spec["sha256"]:
+                    raise ValueError("Shared primary model checkpoint checksum mismatch")
+                companions[label]=model
+            else:
+                companions[label]=_load_component(spec,Path(payload["metadata"]).parent,
+                                                 sys.modules[__name__],len(structures),device)
+    results=[]
+    for image_path in payload.get("images") or ():
+        report={}
+        if pipeline is not None:
+            groups=predict_one(str(image_path),model,meta,payload["metadata"],device,sys.modules[__name__],
+                               component_models=companions)
+        else:
+            groups=_decode_one(model,str(image_path),meta,device,
+                               preprocessing=payload.get("specimen_preprocessing"),
+                               preprocessing_report=report)
+        results.append({"structures":groups,**({"preprocessing":report} if report else {})})
+    return {"results":results}
 
 
 def info():
