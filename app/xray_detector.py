@@ -7,6 +7,7 @@ import random
 import shutil
 import subprocess
 import tempfile
+import time
 
 from .ai_delivery import ensure_ai_runtime
 from .ai_starters import local_starter
@@ -197,6 +198,8 @@ def predict_plates(project,image_ids,cancel=None,progress=None,score_threshold=0
     model=model or project.active_crop_model()
     if not model:raise RuntimeError("Train an X-ray crop model before prediction.")
     ids=list(image_ids);success=[];failures=[];runtime,_=ensure_ai_runtime(project=project)
+    started=time.perf_counter()
+    timings={"prepare":0.0,"detector":0.0,"orientation":0.0,"save":0.0}
     settings=detector_performance_settings()["inference"];chunk_size=max(1,int(settings.get("batch_size") or 1));index=0
     project.compact_disposable_ai_artifacts()
     with tempfile.TemporaryDirectory(prefix="morpholabel_xray_predict_") as scratch:
@@ -204,12 +207,14 @@ def predict_plates(project,image_ids,cancel=None,progress=None,score_threshold=0
         while index<len(ids):
             if cancel is not None and cancel.is_set():break
             chunk=ids[index:index+chunk_size];prepared=[]
+            prepare_started=time.perf_counter()
             for image_id in chunk:
                 try:
                     path,scale,_original=_prediction_input(project,image_id,scratch/f"{image_id}.png");prepared.append((image_id,path,scale))
                 except Exception as exc:
                     failures.append({"image_id":image_id,"reason":f"{type(exc).__name__}: {exc}"})
                     if progress:progress(index+len(prepared)+1,len(ids),image_id)
+            timings["prepare"]+=time.perf_counter()-prepare_started
             if not prepared:
                 index+=len(chunk);continue
             payload={
@@ -217,6 +222,7 @@ def predict_plates(project,image_ids,cancel=None,progress=None,score_threshold=0
                 "images":[str(path) for _image_id,path,_scale in prepared],"device":settings["device"],
                 "score_threshold":float(score_threshold),"mixed_precision":bool(settings.get("mixed_precision")),
             }
+            detector_started=time.perf_counter()
             try:
                 result=_run(runtime,"predict_many",payload,max(600,120*len(prepared)))
             except RuntimeError as exc:
@@ -227,6 +233,8 @@ def predict_plates(project,image_ids,cancel=None,progress=None,score_threshold=0
                 reason=f"{type(exc).__name__}: {exc}"
                 for image_id,_path,_scale in prepared:failures.append({"image_id":image_id,"reason":reason})
                 index+=len(chunk);continue
+            finally:
+                timings["detector"]+=time.perf_counter()-detector_started
             returned=list(result.get("results") or []);pending=[]
             for offset,(image_id,_path,scale) in enumerate(prepared):
                 row=returned[offset] if offset<len(returned) else {"error":"missing prediction result"}
@@ -236,8 +244,16 @@ def predict_plates(project,image_ids,cancel=None,progress=None,score_threshold=0
                     except Exception as exc:failures.append({"image_id":image_id,"reason":f"{type(exc).__name__}: {exc}"})
             if pending:
                 try:
-                    pending=predict_orientation_batch(project,model,pending,runtime,scratch,settings)
-                    for item in pending:success.append(_save_prediction(project,model,item["image_id"],item["proposals"]))
+                    orientation_started=time.perf_counter()
+                    try:
+                        pending=predict_orientation_batch(project,model,pending,runtime,scratch,settings)
+                    finally:
+                        timings["orientation"]+=time.perf_counter()-orientation_started
+                    save_started=time.perf_counter()
+                    try:
+                        for item in pending:success.append(_save_prediction(project,model,item["image_id"],item["proposals"]))
+                    finally:
+                        timings["save"]+=time.perf_counter()-save_started
                 except Exception as exc:
                     reason=f"{type(exc).__name__}: {exc}"
                     for item in pending:failures.append({"image_id":item["image_id"],"reason":reason})
@@ -245,4 +261,6 @@ def predict_plates(project,image_ids,cancel=None,progress=None,score_threshold=0
                 if progress:progress(index+offset+1,len(ids),image_id)
             index+=len(chunk)
     return {"success":len(success),"successful_ids":[row["image_id"] for row in success],"failures":failures,
-            "model_id":model["model_id"],"results":success,"inference_batch_size":chunk_size}
+            "model_id":model["model_id"],"results":success,"inference_batch_size":chunk_size,
+            "timings_seconds":{**{k:round(v,3) for k,v in timings.items()},
+                               "total":round(time.perf_counter()-started,3)}}
