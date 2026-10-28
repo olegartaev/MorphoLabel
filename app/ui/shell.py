@@ -612,7 +612,7 @@ class ProductionShell(tk.Tk):
         ttk.Label(content,text="Open-source software for scalable and reproducible extraction of morphological data from biological images.",wraplength=500,justify="left").pack(anchor="w")
         ttk.Label(content,text="MorphoLabel combines annotation, human review and quality control into a structured workflow for large image datasets.",wraplength=500,justify="left",style="Muted.TLabel").pack(anchor="w",pady=(5,0))
         ttk.Separator(frame,orient="horizontal").pack(fill="x",pady=(14,10))
-        ttk.Label(frame,text="Project creator and lead developer",style="SectionTitle.TLabel").pack(anchor="w")
+        ttk.Label(frame,text="Project",style="Muted.TLabel").pack(anchor="w")
         ttk.Label(frame,text=APP_CREATOR).pack(anchor="w",pady=(3,0))
         ttk.Label(frame,text="Developed with the assistance of OpenAI Codex.",style="Muted.TLabel").pack(anchor="w",pady=(2,10))
         ttk.Label(frame,text="Modules",style="SectionTitle.TLabel").pack(anchor="w")
