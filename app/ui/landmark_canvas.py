@@ -432,12 +432,15 @@ class LandmarkCanvasController:
             x, y = self._position(point["x_standardized"], point["y_standardized"])
             hit_radius = max(10, int(self.display_settings["size"]) + 5)
             if (event.x - x) ** 2 + (event.y - y) ** 2 <= hit_radius ** 2:
-                self.set_choice(int(ident))
+                # Mouse-down must be constant-time. set_choice() rebuilds every
+                # canvas marker and refreshes the sidebar, which can stall the
+                # first drag event on large or filtered image lists. Both are
+                # unnecessary while the existing marker is being dragged.
+                self.operator_state.select(int(ident))
+                self.choice.set(int(ident))
                 self.dragging = int(ident)
                 self.pending = (float(point["x_standardized"]), float(point["y_standardized"]))
                 self.stats["drag_motion"] = 0
-                self._draw_overlays()
-                self._sync_selection()
                 return
         x, y = self._point(event)
         if 0 <= x < self.image.width and 0 <= y < self.image.height:
@@ -502,6 +505,7 @@ class LandmarkCanvasController:
         # The drag path already holds the saved coordinates locally. Defer the
         # authoritative recount/redraw until Tk is idle so mouse release stays instant.
         self._state_fresh=False
+        self.canvas.after_idle(self._sync_selection)
         self.canvas.after_idle(self.changed)
 
     def current_is_missing(self):
