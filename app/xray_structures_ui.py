@@ -1250,7 +1250,8 @@ class XRayStructureWorkspace:
             for item in tree.get_children():tree.delete(item)
             for model in self.project.structure_models():
                 metrics=model.get("metrics") or {};quality=metrics.get("structure/macro_f1")
-                quality_text=f"macro F1 {quality:.3f}" if isinstance(quality,(int,float)) else "Not recorded"
+                quality_text=("High-resolution · unvalidated" if metrics.get("inference/unvalidated") else
+                              f"macro F1 {quality:.3f}" if isinstance(quality,(int,float)) else "Not recorded")
                 source=str(model.get("parent_model_id") or metrics.get("initialization") or metrics.get("original_model_id") or "ImageNet")
                 tree.insert(
                     "","end",iid=model["model_id"],values=(
@@ -1265,6 +1266,13 @@ class XRayStructureWorkspace:
         def activate():
             model_id=selected()
             if not model_id:return
+            selected_model=next((m for m in self.project.structure_models() if m["model_id"]==model_id),None)
+            if selected_model and (selected_model.get("metrics") or {}).get("inference/unvalidated"):
+                if not messagebox.askyesno(
+                    "Experimental high-resolution model",
+                    "This model has not passed full independent validation. Use it only for draft predictions and keep the previous model available. Activate anyway?",
+                    parent=dialog,default="no",
+                ):return
             try:self.project.activate_structure_model(model_id)
             except Exception as exc:messagebox.showerror("X-ray structure models",str(exc),parent=dialog);return
             self._training_parent_touched=False;reload(model_id);self._refresh_workflow()
