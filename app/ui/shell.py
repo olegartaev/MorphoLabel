@@ -73,6 +73,36 @@ class ProductionShell(tk.Tk):
         # Ordinary launches must not silently re-probe or overwrite it.
         if initial_module is not None:
             self.open_module(initial_module)
+        # A short check of the official public release endpoint runs off Tk's
+        # thread only after an already configured application has opened.
+        if not first_run_setup_required():
+            self.after(1600,self._check_release_updates)
+
+    def _check_release_updates(self):
+        """Offer official release notes; never install or download automatically."""
+        if getattr(self,"_morpholabel_destroying",False):return
+        from app.release_update_check import check_for_release
+        results=queue.Queue(maxsize=1)
+        def worker():
+            try:
+                latest=check_for_release(APP_VERSION)
+            except Exception:
+                latest=None  # No network/404/rate limit must not interrupt work.
+            results.put_nowait(latest)
+        threading.Thread(target=worker,daemon=True,name="morpholabel-release-check").start()
+        def poll(attempt=0):
+            if getattr(self,"_morpholabel_destroying",False):return
+            try:latest=results.get_nowait()
+            except queue.Empty:
+                if attempt<25:self.after(250,lambda:poll(attempt+1))
+                return
+            if latest and messagebox.askyesno(
+                "MorphoLabel update available",
+                f"Version {latest['version']} is available.\\n\\nWhat's new:\\n"
+                f"{latest['changes']}\\n\\nOpen official release page?",
+                parent=self,default="no"):
+                webbrowser.open(latest["url"])
+        self.after(250,poll)
 
     def report_callback_exception(self, exc_type, exc_value, tb):
         """Persist an unexpected Tk callback failure instead of losing it in a frozen GUI."""
