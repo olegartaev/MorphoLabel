@@ -897,6 +897,43 @@ class XRayProject:
                 (str(model_id),),
             )]
 
+    def new_verified_training_markers(self, parent_model_id=None):
+        """Count previously unused VERIFIED specimens and their actual saved markers.
+
+        The scope is the active scientific scheme, human pass 1, confirmed
+        non-excluded crops. A model with no registered training membership
+        cannot prove which examples it has previously seen.
+        """
+        parent_id=str(parent_model_id or "")
+        scheme_id=self.active_scheme_record()["scientific_version_id"]
+        with _db_connection(self.db_path) as c:
+            if parent_id:
+                record=c.execute(
+                    "SELECT training_specimen_count,validation_specimen_count "
+                    "FROM xray_structure_models WHERE model_id=?",(parent_id,)).fetchone()
+                if record is None:raise KeyError(parent_id)
+                registered=c.execute(
+                    "SELECT COUNT(*) FROM xray_structure_training_membership WHERE model_id=?",
+                    (parent_id,)).fetchone()[0]
+                if not registered and int(record[0] or 0)+int(record[1] or 0)>0:
+                    return {"known":False,"specimens":None,"markers":None}
+            result=c.execute("""
+                SELECT COUNT(DISTINCT r.specimen_id),COUNT(a.annotation_id)
+                FROM annotation_runs r
+                JOIN specimens s ON s.specimen_id=r.specimen_id
+                JOIN source_images i ON i.image_id=s.image_id
+                LEFT JOIN annotations a ON a.run_id=r.run_id
+                WHERE r.pass_no=1 AND r.source='human'
+                    AND r.schema_version_id=? AND r.status='verified'
+                    AND s.crop_status='confirmed' AND s.excluded=0
+                    AND i.crop_reviewed=1 AND i.excluded=0
+                    AND (?='' OR NOT EXISTS(
+                        SELECT 1 FROM xray_structure_training_membership m
+                        WHERE m.model_id=? AND m.specimen_id=r.specimen_id))
+            """,(scheme_id,parent_id,parent_id)).fetchone()
+        return {"known":True,"specimens":int(result[0] or 0),
+                "markers":int(result[1] or 0)}
+
     def activate_structure_model(self,model_id):
         model_id=str(model_id)
         with _db_connection(self.db_path) as c:
