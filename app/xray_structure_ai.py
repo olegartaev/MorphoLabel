@@ -1002,6 +1002,15 @@ def import_structure_model_package(project, source, *, registry=None):
             raise XRayStructurePackageError("This structure model was trained for a different X-ray structure scheme; embedded information cannot prove equivalence.")
         if str(metadata.get("backend") or STRUCTURE_BACKEND) != provider_id:
             raise XRayStructurePackageError("Imported model metadata backend does not match the package provider.")
+        multires_candidate=metadata.get("inference_pipeline") is not None
+        if multires_candidate:
+            # A high-resolution model is an optional interpreter of existing
+            # annotations, never permission to rewrite a project's scientific
+            # trait scheme or its orientation settings during import.
+            if structure_schema_digest(project.scheme)!=structure_schema_digest(compatibility_scheme):
+                raise XRayStructurePackageError("Multires model needs an existing compatible structure scheme; import cannot replace it.")
+            if manifest.get("orientation_policy") != project.orientation_policy:
+                raise XRayStructurePackageError("Multires model orientation policy is incompatible with this project.")
         original = str(manifest.get("model_id") or "imported_structure_model")
         if not _SAFE_ID.fullmatch(original):
             raise XRayStructurePackageError("Imported structure model ID is unsafe.")
@@ -1052,7 +1061,7 @@ def import_structure_model_package(project, source, *, registry=None):
                 training_specimen_count=int(stats.get("training_specimen_count") or 0),
                 validation_specimen_count=int(stats.get("validation_specimen_count") or 0),
                 activate=False,
-                trait_scheme=imported_scheme,
-                orientation_policy=manifest.get("orientation_policy"),
+                trait_scheme=None if multires_candidate else imported_scheme,
+                orientation_policy=None if multires_candidate else manifest.get("orientation_policy"),
             )
     return local
