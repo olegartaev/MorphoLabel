@@ -860,7 +860,7 @@ def _safe_model_json(path):
         "format_version", "backend", "training_objective", "target_encoding", "input_size", "output_stride", "structures", "preprocessing",
         "thresholds", "validation", "epochs_completed", "model_id", "schema_digest",
         "dataset_hash", "parent_model_id", "training_specimens", "validation_specimens",
-        "training_plates", "validation_plates", "schema_contract",
+        "training_plates", "validation_plates", "schema_contract", "inference_pipeline",
     }
     return {key: source[key] for key in allowed if key in source}
 
@@ -892,6 +892,20 @@ def export_structure_model_package(project, target, model_id=None):
         "artifacts/model.pth": checkpoint_bytes,
         "artifacts/model.json": meta_bytes,
     }
+    if safe_meta.get("inference_pipeline") is not None:
+        from ai_runtime.universal_multires import pipeline_components,component_files
+        try:
+            for component in pipeline_components(safe_meta).values():
+                if component["checkpoint"]=="model.pth" and component["sha256"]!=_sha256_bytes(checkpoint_bytes):
+                    raise ValueError("Shared checkpoint checksum mismatch")
+            auxiliary=component_files(safe_meta)
+        except (KeyError,TypeError,ValueError) as exc:
+            raise XRayStructurePackageError("Invalid multiresolution metadata.") from exc
+        for name,expected_sha in auxiliary.items():
+            item=metadata.parent/name
+            if not item.is_file() or _sha256_file(item)!=expected_sha:
+                raise XRayStructurePackageError("Missing or modified auxiliary model component.")
+            files["artifacts/"+name]=item.read_bytes()
     metrics = dict(model.get("metrics") or {})
     safe_metrics = {
         key: value for key, value in metrics.items()
@@ -947,8 +961,19 @@ def import_structure_model_package(project, source, *, registry=None):
             except (ValueError,TypeError,KeyError) as exc:raise XRayStructurePackageError(f"Invalid embedded trait scheme: {exc}") from exc
         current_digest = structure_schema_digest(compatibility_scheme)
         expected = dict(manifest.get("files") or {})
-        if set(expected) != {"artifacts/model.pth", "artifacts/model.json"}:
-            raise XRayStructurePackageError("Structure model package has an unexpected artifact set.")
+        core={"artifacts/model.pth","artifacts/model.json"}
+        if not core.issubset(expected):
+            raise XRayStructurePackageError("Missing structure model core artifacts.")
+        from ai_runtime.universal_multires import component_files
+        try:
+            candidate=json.loads(archive.read("artifacts/model.json").decode("utf-8"))
+            auxiliary=component_files(candidate)
+        except (KeyError,UnicodeDecodeError,ValueError,TypeError) as exc:
+            raise XRayStructurePackageError("Invalid multiresolution model metadata.") from exc
+        required=core|{"artifacts/"+k for k in auxiliary}
+        members=[name for name in archive.namelist() if not name.endswith("/")]
+        if set(expected)!=required or set(members)!=required|{"manifest.json"} or len(members)!=len(set(members)):
+            raise XRayStructurePackageError("Unexpected, missing or duplicated model package files.")
         payload = {}
         for name, digest in expected.items():
             if ".." in Path(name).parts or not name.startswith("artifacts/"):
@@ -989,6 +1014,8 @@ def import_structure_model_package(project, source, *, registry=None):
         destination = project.models_root / local
         with staged_model_directory(destination) as (staging,publish):
             (staging / "model.pth").write_bytes(payload["artifacts/model.pth"])
+            for name in auxiliary:
+                (staging/name).write_bytes(payload["artifacts/"+name])
             metadata["model_id"] = local
             metadata["imported_from_model_id"] = original
             metadata["original_schema_digest"]=package_digest
