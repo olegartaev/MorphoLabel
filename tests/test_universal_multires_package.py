@@ -6,10 +6,14 @@ from pathlib import Path
 import tempfile
 import unittest
 from zipfile import ZipFile,ZIP_DEFLATED
-import torch
+try:
+    import torch
+except ImportError:
+    torch=None
 from tools.package_universal_multires import package_candidate
 from ai_runtime.universal_multires import component_files
 
+@unittest.skipIf(torch is None, 'Optional PyTorch not installed')
 class TestUniversalPackage(unittest.TestCase):
     def test_three_component_inactive_model(self):
         with tempfile.TemporaryDirectory() as d:
