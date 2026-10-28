@@ -197,9 +197,11 @@ def predict_plate(project,image_id,model=None,score_threshold=0.25):
 def predict_plates(project,image_ids,cancel=None,progress=None,score_threshold=0.25,model=None):
     model=model or project.active_crop_model()
     if not model:raise RuntimeError("Train an X-ray crop model before prediction.")
-    ids=list(image_ids);success=[];failures=[];runtime,_=ensure_ai_runtime(project=project)
     started=time.perf_counter()
-    timings={"prepare":0.0,"detector":0.0,"orientation":0.0,"save":0.0}
+    ids=list(image_ids);success=[];failures=[]
+    runtime,_=ensure_ai_runtime(project=project)
+    timings={"prepare":0.0,"detector":0.0,"orientation":0.0,"save":0.0,
+             "runtime_setup":time.perf_counter()-started}
     settings=detector_performance_settings()["inference"];chunk_size=max(1,int(settings.get("batch_size") or 1));index=0
     project.compact_disposable_ai_artifacts()
     with tempfile.TemporaryDirectory(prefix="morpholabel_xray_predict_") as scratch:
