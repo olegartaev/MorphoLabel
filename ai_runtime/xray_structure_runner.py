@@ -530,7 +530,18 @@ def train(payload):
             "training_photometric_augmentation": ["contrast", "brightness", "gamma", "intensity_inversion"],
         },
     }
-    thresholds, quality = _calibrate(model, val_rows, meta, device)
+    frozen=payload.get("fixed_thresholds")
+    if frozen is None:
+        thresholds,quality=_calibrate(model,val_rows,meta,device)
+    else:
+        channels={str(item["id"]) for item in structures}
+        if not isinstance(frozen,dict) or set(frozen)!=channels:
+            raise ValueError("Frozen training thresholds do not match structure schema")
+        thresholds={str(k):float(v) for k,v in frozen.items()}
+        if any(not math.isfinite(v) or not 0<v<=1 for v in thresholds.values()):
+            raise ValueError("Invalid fixed training thresholds")
+        quality={"structure/calibration":"frozen_pretrained_thresholds",
+                 "structure/independent_validation":False}
     meta["thresholds"] = thresholds
     work = Path(payload["work_dir"]); work.mkdir(parents=True, exist_ok=True)
     checkpoint = work / "model.pth"
