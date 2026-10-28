@@ -462,7 +462,10 @@ def train(payload):
     )
     val_loader = DataLoader(val_dataset, batch_size=max(1, min(batch_size, 8)), shuffle=False, num_workers=workers)
     epochs = max(12, int(payload.get("epochs") or 60))
-    optimizer = torch.optim.AdamW(model.parameters(), lr=2e-4 if initial else 3e-4, weight_decay=1e-4)
+    lr=float(payload.get("learning_rate",2e-4 if initial else 3e-4))
+    if not math.isfinite(lr) or not 0<lr<=1e-3:
+        raise ValueError("Training learning rate is invalid")
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=2e-6)
     use_amp = bool(payload.get("mixed_precision")) and device.startswith("cuda") and torch.cuda.is_available()
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
@@ -527,7 +530,18 @@ def train(payload):
             "training_photometric_augmentation": ["contrast", "brightness", "gamma", "intensity_inversion"],
         },
     }
-    thresholds, quality = _calibrate(model, val_rows, meta, device)
+    frozen=payload.get("fixed_thresholds")
+    if frozen is None:
+        thresholds,quality=_calibrate(model,val_rows,meta,device)
+    else:
+        channels={str(item["id"]) for item in structures}
+        if not isinstance(frozen,dict) or set(frozen)!=channels:
+            raise ValueError("Frozen training thresholds do not match structure schema")
+        thresholds={str(k):float(v) for k,v in frozen.items()}
+        if any(not math.isfinite(v) or not 0<v<=1 for v in thresholds.values()):
+            raise ValueError("Invalid fixed training thresholds")
+        quality={"structure/calibration":"frozen_pretrained_thresholds",
+                 "structure/independent_validation":False}
     meta["thresholds"] = thresholds
     work = Path(payload["work_dir"]); work.mkdir(parents=True, exist_ok=True)
     checkpoint = work / "model.pth"

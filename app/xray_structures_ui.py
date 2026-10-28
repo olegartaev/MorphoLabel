@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import json
 from pathlib import Path
 import queue
 import threading
@@ -466,10 +467,15 @@ class XRayStructureWorkspace:
         self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,values=("ImageNet ResNet18",),width=model_selector_width(("ImageNet ResNet18",),minimum=22),state="readonly")
         self.training_parent_box.pack(side="left",padx=(4,0))
         self._training_parent_touched=False
-        self.training_parent_box.bind("<<ComboboxSelected>>",lambda _e:setattr(self,"_training_parent_touched",True))
+        self.training_parent_box.bind("<<ComboboxSelected>>",self._training_parent_selected)
         self.training_summary=ttk.Label(model_row,text="",style="Muted.TLabel");self.training_summary.pack(side="right",padx=(10,0))
         train_actions=ttk.Frame(three);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
         self.structure_train_button=self._button(train_actions,"Train",self.train_structure_ai,"Teach AI to place markers using your verified annotations.",style="Primary.TButton");self.structure_train_button.pack(side="left")
+        add_command_separator(train_actions)
+        self.highres_train_button=self._button(train_actions,"Обучение высокого разрешения",self.train_highres_structure_ai,
+            "Continue a compatible Native Full + ROI Detail model on verified annotations. Creates a separate unvalidated candidate; the active model stays unchanged.")
+        self.highres_train_button.pack(side="left")
+        self.highres_train_button.configure(state="disabled")
         add_command_separator(train_actions)
         self._button(train_actions,"Models…",self.manage_structure_models,"Compare and select saved Structure models.").pack(side="left")
 
@@ -847,6 +853,7 @@ class XRayStructureWorkspace:
         if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:
             self.training_parent_choice.set(preferred_parent)
         self.training_parent_box.configure(values=parent_values,width=model_selector_width(parent_values,minimum=22))
+        self._refresh_highres_training_button()
         state="normal" if compatible_active and self.pass_no.get()==1 else "disabled"
         self.structure_predict_next_button.configure(state=state);self.structure_predict_all_button.configure(state=state)
         self.structure_review_button.configure(state="normal" if review else "disabled")
@@ -858,6 +865,127 @@ class XRayStructureWorkspace:
             self.annotation_queue_banner.pack(fill="x")
         else:self.annotation_queue_banner.pack_forget()
 
+
+    def _training_parent_selected(self,_event=None):
+        self._training_parent_touched=True
+        self._refresh_highres_training_button()
+
+    def _refresh_highres_training_button(self):
+        button=getattr(self,"highres_train_button",None)
+        if button is None:return
+        parent_id=str(self.training_parent_choice.get() or "")
+        try:
+            from app.xray_multires_training import is_universal_multires_model
+            from app.runtime_paths import resource_path
+            enabled=bool(parent_id and is_universal_multires_model(self.project,parent_id)
+                         and resource_path("tools","train_universal_multires.py").is_file())
+        except Exception:
+            enabled=False
+        button.configure(state="normal" if enabled and not self._busy else "disabled")
+
+    def train_highres_structure_ai(self):
+        if self._busy:return
+        source_model_id=str(self.training_parent_choice.get() or "")
+        from app.xray_multires_training import (
+            HighResolutionTrainingCancelled, is_universal_multires_model,
+            run_high_resolution_training,
+        )
+        if not is_universal_multires_model(self.project,source_model_id):
+            messagebox.showinfo("Обучение высокого разрешения",
+                "Выберите в поле «From» совместимую модель Native Full + ROI Detail.",parent=self.root)
+            return
+        from datetime import datetime
+        initial=f"MorphoLabel_HighResCandidate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        output=filedialog.asksaveasfilename(
+            parent=self.root,title="Save high-resolution model candidate",initialdir=str(self.project.root.parent),
+            initialfile=initial,defaultextension=".zip",filetypes=(("MorphoLabel Structure AI","*.zip"),("ZIP files","*.zip")),
+        )
+        if not output:return
+        output_path=Path(output)
+        if output_path.exists():
+            messagebox.showerror("Обучение высокого разрешения","Файл уже существует. Выберите новое имя, чтобы не перезаписать кандидата.",parent=self.root)
+            return
+        if not messagebox.askyesno(
+            "Обучение высокого разрешения",
+            "Будут использованы только подтверждённые ручные разметки. Native Full и ROI Detail продолжатся с текущих весов по разделению исходных плашек.\n\n"
+            "Результат — новый непроверенный кандидат. Активная модель останется прежней. Обучение выполняется на GPU и может занять продолжительное время. Продолжить?",
+            parent=self.root,default="no",
+        ):return
+
+        self._busy=True;self._refresh_highres_training_button()
+        events=queue.Queue();cancelled=threading.Event()
+        dialog,label,bar=self._structure_ai_dialog(
+            "Обучение высокого разрешения","Подготовка копии проекта и подтверждённых данных…",None,
+        )
+        cancel_button=ttk.Button(bar.master,text="Cancel",command=lambda:(cancelled.set(),label.configure(text="Отмена…"),cancel_button.configure(state="disabled")))
+        cancel_button.pack(anchor="e",pady=(8,0))
+        dialog.protocol("WM_DELETE_WINDOW",lambda:cancel_button.invoke())
+        active_before=(self.project.active_structure_model() or {}).get("model_id")
+
+        def progress(line):events.put(("line",str(line)))
+        def worker():
+            try:
+                from app.ai_delivery import ensure_ai_runtime
+                runtime,_=ensure_ai_runtime(progress=lambda stage,detail:events.put(("setup",str(stage),str(detail))))
+                result=run_high_resolution_training(
+                    self.project,source_model_id,output_path,python_executable=runtime,
+                    progress=progress,cancelled=cancelled,
+                )
+                events.put(("done",result))
+            except HighResolutionTrainingCancelled as exc:events.put(("cancelled",str(exc)))
+            except Exception as exc:events.put(("error",exc))
+        threading.Thread(target=worker,daemon=True,name="xray-highres-training").start()
+
+        def poll():
+            try:
+                while True:
+                    event=events.get_nowait()
+                    if event[0]=="setup":
+                        label.configure(text=f"{event[1]}\n{event[2]}")
+                    elif event[0]=="line":
+                        try:
+                            info=json.loads(event[1])
+                            if info.get("stage")=="PREPARED":
+                                label.configure(text=(f"Подтверждённые экземпляры: {info['training_specimens']} train / "
+                                    f"{info['validation_specimens']} validation; исходные плашки: "
+                                    f"{info['train_plates']} / {info['val_plates']}.\n"
+                                    "Продолжается обучение Native Full и ROI Detail…"))
+                        except (ValueError,KeyError,TypeError):
+                            if event[1]:label.configure(text=event[1][:700])
+                    elif event[0]=="error":
+                        self._busy=False;self._refresh_highres_training_button()
+                        try:bar.stop();dialog.destroy()
+                        except tk.TclError:pass
+                        messagebox.showerror("Обучение высокого разрешения",str(event[1]),parent=self.root);return
+                    elif event[0]=="cancelled":
+                        self._busy=False;self._refresh_highres_training_button()
+                        try:bar.stop();dialog.destroy()
+                        except tk.TclError:pass
+                        messagebox.showinfo("Обучение высокого разрешения","Обучение отменено; неполный ZIP удалён.",parent=self.root);return
+                    elif event[0]=="done":
+                        self._busy=False
+                        try:bar.stop();dialog.destroy()
+                        except tk.TclError:pass
+                        try:
+                            local_id=import_structure_model_package(self.project,event[1]["path"])
+                            active_after=(self.project.active_structure_model() or {}).get("model_id")
+                            if active_after!=active_before:
+                                raise RuntimeError("Import unexpectedly changed the active model; stop and inspect the project.")
+                            self.training_parent_choice.set(local_id);self._training_parent_touched=True
+                            self._refresh_workflow();self._refresh_highres_training_button()
+                            messagebox.showinfo("Обучение высокого разрешения",
+                                f"Новый кандидат импортирован как {local_id}.\n"
+                                f"Активная модель не менялась: {active_after}.\n"
+                                "Кандидат помечен как непроверенный; качество ещё не подтверждено независимой проверкой.\n\n"
+                                f"ZIP: {event[1]['path']}",parent=self.root)
+                        except Exception as exc:
+                            self._refresh_workflow()
+                            messagebox.showerror("Импорт кандидата высокого разрешения",
+                                f"ZIP сохранён, но импорт не выполнен. Активная модель не менялась.\n\n{exc}\n\n{event[1]['path']}",parent=self.root)
+                        return
+            except queue.Empty:pass
+            if dialog.winfo_exists():dialog.after(200,poll)
+        dialog.after(200,poll)
 
     def _activate_prediction_model(self,_event=None):
         model_id=str(self.prediction_model_choice.get() or "")
@@ -1148,6 +1276,15 @@ class XRayStructureWorkspace:
 
     def train_structure_ai(self):
         if self._busy:return
+        selected_parent=str(self.training_parent_choice.get() or "")
+        parent_model_id="" if selected_parent=="ImageNet ResNet18" else selected_parent
+        if parent_model_id:
+            from app.xray_multires_training import is_universal_multires_model
+            if is_universal_multires_model(self.project,parent_model_id):
+                # The ordinary Train action must preserve the selected model's
+                # full + detail pipeline. Never send it through the legacy
+                # single-checkpoint trainer.
+                return self.train_highres_structure_ai()
         p1=self.project.annotation_summary(1)
         if p1["verified"]<8:
             messagebox.showinfo(
@@ -1159,8 +1296,6 @@ class XRayStructureWorkspace:
         dialog,label,bar=self._structure_ai_dialog("Train Structure AI","Preparing verified X-ray structures…",None)
         def progress(stage,detail):
             events.put(("progress",str(stage),str(detail)))
-        selected_parent=self.training_parent_choice.get()
-        parent_model_id="" if selected_parent=="ImageNet ResNet18" else selected_parent
         def worker():
             try:events.put(("done",train_structure_model(self.project,progress=progress,parent_model_id=parent_model_id)))
             except Exception as exc:events.put(("error",exc))
