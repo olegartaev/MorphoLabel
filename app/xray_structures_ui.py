@@ -1524,38 +1524,30 @@ class XRayStructureWorkspace:
         reload((self.project.active_structure_model() or {}).get("model_id"))
 
     def _show_structure_model_comparison(self,report,parent=None):
+        from app.xray_evaluation_summary import scientific_comparison_summary
         summary=dict(report.get("summary") or {});traits=list(report.get("traits") or ());structures=list(report.get("structures") or ())
         dialog=tk.Toplevel(parent or self.root);dialog.title("Structure AI vs human");dialog.transient(parent or self.root);dialog.geometry("1120x650");dialog.minsize(900,520)
         outer=ttk.Frame(dialog,padding=12);outer.pack(fill="both",expand=True);outer.columnconfigure(0,weight=1);outer.rowconfigure(3,weight=1)
         ttk.Label(outer,text="Structure AI vs human",style="PageTitle.TLabel").grid(row=0,column=0,sticky="w")
         ttk.Label(
-            outer,text=f"{summary.get('model_id','')} · validation holdout only · {summary.get('specimens_compared',0)} current human-verified specimens compared. Project data are not changed.",
+            outer,text=f"{summary.get('model_id','')} · compared with {summary.get('specimens_compared',0)} human-verified specimens. This comparison does not prove independence. Project data are unchanged.",
             style="PageSubtitle.TLabel",wraplength=1060,
         ).grid(row=1,column=0,sticky="w",pady=(2,8))
         def pct(value):
             return "—" if value is None else f"{100*float(value):.1f}%"
         def num(value,digits=3):
             return "—" if value is None else f"{float(value):.{digits}f}"
-        exact=f"{int(summary.get('exact_traits') or 0)} / {int(summary.get('exact_traits_total') or 0)} ({pct(summary.get('exact_trait_accuracy'))})"
-        all_correct=f"{int(summary.get('all_traits_correct_specimens') or 0)} / {int(summary.get('all_traits_evaluable_specimens') or 0)}"
-        role=f"{int(summary.get('reference_role_exact') or 0)} / {int(summary.get('reference_role_total') or 0)} ({pct(summary.get('reference_role_accuracy'))})"
-        summary_text=(
-            f"Exact trait values: {exact}    ·    All evaluated traits correct: {all_correct}\n"
-            f"Repeated count MAE: {num(summary.get('repeated_count_mae'))}    ·    Count bias: {num(summary.get('repeated_count_bias'))}    ·    "
-            f"Reference role accuracy: {role}\n"
-            f"Marker localization: median {pct(summary.get('localization_median_diag'))} of crop diagonal · p95 {pct(summary.get('localization_p95_diag'))}    ·    "
-            f"Macro F1: {num(summary.get('macro_f1'))}"
-        )
+        summary_text=scientific_comparison_summary(summary)
         ttk.Label(outer,text=summary_text,justify="left",wraplength=1060).grid(row=2,column=0,sticky="w",pady=(0,10))
         notebook=ttk.Notebook(outer);notebook.grid(row=3,column=0,sticky="nsew")
         trait_tab=ttk.Frame(notebook,padding=8);structure_tab=ttk.Frame(notebook,padding=8)
-        notebook.add(trait_tab,text="Traits");notebook.add(structure_tab,text="Structures")
+        notebook.add(trait_tab,text="Scientific measurements");notebook.add(structure_tab,text="Technical details (optional)")
         trait_tab.columnconfigure(0,weight=1);trait_tab.rowconfigure(0,weight=1)
-        trait_columns=("trait","method","n","accuracy","correct","mae","median","p95")
+        trait_columns=("trait","correct","accuracy","mae","n")
         trait_tree=ttk.Treeview(trait_tab,columns=trait_columns,show="headings")
         for key,title,width in (
-            ("trait","Trait",230),("method","Method",105),("n","Compared",75),("accuracy","Accuracy",95),
-            ("correct","Correct / evaluated",135),("mae","MAE",80),("median","Median |error|",105),("p95","P95 |error|",105),
+            ("trait","Scientific measurement",295),("correct","Correct / checked",160),
+            ("accuracy","Exact",95),("mae","Mean count difference",175),("n","Checked",75),
         ):
             trait_tree.heading(key,text=title);trait_tree.column(key,width=width,anchor="w",stretch=key=="trait")
         trait_tree.grid(row=0,column=0,sticky="nsew")
@@ -1564,8 +1556,8 @@ class XRayStructureWorkspace:
             accuracy=row.get("accuracy");correct=row.get("correct");evaluated=row.get("evaluated")
             correct_text="—" if correct is None else f"{int(correct)} / {int(evaluated or 0)}"
             trait_tree.insert("","end",values=(
-                row.get("abbr") or row.get("name"),row.get("method"),row.get("n",0),pct(accuracy),correct_text,
-                num(row.get("mae")),num(row.get("median_abs_error")),num(row.get("p95_abs_error")),
+                row.get("name") or row.get("abbr"),correct_text,pct(accuracy),
+                num(row.get("mae")),row.get("n",0),
             ))
         structure_tab.columnconfigure(0,weight=1);structure_tab.rowconfigure(0,weight=1)
         structure_columns=("structure","n","prf","count","bias","role","localization")
@@ -1588,8 +1580,9 @@ class XRayStructureWorkspace:
                 count_text,num(row.get("count_bias")),role_text,loc_text,
             ))
         note=(
-            "Accuracy is shown separately for every discrete or derived trait. For continuous traits it is the share within the scheme's explicit tolerance; without a tolerance, MAE/median/p95 are reported instead of inventing a pass/fail threshold. "
-            "Count bias is AI count minus human count. Localization is normalized to the crop diagonal."
+            "Scientific result means the measured value, not whether every marker is at precisely the same pixel. For repeated count-only bones, an exact count is correct regardless of point placement. "
+            "Continuous traits need an explicit scheme tolerance; without one, mean error is shown rather than inventing a correct/incorrect threshold. "
+            "These are retrospective comparisons, not independent performance estimates or measured correction time. Technical detection and position metrics are optional."
         )
         ttk.Label(outer,text=note,style="Muted.TLabel",wraplength=1060).grid(row=4,column=0,sticky="w",pady=(8,0))
         ttk.Button(outer,text="Close",command=dialog.destroy).grid(row=5,column=0,sticky="e",pady=(8,0))
