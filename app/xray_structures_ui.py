@@ -374,6 +374,9 @@ class XRayStructureWorkspace:
             label=ttk.Label(status_host,text=f"{title}: 0",style="StatusChip.TLabel")
             label.pack(side="left",padx=(0,2));self.summary_labels[key]=label
         self.save_label=ttk.Label(status_host,text="Current: Not started",style="StatusChip.TLabel");self.save_label.pack(side="left",padx=(3,0))
+        self.new_training_label=ttk.Label(status_host,text="New for training: —",style="StatusChip.TLabel")
+        self.new_training_label.pack(side="left",padx=(5,0))
+        self.tip.bind(self.new_training_label,"Saved human-verified markers on specimens not previously registered with the selected training parent. Drafts are excluded; imported model history may be unknown.")
         def arrange_context(event):
             compact=event.width<950
             context_fields.grid_configure(columnspan=2 if compact else 1)
@@ -854,6 +857,7 @@ class XRayStructureWorkspace:
             self.training_parent_choice.set(preferred_parent)
         self.training_parent_box.configure(values=parent_values,width=model_selector_width(parent_values,minimum=22))
         self._refresh_highres_training_button()
+        self._refresh_training_new_counter()
         state="normal" if compatible_active and self.pass_no.get()==1 else "disabled"
         self.structure_predict_next_button.configure(state=state);self.structure_predict_all_button.configure(state=state)
         self.structure_review_button.configure(state="normal" if review else "disabled")
@@ -869,6 +873,22 @@ class XRayStructureWorkspace:
     def _training_parent_selected(self,_event=None):
         self._training_parent_touched=True
         self._refresh_highres_training_button()
+        self._refresh_training_new_counter()
+
+    def _refresh_training_new_counter(self):
+        choice=str(self.training_parent_choice.get() or "")
+        parent_id="" if choice=="ImageNet ResNet18" else choice
+        try:
+            stats=self.project.new_verified_training_markers(parent_id)
+            if not stats["known"]:
+                label="New for training: unknown history"
+            elif parent_id:
+                label=f"New for training: {stats['markers']} markers / {stats['specimens']} fish"
+            else:
+                label=f"Verified for training: {stats['markers']} markers / {stats['specimens']} fish"
+        except (KeyError,ValueError):
+            label="New for training: —"
+        self.new_training_label.configure(text=label)
 
     def _refresh_highres_training_button(self):
         button=getattr(self,"highres_train_button",None)
