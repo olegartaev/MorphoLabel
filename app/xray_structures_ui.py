@@ -862,6 +862,15 @@ class XRayStructureWorkspace:
     def _activate_prediction_model(self,_event=None):
         model_id=str(self.prediction_model_choice.get() or "")
         if not model_id:return
+        candidate=next((m for m in self.project.structure_models() if m["model_id"]==model_id),None)
+        if candidate and (candidate.get("metrics") or {}).get("inference/unvalidated"):
+            if not messagebox.askyesno(
+                "Experimental high-resolution model",
+                "This model has not passed full independent validation. Its predictions are drafts requiring review. Activate anyway?",
+                parent=self.root,default="no",
+            ):
+                self._refresh_workflow()
+                return
         try:self.project.activate_structure_model(model_id)
         except Exception as exc:
             messagebox.showerror("X-ray Structure model",str(exc),parent=self.root);return
