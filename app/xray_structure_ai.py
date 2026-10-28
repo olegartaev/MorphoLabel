@@ -1035,6 +1035,11 @@ def import_structure_model_package(project, source, *, registry=None):
                 "portable_package_format": MODEL_PACKAGE_FORMAT,
                 "previous_orientation_policy": project.orientation_policy,
             })
+            if metadata.get("inference_pipeline") is not None:
+                # Parent validation scores do not measure composite accuracy.
+                metrics.pop("structure/macro_f1",None)
+                metrics["inference/mode"]=metadata["inference_pipeline"]["mode"]
+                metrics["inference/unvalidated"]=True
             project.register_structure_model(
                 local,
                 str((destination / "model.pth").relative_to(project.root)),
