@@ -98,8 +98,8 @@ class ProductionShell(tk.Tk):
                 return
             if latest and messagebox.askyesno(
                 "MorphoLabel update available",
-                f"Version {latest['version']} is available.\\n\\nWhat's new:\\n"
-                f"{latest['changes']}\\n\\nOpen official release page?",
+                f"Version {latest['version']} is available.\n\nWhat's new:\n"
+                f"{latest['changes']}\n\nOpen official release page?",
                 parent=self,default="no"):
                 webbrowser.open(latest["url"])
         self.after(250,poll)
