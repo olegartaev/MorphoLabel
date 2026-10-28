@@ -1218,6 +1218,10 @@ class XRayCropWorkspace:
                         self._busy=False;dialog.destroy();result=event[1];self.plate_list.refresh(preserve_scroll=True);self._refresh_controls()
                         summary=f"Predicted: {result['success']} plate(s)."
                         if result.get("failures"):summary+=f"\nNeeds attention: {len(result['failures'])}."
+                        times=result.get("timings_seconds") or {}
+                        if "total" in times:
+                            ai_seconds=float(times.get("detector",0))+float(times.get("orientation",0))
+                            summary+=f"\nElapsed: {float(times['total']):.1f}s (AI {ai_seconds:.1f}s; image preparation {float(times.get('prepare',0)):.1f}s)."
                         success=list(result.get("successful_ids") or [])
                         if success and messagebox.askyesno("Predict Crop",summary+"\n\nReview this batch now?",parent=self.root,default=messagebox.YES):
                             self._set_batch(success,"prediction_review",result.get("model_id"));return
