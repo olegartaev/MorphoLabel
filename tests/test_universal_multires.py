@@ -5,7 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import torch
+try:
+    import torch
+except ImportError:
+    torch=None
 from PIL import Image
 
 from ai_runtime.universal_multires import (
@@ -66,11 +69,13 @@ class TestUniversalMultires(unittest.TestCase):
             path.write_bytes(b"modified")
             with self.assertRaises(ValueError):verify_component_files(x,d)
 
+    @unittest.skipIf(torch is None, 'Optional PyTorch not installed')
     def test_no_tile_is_exact_legacy_fallback(self):
         image=torch.randn(1,2,16,32)
         self.assertIs(merge_logits(image,[],{}),image)
         self.assertIs(merge_logits(image,[object()],{},fusion_weight=0),image)
 
+    @unittest.skipIf(torch is None, 'Optional PyTorch not installed')
     def test_reject_channel_schema_mismatch(self):
         image=torch.zeros(1,2,16,32)
         tile=make_tiles(128,64)[0]
@@ -78,6 +83,7 @@ class TestUniversalMultires(unittest.TestCase):
         with self.assertRaises(ValueError):
             merge_logits(image,[(tile,geom,torch.zeros(1,3,16,32))],geom)
 
+    @unittest.skipIf(torch is None, 'Optional PyTorch not installed')
     def test_valid_probability_fusion(self):
         image=torch.zeros(1,2,16,32)
         tile=make_tiles(128,64)[0]
@@ -88,6 +94,7 @@ class TestUniversalMultires(unittest.TestCase):
         self.assertTrue(torch.isfinite(out).all())
         self.assertGreater(float(out.mean()),0)
 
+    @unittest.skipIf(torch is None, 'Optional PyTorch not installed')
     def test_tiled_inference_without_truth(self):
         class MockRuntime:
             @staticmethod
@@ -108,6 +115,7 @@ class TestUniversalMultires(unittest.TestCase):
             result=predict_one(im,MockModel(),meta(),p,"cpu",MockRuntime)
             self.assertEqual([v["structure_id"] for v in result],["plant_vein","cell_nucleus"])
 
+@unittest.skipIf(torch is None, 'Optional PyTorch not installed')
 class TestGenericComposite(unittest.TestCase):
     def test_nonfish_native_and_detail_channel_retention(self):
         class FakeRuntime:
