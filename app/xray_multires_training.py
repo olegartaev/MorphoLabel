@@ -145,15 +145,10 @@ def run_high_resolution_training(
 
         reader = threading.Thread(target=read_output, daemon=True, name="morpholabel-highres-output")
         reader.start()
-        ended = False
-        while process.poll() is None:
-            if cancelled.wait(0.2):
-                terminate_process_tree(process)
-                ended = True
-                break
-        reader.join(timeout=2)
-        if process.stdout is not None:
-            process.stdout.close()
+        def deliver_progress():
+            # Forward subprocess progress as it arrives, not only after the
+            # entire GPU run. This method runs on the calling worker thread;
+            # the GUI callback only enqueues Tk-safe messages.
             while True:
                 try:
                     line = messages.get_nowait()
@@ -162,15 +157,19 @@ def run_high_resolution_training(
                 if line is not None:
                     log_lines.append(line)
                     progress(line)
-        while True:
-            try:
-                line = messages.get_nowait()
-            except queue.Empty:
+
+        ended = False
+        while process.poll() is None:
+            deliver_progress()
+            if cancelled.wait(0.2):
+                terminate_process_tree(process)
+                ended = True
                 break
-            if line is None:
-                continue
-            log_lines.append(line)
-            progress(line)
+        reader.join(timeout=2)
+        deliver_progress()
+        if process.stdout is not None:
+            process.stdout.close()
+        deliver_progress()
         if ended:
             output_zip.unlink(missing_ok=True)
             raise HighResolutionTrainingCancelled("High-resolution training was cancelled.")
