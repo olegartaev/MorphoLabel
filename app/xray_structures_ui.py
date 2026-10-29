@@ -475,7 +475,7 @@ class XRayStructureWorkspace:
         train_actions=ttk.Frame(three);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
         self.structure_train_button=self._button(train_actions,"Train",self.train_structure_ai,"Teach AI to place markers using your verified annotations.",style="Primary.TButton");self.structure_train_button.pack(side="left")
         add_command_separator(train_actions)
-        self.highres_train_button=self._button(train_actions,"Обучение высокого разрешения",self.train_highres_structure_ai,
+        self.highres_train_button=self._button(train_actions,"High-resolution training",self.train_highres_structure_ai,
             "Continue a compatible Native Full + ROI Detail model on verified annotations. Creates a separate unvalidated candidate; the active model stays unchanged.")
         self.highres_train_button.pack(side="left")
         self.highres_train_button.configure(state="disabled")
@@ -911,8 +911,8 @@ class XRayStructureWorkspace:
             run_high_resolution_training,
         )
         if not is_universal_multires_model(self.project,source_model_id):
-            messagebox.showinfo("Обучение высокого разрешения",
-                "Выберите в поле «From» совместимую модель Native Full + ROI Detail.",parent=self.root)
+            messagebox.showinfo("High-resolution training",
+                "Select a compatible Native Full + ROI Detail model in the From field.",parent=self.root)
             return
         from datetime import datetime
         initial=f"MorphoLabel_HighResCandidate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
@@ -923,21 +923,21 @@ class XRayStructureWorkspace:
         if not output:return
         output_path=Path(output)
         if output_path.exists():
-            messagebox.showerror("Обучение высокого разрешения","Файл уже существует. Выберите новое имя, чтобы не перезаписать кандидата.",parent=self.root)
+            messagebox.showerror("High-resolution training","This file already exists. Choose another name to avoid overwriting a saved candidate.",parent=self.root)
             return
         if not messagebox.askyesno(
-            "Обучение высокого разрешения",
-            "Будут использованы только подтверждённые ручные разметки. Native Full и ROI Detail продолжатся с текущих весов по разделению исходных плашек.\n\n"
-            "Результат — новый непроверенный кандидат. Активная модель останется прежней. Обучение выполняется на GPU и может занять продолжительное время. Продолжить?",
+            "High-resolution training",
+            "Only human-verified annotations will be used. Both Native Full and ROI Detail will continue from the selected weights, with training and validation split by source plate.\n\n"
+            "Training will create a separate, unvalidated model candidate. The active model will remain unchanged. GPU training may take some time. Continue?",
             parent=self.root,default="no",
         ):return
 
         self._busy=True;self._refresh_highres_training_button()
         events=queue.Queue();cancelled=threading.Event()
         dialog,label,bar=self._structure_ai_dialog(
-            "Обучение высокого разрешения","Подготовка копии проекта и подтверждённых данных…",None,
+            "High-resolution training","Preparing a safe project copy and verified training data...",None,
         )
-        cancel_button=ttk.Button(bar.master,text="Cancel",command=lambda:(cancelled.set(),label.configure(text="Отмена…"),cancel_button.configure(state="disabled")))
+        cancel_button=ttk.Button(bar.master,text="Cancel",command=lambda:(cancelled.set(),label.configure(text="Cancelling..."),cancel_button.configure(state="disabled")))
         cancel_button.pack(anchor="e",pady=(8,0))
         dialog.protocol("WM_DELETE_WINDOW",lambda:cancel_button.invoke())
         active_before=(self.project.active_structure_model() or {}).get("model_id")
@@ -966,22 +966,22 @@ class XRayStructureWorkspace:
                         try:
                             info=json.loads(event[1])
                             if info.get("stage")=="PREPARED":
-                                label.configure(text=(f"Подтверждённые экземпляры: {info['training_specimens']} train / "
-                                    f"{info['validation_specimens']} validation; исходные плашки: "
+                                label.configure(text=(f"Verified specimens: {info['training_specimens']} train / "
+                                    f"{info['validation_specimens']} validation; source plates: "
                                     f"{info['train_plates']} / {info['val_plates']}.\n"
-                                    "Продолжается обучение Native Full и ROI Detail…"))
+                                    "Training Native Full and ROI Detail..."))
                         except (ValueError,KeyError,TypeError):
                             if event[1]:label.configure(text=event[1][:700])
                     elif event[0]=="error":
                         self._busy=False;self._refresh_highres_training_button()
                         try:bar.stop();dialog.destroy()
                         except tk.TclError:pass
-                        messagebox.showerror("Обучение высокого разрешения",str(event[1]),parent=self.root);return
+                        messagebox.showerror("High-resolution training",str(event[1]),parent=self.root);return
                     elif event[0]=="cancelled":
                         self._busy=False;self._refresh_highres_training_button()
                         try:bar.stop();dialog.destroy()
                         except tk.TclError:pass
-                        messagebox.showinfo("Обучение высокого разрешения","Обучение отменено; неполный ZIP удалён.",parent=self.root);return
+                        messagebox.showinfo("High-resolution training","Training cancelled. The incomplete candidate ZIP has been removed.",parent=self.root);return
                     elif event[0]=="done":
                         self._busy=False
                         try:bar.stop();dialog.destroy()
@@ -993,15 +993,15 @@ class XRayStructureWorkspace:
                                 raise RuntimeError("Import unexpectedly changed the active model; stop and inspect the project.")
                             self.training_parent_choice.set(local_id);self._training_parent_touched=True
                             self._refresh_workflow();self._refresh_highres_training_button()
-                            messagebox.showinfo("Обучение высокого разрешения",
-                                f"Новый кандидат импортирован как {local_id}.\n"
-                                f"Активная модель не менялась: {active_after}.\n"
-                                "Кандидат помечен как непроверенный; качество ещё не подтверждено независимой проверкой.\n\n"
+                            messagebox.showinfo("High-resolution training",
+                                f"New model candidate imported as {local_id}.\n"
+                                f"Active model unchanged: {active_after}.\n"
+                                "The candidate is unvalidated; independent performance has not been established. Review its predictions before use.\n\n"
                                 f"ZIP: {event[1]['path']}",parent=self.root)
                         except Exception as exc:
                             self._refresh_workflow()
-                            messagebox.showerror("Импорт кандидата высокого разрешения",
-                                f"ZIP сохранён, но импорт не выполнен. Активная модель не менялась.\n\n{exc}\n\n{event[1]['path']}",parent=self.root)
+                            messagebox.showerror("High-resolution candidate import",
+                                f"The ZIP was saved, but model import failed. The active model was not changed.\n\n{exc}\n\n{event[1]['path']}",parent=self.root)
                         return
             except queue.Empty:pass
             if dialog.winfo_exists():dialog.after(200,poll)
