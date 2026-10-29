@@ -786,16 +786,33 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
     }
 
 
-def compare_structure_model_to_human(project,model_id=None,split="val",progress=None, *, registry=None):
-    """Run read-only model inference on its recorded membership and compare with current human truth."""
+def compare_structure_model_to_human(project,model_id=None,split="all",progress=None, *, registry=None):
+    """Compare against currently verified specimens without changing project data.
+
+    "all" is a retrospective practical check (may include training specimens).
+    "val" retains the recorded validation-membership scope for controlled checks.
+    Neither scope alone establishes independent prospective validation.
+    """
     model=next((item for item in project.structure_models() if item["model_id"]==str(model_id)),None) if model_id else project.active_structure_model()
     if not model:raise XRayStructureAIError("Select an X-ray Structure AI model first.")
     if not _scheme_matches_model(project,model):
         raise XRayStructureAIError("This model uses a different X-ray structure scheme.")
-    membership=[item for item in project.structure_model_membership(model["model_id"]) if str(item.get("split") or "")==str(split)]
-    if not membership:
-        raise XRayStructureAIError("This model has no recorded validation membership to compare with human annotations.")
-    ids=[str(item["specimen_id"]) for item in membership]
+    full_membership=list(project.structure_model_membership(model["model_id"]))
+    if split=="all":
+        # User-facing evaluation is intended to answer "how often are the
+        # measurements right on my VERIFIED collection?", not to silently
+        # restrict comparison to an old model's validation subset.
+        ids=[str(item["specimen_id"]) for item in project.structure_specimens(1)
+             if str(item.get("annotation_status") or "")=="verified"]
+    elif split in {"train","val"}:
+        ids=[str(item["specimen_id"]) for item in full_membership
+             if str(item.get("split") or "")==str(split)]
+        if not ids:
+            raise XRayStructureAIError("No registered specimens for the selected training/validation split.")
+    else:
+        raise ValueError("Comparison split must be 'all', 'train' or 'val'.")
+    if not ids:
+        raise XRayStructureAIError("No eligible human-verified specimens are available for this scheme.")
     checkpoint=project.root/str(model["path"]);metadata=project.root/str(model["metadata_path"])
     if not checkpoint.is_file() or not metadata.is_file():
         raise XRayStructureAIError("The selected Structure AI model artifact is incomplete.")
@@ -806,7 +823,7 @@ def compare_structure_model_to_human(project,model_id=None,split="val",progress=
             skipped.append(specimen_id);continue
         verified.append(specimen_id)
     if not verified:
-        raise XRayStructureAIError("None of this model's recorded validation specimens currently has human-verified annotations.")
+        raise XRayStructureAIError("No human-verified specimens remain eligible for comparison.")
     backend=backend_for_structure_model(project,model,registry=registry)
     settings=structure_performance_settings()["inference"];predictions={};failures=[]
     with tempfile.TemporaryDirectory(prefix="morpholabel_xray_structure_compare_") as scratch_name:
@@ -841,11 +858,22 @@ def compare_structure_model_to_human(project,model_id=None,split="val",progress=
             "visibility":project.structure_visibility_states(specimen_id,1,"human"),
             "crop_size":project.specimen_crop_size(specimen_id),
         })
+    if not rows:
+        detail=(failures[0]["reason"] if failures else "No eligible predictions returned.")
+        raise XRayStructureAIError(
+            f"Comparison failed for all {len(verified)} verified specimens. "
+            f"First error: {detail}"
+        )
     report=summarize_structure_ai_human_comparison(project.scheme,rows)
+    registered={str(item["specimen_id"]):str(item.get("split") or "") for item in full_membership}
+    train_used=sum(registered.get(specimen_id)=="train" for specimen_id in predictions)
+    val_used=sum(registered.get(specimen_id)=="val" for specimen_id in predictions)
     report["summary"].update({
         "model_id":str(model["model_id"]),"split":str(split),"membership_specimens":len(ids),
         "skipped_not_verified":len(skipped),"prediction_failures":len(failures),
-        "comparison_note":"Validation holdout only; current human-verified annotations are read without modifying project data.",
+        "comparison_note":"Retrospective verified-specimen comparison; training/validation overlap is possible and independence is NOT established.",
+        "registered_training_compared":train_used,"registered_validation_compared":val_used,
+        "other_verified_compared":len(rows)-train_used-val_used,
     })
     report["failures"]=failures
     return report
