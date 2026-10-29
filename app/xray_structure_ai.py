@@ -716,6 +716,15 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
                 good=_comparison_equal(truth,prediction)
                 stat["exact"]+=int(good);exact_total+=1;exact_ok+=int(good);specimen_total+=1;specimen_ok+=int(good)
                 specimen_all_terms+=1;specimen_all_ok+=int(good)
+                if prediction is None:
+                    stat["missing"]+=1
+                # Exact accuracy includes all human-evaluable cases, including
+                # missed AI predictions. Count difference is reported only
+                # where both values are numeric; otherwise it stays undefined.
+                if (method in {"count","count_to","count_between","position","derived"}
+                        and isinstance(truth,(int,float)) and not isinstance(truth,bool)
+                        and isinstance(prediction,(int,float)) and not isinstance(prediction,bool)):
+                    stat["errors"].append(abs(float(prediction)-float(truth)))
             elif method in _CONTINUOUS_TRAIT_METHODS:
                 if isinstance(prediction,(int,float)) and isinstance(truth,(int,float)):
                     error=abs(float(prediction)-float(truth));stat["errors"].append(error)
