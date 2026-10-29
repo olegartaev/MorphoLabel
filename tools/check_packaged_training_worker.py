@@ -29,10 +29,11 @@ def verify_distribution(distribution: Path):
     missing=[name for name in REQUIRED if not (bundle/name).is_file()]
     if missing:
         raise FileNotFoundError("Packaged high-resolution training worker missing: "+", ".join(missing))
+    # UTF-8 BOM is accepted by Python imports; remove only the leading BOM.
     for path in sorted((bundle/"app").rglob("*.py"))+sorted((bundle/"ai_runtime").rglob("*.py")):
-        compile(path.read_text(encoding="utf-8"),str(path),"exec")
+        compile(path.read_text(encoding="utf-8-sig"),str(path),"exec")
     worker=bundle/REQUIRED[0]
-    compile(worker.read_text(encoding="utf-8"),str(worker),"exec")
+    compile(worker.read_text(encoding="utf-8-sig"),str(worker),"exec")
     return len(list((bundle/"app").rglob("*.py"))),len(list((bundle/"ai_runtime").rglob("*.py")))
 
 
