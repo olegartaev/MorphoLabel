@@ -443,6 +443,8 @@ class XRayStructureAIContractTests(unittest.TestCase):
         by_trait={row["trait_id"]:row for row in report["traits"]}
         self.assertAlmostEqual(1.0,by_trait["tv"]["accuracy"])
         self.assertLess(by_trait["preap"]["accuracy"],1.0)
+        self.assertAlmostEqual(1.0,by_trait["preap"]["mae"])
+        self.assertAlmostEqual(0.0,by_trait["tv"]["mae"])
 
     def test_heatmap_target_has_exact_positive_peak_and_partial_supervision_mask(self):
         from ai_runtime.xray_structure_runner import _gaussian
