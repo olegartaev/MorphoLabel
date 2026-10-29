@@ -596,9 +596,13 @@ def predict_many(payload):
             groups=predict_one(str(image_path),model,meta,payload["metadata"],device,sys.modules[__name__],
                                component_models=companions)
         else:
-            groups=_decode_one(model,str(image_path),meta,device,
-                               preprocessing=payload.get("specimen_preprocessing"),
-                               preprocessing_report=report)
+            # The legacy decoder has no preprocessing kwargs. The image was
+            # already normalized by the host _prediction_image() pipeline.
+            # Reject unsupported alternatives rather than passing unknown
+            # arguments into the decoder (Predict current / Predict many).
+            if payload.get("specimen_preprocessing", "standard") != "standard":
+                raise ValueError("Unsupported legacy specimen preprocessing")
+            groups=_decode_one(model,str(image_path),meta,device)
         results.append({"structures":groups,**({"preprocessing":report} if report else {})})
     return {"results":results}
 
