@@ -2,11 +2,25 @@
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_submodules
 ROOT = Path(SPEC).resolve().parents[1]
+# High-resolution Structure AI fine-tuning is deliberately launched by the
+# separately managed CUDA Python runtime, not by the frozen Tk executable.
+# That process must be able to import the same local application modules.
+# PyInstaller's PYZ is not importable from a separate Python interpreter, so
+# package source modules as files too. This ships no models or user data.
+training_worker_sources = [
+    (str(module), str(module.parent.relative_to(ROOT)))
+    for package in ("app", "ai_runtime")
+    for module in sorted((ROOT / package).rglob("*.py"))
+]
+training_worker_sources.append(
+    (str(ROOT / "tools" / "train_universal_multires.py"), "tools")
+)
 a = Analysis(
     [str(ROOT / "packaging" / "entrypoint.py")],
     pathex=[str(ROOT)],
     binaries=[],
     datas=[
+        *training_worker_sources,
         (str(ROOT / "ai_runtime" / "rtmpose_runner.py"), "ai_runtime"),
         (str(ROOT / "ai_runtime" / "xray_detector_runner.py"), "ai_runtime"),
         (str(ROOT / "ai_runtime" / "xray_orientation_runner.py"), "ai_runtime"),
