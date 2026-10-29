@@ -363,13 +363,31 @@ class RC1RepairInvariants(unittest.TestCase):
                 self.assertIn(directory.name,view.prediction_model_box.cget("values"))
                 self.assertEqual("readonly",str(view.prediction_model_box.cget("state")))
                 self.assertEqual(directory.name,view.prediction_model_choice.get())
-                self.assertIn(directory.name,view.training_parent_box.cget("values"))
+                self.assertEqual(directory.name,view.training_parent_choice.get())
+                self.assertFalse(hasattr(view,"training_parent_box"))
                 for button in (view.predict_current_button,view.structure_predict_next_button,view.structure_predict_all_button):self.assertEqual("normal",str(button.cget("state")))
             finally:root.destroy()
         cosmetic=p.scheme;cosmetic["name"]="Cosmetic";p.save_scheme(cosmetic);self.assertTrue(_scheme_matches_model(p,model))
         changed=p.scheme;changed["structures"][0]["required"]=False;p.save_scheme(changed)
         self.assertFalse(_scheme_matches_model(p,model));self.assertFalse(_current_prediction_allowed(p,sid,model,1))
         with self.assertRaisesRegex(RuntimeError,"incompatible"):predict_structures(p,[sid])
+
+    def test_structure_totals_are_initialized_before_specimen_image_loading(self):
+        p,sid=self.xray()
+        p.add_annotation(sid,"objects",.2,.3);p.verify_annotations(sid)
+        root=tk.Tk();root.withdraw()
+        observed=[]
+        def source(workspace,_image_id):
+            observed.append({key:label.cget("text") for key,label in workspace.summary_labels.items()})
+            return Image.new("RGB",(160,100))
+        try:
+            from app.ui.design import apply_styles
+            apply_styles(root,ttk.Style(root));frame=ttk.Frame(root);frame.pack()
+            with patch.object(XRayStructureWorkspace,"_source_for",source):
+                XRayStructureWorkspace(frame,p,initial_specimen_id=sid)
+            self.assertTrue(observed)
+            self.assertEqual({"verified":"Verified: 1","draft":"Draft: 0","unstarted":"Not started: 0"},observed[0])
+        finally:root.destroy()
 
     def test_ai_setup_prestart_hides_progress_and_click_reveals_work_prevents_double_start(self):
         from app.ui.shell import ProductionShell

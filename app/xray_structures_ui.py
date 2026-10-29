@@ -756,6 +756,9 @@ class XRayStructureWorkspace:
         self.active_structure_id=_first_structure_id(self.project.scheme.get("structures",()))
         item=self.project.specimen(specimen_id);self.current_specimen_excluded=bool(item.get("excluded"))
         self.preferred_image_id=item["image_id"];self._set_context(item)
+        # Project totals must already be correct while the image is loading,
+        # including when a missing image opens an error dialog.
+        self._refresh_summary()
         try:
             source=self._source_for(item["image_id"])
             crop=oriented_crop(source,item["crop"],self.project.orientation_policy)
@@ -764,7 +767,7 @@ class XRayStructureWorkspace:
             messagebox.showerror("Structures",f"Could not open specimen crop:\n{exc}",parent=self.root);self.crop_image=None
         self.annotations=self.project.annotations(specimen_id,self.pass_no.get());self.roles=self.project.annotation_roles(specimen_id,self.pass_no.get())
         self.zoom=1.0;self.pan=None;self.pan_drag=None;self._raster_key=None;self._image_item=None;self.photo=None;self.canvas.delete("all")
-        self.specimen_list.select(specimen_id,reveal=True);self._build_marker_buttons();self._update_counts();self._refresh_summary();self._refresh_workflow();self._refresh_prediction_info();self._draw();self._notify_selection();self.canvas.focus_set()
+        self.specimen_list.select(specimen_id,reveal=True);self._build_marker_buttons();self._update_counts();self._refresh_workflow();self._refresh_prediction_info();self._draw();self._notify_selection();self.canvas.focus_set()
 
     def _clear(self):
         self.selected_specimen_id="";self.crop_image=self.photo=None;self.annotations=[];self.roles=[];self.current_specimen_excluded=False
