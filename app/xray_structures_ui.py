@@ -17,6 +17,7 @@ from app.ui.icons import CONTROL_ICON_SIZE, tk_icon
 from app.ui.design import ElidedLabel, FlowRow, action_icon, build_context_row, model_selector_width, structure_prediction_text, sidebar_width_for_window, dialog_width_for_columns
 from app.model_transfer import model_package_filename
 from app.ui.workflow import WorkflowDock, add_command_separator
+from app.ui.scrollbars import autohide_scroll_command
 from types import SimpleNamespace
 from app.ui.photo_list_panel import DEFAULT_SHOW_EXCLUDED, filtered_photo_indices
 from app.ui.tooltips import Tooltip
@@ -153,7 +154,7 @@ class XRaySpecimenListPanel(ttk.Frame):
             ttk.Label(legend,text=text,style="Muted.TLabel").pack(side="left",padx=(0,7))
         host=ttk.Frame(self);host.pack(fill="both",expand=True)
         self.canvas=PhotoListCanvas(host,height=24,bg="white",status_shape="square")
-        scroll=ttk.Scrollbar(host,orient="vertical",command=self.canvas.yview);self.canvas.configure(yscrollcommand=scroll.set)
+        scroll=ttk.Scrollbar(host,orient="vertical",command=self.canvas.yview);self.canvas.configure(yscrollcommand=autohide_scroll_command(scroll,geometry="pack"))
         self.canvas.pack(side="left",fill="both",expand=True);scroll.pack(side="right",fill="y")
         self.canvas.bind("<<ListboxSelect>>",self._selected)
         action=ttk.Frame(self,padding=(0,5,0,0));action.pack(fill="x")
@@ -428,7 +429,7 @@ class XRayStructureWorkspace:
         marker_viewport=tk.Canvas(marker_dock,highlightthickness=0,background=ttk.Style(main).lookup("WorkflowDock.TFrame","background") or "#f0f0f0")
         marker_viewport.grid(row=0,column=1,sticky="ew");self.marker_canvas=marker_viewport
         marker_scroll=ttk.Scrollbar(marker_dock,orient="vertical",command=marker_viewport.yview)
-        marker_scroll.grid(row=0,column=2,sticky="ns");marker_viewport.configure(yscrollcommand=marker_scroll.set)
+        marker_scroll.grid(row=0,column=2,sticky="ns");marker_viewport.configure(yscrollcommand=autohide_scroll_command(marker_scroll))
         self.marker_host=FlowRow(marker_viewport,style="WorkflowDock.TFrame")
         marker_window=marker_viewport.create_window((0,0),window=self.marker_host,anchor="nw")
         def layout_markers(_event=None):
