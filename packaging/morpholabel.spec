@@ -7,11 +7,24 @@ ROOT = Path(SPEC).resolve().parents[1]
 # That process must be able to import the same local application modules.
 # PyInstaller's PYZ is not importable from a separate Python interpreter, so
 # package source modules as files too. This ships no models or user data.
+required_xray_runners = (
+    "xray_detector_runner.py",
+    "xray_orientation_runner.py",
+    "xray_structure_runner.py",
+)
+required_xray_runner_paths = {
+    (ROOT / "ai_runtime" / name).resolve() for name in required_xray_runners
+}
 training_worker_sources = [
     (str(module), str(module.parent.relative_to(ROOT)))
     for package in ("app", "ai_runtime")
     for module in sorted((ROOT / package).rglob("*.py"))
+    if module.resolve() not in required_xray_runner_paths
 ]
+training_worker_sources.extend(
+    (str(ROOT / "ai_runtime" / name), "ai_runtime")
+    for name in required_xray_runners
+)
 training_worker_sources.append(
     (str(ROOT / "tools" / "train_universal_multires.py"), "tools")
 )
