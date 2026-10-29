@@ -14,6 +14,8 @@ import unittest
 
 CYRILLIC = re.compile("[\\u0400-\\u052F]")
 APP = Path(__file__).resolve().parents[1] / "app"
+REPO_ROOT = APP.parent
+USER_TEXT_ROOTS = (APP, REPO_ROOT / "ai_runtime", REPO_ROOT / "tools")
 
 
 def find_non_english_string_literals(root=APP):
@@ -29,10 +31,15 @@ def find_non_english_string_literals(root=APP):
 
 
 class EnglishOnlyInterfaceTests(unittest.TestCase):
-    def test_all_application_string_literals_are_english(self):
-        violations = find_non_english_string_literals()
+    def test_all_user_facing_package_string_literals_are_english(self):
+        violations = [
+            (f"{root.name}/{path}", line)
+            for root in USER_TEXT_ROOTS
+            if root.exists()
+            for path, line in find_non_english_string_literals(root)
+        ]
         self.assertEqual(violations, [], (
-            "Unexpected Cyrillic in developer-owned application strings. "
+            "Unexpected Cyrillic in developer-owned user-facing strings. "
             "Translate buttons, dialog titles, progress text and errors: "
             + repr(violations[:50])
         ))
@@ -41,11 +48,11 @@ class EnglishOnlyInterfaceTests(unittest.TestCase):
         with __import__("tempfile").TemporaryDirectory() as temp:
             root=Path(temp)
             (root/"test.py").write_text(
-                "# Комментарий для разработчика\\n"
-                "label='Training ready'\\n", encoding="utf-8")
+                "# Комментарий для разработчика\n"
+                "label='Training ready'\n", encoding="utf-8")
             self.assertEqual(find_non_english_string_literals(root), [])
             (root/"test.py").write_text(
-                "label='Обучение'\\n", encoding="utf-8")
+                "label='Обучение'\n", encoding="utf-8")
             self.assertEqual(find_non_english_string_literals(root), [("test.py", 1)])
 
 
