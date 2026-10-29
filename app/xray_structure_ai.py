@@ -1053,11 +1053,18 @@ def import_structure_model_package(project, source, *, registry=None):
                 metrics.pop("structure/macro_f1",None)
                 metrics["inference/mode"]=metadata["inference_pipeline"]["mode"]
                 metrics["inference/unvalidated"]=True
+            multires_training=metadata.get("multires_training") or {}
+            training_source_id=str(multires_training.get("source_model_id") or "")
+            if training_source_id:
+                # Preserve provenance even when the source model is not part of
+                # the destination project. Link it in SQLite when it is present.
+                metrics["training/source_model_id"]=training_source_id
+            parent_model_id=training_source_id if training_source_id in existing else None
             project.register_structure_model(
                 local,
                 str((destination / "model.pth").relative_to(project.root)),
                 str((destination / "model.json").relative_to(project.root)),
-                None,
+                parent_model_id,
                 current_digest,
                 provider_id,
                 metrics,

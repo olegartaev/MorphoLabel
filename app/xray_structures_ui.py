@@ -1416,7 +1416,7 @@ class XRayStructureWorkspace:
                 metrics=model.get("metrics") or {};quality=metrics.get("structure/macro_f1")
                 quality_text=("High-resolution · unvalidated" if metrics.get("inference/unvalidated") else
                               f"macro F1 {quality:.3f}" if isinstance(quality,(int,float)) else "Not recorded")
-                source=str(model.get("parent_model_id") or metrics.get("initialization") or metrics.get("original_model_id") or "ImageNet")
+                source=str(model.get("parent_model_id") or metrics.get("training/source_model_id") or metrics.get("initialization") or metrics.get("original_model_id") or "ImageNet")
                 tree.insert(
                     "","end",iid=model["model_id"],values=(
                         model["model_id"],str(model.get("created_at") or "").replace("T"," ")[:16],source,
