@@ -868,23 +868,23 @@ class XRayStructureWorkspace:
             run_high_resolution_training,
         )
         if not is_universal_multires_model(self.project,source_model_id):
-            messagebox.showinfo("High-resolution training",
-                "Select a compatible Native Full + ROI Detail model in the From field.",parent=self.root)
+            messagebox.showinfo("Train Structure AI",
+                "The active model is not compatible with continued training. Choose another model in Models.",parent=self.root)
             return
         from datetime import datetime
-        initial=f"MorphoLabel_HighResCandidate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        initial=f"MorphoLabel_ModelCandidate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
         output=filedialog.asksaveasfilename(
-            parent=self.root,title="Save high-resolution model candidate",initialdir=str(self.project.root.parent),
+            parent=self.root,title="Save model candidate",initialdir=str(self.project.root.parent),
             initialfile=initial,defaultextension=".zip",filetypes=(("MorphoLabel Structure AI","*.zip"),("ZIP files","*.zip")),
         )
         if not output:return
         output_path=Path(output)
         if output_path.exists():
-            messagebox.showerror("High-resolution training","This file already exists. Choose another name to avoid overwriting a saved candidate.",parent=self.root)
+            messagebox.showerror("Train Structure AI","This file already exists. Choose another name to avoid overwriting a saved candidate.",parent=self.root)
             return
         if not messagebox.askyesno(
-            "High-resolution training",
-            "Only human-verified annotations will be used. Both Native Full and ROI Detail will continue from the selected weights, with training and validation split by source plate.\n\n"
+            "Train Structure AI",
+            "Only verified annotations will be used. Training continues from the active model and separates training and validation by source plate.\n\n"
             "Training will create a separate, unvalidated model candidate. The active model will remain unchanged. GPU training may take some time. Continue?",
             parent=self.root,default="no",
         ):return
@@ -892,7 +892,7 @@ class XRayStructureWorkspace:
         self._busy=True;self._refresh_workflow()
         events=queue.Queue();cancelled=threading.Event()
         dialog,label,bar=self._structure_ai_dialog(
-            "High-resolution training","Preparing a safe project copy and verified training data...",None,
+            "Train Structure AI","Preparing a safe project copy and verified training data...",None,
         )
         cancel_button=ttk.Button(bar.master,text="Cancel",command=lambda:(cancelled.set(),label.configure(text="Cancelling..."),cancel_button.configure(state="disabled")))
         cancel_button.pack(anchor="e",pady=(8,0))
@@ -926,19 +926,19 @@ class XRayStructureWorkspace:
                                 label.configure(text=(f"Verified specimens: {info['training_specimens']} train / "
                                     f"{info['validation_specimens']} validation; source plates: "
                                     f"{info['train_plates']} / {info['val_plates']}.\n"
-                                    "Training Native Full and ROI Detail..."))
+                                    "Training the active model..."))
                         except (ValueError,KeyError,TypeError):
                             if event[1]:label.configure(text=event[1][:700])
                     elif event[0]=="error":
                         self._busy=False;self._refresh_workflow()
                         try:bar.stop();dialog.destroy()
                         except tk.TclError:pass
-                        messagebox.showerror("High-resolution training",str(event[1]),parent=self.root);return
+                        messagebox.showerror("Train Structure AI",str(event[1]),parent=self.root);return
                     elif event[0]=="cancelled":
                         self._busy=False;self._refresh_workflow()
                         try:bar.stop();dialog.destroy()
                         except tk.TclError:pass
-                        messagebox.showinfo("High-resolution training","Training cancelled. The incomplete candidate ZIP has been removed.",parent=self.root);return
+                        messagebox.showinfo("Train Structure AI","Training cancelled. The incomplete candidate ZIP has been removed.",parent=self.root);return
                     elif event[0]=="done":
                         self._busy=False
                         try:bar.stop();dialog.destroy()
@@ -950,14 +950,14 @@ class XRayStructureWorkspace:
                                 raise RuntimeError("Import unexpectedly changed the active model; stop and inspect the project.")
                             self.training_parent_choice.set(local_id);self._training_parent_touched=True
                             self._refresh_workflow();self._refresh_workflow()
-                            messagebox.showinfo("High-resolution training",
+                            messagebox.showinfo("Train Structure AI",
                                 f"New model candidate imported as {local_id}.\n"
                                 f"Active model unchanged: {active_after}.\n"
                                 "The candidate is unvalidated; independent performance has not been established. Review its predictions before use.\n\n"
                                 f"ZIP: {event[1]['path']}",parent=self.root)
                         except Exception as exc:
                             self._refresh_workflow()
-                            messagebox.showerror("High-resolution candidate import",
+                            messagebox.showerror("Model candidate import",
                                 f"The ZIP was saved, but model import failed. The active model was not changed.\n\n{exc}\n\n{event[1]['path']}",parent=self.root)
                         return
             except queue.Empty:pass
@@ -970,7 +970,7 @@ class XRayStructureWorkspace:
         candidate=next((m for m in self.project.structure_models() if m["model_id"]==model_id),None)
         if candidate and (candidate.get("metrics") or {}).get("inference/unvalidated"):
             if not messagebox.askyesno(
-                "Experimental high-resolution model",
+                "Unvalidated model candidate",
                 "This model has not passed full independent validation. Its predictions are drafts requiring review. Activate anyway?",
                 parent=self.root,default="no",
             ):
@@ -1371,7 +1371,7 @@ class XRayStructureWorkspace:
             for item in tree.get_children():tree.delete(item)
             for model in self.project.structure_models():
                 metrics=model.get("metrics") or {};quality=metrics.get("structure/macro_f1")
-                quality_text=("High-resolution · unvalidated" if metrics.get("inference/unvalidated") else
+                quality_text=("Unvalidated candidate" if metrics.get("inference/unvalidated") else
                               f"macro F1 {quality:.3f}" if isinstance(quality,(int,float)) else "Not recorded")
                 source=str(model.get("parent_model_id") or metrics.get("training/source_model_id") or metrics.get("initialization") or metrics.get("original_model_id") or "ImageNet")
                 tree.insert(
@@ -1390,7 +1390,7 @@ class XRayStructureWorkspace:
             selected_model=next((m for m in self.project.structure_models() if m["model_id"]==model_id),None)
             if selected_model and (selected_model.get("metrics") or {}).get("inference/unvalidated"):
                 if not messagebox.askyesno(
-                    "Experimental high-resolution model",
+                    "Unvalidated model candidate",
                     "This model has not passed full independent validation. Use it only for draft predictions and keep the previous model available. Activate anyway?",
                     parent=dialog,default="no",
                 ):return
