@@ -539,7 +539,7 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertIn('text="Scientific measurements"',ui)
         self.assertIn('("count","Exact count / MAE",165)',ui)
         self.assertIn('("bias","Count bias",90)',ui)
-        self.assertIn("For repeated count-only bones, an exact count is correct regardless of point placement.",ui)
+        self.assertIn("For repeated structures, an exact count is correct regardless of arbitrary marker placement.",ui)
         self.assertIn('("role","Role accuracy / MAE",170)',ui)
         self.assertIn('("accuracy","Exact",95)',ui)
         self.assertIn('row.get("accuracy")',ui)
