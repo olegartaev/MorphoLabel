@@ -374,9 +374,6 @@ class XRayStructureWorkspace:
             label=ttk.Label(status_host,text=f"{title}: 0",style="StatusChip.TLabel")
             label.pack(side="left",padx=(0,2));self.summary_labels[key]=label
         self.save_label=ttk.Label(status_host,text="Current: Not started",style="StatusChip.TLabel");self.save_label.pack(side="left",padx=(3,0))
-        self.new_training_label=ttk.Label(status_host,text="New for training: —",style="StatusChip.TLabel")
-        self.new_training_label.pack(side="left",padx=(5,0))
-        self.tip.bind(self.new_training_label,"Saved human-verified markers on specimens not previously registered with the selected training parent. Drafts are excluded; imported model history may be unknown.")
         def arrange_context(event):
             compact=event.width<950
             context_fields.grid_configure(columnspan=2 if compact else 1)
@@ -465,20 +462,18 @@ class XRayStructureWorkspace:
         model_row=ttk.Frame(three);model_row.grid(row=0,column=0,sticky="ew");three.columnconfigure(0,weight=1)
         self.structure_model_label=ElidedLabel(model_row,text="Active: none",style="StatusChip.TLabel",anchor="w",width=24);self.structure_model_label.pack(side="left")
         add_command_separator(model_row)
-        ttk.Label(model_row,text="From").pack(side="left")
+        # Training resumes the active compatible model automatically; the
+        # researcher should not need to select a neural-network architecture.
         self.training_parent_choice=tk.StringVar(master=three,value="ImageNet ResNet18")
-        self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,values=("ImageNet ResNet18",),width=model_selector_width(("ImageNet ResNet18",),minimum=22),state="readonly")
-        self.training_parent_box.pack(side="left",padx=(4,0))
         self._training_parent_touched=False
-        self.training_parent_box.bind("<<ComboboxSelected>>",self._training_parent_selected)
         self.training_summary=ttk.Label(model_row,text="",style="Muted.TLabel");self.training_summary.pack(side="right",padx=(10,0))
         train_actions=ttk.Frame(three);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
-        self.structure_train_button=self._button(train_actions,"Train",self.train_structure_ai,"Teach AI to place markers using your verified annotations.",style="Primary.TButton");self.structure_train_button.pack(side="left")
-        add_command_separator(train_actions)
-        self.highres_train_button=self._button(train_actions,"High-resolution training",self.train_highres_structure_ai,
-            "Continue a compatible Native Full + ROI Detail model on verified annotations. Creates a separate unvalidated candidate; the active model stays unchanged.")
-        self.highres_train_button.pack(side="left")
-        self.highres_train_button.configure(state="disabled")
+        self.structure_train_button=self._button(
+            train_actions,"Train",self.train_structure_ai,
+            "Train from verified specimens. MorphoLabel selects the correct method for the active model.",
+            style="Primary.TButton",
+        )
+        self.structure_train_button.pack(side="left")
         add_command_separator(train_actions)
         self._button(train_actions,"Models…",self.manage_structure_models,"Compare and select saved Structure models.").pack(side="left")
 
@@ -850,14 +845,8 @@ class XRayStructureWorkspace:
         compatible_active=bool(model and _scheme_matches_model(self.project,model))
         self.prediction_model_box.configure(values=prediction_values,width=model_selector_width(prediction_values,minimum=22),state="readonly" if prediction_values else "disabled")
         self.prediction_model_choice.set(active_id if compatible_active else "")
-        parent_values=("ImageNet ResNet18",)+prediction_values
-        current_parent=self.training_parent_choice.get()
-        preferred_parent=active_id if compatible_active else "ImageNet ResNet18"
-        if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:
-            self.training_parent_choice.set(preferred_parent)
-        self.training_parent_box.configure(values=parent_values,width=model_selector_width(parent_values,minimum=22))
-        self._refresh_highres_training_button()
-        self._refresh_training_new_counter()
+        # One Train action: continue the active model, or initialize the first.
+        self.training_parent_choice.set(active_id if compatible_active else "ImageNet ResNet18")
         state="normal" if compatible_active and self.pass_no.get()==1 else "disabled"
         self.structure_predict_next_button.configure(state=state);self.structure_predict_all_button.configure(state=state)
         self.structure_review_button.configure(state="normal" if review else "disabled")
@@ -869,39 +858,6 @@ class XRayStructureWorkspace:
             self.annotation_queue_banner.pack(fill="x")
         else:self.annotation_queue_banner.pack_forget()
 
-
-    def _training_parent_selected(self,_event=None):
-        self._training_parent_touched=True
-        self._refresh_highres_training_button()
-        self._refresh_training_new_counter()
-
-    def _refresh_training_new_counter(self):
-        choice=str(self.training_parent_choice.get() or "")
-        parent_id="" if choice=="ImageNet ResNet18" else choice
-        try:
-            stats=self.project.new_verified_training_markers(parent_id)
-            if not stats["known"]:
-                label="New for training: unknown history"
-            elif parent_id:
-                label=f"New for training: {stats['markers']} markers / {stats['specimens']} fish"
-            else:
-                label=f"Verified for training: {stats['markers']} markers / {stats['specimens']} fish"
-        except (KeyError,ValueError):
-            label="New for training: —"
-        self.new_training_label.configure(text=label)
-
-    def _refresh_highres_training_button(self):
-        button=getattr(self,"highres_train_button",None)
-        if button is None:return
-        parent_id=str(self.training_parent_choice.get() or "")
-        try:
-            from app.xray_multires_training import is_universal_multires_model
-            from app.runtime_paths import resource_path
-            enabled=bool(parent_id and is_universal_multires_model(self.project,parent_id)
-                         and resource_path("tools","train_universal_multires.py").is_file())
-        except Exception:
-            enabled=False
-        button.configure(state="normal" if enabled and not self._busy else "disabled")
 
     def train_highres_structure_ai(self):
         if self._busy:return
@@ -932,7 +888,7 @@ class XRayStructureWorkspace:
             parent=self.root,default="no",
         ):return
 
-        self._busy=True;self._refresh_highres_training_button()
+        self._busy=True;self._refresh_workflow()
         events=queue.Queue();cancelled=threading.Event()
         dialog,label,bar=self._structure_ai_dialog(
             "High-resolution training","Preparing a safe project copy and verified training data...",None,
@@ -973,12 +929,12 @@ class XRayStructureWorkspace:
                         except (ValueError,KeyError,TypeError):
                             if event[1]:label.configure(text=event[1][:700])
                     elif event[0]=="error":
-                        self._busy=False;self._refresh_highres_training_button()
+                        self._busy=False;self._refresh_workflow()
                         try:bar.stop();dialog.destroy()
                         except tk.TclError:pass
                         messagebox.showerror("High-resolution training",str(event[1]),parent=self.root);return
                     elif event[0]=="cancelled":
-                        self._busy=False;self._refresh_highres_training_button()
+                        self._busy=False;self._refresh_workflow()
                         try:bar.stop();dialog.destroy()
                         except tk.TclError:pass
                         messagebox.showinfo("High-resolution training","Training cancelled. The incomplete candidate ZIP has been removed.",parent=self.root);return
@@ -992,7 +948,7 @@ class XRayStructureWorkspace:
                             if active_after!=active_before:
                                 raise RuntimeError("Import unexpectedly changed the active model; stop and inspect the project.")
                             self.training_parent_choice.set(local_id);self._training_parent_touched=True
-                            self._refresh_workflow();self._refresh_highres_training_button()
+                            self._refresh_workflow();self._refresh_workflow()
                             messagebox.showinfo("High-resolution training",
                                 f"New model candidate imported as {local_id}.\n"
                                 f"Active model unchanged: {active_after}.\n"
@@ -1468,12 +1424,12 @@ class XRayStructureWorkspace:
             if self._busy:return
             self._busy=True;events=queue.Queue()
             progress_dialog,progress_label,progress_bar=self._structure_ai_dialog(
-                "Compare with human","Running the selected model on its validation holdout…",None
+                "Compare with human","Comparing with all eligible human-verified specimens…",None
             )
             def progress(done,total,specimen_id):
                 events.put(("progress",int(done),int(total),str(specimen_id)))
             def worker():
-                try:events.put(("done",compare_structure_model_to_human(self.project,model_id,split="val",progress=progress)))
+                try:events.put(("done",compare_structure_model_to_human(self.project,model_id,split="all",progress=progress)))
                 except Exception as exc:events.put(("error",exc))
             threading.Thread(target=worker,daemon=True,name="xray-structure-human-comparison").start()
             def poll():
@@ -1481,7 +1437,7 @@ class XRayStructureWorkspace:
                     while True:
                         event=events.get_nowait()
                         if event[0]=="progress":
-                            progress_label.configure(text=f"Validation holdout: {event[1]} / {event[2]} specimens")
+                            progress_label.configure(text=f"Verified comparison: {event[1]} / {event[2]} specimens")
                         elif event[0]=="error":
                             self._busy=False
                             try:progress_bar.stop();progress_dialog.destroy()
@@ -1530,7 +1486,11 @@ class XRayStructureWorkspace:
         outer=ttk.Frame(dialog,padding=12);outer.pack(fill="both",expand=True);outer.columnconfigure(0,weight=1);outer.rowconfigure(3,weight=1)
         ttk.Label(outer,text="Structure AI vs human",style="PageTitle.TLabel").grid(row=0,column=0,sticky="w")
         ttk.Label(
-            outer,text=f"{summary.get('model_id','')} · compared with {summary.get('specimens_compared',0)} human-verified specimens. This comparison does not prove independence. Project data are unchanged.",
+            outer,text=(f"{summary.get('model_id','')} · {summary.get('specimens_compared',0)} human-verified specimens compared "
+                        f"({summary.get('registered_training_compared',0)} registered training; "
+                        f"{summary.get('registered_validation_compared',0)} registered validation; "
+                        f"{summary.get('other_verified_compared',0)} other). "
+                        f"Failed: {summary.get('prediction_failures',0)}. This is not an independent accuracy estimate."),
             style="PageSubtitle.TLabel",wraplength=1060,
         ).grid(row=1,column=0,sticky="w",pady=(2,8))
         def pct(value):
@@ -1580,7 +1540,7 @@ class XRayStructureWorkspace:
                 count_text,num(row.get("count_bias")),role_text,loc_text,
             ))
         note=(
-            "Scientific result means the measured value, not whether every marker is at precisely the same pixel. For repeated count-only bones, an exact count is correct regardless of point placement. "
+            "Scientific result means the measured value, not whether every marker is at precisely the same pixel. For repeated structures, an exact count is correct regardless of arbitrary marker placement. "
             "Continuous traits need an explicit scheme tolerance; without one, mean error is shown rather than inventing a correct/incorrect threshold. "
             "These are retrospective comparisons, not independent performance estimates or measured correction time. Technical detection and position metrics are optional."
         )
