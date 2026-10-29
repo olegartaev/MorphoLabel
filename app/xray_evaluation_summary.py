@@ -15,13 +15,13 @@ def format_fraction(correct, total):
 
 
 def scientific_comparison_summary(summary):
-    """Return honest outcome lines, prioritizing complete fish and exact values."""
+    """Return honest outcome lines, prioritizing complete specimens and exact values."""
     complete=format_fraction(summary.get("all_traits_correct_specimens"),
                              summary.get("all_traits_evaluable_specimens"))
     measurements=format_fraction(summary.get("exact_traits"),
                                  summary.get("exact_traits_total"))
     lines=[
-        f"All measured traits correct on the same fish: {complete}",
+        f"All measured traits correct on the same specimen: {complete}",
         f"Individual scientific measurements exactly correct: {measurements}",
     ]
     delta=summary.get("repeated_count_mae")
