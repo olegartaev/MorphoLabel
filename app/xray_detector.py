@@ -173,7 +173,13 @@ def prepare_training_dataset(project,model_id,seed=42,workspace_root=None):
     }
 
 def train_detector(project,seed=42,epochs=80,progress=None,parent_model_id=None):
+    # Instrument the existing pipeline before changing performance settings.
+    # Stage timings are reproducible facts; GPU/CPU utilization is measured
+    # separately on the user's Windows machine.
+    stage_times={}
+    started=time.perf_counter()
     project.compact_disposable_ai_artifacts()
+    stage_times["artifact_cleanup"]=round(time.perf_counter()-started,2)
     if parent_model_id is None:
         parent=project.active_crop_model()
     elif not str(parent_model_id):
@@ -183,11 +189,16 @@ def train_detector(project,seed=42,epochs=80,progress=None,parent_model_id=None)
         if parent is None:raise KeyError(f"Unknown X-ray Crop parent model: {parent_model_id}")
     model_id=project.next_crop_model_id();directory=project.models_root/model_id
     performance=detector_performance_settings();hardware_settings=performance["hardware"];settings=performance["training"]
+    runtime_started=time.perf_counter()
     runtime,_=ensure_ai_runtime(project=project,progress=progress)
+    stage_times["runtime_setup"]=round(time.perf_counter()-runtime_started,2)
     parent_checkpoint=(str(project.root/parent["path"]) if parent else (local_starter("detector") or RTMDET_TINY_COCO_URL))
     with tempfile.TemporaryDirectory(prefix=f"morpholabel_xray_train_{model_id}_") as scratch:
         scratch=Path(scratch)
+        dataset_started=time.perf_counter()
         dataset=prepare_training_dataset(project,model_id,seed=seed,workspace_root=scratch)
+        stage_times["dataset_prepare"]=round(time.perf_counter()-dataset_started,2)
+        if progress:progress("DATA PREPARATION",f"Prepared {len(dataset['plate_ids'])} plates in {stage_times['dataset_prepare']:.1f}s.")
         if progress:progress("TRAINING",f"Training {model_id} from {len(dataset['plate_ids'])} confirmed plates…")
         base_batch=max(1,int(settings["batch_size"]))
         batch_attempts=[];value=base_batch
@@ -196,6 +207,7 @@ def train_detector(project,seed=42,epochs=80,progress=None,parent_model_id=None)
             if value==1:break
             value=max(1,value//2)
         result=None;used_batch=None
+        detector_started=time.perf_counter()
         for attempt_index,batch_size in enumerate(batch_attempts):
             payload={
                 "dataset_root":str(dataset["root"]),"train_json":str(dataset["train_json"]),"val_json":str(dataset["val_json"]),
@@ -210,6 +222,8 @@ def train_detector(project,seed=42,epochs=80,progress=None,parent_model_id=None)
                 if not is_cuda_oom(exc) or attempt_index==len(batch_attempts)-1:raise
                 if progress:progress("AUTO PERFORMANCE",f"GPU memory limit at batch {batch_size}; retrying with batch {batch_attempts[attempt_index+1]}…")
         if result is None or used_batch is None:raise RuntimeError("X-ray detector training did not complete.")
+        stage_times["detector_train"]=round(time.perf_counter()-detector_started,2)
+        if progress:progress("TRAINING",f"Detector completed in {stage_times['detector_train']:.1f}s; checking orientation.")
         checkpoint=Path(result["checkpoint"]);config=Path(result["config"])
         if not checkpoint.is_file() or not config.is_file():raise RuntimeError("X-ray detector training finished without a loadable model artifact.")
         with staged_model_directory(directory) as (staging,publish):
@@ -219,7 +233,11 @@ def train_detector(project,seed=42,epochs=80,progress=None,parent_model_id=None)
                      "initialization":(parent or {}).get("model_id") or "rtmdet_tiny_coco_pretrained","batch_size":used_batch,
                      "workers":int(settings.get("workers") or 0),"mixed_precision":bool(settings.get("mixed_precision")),
                      "hardware":hardware_settings,**dict(result.get("metrics") or {})}
+            orientation_started=time.perf_counter()
             metrics.update(train_orientation_model(project,model_id,staging,runtime,settings,seed=seed,progress=progress))
+            stage_times["orientation_train"]=round(time.perf_counter()-orientation_started,2)
+            metrics["training/timings_seconds"]=dict(stage_times)
+            if progress:progress("TRAINING",f"Orientation completed in {stage_times['orientation_train']:.1f}s.")
             training_plate_ids=list(dataset["plate_ids"]);training_specimens=int(dataset["training_specimens"])
             # Validate the complete child before publishing. Orientation paths
             # refer to its final identity, never the temporary staging name.
