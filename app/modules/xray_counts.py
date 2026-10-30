@@ -962,6 +962,12 @@ class XRayCountsRuntime:
                                        parent=root):return
             folder=filedialog.askdirectory(parent=root,title="Locate source X-ray folder")
             if not folder:return
+            if not messagebox.askyesno("Confirm source folder",
+                "Matching relative filenames were found. Their contents cannot be independently "
+                "verified against a missing original folder.\n\n"
+                "Only continue if you personally confirm this is the original image collection. "
+                "Existing annotation identities will be preserved.",
+                parent=root,default="no"):return
             try:project.relocate_source(folder)
             except (OSError,ValueError) as exc:
                 messagebox.showerror("Source folder mismatch",str(exc),parent=root);return

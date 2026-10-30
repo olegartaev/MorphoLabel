@@ -218,9 +218,11 @@ class XRaySpecimenListPanel(ttk.Frame):
             for row in self._rows
         )
         yview=self.canvas.yview()[0] if preserve_scroll and self.canvas.rows else None
+        previous_visible=tuple(self.visible_indices)
         self.visible_indices=filtered_photo_indices(
             self._rows,self._cache,self.specimen_query.get(),self.sample_query.get(),show_excluded=self.show_excluded.get()
         )
+        if tuple(self.visible_indices)!=previous_visible:yview=None
         self.canvas.set_rows([self._row_data(i,self._rows[i]) for i in self.visible_indices])
         selected_index=next((i for i,row in enumerate(self._rows) if row["specimen_id"]==self.selected_specimen_id),None)
         if selected_index in self.visible_indices:

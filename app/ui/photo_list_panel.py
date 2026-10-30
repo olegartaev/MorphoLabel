@@ -70,7 +70,7 @@ class PhotoListPanel(ttk.Frame):
  def refresh(self,preserve_scroll=False):
   rows=self.context.rows
   if len(self._cache)!=len(rows):self._cache=photo_search_cache([row|{'source_relpath':row.get('source_relpath',row.get('relative_path',row.get('original_name','')))} for row in rows])
-  yview=self.canvas.yview()[0] if preserve_scroll and self.canvas.rows else None;self.visible_indices=filtered_photo_indices(rows,self._cache,self.image_query.get(),self.locality_query.get(),show_excluded=self.show_excluded.get());self.canvas.set_rows([self._row_data(i,rows[i]) for i in self.visible_indices])
+  yview=self.canvas.yview()[0] if preserve_scroll and self.canvas.rows else None;previous_visible=tuple(self.visible_indices);self.visible_indices=filtered_photo_indices(rows,self._cache,self.image_query.get(),self.locality_query.get(),show_excluded=self.show_excluded.get());yview=None if tuple(self.visible_indices)!=previous_visible else yview;self.canvas.set_rows([self._row_data(i,rows[i]) for i in self.visible_indices])
   if self.context.selected in self.visible_indices:self.canvas.selection_set(self.visible_indices.index(self.context.selected))
   if yview is not None:self.canvas.yview_moveto(yview)
   elif self.context.selected in self.visible_indices:self.canvas.see(self.visible_indices.index(self.context.selected))
