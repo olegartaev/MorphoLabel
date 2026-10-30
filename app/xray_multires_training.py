@@ -24,6 +24,12 @@ class HighResolutionTrainingCancelled(HighResolutionTrainingError):
     pass
 
 
+def training_progress_record(line):
+    """JSON scalars in a formatted worker result are not progress records."""
+    value=json.loads(line)
+    return value if isinstance(value,dict) else {}
+
+
 def _stage_training_worker(script: Path, destination: Path) -> Path:
     """Give the external Python source imports, without the GUI's ABI extensions."""
     root=script.resolve().parents[1]
@@ -156,6 +162,7 @@ def run_high_resolution_training(
         root = str(worker_script.resolve().parents[1])
         environment["PYTHONPATH"] = root
         environment.pop("PYTHONHOME",None)
+        environment["PYTHONIOENCODING"]="utf-8"
         process = subprocess.Popen(
             command, cwd=str(Path(python_executable).resolve().parent), env=environment, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",

@@ -208,6 +208,7 @@ def run(project_copy,source_model,output,*,epochs_native=18,epochs_detail=18,
             "native_epochs_completed":json.loads(Path(native_result["metadata"]).read_text())["epochs_completed"],
             "detail_epochs_completed":json.loads(Path(detail_result["metadata"]).read_text())["epochs_completed"],
             "frozen_thresholds":True,"learning_rate":lr,
+            "device":device,"mixed_precision":device.startswith("cuda"),"batch_size":1,"workers":0,
             "scientific_scheme_reused":True,
         }
         if bootstrap:
@@ -237,6 +238,6 @@ def main():
     result=run(args.project_copy,args.source_model,args.output,
                epochs_native=args.epochs_native,epochs_detail=args.epochs_detail,
                device=args.device,seed=args.seed)
-    print(json.dumps(result,ensure_ascii=False,indent=2),flush=True)
+    print(json.dumps(result,ensure_ascii=False),flush=True)
 
 if __name__=="__main__":main()

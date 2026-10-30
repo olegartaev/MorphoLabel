@@ -898,7 +898,7 @@ class XRayStructureWorkspace:
         source_model_id=str(self.training_parent_choice.get() or "")
         from app.xray_multires_training import (
             HighResolutionTrainingCancelled, is_universal_multires_model,
-            run_high_resolution_training,
+            run_high_resolution_training, training_progress_record,
         )
         if source_model_id=="ImageNet ResNet18":source_model_id=""
         if self.project.annotation_summary(1)["verified"]<8:
@@ -942,8 +942,8 @@ class XRayStructureWorkspace:
                         label.configure(text=f"{event[1]}\n{event[2]}")
                     elif event[0]=="line":
                         try:
-                            info=json.loads(event[1])
-                            if info.get("stage")=="PREPARED":
+                            info=training_progress_record(event[1])
+                            if isinstance(info,dict) and info.get("stage")=="PREPARED":
                                 label.configure(text=(f"Verified specimens: {info['training_specimens']} train / "
                                     f"{info['validation_specimens']} validation; source plates: "
                                     f"{info['train_plates']} / {info['val_plates']}.\n"

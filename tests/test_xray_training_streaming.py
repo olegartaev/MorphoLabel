@@ -8,10 +8,16 @@ import tempfile
 import threading
 import unittest
 from unittest.mock import patch
-from app.xray_multires_training import run_high_resolution_training
+from app.xray_multires_training import run_high_resolution_training,training_progress_record
 
 
 class TrainingStreamingTests(unittest.TestCase):
+    def test_json_scalars_and_arrays_do_not_break_gui_progress(self):
+        for line in ('0','12.5','null','true','[1,2]','"checkpoint"'):
+            self.assertEqual(training_progress_record(line),{})
+        self.assertEqual(training_progress_record('{"stage":"PREPARED"}'),{"stage":"PREPARED"})
+        with self.assertRaises(ValueError):training_progress_record('plain progress text')
+
     def test_progress_reaches_gui_before_candidate_written(self):
         with tempfile.TemporaryDirectory(prefix="morpholabel_stream_test_") as dirname:
             root=Path(dirname)
@@ -32,7 +38,7 @@ class TrainingStreamingTests(unittest.TestCase):
                 "assert TOKEN==42 and ctypes.sizeof(ctypes.c_int)>0\n"
                 "from pathlib import Path\n"
                 "out=Path(sys.argv[sys.argv.index('--output')+1])\n"
-                "print(json.dumps({'stage':'PREPARED','training_specimens':7}),flush=True)\n"
+                "print(json.dumps({'stage':'PREPARED','training_specimens':7,'detail':'Native + ROI — готово'},ensure_ascii=False),flush=True)\n"
                 "time.sleep(0.8)\n"
                 "with zipfile.ZipFile(out,'w') as z:\n"
                 "    z.writestr('manifest.json',json.dumps({'model_id':'new_candidate'}))\n"
@@ -42,10 +48,12 @@ class TrainingStreamingTests(unittest.TestCase):
             project=type("Project",(),{"root":project_root})()
             output=root/"output"/"new.zip"
             delivered=[]
+            details=[]
             def progress(line):
                 try:stage=json.loads(line).get("stage")
                 except (ValueError,AttributeError):stage=None
                 delivered.append((stage,output.exists()))
+                if stage=="PREPARED":details.append(json.loads(line)["detail"])
             def create_copy(_project,_model,destination):
                 destination.mkdir(parents=True)
                 return destination
@@ -57,6 +65,7 @@ class TrainingStreamingTests(unittest.TestCase):
                     progress=progress,cancelled=threading.Event())
             self.assertEqual(result["model_id"],"new_candidate")
             self.assertIn(("PREPARED",False),delivered)
+            self.assertEqual(details,["Native + ROI — готово"])
             self.assertTrue(output.is_file())
             self.assertEqual(result["membership"],[{"specimen_id":"local-id","split":"train"}])
             self.assertGreater(len(result["log"]),2)
