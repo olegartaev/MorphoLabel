@@ -473,13 +473,16 @@ class XRayStructureWorkspace:
         add_command_separator(model_row)
         # One Train button; From selects existing compatible weights, not an architecture.
         ttk.Label(model_row,text="From",style="Muted.TLabel").pack(side="left")
-        self.training_parent_choice=tk.StringVar(master=three,value="ImageNet ResNet18")
+        saved_parent=self.project.get_ui_state("structure_training_parent","")
+        self.training_parent_choice=tk.StringVar(master=three,value=saved_parent or "ImageNet ResNet18")
         self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,
             values=("ImageNet ResNet18",),width=23,state="readonly")
         self.training_parent_box.pack(side="left",padx=(4,0))
-        self._training_parent_touched=False
+        self._training_parent_touched=bool(saved_parent)
         self.training_parent_box.bind("<<ComboboxSelected>>",
-            lambda _event:(setattr(self,"_training_parent_touched",True),self._refresh_summary()))
+            lambda _event:(setattr(self,"_training_parent_touched",True),
+                          self.project.set_ui_state("structure_training_parent",self.training_parent_choice.get()),
+                          self._refresh_summary()))
         self.training_summary=ttk.Label(model_row,text="",style="Muted.TLabel")
         self.training_summary.pack(side="right",padx=(10,0))
         train_actions=ttk.Frame(three);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
@@ -760,7 +763,7 @@ class XRayStructureWorkspace:
         self.specimen_list.selected_specimen_id=self.selected_specimen_id;self.specimen_list.refresh(preserve_scroll=True,reveal=True)
         if self.selected_specimen_id:self._load_specimen(self.selected_specimen_id)
         else:self._clear()
-        self._refresh_summary();self._refresh_workflow()
+        self._refresh_workflow();self._refresh_summary()
 
     def _list_selected(self,specimen_id):
         if specimen_id!=self.selected_specimen_id:self._load_specimen(specimen_id)

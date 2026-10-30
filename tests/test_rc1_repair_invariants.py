@@ -281,10 +281,10 @@ class RC1RepairInvariants(unittest.TestCase):
 
     def test_crop_model_id_allocator_respects_registry_gaps_and_orphan_directories(self):
         p,_=self.xray();self.crop_parent(p)
-        self.assertEqual("xray_crop_model_v001",p.next_crop_model_id())
+        self.assertEqual("xray_crop_model_v005",p.next_crop_model_id())
         (p.models_root/"xray_crop_model_v001").mkdir()
         p.register_crop_model("xray_crop_model_v002","external/model.pth","external/config.py",None,{},[],0)
-        self.assertEqual("xray_crop_model_v003",p.next_crop_model_id())
+        self.assertEqual("xray_crop_model_v005",p.next_crop_model_id())
         (p.models_root/"xray_crop_model_v003").mkdir()
         self.assertEqual("xray_crop_model_v005",p.next_crop_model_id())
 
@@ -352,7 +352,7 @@ class RC1RepairInvariants(unittest.TestCase):
         (directory/"model.pth").write_bytes(b"checkpoint")
         (directory/"model.json").write_text(json.dumps({"backend":"resnet18_heatmap_v1","schema_digest":digest,"schema_contract":contract}),encoding="utf-8")
         p.register_structure_model(directory.name,str((directory/"model.pth").relative_to(p.root)),str((directory/"model.json").relative_to(p.root)),None,digest,"resnet18_heatmap_v1",{})
-        for _ in range(2):
+        for iteration in range(2):
             p=XRayProject(p.root);model=p.active_structure_model()
             self.assertTrue(_scheme_matches_model(p,model));self.assertTrue(_current_prediction_allowed(p,sid,model,1))
             root=tk.Tk();root.withdraw()
@@ -363,9 +363,13 @@ class RC1RepairInvariants(unittest.TestCase):
                 self.assertIn(directory.name,view.prediction_model_box.cget("values"))
                 self.assertEqual("readonly",str(view.prediction_model_box.cget("state")))
                 self.assertEqual(directory.name,view.prediction_model_choice.get())
-                self.assertEqual(directory.name,view.training_parent_choice.get())
-                self.assertFalse(hasattr(view,"training_parent_box"))
+                self.assertEqual(directory.name if iteration==0 else "ImageNet ResNet18",view.training_parent_choice.get())
+                self.assertEqual("readonly",str(view.training_parent_box.cget("state")))
+                self.assertIn(directory.name,view.training_parent_box.cget("values"))
                 for button in (view.predict_current_button,view.structure_predict_next_button,view.structure_predict_all_button):self.assertEqual("normal",str(button.cget("state")))
+                view.training_parent_choice.set("ImageNet ResNet18")
+                view.training_parent_box.event_generate("<<ComboboxSelected>>");root.update()
+                self.assertEqual("ImageNet ResNet18",p.get_ui_state("structure_training_parent"))
             finally:root.destroy()
         cosmetic=p.scheme;cosmetic["name"]="Cosmetic";p.save_scheme(cosmetic);self.assertTrue(_scheme_matches_model(p,model))
         changed=p.scheme;changed["structures"][0]["required"]=False;p.save_scheme(changed)

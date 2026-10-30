@@ -22,7 +22,7 @@ class UserFacingControlsTests(unittest.TestCase):
         self.assertIn('train_actions,"Train",self.train_structure_ai',self.structures)
         self.assertNotIn('self.highres_train_button=',self.structures)
         self.assertNotIn('self.new_training_label=',self.structures)
-        self.assertNotIn('self.training_parent_box.pack(',self.structures)
+        self.assertIn('self.training_parent_box.pack(',self.structures)
         self.assertIn('self.training_parent_choice.set(active_id if compatible_active',self.structures)
         self.assertIn('return self.train_highres_structure_ai()',self.structures)
 

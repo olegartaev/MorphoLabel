@@ -6,6 +6,7 @@ from pathlib import Path
 import random
 import sys
 import time
+from collections import OrderedDict
 
 
 def _input():
@@ -42,12 +43,24 @@ def _transforms(training=False):
 class _Dataset:
     def __init__(self,rows,training=False):
         self.rows=list(rows);self.transform=_transforms(training)
+        from torchvision import transforms
+        self.augmentation=transforms.Compose(self.transform.transforms[1:])
+        # Cache only deterministic 224x224 RGB inputs, never random augmentations.
+        # Bound each dataset to under 16 MiB even for very large collections.
+        self.resized=OrderedDict();self.cache_limit=(16*1024**2)//(224*224*3)
     def __len__(self):return len(self.rows)
     def __getitem__(self,index):
         import torch
         from PIL import Image
         row=self.rows[index]
-        with Image.open(row["path"]) as image:picture=self.transform(image.convert("RGB"))
+        path=row["path"]
+        if path in self.resized:
+            picture=self.resized.pop(path)
+        else:
+            with Image.open(path) as image:picture=self.transform.transforms[0](image.convert("RGB"))
+        self.resized[path]=picture
+        while len(self.resized)>self.cache_limit:self.resized.popitem(last=False)
+        picture=self.augmentation(picture.copy())
         target=torch.tensor([float(row["head"]),float(row["bottom"])],dtype=torch.float32)
         return picture,target
 

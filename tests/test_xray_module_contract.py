@@ -298,7 +298,8 @@ class XRayModuleContractTests(unittest.TestCase):
         self.assertIn('cols=("row_no","locality","plate","fish"',export_section)
         self.assertIn('tree.heading("row_no",text="#")',export_section)
         self.assertIn('tree.heading("fish",text="Specimen")',export_section)
-        self.assertIn("_sort_export_tree(tree,value,False)",export_section)
+        self.assertIn("_sort_export_tree(tree,column,descending)",export_section)
+        self.assertIn("sort_visible(value)",export_section)
         self.assertIn("def _trait_columns",exporter)
         self.assertNotIn('f"trait:',exporter)
 

@@ -84,7 +84,7 @@ class ReleaseUIUnificationTests(unittest.TestCase):
             self.assertIn("Models…",value)
         for value in (crop,landmarks,xcrop):
             self.assertIn('text="From"',value)
-        self.assertNotIn('text="From"',structures)
+        self.assertIn('text="From"',structures)
         self.assertIn('train_actions,"Train",self.train_structure_ai',structures)
         self.assertIn('self.training_parent_choice.set(active_id if compatible_active else "ImageNet ResNet18")',structures)
         self.assertIn('crop_models=self.context.project.models("crop")',crop)
@@ -112,7 +112,7 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn('parent_values=("RTMDet pretrained",)+prediction_values',crop)
         self.assertIn('compatible_active=bool(model and _scheme_matches_model(self.project,model))',structures)
         self.assertIn('self.training_parent_choice.set(active_id if compatible_active else "ImageNet ResNet18")',structures)
-        self.assertNotIn('self.training_parent_box=',structures)
+        self.assertIn('self.training_parent_box=ttk.Combobox',structures)
         self.assertIn('prediction_values=tuple(item["model_id"] for item in structure_models if _scheme_matches_model(self.project,item))',structures)
         self.assertIn("parent_model_id=parent_model_id",crop)
         self.assertIn("parent_model_id=parent_model_id",structures)
