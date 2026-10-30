@@ -776,9 +776,9 @@ class XRayCountsRuntime:
         ttk.Entry(filters,textvariable=sample_filter,width=19).pack(side="left",padx=(4,12))
         ttk.Label(filters,text="Plate",style="Muted.TLabel").pack(side="left")
         ttk.Entry(filters,textvariable=plate_filter,width=23).pack(side="left",padx=(4,0))
-        summary_label=ttk.Label(parent,text="",style="Muted.TLabel",wraplength=1050,justify="left")
+        summary_label=ttk.Label(parent,text="",style="Muted.TLabel")
         summary_label.pack(fill="x",pady=(0,5))
-        host=ttk.Frame(parent);host.pack(fill="both",expand=True);host.columnconfigure(0,weight=1);host.rowconfigure(0,weight=1)
+        host=ttk.Frame(parent);host.pack(fill="both",expand=True);host.columnconfigure(0,weight=1);host.rowconfigure(1,weight=1)
         tree=ttk.Treeview(host,columns=cols,show="headings",selectmode="browse",height=16)
         tree.heading("row_no",text="#");tree.column("row_no",width=64,anchor="center",stretch=False)
         tree.heading("locality",text="Sample");tree.column("locality",width=180,anchor="w")
@@ -789,6 +789,20 @@ class XRayCountsRuntime:
         tree.heading("status",text="Status");tree.column("status",width=90,anchor="center",stretch=False)
         from tkinter import font as tkfont
         font=tkfont.Font(root=tree,font=ttk.Style(tree).lookup("Treeview","font") or "TkDefaultFont")
+        statistics_canvas=tk.Canvas(host,height=font.metrics("linespace")*4+10,width=1,
+            background=ttk.Style(host).lookup("TFrame","background") or "#f0f0f0",highlightthickness=0)
+        statistics_canvas.grid(row=0,column=0,sticky="ew")
+        column_statistics={}
+        def draw_statistics(*_args):
+            widths=[int(tree.column(column,"width")) for column in cols]
+            offset=round(tree.xview()[0]*sum(widths)) if tree.xview() else 0
+            x=2-offset
+            statistics_canvas.delete("all")
+            for column,width in zip(cols,widths):
+                if column in column_statistics:
+                    statistics_canvas.create_text(x+width/2,4,text="\n".join(column_statistics[column]),
+                        anchor="n",justify="center",font=font,fill="#505050")
+                x+=width
         for column in cols:
             minimum=max(int(tree.column(column,"width")),font.measure(tree.heading(column,"text"))+24)
             if column=="status":minimum=max(minimum,font.measure("Not started")+24)
@@ -816,7 +830,6 @@ class XRayCountsRuntime:
             tree.delete(*tree.get_children(""))
             for index,(specimen_id,_sample,_plate,_values,display) in enumerate(visible):
                 tree.insert("","end",iid=specimen_id,values=display,tags=("alternate",) if index%2 else ())
-            summaries=[]
             for trait in traits:
                 key=trait["id"];values=[]
                 for item in visible:
@@ -826,8 +839,12 @@ class XRayCountsRuntime:
                     except (ValueError,TypeError):continue
                     if math.isfinite(value):values.append(value)
                 name=trait.get("abbr") or key
-                summaries.append(f"{name}: Min {min(values):g} · Max {max(values):g} · Mean {sum(values)/len(values):.2f} (n={len(values)})" if values else f"{name}: — (n=0)")
-            summary_label.configure(text=f"Shown: {len(visible)} specimens   |   "+"   ·   ".join(summaries))
+                statistics=(f"Min {min(values):g}",f"Max {max(values):g}",f"Mean {sum(values)/len(values):.2f}",f"n {len(values)}") if values else ("Min —","Max —","Mean —","n 0")
+                column_statistics[name]=statistics
+                minimum=max(int(tree.column(name,"minwidth")),*(font.measure(text)+20 for text in statistics))
+                tree.column(name,minwidth=minimum,width=max(minimum,int(tree.column(name,"width"))))
+            summary_label.configure(text=f"Shown: {len(visible)} specimens")
+            draw_statistics()
             if sort_state["column"]:
                 _sort_export_tree(tree,sort_state["column"],sort_state["descending"])
                 for key in cols:tree.heading(key,command=lambda col=key:sort_visible(col))
@@ -837,9 +854,14 @@ class XRayCountsRuntime:
         for variable in (sample_filter,plate_filter):variable.trace_add("write",update_visible)
         update_visible()
         scroll=ttk.Scrollbar(host,orient="vertical",command=tree.yview);tree.configure(yscrollcommand=scroll.set)
-        tree.grid(row=0,column=0,sticky="nsew");scroll.grid(row=0,column=1,sticky="ns")
+        tree.grid(row=1,column=0,sticky="nsew");scroll.grid(row=1,column=1,sticky="ns")
         horizontal=ttk.Scrollbar(host,orient="horizontal",command=tree.xview)
-        tree.configure(xscrollcommand=horizontal.set);horizontal.grid(row=1,column=0,sticky="ew")
+        def horizontal_changed(first,last):
+            horizontal.set(first,last);draw_statistics()
+        tree.configure(xscrollcommand=horizontal_changed);horizontal.grid(row=2,column=0,sticky="ew")
+        tree.bind("<Configure>",draw_statistics,add="+")
+        tree.bind("<B1-Motion>",lambda _event:after_idle_for_widget(tree,draw_statistics),add="+")
+        tree.bind("<ButtonRelease-1>",draw_statistics,add="+")
         if current and tree.exists(current):
             tree.selection_set(current);tree.focus(current);tree.see(current)
             after_idle_for_widget(tree,lambda:tree.see(current) if tree.exists(current) else None)
