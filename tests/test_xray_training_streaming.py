@@ -35,7 +35,8 @@ class TrainingStreamingTests(unittest.TestCase):
                 "print(json.dumps({'stage':'PREPARED','training_specimens':7}),flush=True)\n"
                 "time.sleep(0.8)\n"
                 "with zipfile.ZipFile(out,'w') as z:\n"
-                "    z.writestr('manifest.json',json.dumps({'model_id':'new_candidate'}))\n",
+                "    z.writestr('manifest.json',json.dumps({'model_id':'new_candidate'}))\n"
+                "print(json.dumps({'membership':[{'specimen_id':'local-id','split':'train'}]}),flush=True)\n",
                 encoding="utf-8",
             )
             project=type("Project",(),{"root":project_root})()
@@ -55,7 +56,8 @@ class TrainingStreamingTests(unittest.TestCase):
             self.assertEqual(result["model_id"],"new_candidate")
             self.assertIn(("PREPARED",False),delivered)
             self.assertTrue(output.is_file())
-            self.assertEqual(len(result["log"]),1)
+            self.assertEqual(result["membership"],[{"specimen_id":"local-id","split":"train"}])
+            self.assertEqual(len(result["log"]),2)
 
 
 if __name__=="__main__":

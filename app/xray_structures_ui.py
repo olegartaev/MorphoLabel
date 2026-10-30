@@ -969,7 +969,10 @@ class XRayStructureWorkspace:
                             if active_after!=active_before:
                                 raise RuntimeError("Import unexpectedly changed the active model; stop and inspect the project.")
                             self.training_parent_choice.set(local_id);self._training_parent_touched=True
-                            self._refresh_workflow()
+                            if event[1].get("membership"):
+                                self.project.record_structure_training_membership(local_id,event[1]["membership"])
+                            self.project.set_ui_state("structure_training_parent",local_id)
+                            self._refresh_workflow();self._refresh_summary()
                             shutil.rmtree(candidate_dir,ignore_errors=True)
                             messagebox.showinfo("Train Structure AI",
                                 f"New model candidate: {local_id}.\n"
@@ -1322,7 +1325,8 @@ class XRayStructureWorkspace:
                             f"Validation: {result['validation_specimens']} specimens on {result['validation_plates']} plates"
                         )
                         if isinstance(quality,(int,float)):detail+=f"\nValidation macro F1: {quality:.3f}"
-                        self._refresh_workflow()
+                        self.project.set_ui_state("structure_training_parent",result["model_id"])
+                        self._refresh_workflow();self._refresh_summary()
                         messagebox.showinfo("Structure training",detail,parent=self.root);return
             except queue.Empty:pass
             if dialog.winfo_exists():dialog.after(120,poll)

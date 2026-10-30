@@ -209,6 +209,11 @@ def run_high_resolution_training(
                 output_zip.unlink(missing_ok=True)
                 raise HighResolutionTrainingError("The candidate ZIP failed its CRC check.")
             manifest = json.loads(archive.read("manifest.json"))
-        return {"path": output_zip, "model_id": str(manifest.get("model_id") or ""),
+        membership=[]
+        for line in reversed(log_lines):
+            try:membership=json.loads(line).get("membership",[])
+            except (ValueError,AttributeError):continue
+            if membership:break
+        return {"path": output_zip, "model_id": str(manifest.get("model_id") or ""), "membership":membership,
                 "sha256": __import__("hashlib").sha256(output_zip.read_bytes()).hexdigest(),
                 "log": log_lines}

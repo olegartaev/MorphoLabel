@@ -60,6 +60,17 @@ class XRayStructurePersistenceTests(unittest.TestCase):
         self.project.add_annotation(self.specimen_id,"last_predorsal",0.35,0.5,1,replace_single=True)
         return self.project.verify_annotations(self.specimen_id,1)
 
+    def test_local_candidate_membership_updates_usage_without_activation(self):
+        self._complete_pass_one()
+        self.project.register_structure_model("local_candidate","model.pth","model.json",None,"digest","resnet18_heatmap_v1",{},activate=False)
+        self.assertFalse(self.project.structure_training_usage("local_candidate")["known"])
+        self.project.record_structure_training_membership("local_candidate",[{"specimen_id":self.specimen_id,"split":"train"}])
+        self.assertEqual(self.project.structure_training_usage("local_candidate"),{"used":1,"new":0,"known":True})
+        self.assertIsNone(self.project.active_structure_model())
+        with self.assertRaises(ValueError):
+            self.project.record_structure_training_membership("local_candidate",[{"specimen_id":"foreign","split":"train"}])
+        self.assertEqual(len(self.project.structure_model_membership("local_candidate")),1)
+
     def test_only_human_confirmed_crops_are_structure_eligible(self):
         crop=crop_from_geometry(450,240,700,260,0,(900,480),algorithm="manual")
         unconfirmed=self.project.add_manual_specimen(self.image_ids[1],crop)

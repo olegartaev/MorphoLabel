@@ -863,6 +863,19 @@ class XRayProject:
         if not membership:return {"used":None,"new":None,"known":False}
         return {"used":len(eligible & membership),"new":len(eligible-membership),"known":True}
 
+    def record_structure_training_membership(self,model_id,rows):
+        """Record local worker provenance; never include project IDs in portable ZIPs."""
+        rows=list(rows)
+        if any(row.get("split") not in {"train","val"} for row in rows):
+            raise ValueError("Unknown training split")
+        with _db_connection(self.db_path) as c:
+            if not c.execute("SELECT 1 FROM xray_structure_models WHERE model_id=?",(model_id,)).fetchone():
+                raise KeyError(model_id)
+            if any(not c.execute("SELECT 1 FROM specimens WHERE specimen_id=?",(row["specimen_id"],)).fetchone() for row in rows):
+                raise ValueError("Training specimen is outside this project")
+            c.executemany("INSERT OR IGNORE INTO xray_structure_training_membership(model_id,specimen_id,split) VALUES(?,?,?)",
+                [(model_id,row["specimen_id"],row["split"]) for row in rows])
+
     def structure_training_usage(self,model_id=None):
         """Scientific-scheme VERIFIED specimens already represented by model membership."""
         eligible={str(row["specimen_id"]) for row in self.structure_specimens(1)

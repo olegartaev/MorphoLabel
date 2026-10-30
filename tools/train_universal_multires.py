@@ -206,7 +206,7 @@ def run(project_copy,source_model,output,*,epochs_native=18,epochs_detail=18,
                            model_id="multires_retrained_"+sha256(
                                prepared["dataset_hash"].encode()).hexdigest()[:12],
                            provenance=provenance)
-    return {**result,"training":provenance,
+    return {**result,"training":provenance,"membership":prepared["membership"],
             "validation":"NOT_INDEPENDENT; import inactive and compare on untouched specimens"}
 
 

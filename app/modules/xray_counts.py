@@ -752,16 +752,8 @@ class XRayCountsRuntime:
         self._ensure_working_scheme()
         title_row=ttk.Frame(parent);title_row.pack(fill="x")
         ttk.Label(title_row,text="Results",style="PageTitle.TLabel").pack(side="left")
-        actions=ttk.Frame(title_row);actions.pack(side="right")
         if not hasattr(self,"_trait_export_scope"):
             self._trait_export_scope=tk.StringVar(master=self.host.container,value="verified")
-        ttk.Label(actions,text="Export:",style="Muted.TLabel").pack(side="left",padx=(0,4))
-        ttk.Radiobutton(actions,text="All",variable=self._trait_export_scope,value="all").pack(side="left")
-        ttk.Radiobutton(actions,text="Verified only",variable=self._trait_export_scope,value="verified").pack(side="left",padx=(2,6))
-        self._button(
-            actions,"Export",lambda:self._export_traits(self._trait_export_scope.get()=="verified"),
-            "Save the selected trait rows as a table. Verified only includes results you have checked.",True,
-        ).pack(side="left")
         self._render_selection_context(parent)
         ttk.Label(parent,text="Review trait values. Choose the specimens to include, then export the table.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(0,8))
         scheme=self.project.scheme
@@ -771,6 +763,14 @@ class XRayCountsRuntime:
         # Results filters affect the preview and descriptive statistics only.
         # Export remains governed by the explicit All/Verified control above.
         filters=ttk.Frame(parent);filters.pack(fill="x",pady=(0,5))
+        actions=ttk.Frame(filters);actions.pack(side="right")
+        ttk.Label(actions,text="Export:",style="Muted.TLabel").pack(side="left",padx=(0,4))
+        ttk.Radiobutton(actions,text="All",variable=self._trait_export_scope,value="all").pack(side="left")
+        ttk.Radiobutton(actions,text="Verified only",variable=self._trait_export_scope,value="verified").pack(side="left",padx=(2,6))
+        self._button(
+            actions,"Export",lambda:self._export_traits(self._trait_export_scope.get()=="verified"),
+            "Save the selected trait rows as a table. Verified only includes results you have checked.",True,
+        ).pack(side="left")
         sample_filter=tk.StringVar(master=filters);plate_filter=tk.StringVar(master=filters)
         ttk.Label(filters,text="Sample",style="Muted.TLabel").pack(side="left")
         ttk.Entry(filters,textvariable=sample_filter,width=19).pack(side="left",padx=(4,12))
@@ -778,7 +778,7 @@ class XRayCountsRuntime:
         ttk.Entry(filters,textvariable=plate_filter,width=23).pack(side="left",padx=(4,0))
         summary_label=ttk.Label(parent,text="",style="Muted.TLabel")
         summary_label.pack(fill="x",pady=(0,5))
-        host=ttk.Frame(parent);host.pack(fill="both",expand=True);host.columnconfigure(0,weight=1);host.rowconfigure(1,weight=1)
+        host=ttk.Frame(parent);host.pack(fill="both",expand=True);host.columnconfigure(0,weight=1);host.rowconfigure(0,weight=1)
         tree=ttk.Treeview(host,columns=cols,show="headings",selectmode="browse",height=16)
         tree.heading("row_no",text="#");tree.column("row_no",width=64,anchor="center",stretch=False)
         tree.heading("locality",text="Sample");tree.column("locality",width=180,anchor="w")
@@ -789,14 +789,19 @@ class XRayCountsRuntime:
         tree.heading("status",text="Status");tree.column("status",width=90,anchor="center",stretch=False)
         from tkinter import font as tkfont
         font=tkfont.Font(root=tree,font=ttk.Style(tree).lookup("Treeview","font") or "TkDefaultFont")
-        statistics_canvas=tk.Canvas(host,height=font.metrics("linespace")*4+10,width=1,
+        statistics_canvas=tk.Canvas(parent,height=font.metrics("linespace")*4+10,width=1,
             background=ttk.Style(host).lookup("TFrame","background") or "#f0f0f0",highlightthickness=0)
-        statistics_canvas.grid(row=0,column=0,sticky="ew")
         column_statistics={}
         def draw_statistics(*_args):
             widths=[int(tree.column(column,"width")) for column in cols]
             offset=round(tree.xview()[0]*sum(widths)) if tree.xview() else 0
             x=2-offset
+            # Keep the statistics at page-title level, with the left controls
+            # unobscured even when the table is scrolled horizontally.
+            start=max(400,x+sum(widths[:4]))
+            statistics_canvas.place(x=host.winfo_x()+start,y=title_row.winfo_y(),
+                width=max(0,tree.winfo_width()-start),height=font.metrics("linespace")*4+10)
+            x-=start
             statistics_canvas.delete("all")
             for column,width in zip(cols,widths):
                 if column in column_statistics:
@@ -854,11 +859,11 @@ class XRayCountsRuntime:
         for variable in (sample_filter,plate_filter):variable.trace_add("write",update_visible)
         update_visible()
         scroll=ttk.Scrollbar(host,orient="vertical",command=tree.yview);tree.configure(yscrollcommand=scroll.set)
-        tree.grid(row=1,column=0,sticky="nsew");scroll.grid(row=1,column=1,sticky="ns")
+        tree.grid(row=0,column=0,sticky="nsew");scroll.grid(row=0,column=1,sticky="ns")
         horizontal=ttk.Scrollbar(host,orient="horizontal",command=tree.xview)
         def horizontal_changed(first,last):
             horizontal.set(first,last);draw_statistics()
-        tree.configure(xscrollcommand=horizontal_changed);horizontal.grid(row=2,column=0,sticky="ew")
+        tree.configure(xscrollcommand=horizontal_changed);horizontal.grid(row=1,column=0,sticky="ew")
         tree.bind("<Configure>",draw_statistics,add="+")
         tree.bind("<B1-Motion>",lambda _event:after_idle_for_widget(tree,draw_statistics),add="+")
         tree.bind("<ButtonRelease-1>",draw_statistics,add="+")
