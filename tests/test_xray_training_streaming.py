@@ -36,14 +36,16 @@ class TrainingStreamingTests(unittest.TestCase):
                 "time.sleep(0.8)\n"
                 "with zipfile.ZipFile(out,'w') as z:\n"
                 "    z.writestr('manifest.json',json.dumps({'model_id':'new_candidate'}))\n"
-                "print(json.dumps({'membership':[{'specimen_id':'local-id','split':'train'}]}),flush=True)\n",
+                "print(json.dumps({'membership':[{'specimen_id':'local-id','split':'train'}]},indent=2),flush=True)\n",
                 encoding="utf-8",
             )
             project=type("Project",(),{"root":project_root})()
             output=root/"output"/"new.zip"
             delivered=[]
             def progress(line):
-                delivered.append((json.loads(line).get("stage"),output.exists()))
+                try:stage=json.loads(line).get("stage")
+                except (ValueError,AttributeError):stage=None
+                delivered.append((stage,output.exists()))
             def create_copy(_project,_model,destination):
                 destination.mkdir(parents=True)
                 return destination
@@ -57,7 +59,7 @@ class TrainingStreamingTests(unittest.TestCase):
             self.assertIn(("PREPARED",False),delivered)
             self.assertTrue(output.is_file())
             self.assertEqual(result["membership"],[{"specimen_id":"local-id","split":"train"}])
-            self.assertEqual(len(result["log"]),2)
+            self.assertGreater(len(result["log"]),2)
 
 
 if __name__=="__main__":
