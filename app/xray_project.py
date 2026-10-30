@@ -848,6 +848,30 @@ class XRayProject:
             self._remember_model_number(c,model_id,"xray_crop_model_v","crop_model_highwater")
         return model_id
 
+    def crop_training_usage(self,model_id=None):
+        """Verified source plates already represented by model membership, plus new."""
+        with _db_connection(self.db_path) as c:
+            eligible={str(row[0]) for row in c.execute("""
+                SELECT i.image_id FROM source_images i
+                WHERE i.excluded=0 AND i.crop_reviewed=1 AND EXISTS (
+                    SELECT 1 FROM specimens s
+                    WHERE s.image_id=i.image_id AND s.excluded=0 AND s.crop_status='confirmed'
+                )""")}
+            if not model_id:return {"used":0,"new":len(eligible),"known":True}
+            membership={str(row[0]) for row in c.execute(
+                "SELECT image_id FROM xray_crop_training_membership WHERE model_id=?",(str(model_id),))}
+        if not membership:return {"used":None,"new":None,"known":False}
+        return {"used":len(eligible & membership),"new":len(eligible-membership),"known":True}
+
+    def structure_training_usage(self,model_id=None):
+        """Scientific-scheme VERIFIED specimens already represented by model membership."""
+        eligible={str(row["specimen_id"]) for row in self.structure_specimens(1)
+                  if str(row.get("annotation_status") or "")=="verified"}
+        if not model_id:return {"used":0,"new":len(eligible),"known":True}
+        membership={str(row["specimen_id"]) for row in self.structure_model_membership(model_id)}
+        if not membership:return {"used":None,"new":None,"known":False}
+        return {"used":len(eligible & membership),"new":len(eligible-membership),"known":True}
+
     def activate_crop_model(self,model_id):
         """Select a registered crop model as the sole active model."""
         with _db_connection(self.db_path) as c:

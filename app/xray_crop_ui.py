@@ -387,6 +387,10 @@ class XRayCropWorkspace:
         for key,title in (("unresolved","Unresolved"),("review","Review"),("verified","Verified")):
             label=ttk.Label(status_host,text=f"{title}: 0",style="StatusChip.TLabel")
             label.pack(side="left",padx=(0,3));self.predict_status_labels[key]=label
+        self.training_usage_label=ttk.Label(status_host,text="Used: — · New: —",style="StatusChip.TLabel")
+        self.training_usage_label.pack(side="left",padx=(4,0))
+        self._tip.bind(self.training_usage_label,
+            "Verified plates used by the selected training parent / new verified plates not in its recorded training history. — means unknown history.")
         actions=FlowRow(header,style="Toolbar.TFrame");actions.grid(row=1,column=0,columnspan=2,sticky="ew");self.actions=actions
         def arrange_context(event):
             compact=event.width<850
@@ -452,7 +456,8 @@ class XRayCropWorkspace:
         self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,values=("RTMDet pretrained",),width=model_selector_width(("RTMDet pretrained",),minimum=22),state="readonly")
         self.training_parent_box.pack(side="left",padx=(4,0))
         self._training_parent_touched=False
-        self.training_parent_box.bind("<<ComboboxSelected>>",lambda _e:setattr(self,"_training_parent_touched",True))
+        self.training_parent_box.bind("<<ComboboxSelected>>",
+            lambda _e:(setattr(self,"_training_parent_touched",True),self._refresh_controls()))
         self.training_count_label=ttk.Label(model_row,text="Ready: 0",style="Muted.TLabel");self.training_count_label.pack(side="right",padx=(10,0))
         train_actions=ttk.Frame(two);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
         self.train_button=self._button(train_actions,"Train",self.train_model,"Teach AI to find specimens using the plates you have confirmed.",style="Primary.TButton");self.train_button.pack(side="left")
@@ -583,6 +588,11 @@ class XRayCropWorkspace:
             self.training_parent_choice.set(preferred_parent)
         self.training_parent_box.configure(values=parent_values,width=model_selector_width(parent_values,minimum=22))
         self.training_count_label.configure(text=f"Ready: {status['training_plates']} plates · {status['training_specimens']} crops · orientation {status['orientation_training']}")
+        parent_id=self.training_parent_choice.get()
+        usage=self.project.crop_training_usage(None if parent_id=="RTMDet pretrained" else parent_id)
+        self.training_usage_label.configure(text=(
+            f"Used: {usage['used']} · New: {usage['new']}" if usage['known'] else "Used: — · New: —"
+        ))
         self.predict_status_labels["unresolved"].configure(text=f"Unresolved: {status['prediction_candidates']}")
         self.predict_status_labels["review"].configure(text=f"Review: {status['ai_pending_plates']}")
         self.predict_status_labels["verified"].configure(text=f"Verified: {status['verified_plates']}")

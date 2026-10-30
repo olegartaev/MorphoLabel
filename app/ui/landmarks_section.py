@@ -182,7 +182,10 @@ class LandmarksSection(SectionView):
   panel=self.frame(padding=(6,4));panel.pack(fill="both",expand=True);panel.rowconfigure(1,weight=1);panel.columnconfigure(0,weight=1)
 
   header=ttk.Frame(panel);header.grid(row=0,column=0,sticky="ew",pady=(0,4))
-  controls=FlowRow(header,style="Toolbar.TFrame");controls.pack(fill="x")
+  self.training_usage_label=ttk.Label(header,text="Used: — · New: —",style="Muted.TLabel")
+  self.training_usage_label.pack(side="right",padx=(6,0))
+  controls=FlowRow(header,style="Toolbar.TFrame");controls.pack(side="left",fill="x",expand=True)
+  self._refresh_training_usage()
   self.canvas_frame=ttk.Frame(panel);self.canvas_frame.grid(row=1,column=0,sticky="nsew")
   # The image canvas must consume only the space left after the workflow dock.
   # A packed Tk Canvas otherwise propagates its requested height upward and can
@@ -400,9 +403,24 @@ class LandmarksSection(SectionView):
   ttk.Button(actions,text='Apply',command=apply,style='Primary.TButton').pack(side='left',padx=(6,0))
   center(self.shell,dialog)
 
+ def _refresh_training_usage(self):
+  """Compact progress relative to the active landmark model's saved fingerprints."""
+  label=getattr(self,"training_usage_label",None)
+  if label is None:return
+  counts=self.context.landmark_counts()
+  try:model=self.context.project.active_model_readonly("landmark") or {}
+  except (ValueError,AttributeError):model={}
+  fingerprints=getattr(self.context,"_landmark_model_fingerprints",{})
+  if model and not fingerprints:
+   label.configure(text="Used: — · New: —")
+  else:
+   new=int(counts.get("New/changed",0) or 0)
+   used=max(0,int(counts.get("Training set",0) or 0)-new)
+   label.configure(text=f"Used: {used} · New: {new}")
+
  def refresh(self):
   # A persisted landmark edit refreshes one authoritative list row, never the catalogue.
-  image_id=self.canvas.image_id or (self.context.current() or {}).get("image_id");self.context.refresh_landmark_state(image_id);self.context.update_landmark_counts(image_id);self.shell._update_status();panel=getattr(self.shell,"photo_panel",None);panel and panel.refresh_image(image_id);state=self.canvas.take_fresh_state() or self.canvas.refresh_authoritative(notify=False);self._refresh_prediction_info();self._refresh_landmark_sidebar(state);self._refresh_action_buttons(state)
+  image_id=self.canvas.image_id or (self.context.current() or {}).get("image_id");self.context.refresh_landmark_state(image_id);self.context.update_landmark_counts(image_id);self._refresh_training_usage();self.shell._update_status();panel=getattr(self.shell,"photo_panel",None);panel and panel.refresh_image(image_id);state=self.canvas.take_fresh_state() or self.canvas.refresh_authoritative(notify=False);self._refresh_prediction_info();self._refresh_landmark_sidebar(state);self._refresh_action_buttons(state)
  def cancel_pending_for_target(self,image_id):
   """Discard a deferred Next unless it belongs to this exact target image."""
   pending=getattr(self,'_pending_next_image_id',None)

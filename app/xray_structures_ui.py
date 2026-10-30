@@ -377,6 +377,10 @@ class XRayStructureWorkspace:
             label=ttk.Label(status_host,text=f"{title}: 0",style="StatusChip.TLabel")
             label.pack(side="left",padx=(0,2));self.summary_labels[key]=label
         self.save_label=ttk.Label(status_host,text="Current: Not started",style="StatusChip.TLabel");self.save_label.pack(side="left",padx=(3,0))
+        self.training_usage_label=ttk.Label(status_host,text="Used: — · New: —",style="StatusChip.TLabel")
+        self.training_usage_label.pack(side="left",padx=(5,0))
+        self.tip.bind(self.training_usage_label,
+            "Human-verified specimens used by the selected training parent / not in its recorded training history. — means unknown history.")
         def arrange_context(event):
             compact=event.width<950
             context_fields.grid_configure(columnspan=2 if compact else 1)
@@ -473,7 +477,7 @@ class XRayStructureWorkspace:
         self.training_parent_box.pack(side="left",padx=(4,0))
         self._training_parent_touched=False
         self.training_parent_box.bind("<<ComboboxSelected>>",
-            lambda _event:setattr(self,"_training_parent_touched",True))
+            lambda _event:(setattr(self,"_training_parent_touched",True),self._refresh_summary()))
         self.training_summary=ttk.Label(model_row,text="",style="Muted.TLabel")
         self.training_summary.pack(side="right",padx=(10,0))
         train_actions=ttk.Frame(three);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
@@ -798,6 +802,11 @@ class XRayStructureWorkspace:
         summary=self.project.annotation_summary(self.pass_no.get())
         labels={"verified":"Verified","draft":"Draft","unstarted":"Not started"}
         for key,label in self.summary_labels.items():label.configure(text=f"{labels[key]}: {summary[key]}")
+        parent_id=self.training_parent_choice.get()
+        usage=self.project.structure_training_usage(None if parent_id=="ImageNet ResNet18" else parent_id)
+        self.training_usage_label.configure(text=(
+            f"Used: {usage['used']} · New: {usage['new']}" if usage["known"] else "Used: — · New: —"
+        ))
         run=self.project.annotation_run(self.selected_specimen_id,self.pass_no.get(),create=False) if self.selected_specimen_id else None
         verified=bool(run and str(run.get("status") or "")=="verified")
         state="normal" if self.selected_specimen_id and not self.current_specimen_excluded and not verified else "disabled"
