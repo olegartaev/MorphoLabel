@@ -366,17 +366,50 @@ class XRayProject:
             shutil.rmtree(target,ignore_errors=True)
         return {"removed_files":removed_files,"removed_bytes":removed_bytes}
 
-    def scan_source(self):
+    def scan_source(self, *, report=False):
+        """Index new files without ever removing or remapping annotated images.
+
+        The detailed report is opt-in to preserve the legacy integer API.
+        A missing source is an error for the user-facing Rescan command.
+        """
         source=self.source
-        if not source.is_dir():return 0
+        if not source.is_dir():
+            if report:raise FileNotFoundError(f"Source image folder is unavailable: {source}")
+            return 0
         rows=[]
         for path in sorted(source.rglob("*")):
             if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS:
                 relative=path.relative_to(source).as_posix()
                 image_id=str(uuid.uuid5(uuid.NAMESPACE_URL,relative.lower()))
                 rows.append((image_id,relative))
-        with _db_connection(self.db_path) as c:c.executemany("INSERT OR IGNORE INTO source_images(image_id,relative_path) VALUES(?,?)",rows)
+        with _db_connection(self.db_path) as c:
+            known={str(item[0]):str(item[1]) for item in c.execute("SELECT image_id,relative_path FROM source_images")}
+            # Path-derived IDs must not silently be reused for different paths.
+            for image_id,relative in rows:
+                if image_id in known and known[image_id].casefold()!=relative.casefold():
+                    raise ValueError(f"Conflicting image identity: {relative}")
+            c.executemany("INSERT OR IGNORE INTO source_images(image_id,relative_path) VALUES(?,?)",rows)
+        if report:
+            discovered={ident for ident,_relative in rows}
+            missing=sum(not (source/relative).is_file() for relative in known.values())
+            new=sum(ident not in known for ident,_relative in rows)
+            return {"scanned":len(rows),"new":new,"already_indexed":len(rows)-new,"missing":missing}
         return len(rows)
+
+    def relocate_source(self,new_folder):
+        """Safely relink an external image root if every indexed relative path exists."""
+        if self.is_self_contained:
+            raise ValueError("Managed project images cannot be relinked to an external folder.")
+        folder=Path(new_folder).resolve()
+        if not folder.is_dir():raise FileNotFoundError(folder)
+        indexed=self.source_images()
+        missing=[row["relative_path"] for row in indexed if not (folder/row["relative_path"]).is_file()]
+        if missing:
+            raise ValueError(f"Selected folder does not match the indexed paths: {len(missing)} missing. "
+                             "No changes made. For renamed internal folders, restore their names or use a verified recovery procedure.")
+        with _db_connection(self.db_path) as c:
+            c.execute("INSERT INTO meta(key,value) VALUES('source',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(folder),))
+        return len(indexed)
 
     def source_images(self):
         with _db_connection(self.db_path) as c:
@@ -756,14 +789,34 @@ class XRayProject:
         candidates=self.ai_review_plate_ids()
         return self._sample_crop_plate_ids(candidates,len(candidates) if count is None else max(1,int(count)))
 
-    def next_crop_model_id(self):
+    def _model_number(self,table,prefix,highwater_key):
+        """Monotonic version number, including registered, imported and deleted models."""
         with _db_connection(self.db_path) as c:
-            existing={str(row[0]) for row in c.execute("SELECT model_id FROM xray_crop_models")}
-        number=1
-        while True:
-            candidate=f"xray_crop_model_v{number:03d}"
-            if candidate not in existing and not (self.models_root/candidate).exists():return candidate
-            number+=1
+            ids={str(row[0]) for row in c.execute(f"SELECT model_id FROM {table}")}
+            item=c.execute("SELECT value FROM meta WHERE key=?",(highwater_key,)).fetchone()
+        ids.update(p.name for p in self.models_root.iterdir() if p.is_dir())
+        used=[]
+        for name in ids:
+            suffix=name[len(prefix):] if name.startswith(prefix) else ""
+            if suffix.isdigit():used.append(int(suffix))
+        try:previous=int(item[0]) if item else 0
+        except (ValueError,TypeError):previous=0
+        return max([previous,*used],default=0)+1
+
+    @staticmethod
+    def _remember_model_number(c,model_id,prefix,highwater_key):
+        suffix=str(model_id)[len(prefix):] if str(model_id).startswith(prefix) else ""
+        if not suffix.isdigit():return
+        previous=c.execute("SELECT value FROM meta WHERE key=?",(highwater_key,)).fetchone()
+        try:old=int(previous[0]) if previous else 0
+        except (ValueError,TypeError):old=0
+        latest=max(old,int(suffix))
+        c.execute("INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                  (highwater_key,str(latest)))
+
+    def next_crop_model_id(self):
+        number=self._model_number("xray_crop_models","xray_crop_model_v","crop_model_highwater")
+        return f"xray_crop_model_v{number:03d}"
 
     def active_crop_model(self):
         with _db_connection(self.db_path) as c:
@@ -792,6 +845,7 @@ class XRayProject:
                          VALUES(?,?,?,?,?,?,?,?,?)""",
                       (model_id,now,str(path),str(config_path),parent_model_id,_json(metrics or {}),len(training_plate_ids),int(training_specimen_count),int(bool(activate))))
             c.executemany("INSERT OR IGNORE INTO xray_crop_training_membership(model_id,image_id) VALUES(?,?)",[(model_id,image_id) for image_id in training_plate_ids])
+            self._remember_model_number(c,model_id,"xray_crop_model_v","crop_model_highwater")
         return model_id
 
     def activate_crop_model(self,model_id):
@@ -829,13 +883,8 @@ class XRayProject:
         return model_id
 
     def next_structure_model_id(self):
-        with _db_connection(self.db_path) as c:
-            existing={str(row[0]) for row in c.execute("SELECT model_id FROM xray_structure_models")}
-        number=1
-        while True:
-            candidate=f"xray_structure_model_v{number:03d}"
-            if candidate not in existing and not (self.models_root/candidate).exists():return candidate
-            number+=1
+        number=self._model_number("xray_structure_models","xray_structure_model_v","structure_model_highwater")
+        return f"xray_structure_model_v{number:03d}"
 
     @staticmethod
     def _structure_model_dict(row):
@@ -887,6 +936,7 @@ class XRayProject:
                 "INSERT OR IGNORE INTO xray_structure_training_membership(model_id,specimen_id,split) VALUES(?,?,?)",
                 [(model_id,str(item["specimen_id"]),str(item["split"])) for item in rows],
             )
+            self._remember_model_number(c,model_id,"xray_structure_model_v","structure_model_highwater")
         return model_id
 
     def structure_model_membership(self,model_id):

@@ -15,7 +15,7 @@ class PhotoListCanvas(tk.Canvas):
   return super().configure(cnf,**kwargs)
  config=configure
  def set_rows(self,rows):
-  self.rows=list(rows);self._selection=();super().configure(scrollregion=(0,0,max(1,self.winfo_width()),max(1,len(self.rows)*self.row_height)));self._draw()
+  self.rows=list(rows);self._selection=();super().configure(scrollregion=(0,0,max(1,self.winfo_width()),max(1,len(self.rows)*self.row_height)));super().yview_moveto(0);self._draw()
  def set_row(self,index,row):
   if 0<=index<len(self.rows):self.rows[index]=row;self._draw()
  def curselection(self):return self._selection
@@ -59,6 +59,8 @@ class PhotoListCanvas(tk.Canvas):
   super().delete("photo_list_render")
   if not self.winfo_exists():return
   width=max(1,self.winfo_width());super().configure(scrollregion=(0,0,width,max(1,len(self.rows)*self.row_height)))
+  if not self.rows:
+   self.create_text(12,18,text="No matching items",anchor="nw",fill="#66727d",tags="photo_list_render")
   top=max(0,int(self.canvasy(0)//self.row_height));bottom=min(len(self.rows),int(self.canvasy(self.winfo_height())//self.row_height)+2)
   for index in range(top,bottom):
    row=self.rows[index];y=index*self.row_height
