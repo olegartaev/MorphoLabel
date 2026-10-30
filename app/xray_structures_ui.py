@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import math
 import json
+import shutil
+import tempfile
 from pathlib import Path
 import queue
 import threading
@@ -17,6 +19,7 @@ from app.ui.icons import CONTROL_ICON_SIZE, tk_icon
 from app.ui.design import ElidedLabel, FlowRow, action_icon, build_context_row, model_selector_width, structure_prediction_text, sidebar_width_for_window, dialog_width_for_columns
 from app.model_transfer import model_package_filename
 from app.ui.workflow import WorkflowDock, add_command_separator
+from app.ui.scrollbars import autohide_scroll_command
 from types import SimpleNamespace
 from app.ui.photo_list_panel import DEFAULT_SHOW_EXCLUDED, filtered_photo_indices
 from app.ui.tooltips import Tooltip
@@ -153,7 +156,7 @@ class XRaySpecimenListPanel(ttk.Frame):
             ttk.Label(legend,text=text,style="Muted.TLabel").pack(side="left",padx=(0,7))
         host=ttk.Frame(self);host.pack(fill="both",expand=True)
         self.canvas=PhotoListCanvas(host,height=24,bg="white",status_shape="square")
-        scroll=ttk.Scrollbar(host,orient="vertical",command=self.canvas.yview);self.canvas.configure(yscrollcommand=scroll.set)
+        scroll=ttk.Scrollbar(host,orient="vertical",command=self.canvas.yview);self.canvas.configure(yscrollcommand=autohide_scroll_command(scroll,geometry="pack"))
         self.canvas.pack(side="left",fill="both",expand=True);scroll.pack(side="right",fill="y")
         self.canvas.bind("<<ListboxSelect>>",self._selected)
         action=ttk.Frame(self,padding=(0,5,0,0));action.pack(fill="x")
@@ -215,9 +218,11 @@ class XRaySpecimenListPanel(ttk.Frame):
             for row in self._rows
         )
         yview=self.canvas.yview()[0] if preserve_scroll and self.canvas.rows else None
+        previous_visible=tuple(self.visible_indices)
         self.visible_indices=filtered_photo_indices(
             self._rows,self._cache,self.specimen_query.get(),self.sample_query.get(),show_excluded=self.show_excluded.get()
         )
+        if tuple(self.visible_indices)!=previous_visible:yview=None
         self.canvas.set_rows([self._row_data(i,self._rows[i]) for i in self.visible_indices])
         selected_index=next((i for i,row in enumerate(self._rows) if row["specimen_id"]==self.selected_specimen_id),None)
         if selected_index in self.visible_indices:
@@ -374,6 +379,10 @@ class XRayStructureWorkspace:
             label=ttk.Label(status_host,text=f"{title}: 0",style="StatusChip.TLabel")
             label.pack(side="left",padx=(0,2));self.summary_labels[key]=label
         self.save_label=ttk.Label(status_host,text="Current: Not started",style="StatusChip.TLabel");self.save_label.pack(side="left",padx=(3,0))
+        self.training_usage_label=ttk.Label(status_host,text="Used: — · New: —",style="StatusChip.TLabel")
+        self.training_usage_label.pack(side="left",padx=(5,0))
+        self.tip.bind(self.training_usage_label,
+            "Human-verified specimens used by the selected training parent / not in its recorded training history. — means unknown history.")
         def arrange_context(event):
             compact=event.width<950
             context_fields.grid_configure(columnspan=2 if compact else 1)
@@ -428,7 +437,7 @@ class XRayStructureWorkspace:
         marker_viewport=tk.Canvas(marker_dock,highlightthickness=0,background=ttk.Style(main).lookup("WorkflowDock.TFrame","background") or "#f0f0f0")
         marker_viewport.grid(row=0,column=1,sticky="ew");self.marker_canvas=marker_viewport
         marker_scroll=ttk.Scrollbar(marker_dock,orient="vertical",command=marker_viewport.yview)
-        marker_scroll.grid(row=0,column=2,sticky="ns");marker_viewport.configure(yscrollcommand=marker_scroll.set)
+        marker_scroll.grid(row=0,column=2,sticky="ns");marker_viewport.configure(yscrollcommand=autohide_scroll_command(marker_scroll))
         self.marker_host=FlowRow(marker_viewport,style="WorkflowDock.TFrame")
         marker_window=marker_viewport.create_window((0,0),window=self.marker_host,anchor="nw")
         def layout_markers(_event=None):
@@ -462,20 +471,27 @@ class XRayStructureWorkspace:
         model_row=ttk.Frame(three);model_row.grid(row=0,column=0,sticky="ew");three.columnconfigure(0,weight=1)
         self.structure_model_label=ElidedLabel(model_row,text="Active: none",style="StatusChip.TLabel",anchor="w",width=24);self.structure_model_label.pack(side="left")
         add_command_separator(model_row)
-        ttk.Label(model_row,text="From").pack(side="left")
-        self.training_parent_choice=tk.StringVar(master=three,value="ImageNet ResNet18")
-        self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,values=("ImageNet ResNet18",),width=model_selector_width(("ImageNet ResNet18",),minimum=22),state="readonly")
+        # One Train button; From selects existing compatible weights, not an architecture.
+        ttk.Label(model_row,text="From",style="Muted.TLabel").pack(side="left")
+        saved_parent=self.project.get_ui_state("structure_training_parent","")
+        self.training_parent_choice=tk.StringVar(master=three,value=saved_parent or "ImageNet ResNet18")
+        self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,
+            values=("ImageNet ResNet18",),width=23,state="readonly")
         self.training_parent_box.pack(side="left",padx=(4,0))
-        self._training_parent_touched=False
-        self.training_parent_box.bind("<<ComboboxSelected>>",self._training_parent_selected)
-        self.training_summary=ttk.Label(model_row,text="",style="Muted.TLabel");self.training_summary.pack(side="right",padx=(10,0))
+        self._training_parent_touched=bool(saved_parent)
+        self.training_parent_box.bind("<<ComboboxSelected>>",
+            lambda _event:(setattr(self,"_training_parent_touched",True),
+                          self.project.set_ui_state("structure_training_parent",self.training_parent_choice.get()),
+                          self._refresh_summary()))
+        self.training_summary=ttk.Label(model_row,text="",style="Muted.TLabel")
+        self.training_summary.pack(side="right",padx=(10,0))
         train_actions=ttk.Frame(three);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
-        self.structure_train_button=self._button(train_actions,"Train",self.train_structure_ai,"Teach AI to place markers using your verified annotations.",style="Primary.TButton");self.structure_train_button.pack(side="left")
-        add_command_separator(train_actions)
-        self.highres_train_button=self._button(train_actions,"Обучение высокого разрешения",self.train_highres_structure_ai,
-            "Continue a compatible Native Full + ROI Detail model on verified annotations. Creates a separate unvalidated candidate; the active model stays unchanged.")
-        self.highres_train_button.pack(side="left")
-        self.highres_train_button.configure(state="disabled")
+        self.structure_train_button=self._button(
+            train_actions,"Train",self.train_structure_ai,
+            "Train from verified specimens. MorphoLabel selects the correct method for the active model.",
+            style="Primary.TButton",
+        )
+        self.structure_train_button.pack(side="left")
         add_command_separator(train_actions)
         self._button(train_actions,"Models…",self.manage_structure_models,"Compare and select saved Structure models.").pack(side="left")
 
@@ -747,7 +763,7 @@ class XRayStructureWorkspace:
         self.specimen_list.selected_specimen_id=self.selected_specimen_id;self.specimen_list.refresh(preserve_scroll=True,reveal=True)
         if self.selected_specimen_id:self._load_specimen(self.selected_specimen_id)
         else:self._clear()
-        self._refresh_summary();self._refresh_workflow()
+        self._refresh_workflow();self._refresh_summary()
 
     def _list_selected(self,specimen_id):
         if specimen_id!=self.selected_specimen_id:self._load_specimen(specimen_id)
@@ -757,6 +773,9 @@ class XRayStructureWorkspace:
         self.active_structure_id=_first_structure_id(self.project.scheme.get("structures",()))
         item=self.project.specimen(specimen_id);self.current_specimen_excluded=bool(item.get("excluded"))
         self.preferred_image_id=item["image_id"];self._set_context(item)
+        # Project totals must already be correct while the image is loading,
+        # including when a missing image opens an error dialog.
+        self._refresh_summary()
         try:
             source=self._source_for(item["image_id"])
             crop=oriented_crop(source,item["crop"],self.project.orientation_policy)
@@ -765,7 +784,7 @@ class XRayStructureWorkspace:
             messagebox.showerror("Structures",f"Could not open specimen crop:\n{exc}",parent=self.root);self.crop_image=None
         self.annotations=self.project.annotations(specimen_id,self.pass_no.get());self.roles=self.project.annotation_roles(specimen_id,self.pass_no.get())
         self.zoom=1.0;self.pan=None;self.pan_drag=None;self._raster_key=None;self._image_item=None;self.photo=None;self.canvas.delete("all")
-        self.specimen_list.select(specimen_id,reveal=True);self._build_marker_buttons();self._update_counts();self._refresh_summary();self._refresh_workflow();self._refresh_prediction_info();self._draw();self._notify_selection();self.canvas.focus_set()
+        self.specimen_list.select(specimen_id,reveal=True);self._build_marker_buttons();self._update_counts();self._refresh_workflow();self._refresh_prediction_info();self._draw();self._notify_selection();self.canvas.focus_set()
 
     def _clear(self):
         self.selected_specimen_id="";self.crop_image=self.photo=None;self.annotations=[];self.roles=[];self.current_specimen_excluded=False
@@ -788,12 +807,17 @@ class XRayStructureWorkspace:
         summary=self.project.annotation_summary(self.pass_no.get())
         labels={"verified":"Verified","draft":"Draft","unstarted":"Not started"}
         for key,label in self.summary_labels.items():label.configure(text=f"{labels[key]}: {summary[key]}")
+        parent_id=self.training_parent_choice.get()
+        usage=self.project.structure_training_usage(None if parent_id=="ImageNet ResNet18" else parent_id)
+        self.training_usage_label.configure(text=(
+            f"Used: {usage['used']} · New: {usage['new']}" if usage["known"] else "Used: — · New: —"
+        ))
         run=self.project.annotation_run(self.selected_specimen_id,self.pass_no.get(),create=False) if self.selected_specimen_id else None
         verified=bool(run and str(run.get("status") or "")=="verified")
         state="normal" if self.selected_specimen_id and not self.current_specimen_excluded and not verified else "disabled"
         self.apply_button.configure(text="Verified ✓" if verified else "Verify specimen",state=state)
         model=self.project.active_structure_model()
-        can_predict=(not self.current_specimen_excluded) and _current_prediction_allowed(self.project,self.selected_specimen_id,model,self.pass_no.get())
+        can_predict=self._native_prediction_model() and (not self.current_specimen_excluded) and _current_prediction_allowed(self.project,self.selected_specimen_id,model,self.pass_no.get())
         self.predict_current_button.configure(state="normal" if can_predict else "disabled")
 
     def _refresh_result_review_banner(self):
@@ -839,22 +863,25 @@ class XRayStructureWorkspace:
         # when the current main annotation has no verified specimens yet.
         self.repeat_button.configure(state="normal")
         model=self.project.active_structure_model();candidates=len(self.project.structure_prediction_candidate_ids());review=len(self.project.structure_ai_review_ids())
-        self.training_summary.configure(text=f"Ready: {p1['verified']} human-verified")
+        self.training_summary.configure(text=f"Native Full + ROI Detail · Ready: {p1['verified']} human-verified")
         active_id=(model or {}).get("model_id") or "none"
-        self.structure_model_label.configure(text=f"Active: {active_id}")
         structure_models=tuple(self.project.structure_models())
-        prediction_values=tuple(item["model_id"] for item in structure_models if _scheme_matches_model(self.project,item))
+        from app.xray_multires_training import is_universal_multires_model
+        compatible_values=tuple(item["model_id"] for item in structure_models if _scheme_matches_model(self.project,item))
+        prediction_values=tuple(mid for mid in compatible_values if is_universal_multires_model(self.project,mid))
         compatible_active=bool(model and _scheme_matches_model(self.project,model))
+        native_active=compatible_active and active_id in prediction_values
+        self.structure_model_label.configure(text=f"Active: {active_id}" if native_active else "Native Full + ROI Detail: train or import a model")
         self.prediction_model_box.configure(values=prediction_values,width=model_selector_width(prediction_values,minimum=22),state="readonly" if prediction_values else "disabled")
-        self.prediction_model_choice.set(active_id if compatible_active else "")
-        parent_values=("ImageNet ResNet18",)+prediction_values
+        self.prediction_model_choice.set(active_id if native_active else "")
+        parent_values=("ImageNet ResNet18",)+compatible_values
         current_parent=self.training_parent_choice.get()
-        preferred_parent=active_id if compatible_active else "ImageNet ResNet18"
-        if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:
-            self.training_parent_choice.set(preferred_parent)
-        self.training_parent_box.configure(values=parent_values,width=model_selector_width(parent_values,minimum=22))
-        self._refresh_highres_training_button()
-        state="normal" if compatible_active and self.pass_no.get()==1 else "disabled"
+        if not self._training_parent_touched or current_parent not in parent_values:
+            self.training_parent_choice.set(active_id if compatible_active else "ImageNet ResNet18")
+            self._training_parent_touched=False
+        self.training_parent_box.configure(values=parent_values,
+            width=model_selector_width(parent_values,minimum=22),state="readonly")
+        state="normal" if native_active and self.pass_no.get()==1 else "disabled"
         self.structure_predict_next_button.configure(state=state);self.structure_predict_all_button.configure(state=state)
         self.structure_review_button.configure(state="normal" if review else "disabled")
         current=self.selected_specimen_id;ids=list(batch.get("ids") or ())
@@ -866,58 +893,29 @@ class XRayStructureWorkspace:
         else:self.annotation_queue_banner.pack_forget()
 
 
-    def _training_parent_selected(self,_event=None):
-        self._training_parent_touched=True
-        self._refresh_highres_training_button()
-
-    def _refresh_highres_training_button(self):
-        button=getattr(self,"highres_train_button",None)
-        if button is None:return
-        parent_id=str(self.training_parent_choice.get() or "")
-        try:
-            from app.xray_multires_training import is_universal_multires_model
-            from app.runtime_paths import resource_path
-            enabled=bool(parent_id and is_universal_multires_model(self.project,parent_id)
-                         and resource_path("tools","train_universal_multires.py").is_file())
-        except Exception:
-            enabled=False
-        button.configure(state="normal" if enabled and not self._busy else "disabled")
-
     def train_highres_structure_ai(self):
         if self._busy:return
         source_model_id=str(self.training_parent_choice.get() or "")
         from app.xray_multires_training import (
             HighResolutionTrainingCancelled, is_universal_multires_model,
-            run_high_resolution_training,
+            run_high_resolution_training, training_progress_record,
         )
-        if not is_universal_multires_model(self.project,source_model_id):
-            messagebox.showinfo("Обучение высокого разрешения",
-                "Выберите в поле «From» совместимую модель Native Full + ROI Detail.",parent=self.root)
+        if source_model_id=="ImageNet ResNet18":source_model_id=""
+        if self.project.annotation_summary(1)["verified"]<8:
+            messagebox.showinfo("Train Structure AI","Verify at least 8 specimens from at least 3 source X-rays first.",parent=self.root)
             return
-        from datetime import datetime
-        initial=f"MorphoLabel_HighResCandidate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
-        output=filedialog.asksaveasfilename(
-            parent=self.root,title="Save high-resolution model candidate",initialdir=str(self.project.root.parent),
-            initialfile=initial,defaultextension=".zip",filetypes=(("MorphoLabel Structure AI","*.zip"),("ZIP files","*.zip")),
-        )
-        if not output:return
-        output_path=Path(output)
-        if output_path.exists():
-            messagebox.showerror("Обучение высокого разрешения","Файл уже существует. Выберите новое имя, чтобы не перезаписать кандидата.",parent=self.root)
-            return
-        if not messagebox.askyesno(
-            "Обучение высокого разрешения",
-            "Будут использованы только подтверждённые ручные разметки. Native Full и ROI Detail продолжатся с текущих весов по разделению исходных плашек.\n\n"
-            "Результат — новый непроверенный кандидат. Активная модель останется прежней. Обучение выполняется на GPU и может занять продолжительное время. Продолжить?",
-            parent=self.root,default="no",
-        ):return
+        # Generate a verified candidate package behind the scenes. Users can
+        # separately export any saved model through Models. Keep the ZIP on
+        # import failure for recovery; otherwise remove the temporary files.
+        candidate_dir=Path(tempfile.mkdtemp(prefix="morpholabel_structure_candidate_"))
+        output_path=candidate_dir/"candidate.zip"
 
-        self._busy=True;self._refresh_highres_training_button()
+        self._busy=True;self._refresh_workflow()
         events=queue.Queue();cancelled=threading.Event()
         dialog,label,bar=self._structure_ai_dialog(
-            "Обучение высокого разрешения","Подготовка копии проекта и подтверждённых данных…",None,
+            "Train Structure AI","Preparing a safe project copy and verified training data...",None,
         )
-        cancel_button=ttk.Button(bar.master,text="Cancel",command=lambda:(cancelled.set(),label.configure(text="Отмена…"),cancel_button.configure(state="disabled")))
+        cancel_button=ttk.Button(bar.master,text="Cancel",command=lambda:(cancelled.set(),label.configure(text="Cancelling..."),cancel_button.configure(state="disabled")))
         cancel_button.pack(anchor="e",pady=(8,0))
         dialog.protocol("WM_DELETE_WINDOW",lambda:cancel_button.invoke())
         active_before=(self.project.active_structure_model() or {}).get("model_id")
@@ -944,24 +942,26 @@ class XRayStructureWorkspace:
                         label.configure(text=f"{event[1]}\n{event[2]}")
                     elif event[0]=="line":
                         try:
-                            info=json.loads(event[1])
-                            if info.get("stage")=="PREPARED":
-                                label.configure(text=(f"Подтверждённые экземпляры: {info['training_specimens']} train / "
-                                    f"{info['validation_specimens']} validation; исходные плашки: "
+                            info=training_progress_record(event[1])
+                            if isinstance(info,dict) and info.get("stage")=="PREPARED":
+                                label.configure(text=(f"Verified specimens: {info['training_specimens']} train / "
+                                    f"{info['validation_specimens']} validation; source plates: "
                                     f"{info['train_plates']} / {info['val_plates']}.\n"
-                                    "Продолжается обучение Native Full и ROI Detail…"))
+                                    "Training the active model..."))
                         except (ValueError,KeyError,TypeError):
                             if event[1]:label.configure(text=event[1][:700])
                     elif event[0]=="error":
-                        self._busy=False;self._refresh_highres_training_button()
+                        self._busy=False;self._refresh_workflow()
                         try:bar.stop();dialog.destroy()
                         except tk.TclError:pass
-                        messagebox.showerror("Обучение высокого разрешения",str(event[1]),parent=self.root);return
+                        if not output_path.exists():shutil.rmtree(candidate_dir,ignore_errors=True)
+                        messagebox.showerror("Train Structure AI",str(event[1]),parent=self.root);return
                     elif event[0]=="cancelled":
-                        self._busy=False;self._refresh_highres_training_button()
+                        self._busy=False;self._refresh_workflow()
                         try:bar.stop();dialog.destroy()
                         except tk.TclError:pass
-                        messagebox.showinfo("Обучение высокого разрешения","Обучение отменено; неполный ZIP удалён.",parent=self.root);return
+                        shutil.rmtree(candidate_dir,ignore_errors=True)
+                        messagebox.showinfo("Train Structure AI","Training cancelled.",parent=self.root);return
                     elif event[0]=="done":
                         self._busy=False
                         try:bar.stop();dialog.destroy()
@@ -972,28 +972,44 @@ class XRayStructureWorkspace:
                             if active_after!=active_before:
                                 raise RuntimeError("Import unexpectedly changed the active model; stop and inspect the project.")
                             self.training_parent_choice.set(local_id);self._training_parent_touched=True
-                            self._refresh_workflow();self._refresh_highres_training_button()
-                            messagebox.showinfo("Обучение высокого разрешения",
-                                f"Новый кандидат импортирован как {local_id}.\n"
-                                f"Активная модель не менялась: {active_after}.\n"
-                                "Кандидат помечен как непроверенный; качество ещё не подтверждено независимой проверкой.\n\n"
-                                f"ZIP: {event[1]['path']}",parent=self.root)
+                            if event[1].get("membership"):
+                                self.project.record_structure_training_membership(local_id,event[1]["membership"])
+                            self.project.set_ui_state("structure_training_parent",local_id)
+                            self._refresh_workflow();self._refresh_summary()
+                            shutil.rmtree(candidate_dir,ignore_errors=True)
+                            messagebox.showinfo("Train Structure AI",
+                                f"New model candidate: {local_id}.\n"
+                                f"Active model unchanged: {active_after}.\n"
+                                "The candidate is unvalidated; review its predictions before use.",parent=self.root)
                         except Exception as exc:
                             self._refresh_workflow()
-                            messagebox.showerror("Импорт кандидата высокого разрешения",
-                                f"ZIP сохранён, но импорт не выполнен. Активная модель не менялась.\n\n{exc}\n\n{event[1]['path']}",parent=self.root)
+                            messagebox.showerror("Model candidate import",
+                                f"Training finished, but the model could not be registered.\n"
+                                f"The active model is unchanged.\n\n{exc}\n\n"
+                                f"Recovery ZIP: {event[1]['path']}",parent=self.root)
                         return
             except queue.Empty:pass
             if dialog.winfo_exists():dialog.after(200,poll)
         dialog.after(200,poll)
 
+    def _native_prediction_model(self,model_id=None):
+        from app.xray_multires_training import is_universal_multires_model
+        model_id=model_id or (self.project.active_structure_model() or {}).get("model_id")
+        return bool(model_id and is_universal_multires_model(self.project,model_id))
+
+    def _explain_native_required(self):
+        messagebox.showinfo("Native Full + ROI Detail",
+            "This checkpoint can initialize training. Train a Native Full + ROI Detail candidate before using it for predictions.",parent=self.root)
+
     def _activate_prediction_model(self,_event=None):
         model_id=str(self.prediction_model_choice.get() or "")
         if not model_id:return
+        if not self._native_prediction_model(model_id):
+            self._explain_native_required();return
         candidate=next((m for m in self.project.structure_models() if m["model_id"]==model_id),None)
         if candidate and (candidate.get("metrics") or {}).get("inference/unvalidated"):
             if not messagebox.askyesno(
-                "Experimental high-resolution model",
+                "Unvalidated model candidate",
                 "This model has not passed full independent validation. Its predictions are drafts requiring review. Activate anyway?",
                 parent=self.root,default="no",
             ):
@@ -1276,58 +1292,7 @@ class XRayStructureWorkspace:
 
     def train_structure_ai(self):
         if self._busy:return
-        selected_parent=str(self.training_parent_choice.get() or "")
-        parent_model_id="" if selected_parent=="ImageNet ResNet18" else selected_parent
-        if parent_model_id:
-            from app.xray_multires_training import is_universal_multires_model
-            if is_universal_multires_model(self.project,parent_model_id):
-                # The ordinary Train action must preserve the selected model's
-                # full + detail pipeline. Never send it through the legacy
-                # single-checkpoint trainer.
-                return self.train_highres_structure_ai()
-        p1=self.project.annotation_summary(1)
-        if p1["verified"]<8:
-            messagebox.showinfo(
-                "Train Structure AI",
-                "Verify at least 8 specimens from at least 3 source X-rays first. More diverse verified specimens usually give a more useful model.",
-                parent=self.root,
-            );return
-        self._busy=True;events=queue.Queue()
-        dialog,label,bar=self._structure_ai_dialog("Train Structure AI","Preparing verified X-ray structures…",None)
-        def progress(stage,detail):
-            events.put(("progress",str(stage),str(detail)))
-        def worker():
-            try:events.put(("done",train_structure_model(self.project,progress=progress,parent_model_id=parent_model_id)))
-            except Exception as exc:events.put(("error",exc))
-        threading.Thread(target=worker,daemon=True,name="xray-structure-training").start()
-        def poll():
-            try:
-                while True:
-                    event=events.get_nowait()
-                    if event[0]=="progress":
-                        label.configure(text=f"{event[1]}\n{event[2]}")
-                    elif event[0]=="error":
-                        self._busy=False
-                        try:bar.stop();dialog.destroy()
-                        except tk.TclError:pass
-                        messagebox.showerror("Structure training",str(event[1]),parent=self.root);return
-                    elif event[0]=="done":
-                        self._busy=False
-                        try:bar.stop();dialog.destroy()
-                        except tk.TclError:pass
-                        result=event[1];self._training_parent_touched=False;self.training_parent_choice.set(result["model_id"]);metrics=result.get("metrics") or {}
-                        quality=metrics.get("structure/macro_f1")
-                        detail=(
-                            f"Model ready: {result['model_id']}\n"
-                            f"Training: {result['training_specimens']} specimens on {result['training_plates']} plates\n"
-                            f"Validation: {result['validation_specimens']} specimens on {result['validation_plates']} plates"
-                        )
-                        if isinstance(quality,(int,float)):detail+=f"\nValidation macro F1: {quality:.3f}"
-                        self._refresh_workflow()
-                        messagebox.showinfo("Structure training",detail,parent=self.root);return
-            except queue.Empty:pass
-            if dialog.winfo_exists():dialog.after(120,poll)
-        dialog.after(120,poll)
+        return self.train_highres_structure_ai()
 
     def export_active_structure_ai(self):
         model=self.project.active_structure_model()
@@ -1362,12 +1327,14 @@ class XRayStructureWorkspace:
         if not source:return
         try:
             model_id=import_structure_model_package(self.project,source)
-            self.project.activate_structure_model(model_id)
+            if self._native_prediction_model(model_id):self.project.activate_structure_model(model_id)
+            self.training_parent_choice.set(model_id);self._training_parent_touched=True
+            self.project.set_ui_state("structure_training_parent",model_id)
         except Exception as exc:messagebox.showerror("Import trained AI",str(exc),parent=self.root);return
         self._refresh_imported_scheme()
         messagebox.showinfo(
             "Import trained AI",
-            f"Imported and activated {model_id}. The file contained the trained model only; project X-rays were not changed.",
+            f"Imported {model_id}. Native Full + ROI Detail models can be used for predictions; other checkpoints initialize Native + Detail training.",
             parent=self.root,
         )
 
@@ -1394,14 +1361,14 @@ class XRayStructureWorkspace:
             for item in tree.get_children():tree.delete(item)
             for model in self.project.structure_models():
                 metrics=model.get("metrics") or {};quality=metrics.get("structure/macro_f1")
-                quality_text=("High-resolution · unvalidated" if metrics.get("inference/unvalidated") else
+                quality_text=("Unvalidated candidate" if metrics.get("inference/unvalidated") else
                               f"macro F1 {quality:.3f}" if isinstance(quality,(int,float)) else "Not recorded")
-                source=str(model.get("parent_model_id") or metrics.get("initialization") or metrics.get("original_model_id") or "ImageNet")
+                source=str(model.get("parent_model_id") or metrics.get("training/source_model_id") or metrics.get("initialization") or metrics.get("original_model_id") or "ImageNet")
                 tree.insert(
                     "","end",iid=model["model_id"],values=(
                         model["model_id"],str(model.get("created_at") or "").replace("T"," ")[:16],source,
                         f"{int(model.get('training_specimen_count') or 0)} / {int(model.get('validation_specimen_count') or 0)}",
-                        quality_text,("Active" if model.get("active") else "Available") if _scheme_matches_model(self.project,model) else "Incompatible scheme",
+                        quality_text,(("Active" if model.get("active") else "Available") if self._native_prediction_model(model["model_id"]) else "Initialization only") if _scheme_matches_model(self.project,model) else "Incompatible scheme",
                     ),
                 )
             if select and tree.exists(select):tree.selection_set(select);tree.see(select)
@@ -1410,10 +1377,12 @@ class XRayStructureWorkspace:
         def activate():
             model_id=selected()
             if not model_id:return
+            if not self._native_prediction_model(model_id):
+                self._explain_native_required();return
             selected_model=next((m for m in self.project.structure_models() if m["model_id"]==model_id),None)
             if selected_model and (selected_model.get("metrics") or {}).get("inference/unvalidated"):
                 if not messagebox.askyesno(
-                    "Experimental high-resolution model",
+                    "Unvalidated model candidate",
                     "This model has not passed full independent validation. Use it only for draft predictions and keep the previous model available. Activate anyway?",
                     parent=dialog,default="no",
                 ):return
@@ -1448,12 +1417,12 @@ class XRayStructureWorkspace:
             if self._busy:return
             self._busy=True;events=queue.Queue()
             progress_dialog,progress_label,progress_bar=self._structure_ai_dialog(
-                "Compare with human","Running the selected model on its validation holdout…",None
+                "Compare with human","Comparing with all eligible human-verified specimens…",None
             )
             def progress(done,total,specimen_id):
                 events.put(("progress",int(done),int(total),str(specimen_id)))
             def worker():
-                try:events.put(("done",compare_structure_model_to_human(self.project,model_id,split="val",progress=progress)))
+                try:events.put(("done",compare_structure_model_to_human(self.project,model_id,split="all",progress=progress)))
                 except Exception as exc:events.put(("error",exc))
             threading.Thread(target=worker,daemon=True,name="xray-structure-human-comparison").start()
             def poll():
@@ -1461,7 +1430,7 @@ class XRayStructureWorkspace:
                     while True:
                         event=events.get_nowait()
                         if event[0]=="progress":
-                            progress_label.configure(text=f"Validation holdout: {event[1]} / {event[2]} specimens")
+                            progress_label.configure(text=f"Verified comparison: {event[1]} / {event[2]} specimens")
                         elif event[0]=="error":
                             self._busy=False
                             try:progress_bar.stop();progress_dialog.destroy()
@@ -1504,38 +1473,34 @@ class XRayStructureWorkspace:
         reload((self.project.active_structure_model() or {}).get("model_id"))
 
     def _show_structure_model_comparison(self,report,parent=None):
+        from app.xray_evaluation_summary import scientific_comparison_summary
         summary=dict(report.get("summary") or {});traits=list(report.get("traits") or ());structures=list(report.get("structures") or ())
         dialog=tk.Toplevel(parent or self.root);dialog.title("Structure AI vs human");dialog.transient(parent or self.root);dialog.geometry("1120x650");dialog.minsize(900,520)
         outer=ttk.Frame(dialog,padding=12);outer.pack(fill="both",expand=True);outer.columnconfigure(0,weight=1);outer.rowconfigure(3,weight=1)
         ttk.Label(outer,text="Structure AI vs human",style="PageTitle.TLabel").grid(row=0,column=0,sticky="w")
         ttk.Label(
-            outer,text=f"{summary.get('model_id','')} · validation holdout only · {summary.get('specimens_compared',0)} current human-verified specimens compared. Project data are not changed.",
+            outer,text=(f"{summary.get('model_id','')} · {summary.get('specimens_compared',0)} human-verified specimens compared "
+                        f"({summary.get('registered_training_compared',0)} registered training; "
+                        f"{summary.get('registered_validation_compared',0)} registered validation; "
+                        f"{summary.get('other_verified_compared',0)} other). "
+                        f"Failed: {summary.get('prediction_failures',0)}. This is not an independent accuracy estimate."),
             style="PageSubtitle.TLabel",wraplength=1060,
         ).grid(row=1,column=0,sticky="w",pady=(2,8))
         def pct(value):
             return "—" if value is None else f"{100*float(value):.1f}%"
         def num(value,digits=3):
             return "—" if value is None else f"{float(value):.{digits}f}"
-        exact=f"{int(summary.get('exact_traits') or 0)} / {int(summary.get('exact_traits_total') or 0)} ({pct(summary.get('exact_trait_accuracy'))})"
-        all_correct=f"{int(summary.get('all_traits_correct_specimens') or 0)} / {int(summary.get('all_traits_evaluable_specimens') or 0)}"
-        role=f"{int(summary.get('reference_role_exact') or 0)} / {int(summary.get('reference_role_total') or 0)} ({pct(summary.get('reference_role_accuracy'))})"
-        summary_text=(
-            f"Exact trait values: {exact}    ·    All evaluated traits correct: {all_correct}\n"
-            f"Repeated count MAE: {num(summary.get('repeated_count_mae'))}    ·    Count bias: {num(summary.get('repeated_count_bias'))}    ·    "
-            f"Reference role accuracy: {role}\n"
-            f"Marker localization: median {pct(summary.get('localization_median_diag'))} of crop diagonal · p95 {pct(summary.get('localization_p95_diag'))}    ·    "
-            f"Macro F1: {num(summary.get('macro_f1'))}"
-        )
+        summary_text=scientific_comparison_summary(summary)
         ttk.Label(outer,text=summary_text,justify="left",wraplength=1060).grid(row=2,column=0,sticky="w",pady=(0,10))
         notebook=ttk.Notebook(outer);notebook.grid(row=3,column=0,sticky="nsew")
         trait_tab=ttk.Frame(notebook,padding=8);structure_tab=ttk.Frame(notebook,padding=8)
-        notebook.add(trait_tab,text="Traits");notebook.add(structure_tab,text="Structures")
+        notebook.add(trait_tab,text="Scientific measurements");notebook.add(structure_tab,text="Technical details (optional)")
         trait_tab.columnconfigure(0,weight=1);trait_tab.rowconfigure(0,weight=1)
-        trait_columns=("trait","method","n","accuracy","correct","mae","median","p95")
+        trait_columns=("trait","correct","accuracy","mae","n")
         trait_tree=ttk.Treeview(trait_tab,columns=trait_columns,show="headings")
         for key,title,width in (
-            ("trait","Trait",230),("method","Method",105),("n","Compared",75),("accuracy","Accuracy",95),
-            ("correct","Correct / evaluated",135),("mae","MAE",80),("median","Median |error|",105),("p95","P95 |error|",105),
+            ("trait","Scientific measurement",295),("correct","Correct / checked",160),
+            ("accuracy","Exact",95),("mae","Mean count difference",175),("n","Checked",75),
         ):
             trait_tree.heading(key,text=title);trait_tree.column(key,width=width,anchor="w",stretch=key=="trait")
         trait_tree.grid(row=0,column=0,sticky="nsew")
@@ -1544,8 +1509,8 @@ class XRayStructureWorkspace:
             accuracy=row.get("accuracy");correct=row.get("correct");evaluated=row.get("evaluated")
             correct_text="—" if correct is None else f"{int(correct)} / {int(evaluated or 0)}"
             trait_tree.insert("","end",values=(
-                row.get("abbr") or row.get("name"),row.get("method"),row.get("n",0),pct(accuracy),correct_text,
-                num(row.get("mae")),num(row.get("median_abs_error")),num(row.get("p95_abs_error")),
+                row.get("name") or row.get("abbr"),correct_text,pct(accuracy),
+                num(row.get("mae")),row.get("n",0),
             ))
         structure_tab.columnconfigure(0,weight=1);structure_tab.rowconfigure(0,weight=1)
         structure_columns=("structure","n","prf","count","bias","role","localization")
@@ -1568,8 +1533,9 @@ class XRayStructureWorkspace:
                 count_text,num(row.get("count_bias")),role_text,loc_text,
             ))
         note=(
-            "Accuracy is shown separately for every discrete or derived trait. For continuous traits it is the share within the scheme's explicit tolerance; without a tolerance, MAE/median/p95 are reported instead of inventing a pass/fail threshold. "
-            "Count bias is AI count minus human count. Localization is normalized to the crop diagonal."
+            "Scientific result means the measured value, not whether every marker is at precisely the same pixel. For repeated structures, an exact count is correct regardless of arbitrary marker placement. "
+            "Continuous traits need an explicit scheme tolerance; without one, mean error is shown rather than inventing a correct/incorrect threshold. "
+            "These are retrospective comparisons, not independent performance estimates or measured correction time. Technical detection and position metrics are optional."
         )
         ttk.Label(outer,text=note,style="Muted.TLabel",wraplength=1060).grid(row=4,column=0,sticky="w",pady=(8,0))
         ttk.Button(outer,text="Close",command=dialog.destroy).grid(row=5,column=0,sticky="e",pady=(8,0))
@@ -1604,6 +1570,8 @@ class XRayStructureWorkspace:
 
     def predict_current_structure(self):
         if self._busy or not self.selected_specimen_id or self.current_specimen_excluded:return
+        if not self._native_prediction_model():
+            self._explain_native_required();return
         model=self.project.active_structure_model()
         if not model:
             messagebox.showinfo("Predict current","Train or import a Structure AI model first.",parent=self.root);return
@@ -1618,11 +1586,12 @@ class XRayStructureWorkspace:
             "After correcting the AI suggestions, press Apply to verify the result again.",
             parent=self.root,default="no",
         ):return
-        self._busy=True;events=queue.Queue()
+        self._busy=True;events=queue.Queue();cancel=threading.Event()
         dialog,label,bar=self._structure_ai_dialog("Predict current","Placing AI marker suggestions on this specimen…",1)
+        dialog.protocol("WM_DELETE_WINDOW",lambda:(cancel.set(),label.configure(text="Cancelling after current inference…")))
         def worker():
             try:events.put(("done",predict_structures(
-                self.project,[specimen_id],model=model,pass_no=pass_no,allow_verified=True
+                self.project,[specimen_id],model=model,pass_no=pass_no,allow_verified=True,cancel=cancel
             )))
             except Exception as exc:events.put(("error",exc))
         threading.Thread(target=worker,daemon=True,name="xray-structure-predict-current").start()
@@ -1635,6 +1604,8 @@ class XRayStructureWorkspace:
             self._busy=False
             try:dialog.destroy()
             except tk.TclError:pass
+            if cancel.is_set():
+                self._refresh_summary();self._refresh_workflow();return
             if event[0]=="error":
                 messagebox.showerror("Predict current",str(event[1]),parent=self.root);return
             result=event[1];success=list(result.get("success") or ())
@@ -1647,6 +1618,8 @@ class XRayStructureWorkspace:
 
     def predict_structure_batch(self,count):
         if self._busy:return
+        if not self._native_prediction_model():
+            self._explain_native_required();return
         model=self.project.active_structure_model()
         if not model:
             messagebox.showinfo("Predict structures","Train or import a Structure AI model first.",parent=self.root);return
@@ -1657,6 +1630,7 @@ class XRayStructureWorkspace:
         self._busy=True;events=queue.Queue();cancel=threading.Event()
         dialog,label,bar=self._structure_ai_dialog("Predict structures",f"Preparing {len(ids)} specimen(s)…",len(ids))
         ttk.Button(dialog.winfo_children()[0],text="Cancel",command=cancel.set).pack(anchor="e",pady=(8,0))
+        dialog.protocol("WM_DELETE_WINDOW",lambda:(cancel.set(),label.configure(text="Cancelling after current inference…")))
         def progress(done,total,detail):
             events.put(("progress",int(done),int(total),str(detail)))
         def worker():
@@ -1670,9 +1644,14 @@ class XRayStructureWorkspace:
                     if event[0]=="progress":
                         bar.configure(value=event[1],maximum=max(1,event[2]));label.configure(text=f"Predicting structures: {event[1]} / {event[2]}")
                     elif event[0]=="error":
-                        self._busy=False;dialog.destroy();messagebox.showerror("Predict structures",str(event[1]),parent=self.root);return
+                        self._busy=False;dialog.destroy()
+                        if not cancel.is_set():messagebox.showerror("Predict structures",str(event[1]),parent=self.root)
+                        return
                     elif event[0]=="done":
                         self._busy=False;dialog.destroy();result=event[1]
+                        if cancel.is_set():
+                            self._refresh_after_prediction(result.get("success") or ())
+                            return
                         success=[row["specimen_id"] for row in result.get("success") or ()]
                         failures=list(result.get("failures") or ())
                         self._refresh_after_prediction(result.get("success") or ())

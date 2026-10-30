@@ -165,7 +165,7 @@ def _load_component(spec,directory,runner,channels,device):
     model.load_state_dict(state,strict=True)
     return model.to(device).eval()
 
-def predict_one(source_path,primary_model,metadata,metadata_path,device,runner,*,component_models=None):
+def predict_one(source_path,primary_model,metadata,metadata_path,device,runner,*,component_models=None,components_out=None):
     """Full+detail, optionally native full+selected detail channels, any schema."""
     from PIL import Image
     import torch
@@ -208,5 +208,6 @@ def predict_one(source_path,primary_model,metadata,metadata_path,device,runner,*
     finally:
         if component_models is None and native is not primary_model:del native
     kept=set(pipeline.get("retain_detail_structures",()))
+    if components_out is not None:components_out.update(native=primary,detail=refined)
     by_id={g["structure_id"]:g for g in refined}
     return [by_id[g["structure_id"]] if g["structure_id"] in kept else g for g in primary]

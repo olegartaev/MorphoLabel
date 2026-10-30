@@ -116,7 +116,7 @@ class HighResolutionTrainingUITests(unittest.TestCase):
                 progress=progress.append,cancelled=threading.Event(),
             )
         self.assertEqual(result["model_id"],"test_candidate")
-        self.assertEqual(result["path"],output)
+        self.assertEqual(Path(result["path"]).resolve(),output.resolve())
         self.assertTrue(any("PREPARED" in line for line in progress))
         self.assertEqual(hashlib.sha256(self.project.db_path.read_bytes()).hexdigest(),self.before_db)
 

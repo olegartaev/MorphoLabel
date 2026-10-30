@@ -281,10 +281,10 @@ class RC1RepairInvariants(unittest.TestCase):
 
     def test_crop_model_id_allocator_respects_registry_gaps_and_orphan_directories(self):
         p,_=self.xray();self.crop_parent(p)
-        self.assertEqual("xray_crop_model_v001",p.next_crop_model_id())
+        self.assertEqual("xray_crop_model_v005",p.next_crop_model_id())
         (p.models_root/"xray_crop_model_v001").mkdir()
         p.register_crop_model("xray_crop_model_v002","external/model.pth","external/config.py",None,{},[],0)
-        self.assertEqual("xray_crop_model_v003",p.next_crop_model_id())
+        self.assertEqual("xray_crop_model_v005",p.next_crop_model_id())
         (p.models_root/"xray_crop_model_v003").mkdir()
         self.assertEqual("xray_crop_model_v005",p.next_crop_model_id())
 
@@ -341,7 +341,7 @@ class RC1RepairInvariants(unittest.TestCase):
         self.assertEqual(b"parent bytes",checkpoint.read_bytes());self.assertFalse((p.models_root/child).exists())
         self.assertEqual(parent.name,XRayProject(p.root).active_structure_model()["model_id"])
 
-    def test_legacy_v007_semantic_selector_current_batch_and_parent_eligibility_survive_reopen(self):
+    def test_legacy_v007_remains_a_parent_but_not_a_prediction_mode_after_reopen(self):
         scheme=bundled_scheme("phoxinus_vertebral_counts");p,sid=self.xray(scheme)
         legacy=copy.deepcopy(scheme)
         for item in legacy["structures"]:item.pop("learning_relation",None);item.pop("reuse_from",None)
@@ -352,7 +352,7 @@ class RC1RepairInvariants(unittest.TestCase):
         (directory/"model.pth").write_bytes(b"checkpoint")
         (directory/"model.json").write_text(json.dumps({"backend":"resnet18_heatmap_v1","schema_digest":digest,"schema_contract":contract}),encoding="utf-8")
         p.register_structure_model(directory.name,str((directory/"model.pth").relative_to(p.root)),str((directory/"model.json").relative_to(p.root)),None,digest,"resnet18_heatmap_v1",{})
-        for _ in range(2):
+        for iteration in range(2):
             p=XRayProject(p.root);model=p.active_structure_model()
             self.assertTrue(_scheme_matches_model(p,model));self.assertTrue(_current_prediction_allowed(p,sid,model,1))
             root=tk.Tk();root.withdraw()
@@ -360,16 +360,38 @@ class RC1RepairInvariants(unittest.TestCase):
                 from app.ui.design import apply_styles
                 apply_styles(root,ttk.Style(root));frame=ttk.Frame(root);frame.pack()
                 view=XRayStructureWorkspace(frame,p,initial_specimen_id=sid);root.update_idletasks()
-                self.assertIn(directory.name,view.prediction_model_box.cget("values"))
-                self.assertEqual("readonly",str(view.prediction_model_box.cget("state")))
-                self.assertEqual(directory.name,view.prediction_model_choice.get())
+                self.assertNotIn(directory.name,view.prediction_model_box.cget("values"))
+                self.assertEqual("disabled",str(view.prediction_model_box.cget("state")))
+                self.assertEqual("",view.prediction_model_choice.get())
+                self.assertEqual(directory.name if iteration==0 else "ImageNet ResNet18",view.training_parent_choice.get())
+                self.assertEqual("readonly",str(view.training_parent_box.cget("state")))
                 self.assertIn(directory.name,view.training_parent_box.cget("values"))
-                for button in (view.predict_current_button,view.structure_predict_next_button,view.structure_predict_all_button):self.assertEqual("normal",str(button.cget("state")))
+                for button in (view.predict_current_button,view.structure_predict_next_button,view.structure_predict_all_button):self.assertEqual("disabled",str(button.cget("state")))
+                view.training_parent_choice.set("ImageNet ResNet18")
+                view.training_parent_box.event_generate("<<ComboboxSelected>>");root.update()
+                self.assertEqual("ImageNet ResNet18",p.get_ui_state("structure_training_parent"))
             finally:root.destroy()
         cosmetic=p.scheme;cosmetic["name"]="Cosmetic";p.save_scheme(cosmetic);self.assertTrue(_scheme_matches_model(p,model))
         changed=p.scheme;changed["structures"][0]["required"]=False;p.save_scheme(changed)
         self.assertFalse(_scheme_matches_model(p,model));self.assertFalse(_current_prediction_allowed(p,sid,model,1))
         with self.assertRaisesRegex(RuntimeError,"incompatible"):predict_structures(p,[sid])
+
+    def test_structure_totals_are_initialized_before_specimen_image_loading(self):
+        p,sid=self.xray()
+        p.add_annotation(sid,"objects",.2,.3);p.verify_annotations(sid)
+        root=tk.Tk();root.withdraw()
+        observed=[]
+        def source(workspace,_image_id):
+            observed.append({key:label.cget("text") for key,label in workspace.summary_labels.items()})
+            return Image.new("RGB",(160,100))
+        try:
+            from app.ui.design import apply_styles
+            apply_styles(root,ttk.Style(root));frame=ttk.Frame(root);frame.pack()
+            with patch.object(XRayStructureWorkspace,"_source_for",source):
+                XRayStructureWorkspace(frame,p,initial_specimen_id=sid)
+            self.assertTrue(observed)
+            self.assertEqual({"verified":"Verified: 1","draft":"Draft: 0","unstarted":"Not started: 0"},observed[0])
+        finally:root.destroy()
 
     def test_ai_setup_prestart_hides_progress_and_click_reveals_work_prevents_double_start(self):
         from app.ui.shell import ProductionShell

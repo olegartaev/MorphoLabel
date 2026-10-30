@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import random
 import sys
+import time
+from collections import OrderedDict
 
 
 def _input():
@@ -41,12 +43,24 @@ def _transforms(training=False):
 class _Dataset:
     def __init__(self,rows,training=False):
         self.rows=list(rows);self.transform=_transforms(training)
+        from torchvision import transforms
+        self.augmentation=transforms.Compose(self.transform.transforms[1:])
+        # Cache only deterministic 224x224 RGB inputs, never random augmentations.
+        # Bound each dataset to under 16 MiB even for very large collections.
+        self.resized=OrderedDict();self.cache_limit=(16*1024**2)//(224*224*3)
     def __len__(self):return len(self.rows)
     def __getitem__(self,index):
         import torch
         from PIL import Image
         row=self.rows[index]
-        with Image.open(row["path"]) as image:picture=self.transform(image.convert("RGB"))
+        path=row["path"]
+        if path in self.resized:
+            picture=self.resized.pop(path)
+        else:
+            with Image.open(path) as image:picture=self.transform.transforms[0](image.convert("RGB"))
+        self.resized[path]=picture
+        while len(self.resized)>self.cache_limit:self.resized.popitem(last=False)
+        picture=self.augmentation(picture.copy())
         target=torch.tensor([float(row["head"]),float(row["bottom"])],dtype=torch.float32)
         return picture,target
 
@@ -120,16 +134,19 @@ def predict_orientation_many(payload):
     device=str(payload.get("device") or ("cuda:0" if torch.cuda.is_available() else "cpu"))
     rows=[{"path":str(path),"head":0,"bottom":0} for path in payload.get("images") or ()]
     if not rows:return {"results":[],"threshold":float(meta.get("threshold",.65))}
+    model_started=time.perf_counter()
     model=_model(pretrained=False)
     state=torch.load(str(payload["checkpoint"]),map_location="cpu",weights_only=True);model.load_state_dict(state);model.to(device);model.eval()
+    model_load_seconds=time.perf_counter()-model_started
     loader=DataLoader(_Dataset(rows,False),batch_size=max(1,int(payload.get("batch_size") or 16)),shuffle=False,num_workers=0)
-    results=[]
+    results=[];inference_started=time.perf_counter()
     with torch.no_grad():
         for images,_targets in loader:
             probs=torch.sigmoid(model(images.to(device))).cpu().numpy()
             for head,bottom in probs:
                 results.append({"head_right_probability":float(head),"bottom_down_probability":float(bottom)})
-    return {"results":results,"threshold":float(meta.get("threshold",.65))}
+    return {"results":results,"threshold":float(meta.get("threshold",.65)),
+            "timings_seconds":{"model_load":model_load_seconds,"inference":time.perf_counter()-inference_started}}
 
 
 def main():

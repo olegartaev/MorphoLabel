@@ -286,12 +286,21 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
     def test_high_resolution_bundle_roundtrip_keeps_scheme_and_is_inactive(self):
         import hashlib
         model_id="multires_example_v1"
+        parent_id="hybrid_parent_v1"
+        parent_dir=self.project.models_root/parent_id
+        parent_dir.mkdir(parents=True)
+        (parent_dir/"model.pth").write_bytes(b"parent")
+        (parent_dir/"model.json").write_text("{}",encoding="utf-8")
+        digest=structure_schema_digest(self.project.scheme)
+        self.project.register_structure_model(parent_id,
+            str((parent_dir/"model.pth").relative_to(self.project.root)),
+            str((parent_dir/"model.json").relative_to(self.project.root)),
+            None,digest,"resnet18_heatmap_v1",{},(),activate=False)
         directory=self.project.models_root/model_id
         directory.mkdir(parents=True)
         (directory/"model.pth").write_bytes(b"primary")
         (directory/"detail.pth").write_bytes(b"detail")
         (directory/"native.pth").write_bytes(b"native")
-        digest=structure_schema_digest(self.project.scheme)
         meta={
             "format_version":1,"backend":"resnet18_heatmap_v1",
             "input_size":[768,256],"output_stride":2,
@@ -309,12 +318,13 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
                 "fusion_weight":.6,
                 "tiles":{"nx":4,"ny":2,"width_fraction":.38,"height_fraction":.62},
             },
+            "multires_training":{"source_model_id":parent_id},
         }
         (directory/"model.json").write_text(json.dumps(meta),encoding="utf-8")
         self.project.register_structure_model(model_id,
             str((directory/"model.pth").relative_to(self.project.root)),
             str((directory/"model.json").relative_to(self.project.root)),
-            None,digest,"resnet18_heatmap_v1",{},(),activate=False)
+            parent_id,digest,"resnet18_heatmap_v1",{},(),activate=False)
         archive=self.root/"multires_package.zip"
         original_scheme=json.dumps(self.project.scheme,sort_keys=True)
         export_structure_model_package(self.project,archive,model_id)
@@ -326,11 +336,20 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         Image.new("L",(400,200)).save(other_source/"one.png")
         other=XRayProject.create("same_schema",other_source,self.root/"projects",
                                  bundled_scheme("phoxinus_vertebral_counts"))
+        other_parent_dir=other.models_root/parent_id
+        other_parent_dir.mkdir(parents=True)
+        (other_parent_dir/"model.pth").write_bytes(b"parent")
+        (other_parent_dir/"model.json").write_text("{}",encoding="utf-8")
+        other.register_structure_model(parent_id,
+            str((other_parent_dir/"model.pth").relative_to(other.root)),
+            str((other_parent_dir/"model.json").relative_to(other.root)),
+            None,structure_schema_digest(other.scheme),"resnet18_heatmap_v1",{},(),activate=False)
         before_scheme=json.dumps(other.scheme,sort_keys=True)
         imported=import_structure_model_package(other,archive)
         self.assertEqual(before_scheme,json.dumps(other.scheme,sort_keys=True))
         row=next(m for m in other.structure_models() if m["model_id"]==imported)
         self.assertFalse(row["active"])
+        self.assertEqual(parent_id,row["parent_model_id"])
         self.assertTrue(row["metrics"]["inference/unvalidated"])
         self.assertTrue((other.root/row["metadata_path"]).parent.joinpath("detail.pth").is_file())
         self.assertTrue((other.root/row["metadata_path"]).parent.joinpath("native.pth").is_file())
@@ -424,6 +443,8 @@ class XRayStructureAIContractTests(unittest.TestCase):
         by_trait={row["trait_id"]:row for row in report["traits"]}
         self.assertAlmostEqual(1.0,by_trait["tv"]["accuracy"])
         self.assertLess(by_trait["preap"]["accuracy"],1.0)
+        self.assertAlmostEqual(1.0,by_trait["preap"]["mae"])
+        self.assertAlmostEqual(0.0,by_trait["tv"]["mae"])
 
     def test_heatmap_target_has_exact_positive_peak_and_partial_supervision_mask(self):
         from ai_runtime.xray_structure_runner import _gaussian
@@ -517,10 +538,12 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertIn("start_structure_repeatability",ui)
         self.assertIn("structure_repeatability_metrics",ui)
         self.assertIn("compare_structure_model_to_human",ui)
-        self.assertIn("Exact trait values:",ui)
-        self.assertIn("Count bias:",ui)
-        self.assertIn("Reference role accuracy:",ui)
-        self.assertIn('("accuracy","Accuracy"',ui)
+        self.assertIn('text="Scientific measurements"',ui)
+        self.assertIn('("count","Exact count / MAE",165)',ui)
+        self.assertIn('("bias","Count bias",90)',ui)
+        self.assertIn("For repeated structures, an exact count is correct regardless of arbitrary marker placement.",ui)
+        self.assertIn('("role","Role accuracy / MAE",170)',ui)
+        self.assertIn('("accuracy","Exact",95)',ui)
         self.assertIn('row.get("accuracy")',ui)
         self.assertIn("pass_no=pass_no",ui)
         self.assertIn("_marker_visibility_buttons",ui)

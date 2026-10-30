@@ -4,6 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 import ast
+import math
 import re
 import sys
 import tkinter as tk
@@ -32,7 +33,7 @@ from app.xray_schema import (
 
 STAGES=(
     ("project","Project","xray_project"),("crops","Crop","xray_crops"),
-    ("structures","Structures","xray_structures"),("export","Export","xray_export"),
+    ("structures","Structures","xray_structures"),("export","Results","xray_export"),
 )
 
 def _safe_id(text,prefix="item"):
@@ -486,11 +487,13 @@ class XRayCountsRuntime:
         if not source:return
         try:
             model_id=import_structure_model_package(self.project,source)
-            self.project.activate_structure_model(model_id)
+            from app.xray_multires_training import is_universal_multires_model
+            if is_universal_multires_model(self.project,model_id):self.project.activate_structure_model(model_id)
+            self.project.set_ui_state("structure_training_parent",model_id)
         except Exception as exc:
             messagebox.showerror("Import Structure AI",str(exc),parent=root);return
         self._rerender()
-        messagebox.showinfo("Import Structure AI",f"Imported and activated {model_id}.",parent=root)
+        messagebox.showinfo("Import Structure AI",f"Imported {model_id}. Native Full + ROI Detail models can be used for predictions; other checkpoints initialize Native + Detail training.",parent=root)
 
     def _menu_export_structure_ai(self):
         if self.project is None:return
@@ -750,10 +753,19 @@ class XRayCountsRuntime:
     def _render_results(self,parent):
         self._ensure_working_scheme()
         title_row=ttk.Frame(parent);title_row.pack(fill="x")
-        ttk.Label(title_row,text="Export",style="PageTitle.TLabel").pack(side="left")
-        actions=ttk.Frame(title_row);actions.pack(side="right")
+        ttk.Label(title_row,text="Results",style="PageTitle.TLabel").pack(side="left")
         if not hasattr(self,"_trait_export_scope"):
             self._trait_export_scope=tk.StringVar(master=self.host.container,value="verified")
+        self._render_selection_context(parent)
+        ttk.Label(parent,text="Review trait values. Choose the specimens to include, then export the table.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(0,8))
+        scheme=self.project.scheme
+        if not scheme.get("traits"):
+            self._empty_scheme_state(parent,"No traits to calculate","Open a trait set or create traits in Project first.");return
+        traits=list(scheme["traits"]);cols=("row_no","locality","plate","fish",*(t.get("abbr") or t["id"] for t in traits),"status")
+        # Results filters affect the preview and descriptive statistics only.
+        # Export remains governed by the explicit All/Verified control above.
+        filters=ttk.Frame(parent);filters.pack(fill="x",pady=(0,5))
+        actions=ttk.Frame(filters);actions.pack(side="right")
         ttk.Label(actions,text="Export:",style="Muted.TLabel").pack(side="left",padx=(0,4))
         ttk.Radiobutton(actions,text="All",variable=self._trait_export_scope,value="all").pack(side="left")
         ttk.Radiobutton(actions,text="Verified only",variable=self._trait_export_scope,value="verified").pack(side="left",padx=(2,6))
@@ -761,12 +773,13 @@ class XRayCountsRuntime:
             actions,"Export",lambda:self._export_traits(self._trait_export_scope.get()=="verified"),
             "Save the selected trait rows as a table. Verified only includes results you have checked.",True,
         ).pack(side="left")
-        self._render_selection_context(parent)
-        ttk.Label(parent,text="Review trait values. Choose the specimens to include, then export the table.",style="PageSubtitle.TLabel").pack(anchor="w",pady=(0,8))
-        scheme=self.project.scheme
-        if not scheme.get("traits"):
-            self._empty_scheme_state(parent,"No traits to calculate","Open a trait set or create traits in Project first.");return
-        traits=list(scheme["traits"]);cols=("row_no","locality","plate","fish",*(t.get("abbr") or t["id"] for t in traits),"status")
+        sample_filter=tk.StringVar(master=filters);plate_filter=tk.StringVar(master=filters)
+        ttk.Label(filters,text="Sample",style="Muted.TLabel").pack(side="left")
+        ttk.Entry(filters,textvariable=sample_filter,width=19).pack(side="left",padx=(4,12))
+        ttk.Label(filters,text="Plate",style="Muted.TLabel").pack(side="left")
+        ttk.Entry(filters,textvariable=plate_filter,width=23).pack(side="left",padx=(4,0))
+        summary_label=ttk.Label(parent,text="",style="Muted.TLabel")
+        summary_label.pack(fill="x",pady=(0,5))
         host=ttk.Frame(parent);host.pack(fill="both",expand=True);host.columnconfigure(0,weight=1);host.rowconfigure(0,weight=1)
         tree=ttk.Treeview(host,columns=cols,show="headings",selectmode="browse",height=16)
         tree.heading("row_no",text="#");tree.column("row_no",width=64,anchor="center",stretch=False)
@@ -778,24 +791,84 @@ class XRayCountsRuntime:
         tree.heading("status",text="Status");tree.column("status",width=90,anchor="center",stretch=False)
         from tkinter import font as tkfont
         font=tkfont.Font(root=tree,font=ttk.Style(tree).lookup("Treeview","font") or "TkDefaultFont")
+        statistics_canvas=tk.Canvas(parent,height=font.metrics("linespace")*4+10,width=1,
+            background=ttk.Style(host).lookup("TFrame","background") or "#f0f0f0",highlightthickness=0)
+        column_statistics={}
+        def draw_statistics(*_args):
+            widths=[int(tree.column(column,"width")) for column in cols]
+            offset=round(tree.xview()[0]*sum(widths)) if tree.xview() else 0
+            x=2-offset
+            # Keep the statistics at page-title level, with the left controls
+            # unobscured even when the table is scrolled horizontally.
+            start=max(400,x+sum(widths[:4]))
+            statistics_canvas.place(x=host.winfo_x()+start,y=title_row.winfo_y(),
+                width=max(0,tree.winfo_width()-start),height=font.metrics("linespace")*4+10)
+            x-=start
+            statistics_canvas.delete("all")
+            for column,width in zip(cols,widths):
+                if column in column_statistics:
+                    statistics_canvas.create_text(x+width/2,4,text="\n".join(column_statistics[column]),
+                        anchor="n",justify="center",font=font,fill="#505050")
+                x+=width
         for column in cols:
             minimum=max(int(tree.column(column,"width")),font.measure(tree.heading(column,"text"))+24)
             if column=="status":minimum=max(minimum,font.measure("Not started")+24)
             tree.column(column,minwidth=minimum,width=minimum)
-        for column in cols:tree.heading(column,command=lambda value=column:_sort_export_tree(tree,value,False))
+        sort_state={"column":None,"descending":False}
+        def sort_visible(column):
+            descending=not sort_state["descending"] if sort_state["column"]==column else False
+            _sort_export_tree(tree,column,descending)
+            sort_state.update(column=column,descending=descending)
+            for key in cols:tree.heading(key,command=lambda col=key:sort_visible(col))
+        for column in cols:tree.heading(column,command=lambda value=column:sort_visible(value))
         current=self._selection().get("specimen_id")
+        catalog=[]
         for index,row in enumerate(self.project.trait_rows(),1):
             path=Path(row["relative_path"]);values=row["trait_values"];workflow_no=int(row.get("workflow_no") or index)
-            display=[workflow_no,self._sample_name(row["relative_path"]),path.name,specimen_display_id(row)]
+            sample=self._sample_name(row["relative_path"])
+            display=[workflow_no,sample,path.name,specimen_display_id(row)]
             display.extend("" if values.get(trait["id"]) is None else str(values.get(trait["id"])) for trait in traits)
             status=str(row.get("result_status") or "not_started")
             status_text={"not_started":"Not started","draft":"Draft","verified":"Verified","stale_crop":"Crop changed"}.get(status,status.replace("_"," ").capitalize())
-            tree.insert("","end",iid=row["specimen_id"],values=(*display,status_text),tags=("alternate",) if index%2==0 else ())
+            catalog.append((row["specimen_id"],sample,path.name,values,(*display,status_text)))
+        def update_visible(*_args):
+            sample_term=sample_filter.get().strip().casefold();plate_term=plate_filter.get().strip().casefold()
+            visible=[item for item in catalog if sample_term in item[1].casefold() and plate_term in item[2].casefold()]
+            tree.delete(*tree.get_children(""))
+            for index,(specimen_id,_sample,_plate,_values,display) in enumerate(visible):
+                tree.insert("","end",iid=specimen_id,values=display,tags=("alternate",) if index%2 else ())
+            for trait in traits:
+                key=trait["id"];values=[]
+                for item in visible:
+                    raw=item[3].get(key)
+                    if isinstance(raw,bool):continue
+                    try:value=float(raw)
+                    except (ValueError,TypeError):continue
+                    if math.isfinite(value):values.append(value)
+                name=trait.get("abbr") or key
+                statistics=(f"Min {min(values):g}",f"Max {max(values):g}",f"Mean {sum(values)/len(values):.2f}",f"n {len(values)}") if values else ("Min —","Max —","Mean —","n 0")
+                column_statistics[name]=statistics
+                minimum=max(int(tree.column(name,"minwidth")),*(font.measure(text)+20 for text in statistics))
+                tree.column(name,minwidth=minimum,width=max(minimum,int(tree.column(name,"width"))))
+            summary_label.configure(text=f"Shown: {len(visible)} specimens")
+            draw_statistics()
+            if sort_state["column"]:
+                _sort_export_tree(tree,sort_state["column"],sort_state["descending"])
+                for key in cols:tree.heading(key,command=lambda col=key:sort_visible(col))
+            if current and tree.exists(current):
+                tree.selection_set(current);tree.focus(current)
         tree.tag_configure("alternate",background="#f7f7f7")
+        for variable in (sample_filter,plate_filter):variable.trace_add("write",update_visible)
+        update_visible()
         scroll=ttk.Scrollbar(host,orient="vertical",command=tree.yview);tree.configure(yscrollcommand=scroll.set)
         tree.grid(row=0,column=0,sticky="nsew");scroll.grid(row=0,column=1,sticky="ns")
         horizontal=ttk.Scrollbar(host,orient="horizontal",command=tree.xview)
-        tree.configure(xscrollcommand=horizontal.set);horizontal.grid(row=1,column=0,sticky="ew")
+        def horizontal_changed(first,last):
+            horizontal.set(first,last);draw_statistics()
+        tree.configure(xscrollcommand=horizontal_changed);horizontal.grid(row=1,column=0,sticky="ew")
+        tree.bind("<Configure>",draw_statistics,add="+")
+        tree.bind("<B1-Motion>",lambda _event:after_idle_for_widget(tree,draw_statistics),add="+")
+        tree.bind("<ButtonRelease-1>",draw_statistics,add="+")
         if current and tree.exists(current):
             tree.selection_set(current);tree.focus(current);tree.see(current)
             after_idle_for_widget(tree,lambda:tree.see(current) if tree.exists(current) else None)
@@ -905,10 +978,37 @@ class XRayCountsRuntime:
         messagebox.showinfo("Project cache",f"Removed {result['removed_files']} reproducible file(s).\nFreed {result['removed_bytes']/1024/1024:.1f} MB.\n\nSource X-rays, SQLite data and final models were not touched.",parent=self.host.container.winfo_toplevel());self._rerender()
 
     def _rescan_source(self):
-        project=self.project
+        project=self.project;root=self.host.container.winfo_toplevel()
+        if not project.source.is_dir():
+            if project.is_self_contained:
+                messagebox.showerror("Source images missing",
+                                     f"Project-managed source folder was not found:\n{project.source}\n\n"
+                                     "Restore the project source folder from backup. No records have been changed.",
+                                     parent=root)
+                return
+            if not messagebox.askyesno("Source images missing",
+                                       f"Source folder was not found:\n{project.source}\n\nLocate its new location?",
+                                       parent=root):return
+            folder=filedialog.askdirectory(parent=root,title="Locate source X-ray folder")
+            if not folder:return
+            if not messagebox.askyesno("Confirm source folder",
+                "Matching relative filenames were found. Their contents cannot be independently "
+                "verified against a missing original folder.\n\n"
+                "Only continue if you personally confirm this is the original image collection. "
+                "Existing annotation identities will be preserved.",
+                parent=root,default="no"):return
+            try:project.relocate_source(folder)
+            except (OSError,ValueError) as exc:
+                messagebox.showerror("Source folder mismatch",str(exc),parent=root);return
         def worker(progress):
-            progress("Scanning source X-rays…");return project.scan_source()
-        self._background_project_task("Rescan source X-rays","Loading source X-rays…",worker,lambda result:self._rerender())
+            progress("Scanning source X-rays…");return project.scan_source(report=True)
+        def done(result):
+            self._rerender()
+            messagebox.showinfo("Scan completed",
+                                f"New images: {result['new']}\n"
+                                f"Already indexed: {result['already_indexed']}\n"
+                                f"Missing: {result['missing']}",parent=root)
+        self._background_project_task("Rescan source X-rays","Loading source X-rays…",worker,done)
 
     def _open_project(self):
         root=self.host.container.winfo_toplevel();folder=filedialog.askdirectory(parent=root,title="Select X-ray project folder")

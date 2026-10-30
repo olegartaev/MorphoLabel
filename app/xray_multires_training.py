@@ -24,6 +24,31 @@ class HighResolutionTrainingCancelled(HighResolutionTrainingError):
     pass
 
 
+def training_progress_record(line):
+    """JSON scalars in a formatted worker result are not progress records."""
+    value=json.loads(line)
+    return value if isinstance(value,dict) else {}
+
+
+def _stage_training_worker(script: Path, destination: Path) -> Path:
+    """Give the external Python source imports, without the GUI's ABI extensions."""
+    root=script.resolve().parents[1]
+    for package in ("app","ai_runtime"):
+        source=root/package
+        paths=source.rglob("*.py") if package=="app" else source.glob("*.py")
+        for path in paths:
+            target=destination/path.relative_to(root)
+            target.parent.mkdir(parents=True,exist_ok=True)
+            shutil.copy2(path,target)
+    resources=root/"app"/"resources"
+    if resources.is_dir():
+        shutil.copytree(resources,destination/"app"/"resources",dirs_exist_ok=True)
+    target=destination/"tools"/script.name
+    target.parent.mkdir(parents=True,exist_ok=True)
+    shutil.copy2(script,target)
+    return target
+
+
 def is_universal_multires_model(project, model_id: str) -> bool:
     """True only for a compatible, hash-validated Native + Detail model."""
     from ai_runtime.universal_multires import pipeline_components
@@ -50,21 +75,26 @@ def create_read_only_source_project_copy(project, source_model_id: str, destinat
     if destination.exists():
         raise FileExistsError(destination)
     model = next((row for row in project.structure_models() if row["model_id"] == str(source_model_id)), None)
-    if model is None or not is_universal_multires_model(project, source_model_id):
-        raise HighResolutionTrainingError("Select a compatible Native Full + ROI Detail model first.")
+    if source_model_id and (model is None or not _model_schema_matches(project,model)):
+        raise HighResolutionTrainingError("Select a compatible structure model first.")
     source_images = project.source.resolve()
     if not source_images.is_dir():
         raise FileNotFoundError(f"The source image folder is unavailable: {source_images}")
-    model_file = (project.root / str(model["path"])).resolve()
-    metadata_file = (project.root / str(model["metadata_path"])).resolve()
-    models_root = project.models_root.resolve()
-    if models_root not in model_file.parents or models_root not in metadata_file.parents:
-        raise HighResolutionTrainingError("The selected model files are outside the managed model directory.")
-    if not model_file.is_file() or not metadata_file.is_file():
-        raise FileNotFoundError("The selected model package is incomplete.")
-    model_directory = model_file.parent
-    if metadata_file.parent != model_directory:
-        raise HighResolutionTrainingError("Model components must be stored together for safe copying.")
+    model_directory=None
+    if model is not None:
+        model_file=(project.root/str(model["path"])).resolve()
+        metadata_file=(project.root/str(model["metadata_path"])).resolve()
+        models_root=project.models_root.resolve()
+        if models_root not in model_file.parents or models_root not in metadata_file.parents:
+            raise HighResolutionTrainingError("The selected model files are outside the managed model directory.")
+        if not model_file.is_file() or not metadata_file.is_file():
+            raise FileNotFoundError("The selected model package is incomplete.")
+        metadata=json.loads(metadata_file.read_text(encoding="utf-8"))
+        if metadata.get("inference_pipeline") is not None and not is_universal_multires_model(project,source_model_id):
+            raise HighResolutionTrainingError("The Native + Detail parent is damaged or incompatible.")
+        model_directory=model_file.parent
+        if metadata_file.parent!=model_directory:
+            raise HighResolutionTrainingError("Model components must be stored together for safe copying.")
 
     destination.mkdir(parents=True)
     (destination / "models").mkdir()
@@ -76,8 +106,8 @@ def create_read_only_source_project_copy(project, source_model_id: str, destinat
         finally:
             copied_db.close()
             source_db.close()
-        copied_model_dir = destination / "models" / model_directory.name
-        shutil.copytree(model_directory, copied_model_dir)
+        if model_directory is not None:
+            shutil.copytree(model_directory,destination/"models"/model_directory.name)
         connection = sqlite3.connect(str(destination / "xray_project.sqlite3"))
         try:
             with connection:
@@ -109,8 +139,6 @@ def run_high_resolution_training(
         raise FileExistsError(output_zip)
     if output_zip == project_root or project_root in output_zip.parents:
         raise HighResolutionTrainingError("Save the candidate ZIP outside the active project folder.")
-    if not is_universal_multires_model(project, source_model_id):
-        raise HighResolutionTrainingError("The selected parent is not a compatible Native + Detail model.")
     script = resource_path("tools", "train_universal_multires.py")
     if not script.is_file():
         raise HighResolutionTrainingError("The high-resolution training tool is not included in this build.")
@@ -120,17 +148,23 @@ def run_high_resolution_training(
     with tempfile.TemporaryDirectory(prefix="morpholabel_highres_project_") as temporary:
         project_copy = Path(temporary) / "project_copy"
         create_read_only_source_project_copy(project, source_model_id, project_copy)
+        # A frozen GUI may use a different Python ABI than the AI component.
+        # Exposing its _internal directory through cwd/PYTHONPATH lets bundled
+        # _ctypes.pyd and other extensions shadow the AI runtime's own modules.
+        worker_script=_stage_training_worker(script,Path(temporary)/"worker_sources")
         command = [
-            str(python_executable), str(script), "--project-copy", str(project_copy),
+            str(python_executable), str(worker_script), "--project-copy", str(project_copy),
             "--source-model", str(source_model_id), "--output", str(output_zip),
             "--epochs-native", str(int(epochs_native)), "--epochs-detail", str(int(epochs_detail)),
-            "--device", "cuda:0",
+            "--device", "auto",
         ]
         environment = os.environ.copy()
-        root = str(script.resolve().parents[1])
-        environment["PYTHONPATH"] = root + (os.pathsep + environment["PYTHONPATH"] if environment.get("PYTHONPATH") else "")
+        root = str(worker_script.resolve().parents[1])
+        environment["PYTHONPATH"] = root
+        environment.pop("PYTHONHOME",None)
+        environment["PYTHONIOENCODING"]="utf-8"
         process = subprocess.Popen(
-            command, cwd=root, env=environment, stdout=subprocess.PIPE,
+            command, cwd=str(Path(python_executable).resolve().parent), env=environment, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
             bufsize=1, **hidden_window_kwargs(),
         )
@@ -145,15 +179,10 @@ def run_high_resolution_training(
 
         reader = threading.Thread(target=read_output, daemon=True, name="morpholabel-highres-output")
         reader.start()
-        ended = False
-        while process.poll() is None:
-            if cancelled.wait(0.2):
-                terminate_process_tree(process)
-                ended = True
-                break
-        reader.join(timeout=2)
-        if process.stdout is not None:
-            process.stdout.close()
+        def deliver_progress():
+            # Forward subprocess progress as it arrives, not only after the
+            # entire GPU run. This method runs on the calling worker thread;
+            # the GUI callback only enqueues Tk-safe messages.
             while True:
                 try:
                     line = messages.get_nowait()
@@ -162,15 +191,19 @@ def run_high_resolution_training(
                 if line is not None:
                     log_lines.append(line)
                     progress(line)
-        while True:
-            try:
-                line = messages.get_nowait()
-            except queue.Empty:
+
+        ended = False
+        while process.poll() is None:
+            deliver_progress()
+            if cancelled.wait(0.2):
+                terminate_process_tree(process)
+                ended = True
                 break
-            if line is None:
-                continue
-            log_lines.append(line)
-            progress(line)
+        reader.join(timeout=2)
+        deliver_progress()
+        if process.stdout is not None:
+            process.stdout.close()
+        deliver_progress()
         if ended:
             output_zip.unlink(missing_ok=True)
             raise HighResolutionTrainingCancelled("High-resolution training was cancelled.")
@@ -186,6 +219,15 @@ def run_high_resolution_training(
                 output_zip.unlink(missing_ok=True)
                 raise HighResolutionTrainingError("The candidate ZIP failed its CRC check.")
             manifest = json.loads(archive.read("manifest.json"))
-        return {"path": output_zip, "model_id": str(manifest.get("model_id") or ""),
+        membership=[]
+        output="\n".join(log_lines)
+        decoder=json.JSONDecoder()
+        for index,char in enumerate(output):
+            if char!="{":continue
+            try:record,_=decoder.raw_decode(output[index:])
+            except ValueError:continue
+            if isinstance(record,dict) and isinstance(record.get("membership"),list):
+                membership=record["membership"];break
+        return {"path": output_zip, "model_id": str(manifest.get("model_id") or ""), "membership":membership,
                 "sha256": __import__("hashlib").sha256(output_zip.read_bytes()).hexdigest(),
                 "log": log_lines}

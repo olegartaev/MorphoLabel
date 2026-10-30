@@ -73,7 +73,7 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertNotIn("add_card('1. Repeatability'",landmarks)
         self.assertNotIn('add_card("1. Repeatability"',structures)
 
-    def test_training_cards_share_active_from_train_models_pattern(self):
+    def test_training_cards_preserve_active_train_models_and_automatic_structure_parent(self):
         crop=source("app/ui/crop_section.py")
         landmarks=source("app/ui/landmarks_section.py")
         xcrop=source("app/xray_crop_ui.py")
@@ -81,8 +81,12 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         for value in (crop,landmarks,xcrop,structures):
             self.assertIn("Train model",value)
             self.assertIn("Active:",value)
-            self.assertIn('text="From"',value)
             self.assertIn("Models…",value)
+        for value in (crop,landmarks,xcrop):
+            self.assertIn('text="From"',value)
+        self.assertIn('text="From"',structures)
+        self.assertIn('train_actions,"Train",self.train_structure_ai',structures)
+        self.assertIn('self.training_parent_choice.set(active_id if compatible_active else "ImageNet ResNet18")',structures)
         self.assertIn('crop_models=self.context.project.models("crop")',crop)
         self.assertIn("Bootstrap / first model",crop)
         self.assertNotIn("Verified Crop data",crop)
@@ -100,18 +104,21 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn("lineage_parent=previous if parent_model_id is None",training)
         self.assertIn("def models(self,kind):",storage)
 
-    def test_xray_training_parent_choices_are_real_saved_models_not_decorative_fields(self):
+    def test_xray_training_uses_saved_crop_choices_and_the_active_structure_parent(self):
         crop=source("app/xray_crop_ui.py")
         structures=source("app/xray_structures_ui.py")
         detector=source("app/xray_detector.py")
         structure_ai=source("app/xray_structure_ai.py")
         self.assertIn('parent_values=("RTMDet pretrained",)+prediction_values',crop)
-        self.assertIn('parent_values=("ImageNet ResNet18",)+prediction_values',structures)
-        self.assertIn('prediction_values=tuple(item["model_id"] for item in structure_models if _scheme_matches_model(self.project,item))',structures)
+        self.assertIn('compatible_active=bool(model and _scheme_matches_model(self.project,model))',structures)
+        self.assertIn('self.training_parent_choice.set(active_id if compatible_active else "ImageNet ResNet18")',structures)
+        self.assertIn('self.training_parent_box=ttk.Combobox',structures)
+        self.assertIn('compatible_values=tuple(item["model_id"] for item in structure_models if _scheme_matches_model(self.project,item))',structures)
+        self.assertIn('prediction_values=tuple(mid for mid in compatible_values if is_universal_multires_model(self.project,mid))',structures)
         self.assertIn("parent_model_id=parent_model_id",crop)
-        self.assertIn("parent_model_id=parent_model_id",structures)
+        self.assertIn("return self.train_highres_structure_ai()",structures)
         self.assertIn("def train_detector(project,seed=42,epochs=80,progress=None,parent_model_id=None):",detector)
-        self.assertIn("def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None, *, backend_id=None, registry=None):",structure_ai)
+        self.assertIn("def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None, *, backend_id=None, registry=None, device_override=None):",structure_ai)
 
     def test_structures_never_stacks_two_yellow_queue_banners(self):
         structures=source("app/xray_structures_ui.py")
@@ -247,7 +254,7 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         about=source("app/ui/shell.py")
         credits=source("app/ui/module_credits.py")
         self.assertIn("module_box=ttk.LabelFrame(credits,text=name",about)
-        self.assertIn('text="Project creator and lead developer"',about)
+        self.assertIn('text="Project"',about)
         self.assertIn('text=APP_CREATOR',about)
         self.assertIn('author_label=visible_module_author(author)',about)
         self.assertNotIn('text=f"Author: {author}"',about)
@@ -335,7 +342,7 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         structures=source("app/xray_structures_ui.py")
         self.assertIn("chosen=active.get('model_id') if active.get('model_id') in valid",landmarks)
         self.assertIn('if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:',xcrop)
-        self.assertIn('if not getattr(self,"_training_parent_touched",False) or current_parent not in parent_values:',structures)
+        self.assertIn('self.training_parent_choice.set(active_id if compatible_active else "ImageNet ResNet18")',structures)
         self.assertIn("self._training_parent_touched=False;refresh();self._refresh_controls()",xcrop)
         self.assertIn("self._training_parent_touched=False;reload(model_id);self._refresh_workflow()",structures)
 

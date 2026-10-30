@@ -9,6 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 import hashlib
 import json
+import threading
+import weakref
 from datetime import datetime
 from PIL import Image
 
@@ -20,6 +22,10 @@ from .transforms import Transform
 
 class LandmarkFrameError(ValueError):
     pass
+
+
+_frame_locks = weakref.WeakValueDictionary()
+_frame_locks_guard = threading.Lock()
 
 
 def _relative_path(project, value, default):
@@ -171,6 +177,20 @@ def _legacy_standardized_size_matches(crop,target):
 
 def restore_standardized_frame(project, image_id, crop=None):
     """Return a cache that is proven to match the persisted Crop frame, rebuilding stale caches."""
+    # Selection callbacks and one-ahead prefetch can request the same uncached
+    # RAW concurrently. A second writer can replace a PNG while Pillow reads
+    # it on Windows. Serialize only this frame; unrelated images stay parallel.
+    key = str((Path(project.data_root) / str(image_id)).resolve()).casefold()
+    with _frame_locks_guard:
+        lock = _frame_locks.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _frame_locks[key] = lock
+    with lock:
+        return _restore_standardized_frame(project, image_id, crop)
+
+
+def _restore_standardized_frame(project, image_id, crop=None):
     crop = crop or crop_frame_record(project, image_id)
     if not crop:
         raise LandmarkFrameError("Crop required before landmarking")

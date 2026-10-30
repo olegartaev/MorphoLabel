@@ -342,7 +342,7 @@ def prepare_structure_training_dataset(project, workspace_root, seed=42, *, back
     }
 
 
-def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None, *, backend_id=None, registry=None):
+def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None, *, backend_id=None, registry=None, device_override=None):
     model_id = project.next_structure_model_id()
     if parent_model_id is None:
         parent = project.active_structure_model()
@@ -361,7 +361,11 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
         raise XRayStructureAIError("The parent model is incompatible with the selected structure provider.")
     backend = _structure_backend(spec, progress)
     performance = structure_performance_settings()
-    settings = performance["training"]
+    settings = dict(performance["training"])
+    if device_override is not None:
+        if device_override not in {"cpu","cuda:0"}:raise ValueError("Unsupported training device")
+        settings.update(device=device_override,batch_size=1,workers=0,persistent_workers=False,
+                        mixed_precision=device_override.startswith("cuda"),pin_memory=device_override.startswith("cuda"))
     target = project.models_root / model_id
     if target.exists():
         raise XRayStructureAIError(f"Model folder already exists: {target}")
@@ -564,8 +568,10 @@ def predict_structures(project, specimen_ids=None, count=None, cancel=None, prog
                     failures.append({"specimen_id": specimen_id, "reason": str(exc)})
                 index += len(chunk)
                 continue
+            if cancel is not None and cancel.is_set():break
             returned = list(result.get("results") or ())
             for offset, (specimen_id, _path) in enumerate(chunk):
+                if cancel is not None and cancel.is_set():break
                 try:
                     if offset >= len(returned):
                         raise RuntimeError("Structure model returned an incomplete prediction batch.")
@@ -716,6 +722,15 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
                 good=_comparison_equal(truth,prediction)
                 stat["exact"]+=int(good);exact_total+=1;exact_ok+=int(good);specimen_total+=1;specimen_ok+=int(good)
                 specimen_all_terms+=1;specimen_all_ok+=int(good)
+                if prediction is None:
+                    stat["missing"]+=1
+                # Exact accuracy includes all human-evaluable cases, including
+                # missed AI predictions. Count difference is reported only
+                # where both values are numeric; otherwise it stays undefined.
+                if (method in {"count","count_to","count_between","position","derived"}
+                        and isinstance(truth,(int,float)) and not isinstance(truth,bool)
+                        and isinstance(prediction,(int,float)) and not isinstance(prediction,bool)):
+                    stat["errors"].append(abs(float(prediction)-float(truth)))
             elif method in _CONTINUOUS_TRAIT_METHODS:
                 if isinstance(prediction,(int,float)) and isinstance(truth,(int,float)):
                     error=abs(float(prediction)-float(truth));stat["errors"].append(error)
@@ -786,16 +801,33 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
     }
 
 
-def compare_structure_model_to_human(project,model_id=None,split="val",progress=None, *, registry=None):
-    """Run read-only model inference on its recorded membership and compare with current human truth."""
+def compare_structure_model_to_human(project,model_id=None,split="all",progress=None, *, registry=None):
+    """Compare against currently verified specimens without changing project data.
+
+    "all" is a retrospective practical check (may include training specimens).
+    "val" retains the recorded validation-membership scope for controlled checks.
+    Neither scope alone establishes independent prospective validation.
+    """
     model=next((item for item in project.structure_models() if item["model_id"]==str(model_id)),None) if model_id else project.active_structure_model()
     if not model:raise XRayStructureAIError("Select an X-ray Structure AI model first.")
     if not _scheme_matches_model(project,model):
         raise XRayStructureAIError("This model uses a different X-ray structure scheme.")
-    membership=[item for item in project.structure_model_membership(model["model_id"]) if str(item.get("split") or "")==str(split)]
-    if not membership:
-        raise XRayStructureAIError("This model has no recorded validation membership to compare with human annotations.")
-    ids=[str(item["specimen_id"]) for item in membership]
+    full_membership=list(project.structure_model_membership(model["model_id"]))
+    if split=="all":
+        # User-facing evaluation is intended to answer "how often are the
+        # measurements right on my VERIFIED collection?", not to silently
+        # restrict comparison to an old model's validation subset.
+        ids=[str(item["specimen_id"]) for item in project.structure_specimens(1)
+             if str(item.get("annotation_status") or "")=="verified"]
+    elif split in {"train","val"}:
+        ids=[str(item["specimen_id"]) for item in full_membership
+             if str(item.get("split") or "")==str(split)]
+        if not ids:
+            raise XRayStructureAIError("No registered specimens for the selected training/validation split.")
+    else:
+        raise ValueError("Comparison split must be 'all', 'train' or 'val'.")
+    if not ids:
+        raise XRayStructureAIError("No eligible human-verified specimens are available for this scheme.")
     checkpoint=project.root/str(model["path"]);metadata=project.root/str(model["metadata_path"])
     if not checkpoint.is_file() or not metadata.is_file():
         raise XRayStructureAIError("The selected Structure AI model artifact is incomplete.")
@@ -806,7 +838,7 @@ def compare_structure_model_to_human(project,model_id=None,split="val",progress=
             skipped.append(specimen_id);continue
         verified.append(specimen_id)
     if not verified:
-        raise XRayStructureAIError("None of this model's recorded validation specimens currently has human-verified annotations.")
+        raise XRayStructureAIError("No human-verified specimens remain eligible for comparison.")
     backend=backend_for_structure_model(project,model,registry=registry)
     settings=structure_performance_settings()["inference"];predictions={};failures=[]
     with tempfile.TemporaryDirectory(prefix="morpholabel_xray_structure_compare_") as scratch_name:
@@ -841,11 +873,22 @@ def compare_structure_model_to_human(project,model_id=None,split="val",progress=
             "visibility":project.structure_visibility_states(specimen_id,1,"human"),
             "crop_size":project.specimen_crop_size(specimen_id),
         })
+    if not rows:
+        detail=(failures[0]["reason"] if failures else "No eligible predictions returned.")
+        raise XRayStructureAIError(
+            f"Comparison failed for all {len(verified)} verified specimens. "
+            f"First error: {detail}"
+        )
     report=summarize_structure_ai_human_comparison(project.scheme,rows)
+    registered={str(item["specimen_id"]):str(item.get("split") or "") for item in full_membership}
+    train_used=sum(registered.get(specimen_id)=="train" for specimen_id in predictions)
+    val_used=sum(registered.get(specimen_id)=="val" for specimen_id in predictions)
     report["summary"].update({
         "model_id":str(model["model_id"]),"split":str(split),"membership_specimens":len(ids),
         "skipped_not_verified":len(skipped),"prediction_failures":len(failures),
-        "comparison_note":"Validation holdout only; current human-verified annotations are read without modifying project data.",
+        "comparison_note":"Retrospective verified-specimen comparison; training/validation overlap is possible and independence is NOT established.",
+        "registered_training_compared":train_used,"registered_validation_compared":val_used,
+        "other_verified_compared":len(rows)-train_used-val_used,
     })
     report["failures"]=failures
     return report
@@ -1053,11 +1096,18 @@ def import_structure_model_package(project, source, *, registry=None):
                 metrics.pop("structure/macro_f1",None)
                 metrics["inference/mode"]=metadata["inference_pipeline"]["mode"]
                 metrics["inference/unvalidated"]=True
+            multires_training=metadata.get("multires_training") or {}
+            training_source_id=str(multires_training.get("source_model_id") or "")
+            if training_source_id:
+                # Preserve provenance even when the source model is not part of
+                # the destination project. Link it in SQLite when it is present.
+                metrics["training/source_model_id"]=training_source_id
+            parent_model_id=training_source_id if training_source_id in existing else None
             project.register_structure_model(
                 local,
                 str((destination / "model.pth").relative_to(project.root)),
                 str((destination / "model.json").relative_to(project.root)),
-                None,
+                parent_model_id,
                 current_digest,
                 provider_id,
                 metrics,

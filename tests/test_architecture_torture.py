@@ -95,6 +95,19 @@ class ArchitectureTortureTests(unittest.TestCase):
             if isinstance(node, ast.If):
                 self.assertNotIn("landmarks", ast.unparse(node.test))
 
+    def test_release_checker_tk_callbacks_are_cancelled_on_early_close(self):
+        shell,errors=self.make_shell()
+        self.assertTrue(shell._release_update_start_job)
+        # Simulate a slow/offline endpoint: the worker is asynchronous and a
+        # Tk poll is pending when the user closes the window.
+        with patch("app.release_update_check.check_for_release",return_value=None):
+            shell._check_release_updates()
+        self.assertTrue(shell._release_update_poll_job)
+        shell.destroy()
+        self.assertIsNone(shell._release_update_start_job)
+        self.assertIsNone(shell._release_update_poll_job)
+        self.assertEqual([],errors)
+
     def register_arbitrary(self, shell):
         records = []
         for ident, project in (("third", ThirdProject()), ("fourth", FourthProject())):

@@ -241,9 +241,11 @@ class XRayPlateListPanel(ttk.Frame):
         self._rows=self._catalog_rows()
         self._cache=photo_search_cache(self._rows)
         yview=self.canvas.yview()[0] if preserve_scroll and self.canvas.rows else None
+        previous_visible=tuple(self.visible_indices)
         self.visible_indices=filtered_photo_indices(
             self._rows,self._cache,self.image_query.get(),self.sample_query.get(),show_excluded=self.show_excluded.get(),
         )
+        if tuple(self.visible_indices)!=previous_visible:yview=None
         self.canvas.set_rows([self._row_data(i,self._rows[i]) for i in self.visible_indices])
         selected_index=next((i for i,row in enumerate(self._rows) if row["image_id"]==self.selected_image_id),None)
         if selected_index in self.visible_indices:
@@ -387,6 +389,10 @@ class XRayCropWorkspace:
         for key,title in (("unresolved","Unresolved"),("review","Review"),("verified","Verified")):
             label=ttk.Label(status_host,text=f"{title}: 0",style="StatusChip.TLabel")
             label.pack(side="left",padx=(0,3));self.predict_status_labels[key]=label
+        self.training_usage_label=ttk.Label(status_host,text="Used: — · New: —",style="StatusChip.TLabel")
+        self.training_usage_label.pack(side="left",padx=(4,0))
+        self._tip.bind(self.training_usage_label,
+            "Verified plates used by the selected training parent / new verified plates not in its recorded training history. — means unknown history.")
         actions=FlowRow(header,style="Toolbar.TFrame");actions.grid(row=1,column=0,columnspan=2,sticky="ew");self.actions=actions
         def arrange_context(event):
             compact=event.width<850
@@ -452,7 +458,8 @@ class XRayCropWorkspace:
         self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,values=("RTMDet pretrained",),width=model_selector_width(("RTMDet pretrained",),minimum=22),state="readonly")
         self.training_parent_box.pack(side="left",padx=(4,0))
         self._training_parent_touched=False
-        self.training_parent_box.bind("<<ComboboxSelected>>",lambda _e:setattr(self,"_training_parent_touched",True))
+        self.training_parent_box.bind("<<ComboboxSelected>>",
+            lambda _e:(setattr(self,"_training_parent_touched",True),self._refresh_controls()))
         self.training_count_label=ttk.Label(model_row,text="Ready: 0",style="Muted.TLabel");self.training_count_label.pack(side="right",padx=(10,0))
         train_actions=ttk.Frame(two);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
         self.train_button=self._button(train_actions,"Train",self.train_model,"Teach AI to find specimens using the plates you have confirmed.",style="Primary.TButton");self.train_button.pack(side="left")
@@ -583,6 +590,11 @@ class XRayCropWorkspace:
             self.training_parent_choice.set(preferred_parent)
         self.training_parent_box.configure(values=parent_values,width=model_selector_width(parent_values,minimum=22))
         self.training_count_label.configure(text=f"Ready: {status['training_plates']} plates · {status['training_specimens']} crops · orientation {status['orientation_training']}")
+        parent_id=self.training_parent_choice.get()
+        usage=self.project.crop_training_usage(None if parent_id=="RTMDet pretrained" else parent_id)
+        self.training_usage_label.configure(text=(
+            f"Used: {usage['used']} · New: {usage['new']}" if usage['known'] else "Used: — · New: —"
+        ))
         self.predict_status_labels["unresolved"].configure(text=f"Unresolved: {status['prediction_candidates']}")
         self.predict_status_labels["review"].configure(text=f"Review: {status['ai_pending_plates']}")
         self.predict_status_labels["verified"].configure(text=f"Verified: {status['verified_plates']}")
@@ -1068,12 +1080,29 @@ class XRayCropWorkspace:
         if self._busy:return
         if len(self.project.training_plates())<3:
             messagebox.showinfo("Train crop model","Confirm at least 3 plates first. A first batch of 6–10 diverse plates is recommended.",parent=self.root);return
+        # A frozen installation may have deferred AI support setup. Route
+        # missing starter weights into the existing verified setup UI, rather
+        # than beginning a GPU job that inevitably fails.
+        selected_parent=self.training_parent_choice.get()
+        parent_model_id="" if selected_parent=="RTMDet pretrained" else selected_parent
+        if not parent_model_id:
+            from .runtime_paths import is_frozen
+            from .ai_starters import STARTERS,starter_valid
+            starter=next(item for item in STARTERS if item.role=="detector")
+            if is_frozen() and not starter_valid(starter):
+                setup=getattr(self.root,"_show_first_run_setup",None)
+                if messagebox.askyesno("Crop AI support",
+                    "The verified Crop AI starter is missing or damaged.\n\n"
+                    "Open AI support setup to repair it before training?",
+                    parent=self.root):
+                    if callable(setup):setup()
+                    else:messagebox.showinfo("Crop AI support",
+                        "Open Menu → Set up AI support… to repair the AI starter.",parent=self.root)
+                return
         self._busy=True;events=queue.Queue();dialog=tk.Toplevel(self.root);dialog.title("Train crop model");dialog.transient(self.root);dialog.resizable(False,False)
         frame=ttk.Frame(dialog,padding=14);frame.pack();label=ttk.Label(frame,text="Training X-ray crop model…");label.pack(anchor="w")
         bar=ttk.Progressbar(frame,mode="indeterminate");bar.pack(fill="x",pady=(8,0));bar.start();center(self.root,dialog)
         def progress(stage,detail):events.put(("stage",stage,detail))
-        selected_parent=self.training_parent_choice.get()
-        parent_model_id="" if selected_parent=="RTMDet pretrained" else selected_parent
         def worker():
             try:events.put(("done",train_detector(self.project,progress=progress,parent_model_id=parent_model_id)))
             except Exception as exc:events.put(("error",exc))
@@ -1167,13 +1196,14 @@ class XRayCropWorkspace:
         try:self.flush_pending_edits()
         except Exception as exc:
             messagebox.showerror("Predict current",f"Could not save the current crop edits:\n{exc}",parent=self.root);return
-        self._busy=True;events=queue.Queue()
+        self._busy=True;events=queue.Queue();cancel=threading.Event()
         dialog=tk.Toplevel(self.root);dialog.title("Predict current");dialog.transient(self.root);dialog.resizable(False,False)
         frame=ttk.Frame(dialog,padding=14);frame.pack(fill="both",expand=True)
         label=ttk.Label(frame,text="Applying Crop AI to the current X-ray…");label.pack(anchor="w")
         bar=ttk.Progressbar(frame,mode="indeterminate",length=340);bar.pack(fill="x",pady=(8,0));bar.start(12);center(self.root,dialog)
+        dialog.protocol("WM_DELETE_WINDOW",lambda:(cancel.set(),label.configure(text="Cancelling after current inference…")))
         def worker():
-            try:events.put(("done",predict_plates(self.project,[image_id],model=model)))
+            try:events.put(("done",predict_plates(self.project,[image_id],cancel=cancel,model=model)))
             except Exception as exc:events.put(("error",exc))
         threading.Thread(target=worker,daemon=True,name="xray-detector-predict-current").start()
         def poll():
@@ -1184,6 +1214,8 @@ class XRayCropWorkspace:
             self._busy=False
             try:bar.stop();dialog.destroy()
             except tk.TclError:pass
+            if cancel.is_set():
+                self._refresh_controls();return
             if event[0]=="error":
                 messagebox.showerror("Predict current",str(event[1]),parent=self.root);self._refresh_controls();return
             result=event[1]
@@ -1203,6 +1235,7 @@ class XRayCropWorkspace:
         self._busy=True;events=queue.Queue();cancel=threading.Event();dialog=tk.Toplevel(self.root);dialog.title("Predict Crop");dialog.transient(self.root);dialog.resizable(False,False)
         frame=ttk.Frame(dialog,padding=14);frame.pack();label=ttk.Label(frame,text=f"Preparing crop predictions for {len(ids)} plate(s)…");label.pack(anchor="w")
         bar=ttk.Progressbar(frame,mode="determinate",maximum=len(ids));bar.pack(fill="x",pady=(8,0));self._button(frame,"Cancel",cancel.set,"Stop after the current prediction.").pack(anchor="e",pady=(8,0));center(self.root,dialog)
+        dialog.protocol("WM_DELETE_WINDOW",lambda:(cancel.set(),label.configure(text="Cancelling after current inference…")))
         def worker():
             try:events.put(("done",predict_plates(self.project,ids,cancel=cancel,progress=lambda done,total,image_id:events.put(("progress",done,total,image_id)))))
             except Exception as exc:events.put(("error",exc))
@@ -1213,11 +1246,23 @@ class XRayCropWorkspace:
                     event=events.get_nowait()
                     if event[0]=="progress":bar.configure(value=event[1]);label.configure(text=f"Predicting Crop: {event[1]} / {event[2]}")
                     elif event[0]=="error":
-                        self._busy=False;dialog.destroy();messagebox.showerror("Predict Crop",str(event[1]),parent=self.root);return
+                        self._busy=False;dialog.destroy()
+                        if not cancel.is_set():messagebox.showerror("Predict Crop",str(event[1]),parent=self.root)
+                        return
                     else:
                         self._busy=False;dialog.destroy();result=event[1];self.plate_list.refresh(preserve_scroll=True);self._refresh_controls()
+                        if cancel.is_set():return
                         summary=f"Predicted: {result['success']} plate(s)."
                         if result.get("failures"):summary+=f"\nNeeds attention: {len(result['failures'])}."
+                        times=result.get("timings_seconds") or {}
+                        if "total" in times:
+                            summary+=(f"\nElapsed: {float(times['total']):.1f}s. "
+                                f"Prepare {float(times.get('prepare',0)):.1f}s; "
+                                f"AI launch {float(times.get('ai_launch',0)):.1f}s; "
+                                f"model load {float(times.get('model_load',0)):.1f}s; "
+                                f"detection {float(times.get('detection',0)):.1f}s; "
+                                f"orientation {float(times.get('orientation',0)):.1f}s; "
+                                f"save {float(times.get('persistence',times.get('save',0))):.1f}s.")
                         success=list(result.get("successful_ids") or [])
                         if success and messagebox.askyesno("Predict Crop",summary+"\n\nReview this batch now?",parent=self.root,default=messagebox.YES):
                             self._set_batch(success,"prediction_review",result.get("model_id"));return
