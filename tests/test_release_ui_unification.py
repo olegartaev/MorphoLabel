@@ -113,11 +113,12 @@ class ReleaseUIUnificationTests(unittest.TestCase):
         self.assertIn('compatible_active=bool(model and _scheme_matches_model(self.project,model))',structures)
         self.assertIn('self.training_parent_choice.set(active_id if compatible_active else "ImageNet ResNet18")',structures)
         self.assertIn('self.training_parent_box=ttk.Combobox',structures)
-        self.assertIn('prediction_values=tuple(item["model_id"] for item in structure_models if _scheme_matches_model(self.project,item))',structures)
+        self.assertIn('compatible_values=tuple(item["model_id"] for item in structure_models if _scheme_matches_model(self.project,item))',structures)
+        self.assertIn('prediction_values=tuple(mid for mid in compatible_values if is_universal_multires_model(self.project,mid))',structures)
         self.assertIn("parent_model_id=parent_model_id",crop)
-        self.assertIn("parent_model_id=parent_model_id",structures)
+        self.assertIn("return self.train_highres_structure_ai()",structures)
         self.assertIn("def train_detector(project,seed=42,epochs=80,progress=None,parent_model_id=None):",detector)
-        self.assertIn("def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None, *, backend_id=None, registry=None):",structure_ai)
+        self.assertIn("def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None, *, backend_id=None, registry=None, device_override=None):",structure_ai)
 
     def test_structures_never_stacks_two_yellow_queue_banners(self):
         structures=source("app/xray_structures_ui.py")

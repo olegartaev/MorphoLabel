@@ -69,21 +69,26 @@ def create_read_only_source_project_copy(project, source_model_id: str, destinat
     if destination.exists():
         raise FileExistsError(destination)
     model = next((row for row in project.structure_models() if row["model_id"] == str(source_model_id)), None)
-    if model is None or not is_universal_multires_model(project, source_model_id):
-        raise HighResolutionTrainingError("Select a compatible Native Full + ROI Detail model first.")
+    if source_model_id and (model is None or not _model_schema_matches(project,model)):
+        raise HighResolutionTrainingError("Select a compatible structure model first.")
     source_images = project.source.resolve()
     if not source_images.is_dir():
         raise FileNotFoundError(f"The source image folder is unavailable: {source_images}")
-    model_file = (project.root / str(model["path"])).resolve()
-    metadata_file = (project.root / str(model["metadata_path"])).resolve()
-    models_root = project.models_root.resolve()
-    if models_root not in model_file.parents or models_root not in metadata_file.parents:
-        raise HighResolutionTrainingError("The selected model files are outside the managed model directory.")
-    if not model_file.is_file() or not metadata_file.is_file():
-        raise FileNotFoundError("The selected model package is incomplete.")
-    model_directory = model_file.parent
-    if metadata_file.parent != model_directory:
-        raise HighResolutionTrainingError("Model components must be stored together for safe copying.")
+    model_directory=None
+    if model is not None:
+        model_file=(project.root/str(model["path"])).resolve()
+        metadata_file=(project.root/str(model["metadata_path"])).resolve()
+        models_root=project.models_root.resolve()
+        if models_root not in model_file.parents or models_root not in metadata_file.parents:
+            raise HighResolutionTrainingError("The selected model files are outside the managed model directory.")
+        if not model_file.is_file() or not metadata_file.is_file():
+            raise FileNotFoundError("The selected model package is incomplete.")
+        metadata=json.loads(metadata_file.read_text(encoding="utf-8"))
+        if metadata.get("inference_pipeline") is not None and not is_universal_multires_model(project,source_model_id):
+            raise HighResolutionTrainingError("The Native + Detail parent is damaged or incompatible.")
+        model_directory=model_file.parent
+        if metadata_file.parent!=model_directory:
+            raise HighResolutionTrainingError("Model components must be stored together for safe copying.")
 
     destination.mkdir(parents=True)
     (destination / "models").mkdir()
@@ -95,8 +100,8 @@ def create_read_only_source_project_copy(project, source_model_id: str, destinat
         finally:
             copied_db.close()
             source_db.close()
-        copied_model_dir = destination / "models" / model_directory.name
-        shutil.copytree(model_directory, copied_model_dir)
+        if model_directory is not None:
+            shutil.copytree(model_directory,destination/"models"/model_directory.name)
         connection = sqlite3.connect(str(destination / "xray_project.sqlite3"))
         try:
             with connection:
@@ -128,8 +133,6 @@ def run_high_resolution_training(
         raise FileExistsError(output_zip)
     if output_zip == project_root or project_root in output_zip.parents:
         raise HighResolutionTrainingError("Save the candidate ZIP outside the active project folder.")
-    if not is_universal_multires_model(project, source_model_id):
-        raise HighResolutionTrainingError("The selected parent is not a compatible Native + Detail model.")
     script = resource_path("tools", "train_universal_multires.py")
     if not script.is_file():
         raise HighResolutionTrainingError("The high-resolution training tool is not included in this build.")
@@ -147,7 +150,7 @@ def run_high_resolution_training(
             str(python_executable), str(worker_script), "--project-copy", str(project_copy),
             "--source-model", str(source_model_id), "--output", str(output_zip),
             "--epochs-native", str(int(epochs_native)), "--epochs-detail", str(int(epochs_detail)),
-            "--device", "cuda:0",
+            "--device", "auto",
         ]
         environment = os.environ.copy()
         root = str(worker_script.resolve().parents[1])

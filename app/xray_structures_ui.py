@@ -817,7 +817,7 @@ class XRayStructureWorkspace:
         state="normal" if self.selected_specimen_id and not self.current_specimen_excluded and not verified else "disabled"
         self.apply_button.configure(text="Verified ✓" if verified else "Verify specimen",state=state)
         model=self.project.active_structure_model()
-        can_predict=(not self.current_specimen_excluded) and _current_prediction_allowed(self.project,self.selected_specimen_id,model,self.pass_no.get())
+        can_predict=self._native_prediction_model() and (not self.current_specimen_excluded) and _current_prediction_allowed(self.project,self.selected_specimen_id,model,self.pass_no.get())
         self.predict_current_button.configure(state="normal" if can_predict else "disabled")
 
     def _refresh_result_review_banner(self):
@@ -863,22 +863,25 @@ class XRayStructureWorkspace:
         # when the current main annotation has no verified specimens yet.
         self.repeat_button.configure(state="normal")
         model=self.project.active_structure_model();candidates=len(self.project.structure_prediction_candidate_ids());review=len(self.project.structure_ai_review_ids())
-        self.training_summary.configure(text=f"Ready: {p1['verified']} human-verified")
+        self.training_summary.configure(text=f"Native Full + ROI Detail · Ready: {p1['verified']} human-verified")
         active_id=(model or {}).get("model_id") or "none"
-        self.structure_model_label.configure(text=f"Active: {active_id}")
         structure_models=tuple(self.project.structure_models())
-        prediction_values=tuple(item["model_id"] for item in structure_models if _scheme_matches_model(self.project,item))
+        from app.xray_multires_training import is_universal_multires_model
+        compatible_values=tuple(item["model_id"] for item in structure_models if _scheme_matches_model(self.project,item))
+        prediction_values=tuple(mid for mid in compatible_values if is_universal_multires_model(self.project,mid))
         compatible_active=bool(model and _scheme_matches_model(self.project,model))
+        native_active=compatible_active and active_id in prediction_values
+        self.structure_model_label.configure(text=f"Active: {active_id}" if native_active else "Native Full + ROI Detail: train or import a model")
         self.prediction_model_box.configure(values=prediction_values,width=model_selector_width(prediction_values,minimum=22),state="readonly" if prediction_values else "disabled")
-        self.prediction_model_choice.set(active_id if compatible_active else "")
-        parent_values=("ImageNet ResNet18",)+prediction_values
+        self.prediction_model_choice.set(active_id if native_active else "")
+        parent_values=("ImageNet ResNet18",)+compatible_values
         current_parent=self.training_parent_choice.get()
         if not self._training_parent_touched or current_parent not in parent_values:
             self.training_parent_choice.set(active_id if compatible_active else "ImageNet ResNet18")
             self._training_parent_touched=False
         self.training_parent_box.configure(values=parent_values,
             width=model_selector_width(parent_values,minimum=22),state="readonly")
-        state="normal" if compatible_active and self.pass_no.get()==1 else "disabled"
+        state="normal" if native_active and self.pass_no.get()==1 else "disabled"
         self.structure_predict_next_button.configure(state=state);self.structure_predict_all_button.configure(state=state)
         self.structure_review_button.configure(state="normal" if review else "disabled")
         current=self.selected_specimen_id;ids=list(batch.get("ids") or ())
@@ -897,9 +900,9 @@ class XRayStructureWorkspace:
             HighResolutionTrainingCancelled, is_universal_multires_model,
             run_high_resolution_training,
         )
-        if not is_universal_multires_model(self.project,source_model_id):
-            messagebox.showinfo("Train Structure AI",
-                "The active model is not compatible with continued training. Choose another model in Models.",parent=self.root)
+        if source_model_id=="ImageNet ResNet18":source_model_id=""
+        if self.project.annotation_summary(1)["verified"]<8:
+            messagebox.showinfo("Train Structure AI","Verify at least 8 specimens from at least 3 source X-rays first.",parent=self.root)
             return
         # Generate a verified candidate package behind the scenes. Users can
         # separately export any saved model through Models. Keep the ZIP on
@@ -989,9 +992,20 @@ class XRayStructureWorkspace:
             if dialog.winfo_exists():dialog.after(200,poll)
         dialog.after(200,poll)
 
+    def _native_prediction_model(self,model_id=None):
+        from app.xray_multires_training import is_universal_multires_model
+        model_id=model_id or (self.project.active_structure_model() or {}).get("model_id")
+        return bool(model_id and is_universal_multires_model(self.project,model_id))
+
+    def _explain_native_required(self):
+        messagebox.showinfo("Native Full + ROI Detail",
+            "This checkpoint can initialize training. Train a Native Full + ROI Detail candidate before using it for predictions.",parent=self.root)
+
     def _activate_prediction_model(self,_event=None):
         model_id=str(self.prediction_model_choice.get() or "")
         if not model_id:return
+        if not self._native_prediction_model(model_id):
+            self._explain_native_required();return
         candidate=next((m for m in self.project.structure_models() if m["model_id"]==model_id),None)
         if candidate and (candidate.get("metrics") or {}).get("inference/unvalidated"):
             if not messagebox.askyesno(
@@ -1278,59 +1292,7 @@ class XRayStructureWorkspace:
 
     def train_structure_ai(self):
         if self._busy:return
-        selected_parent=str(self.training_parent_choice.get() or "")
-        parent_model_id="" if selected_parent=="ImageNet ResNet18" else selected_parent
-        if parent_model_id:
-            from app.xray_multires_training import is_universal_multires_model
-            if is_universal_multires_model(self.project,parent_model_id):
-                # The ordinary Train action must preserve the selected model's
-                # full + detail pipeline. Never send it through the legacy
-                # single-checkpoint trainer.
-                return self.train_highres_structure_ai()
-        p1=self.project.annotation_summary(1)
-        if p1["verified"]<8:
-            messagebox.showinfo(
-                "Train Structure AI",
-                "Verify at least 8 specimens from at least 3 source X-rays first. More diverse verified specimens usually give a more useful model.",
-                parent=self.root,
-            );return
-        self._busy=True;events=queue.Queue()
-        dialog,label,bar=self._structure_ai_dialog("Train Structure AI","Preparing verified X-ray structures…",None)
-        def progress(stage,detail):
-            events.put(("progress",str(stage),str(detail)))
-        def worker():
-            try:events.put(("done",train_structure_model(self.project,progress=progress,parent_model_id=parent_model_id)))
-            except Exception as exc:events.put(("error",exc))
-        threading.Thread(target=worker,daemon=True,name="xray-structure-training").start()
-        def poll():
-            try:
-                while True:
-                    event=events.get_nowait()
-                    if event[0]=="progress":
-                        label.configure(text=f"{event[1]}\n{event[2]}")
-                    elif event[0]=="error":
-                        self._busy=False
-                        try:bar.stop();dialog.destroy()
-                        except tk.TclError:pass
-                        messagebox.showerror("Structure training",str(event[1]),parent=self.root);return
-                    elif event[0]=="done":
-                        self._busy=False
-                        try:bar.stop();dialog.destroy()
-                        except tk.TclError:pass
-                        result=event[1];self._training_parent_touched=True;self.training_parent_choice.set(result["model_id"]);metrics=result.get("metrics") or {}
-                        quality=metrics.get("structure/macro_f1")
-                        detail=(
-                            f"Model ready: {result['model_id']}\n"
-                            f"Training: {result['training_specimens']} specimens on {result['training_plates']} plates\n"
-                            f"Validation: {result['validation_specimens']} specimens on {result['validation_plates']} plates"
-                        )
-                        if isinstance(quality,(int,float)):detail+=f"\nValidation macro F1: {quality:.3f}"
-                        self.project.set_ui_state("structure_training_parent",result["model_id"])
-                        self._refresh_workflow();self._refresh_summary()
-                        messagebox.showinfo("Structure training",detail,parent=self.root);return
-            except queue.Empty:pass
-            if dialog.winfo_exists():dialog.after(120,poll)
-        dialog.after(120,poll)
+        return self.train_highres_structure_ai()
 
     def export_active_structure_ai(self):
         model=self.project.active_structure_model()
@@ -1365,12 +1327,14 @@ class XRayStructureWorkspace:
         if not source:return
         try:
             model_id=import_structure_model_package(self.project,source)
-            self.project.activate_structure_model(model_id)
+            if self._native_prediction_model(model_id):self.project.activate_structure_model(model_id)
+            self.training_parent_choice.set(model_id);self._training_parent_touched=True
+            self.project.set_ui_state("structure_training_parent",model_id)
         except Exception as exc:messagebox.showerror("Import trained AI",str(exc),parent=self.root);return
         self._refresh_imported_scheme()
         messagebox.showinfo(
             "Import trained AI",
-            f"Imported and activated {model_id}. The file contained the trained model only; project X-rays were not changed.",
+            f"Imported {model_id}. Native Full + ROI Detail models can be used for predictions; other checkpoints initialize Native + Detail training.",
             parent=self.root,
         )
 
@@ -1404,7 +1368,7 @@ class XRayStructureWorkspace:
                     "","end",iid=model["model_id"],values=(
                         model["model_id"],str(model.get("created_at") or "").replace("T"," ")[:16],source,
                         f"{int(model.get('training_specimen_count') or 0)} / {int(model.get('validation_specimen_count') or 0)}",
-                        quality_text,("Active" if model.get("active") else "Available") if _scheme_matches_model(self.project,model) else "Incompatible scheme",
+                        quality_text,(("Active" if model.get("active") else "Available") if self._native_prediction_model(model["model_id"]) else "Initialization only") if _scheme_matches_model(self.project,model) else "Incompatible scheme",
                     ),
                 )
             if select and tree.exists(select):tree.selection_set(select);tree.see(select)
@@ -1413,6 +1377,8 @@ class XRayStructureWorkspace:
         def activate():
             model_id=selected()
             if not model_id:return
+            if not self._native_prediction_model(model_id):
+                self._explain_native_required();return
             selected_model=next((m for m in self.project.structure_models() if m["model_id"]==model_id),None)
             if selected_model and (selected_model.get("metrics") or {}).get("inference/unvalidated"):
                 if not messagebox.askyesno(
@@ -1604,6 +1570,8 @@ class XRayStructureWorkspace:
 
     def predict_current_structure(self):
         if self._busy or not self.selected_specimen_id or self.current_specimen_excluded:return
+        if not self._native_prediction_model():
+            self._explain_native_required();return
         model=self.project.active_structure_model()
         if not model:
             messagebox.showinfo("Predict current","Train or import a Structure AI model first.",parent=self.root);return
@@ -1650,6 +1618,8 @@ class XRayStructureWorkspace:
 
     def predict_structure_batch(self,count):
         if self._busy:return
+        if not self._native_prediction_model():
+            self._explain_native_required();return
         model=self.project.active_structure_model()
         if not model:
             messagebox.showinfo("Predict structures","Train or import a Structure AI model first.",parent=self.root);return

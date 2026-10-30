@@ -487,11 +487,13 @@ class XRayCountsRuntime:
         if not source:return
         try:
             model_id=import_structure_model_package(self.project,source)
-            self.project.activate_structure_model(model_id)
+            from app.xray_multires_training import is_universal_multires_model
+            if is_universal_multires_model(self.project,model_id):self.project.activate_structure_model(model_id)
+            self.project.set_ui_state("structure_training_parent",model_id)
         except Exception as exc:
             messagebox.showerror("Import Structure AI",str(exc),parent=root);return
         self._rerender()
-        messagebox.showinfo("Import Structure AI",f"Imported and activated {model_id}.",parent=root)
+        messagebox.showinfo("Import Structure AI",f"Imported {model_id}. Native Full + ROI Detail models can be used for predictions; other checkpoints initialize Native + Detail training.",parent=root)
 
     def _menu_export_structure_ai(self):
         if self.project is None:return

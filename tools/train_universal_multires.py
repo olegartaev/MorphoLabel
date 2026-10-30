@@ -1,4 +1,4 @@
-"""Fine-tune an EXISTING generic multires Structure AI on VERIFIED annotations.
+"""Train the Native Full + ROI Detail Structure AI on VERIFIED annotations.
 
 This creates only an INACTIVE portable ZIP. No SQLite writes, model activation,
 image modifications, manually created labels or automatic deployment.
@@ -101,7 +101,7 @@ def new_package(source_manifest,source_meta,source_data,
 
 
 def run(project_copy,source_model,output,*,epochs_native=18,epochs_detail=18,
-        seed=42,device="cuda:0",lr=2e-5):
+        seed=42,device="auto",lr=2e-5):
     import torch
     from app.xray_project import XRayProject
     from app.xray_structure_ai import (
@@ -119,17 +119,24 @@ def run(project_copy,source_model,output,*,epochs_native=18,epochs_detail=18,
         raise ValueError("Training epochs outside supported range")
     if not (0<lr<=1e-4):
         raise ValueError("Only low-rate warm-start fine-tuning is allowed")
+    if device=="auto":device="cuda:0" if torch.cuda.is_available() else "cpu"
     if str(device).startswith("cuda") and not torch.cuda.is_available():
         raise RuntimeError("CUDA GPU not available in this Python environment")
     project=XRayProject(project_root)
     source=next((m for m in project.structure_models()
                  if m["model_id"]==source_model),None)
-    if source is None:raise ValueError("Source multi-resolution model was not found")
+    if source is None and source_model:raise ValueError("Source model was not found")
     with tempfile.TemporaryDirectory(prefix="morpholabel_multires_training_") as tmp:
         scratch=Path(tmp)
         original_zip=scratch/"source.zip"
-        export_structure_model_package(project,original_zip,source_model)
-        original_manifest,original_meta,data=inspect_source_package(original_zip)
+        from app.xray_multires_training import is_universal_multires_model
+        bootstrap=not source or not is_universal_multires_model(project,source_model)
+        if bootstrap:
+            from app.native_structure_bootstrap import initialize_parent
+            original_manifest,original_meta,data=initialize_parent(project,source,scratch,seed=seed,device=device)
+        else:
+            export_structure_model_package(project,original_zip,source_model)
+            original_manifest,original_meta,data=inspect_source_package(original_zip)
         if structure_schema_digest(project.scheme)!=original_meta["schema_digest"]:
             raise ValueError("Scientific schema changed since model was trained")
         meta_ids=[str(x["id"]) for x in original_meta["structures"]]
@@ -164,8 +171,8 @@ def run(project_copy,source_model,output,*,epochs_native=18,epochs_detail=18,
         native_initial=scratch/"native_initial.pth"
         torch.save(detail_state,detail_initial)
         torch.save(state,native_initial)
-        common={"device":device,"batch_size":1,"workers":0,"mixed_precision":True,
-                "pin_memory":True,"persistent_workers":False,"seed":seed,
+        common={"device":device,"batch_size":1,"workers":0,"mixed_precision":device.startswith("cuda"),
+                "pin_memory":device.startswith("cuda"),"persistent_workers":False,"seed":seed,
                 "learning_rate":lr,"fixed_thresholds":original_meta["thresholds"]}
         print(json.dumps({"stage":"PREPARED",
             "training_specimens":prepared["training_specimens"],
@@ -193,7 +200,9 @@ def run(project_copy,source_model,output,*,epochs_native=18,epochs_detail=18,
             "validation_source_plates":prepared["validation_plates"],
             "dataset_hash":prepared["dataset_hash"],
             "tile_manifest_hash":tiles["manifest_sha256"],
-            "source_model_id":source_model,"source_model_sha256":hash_bytes(original_zip.read_bytes()),
+            "source_model_id":source_model,"source_model_sha256":hash_bytes(original_zip.read_bytes()) if original_zip.exists() else hash_bytes(data["artifacts/model.pth"]),
+            "initialization_mode":("native_detail_parent" if not bootstrap else "legacy_checkpoint" if source_model else "imagenet"),
+            "source_model_sha256_kind":"package" if original_zip.exists() else "context_checkpoint",
             "source_model_trained_on_overlapping_data_possible":True,
             "independent_validation_proven":False,
             "native_epochs_completed":json.loads(Path(native_result["metadata"]).read_text())["epochs_completed"],
@@ -201,6 +210,11 @@ def run(project_copy,source_model,output,*,epochs_native=18,epochs_detail=18,
             "frozen_thresholds":True,"learning_rate":lr,
             "scientific_scheme_reused":True,
         }
+        if bootstrap:
+            from app.native_structure_bootstrap import select_detail_channels
+            selected,calibration=select_detail_channels(original_meta,data,buffer.getvalue(),detail_new,manifest,scratch,device)
+            original_meta["inference_pipeline"]["retain_detail_structures"]=selected
+            provenance["channel_selection_validation"]=calibration
         result=new_package(original_manifest,original_meta,data,
                            detail_new,buffer.getvalue(),output,
                            model_id="multires_retrained_"+sha256(
@@ -213,11 +227,11 @@ def run(project_copy,source_model,output,*,epochs_native=18,epochs_detail=18,
 def main():
     a=argparse.ArgumentParser(description=__doc__)
     a.add_argument("--project-copy",type=Path,required=True)
-    a.add_argument("--source-model",required=True)
+    a.add_argument("--source-model",default="")
     a.add_argument("--output",type=Path,required=True)
     a.add_argument("--epochs-native",type=int,default=18)
     a.add_argument("--epochs-detail",type=int,default=18)
-    a.add_argument("--device",default="cuda:0")
+    a.add_argument("--device",default="auto")
     a.add_argument("--seed",type=int,default=42)
     args=a.parse_args()
     result=run(args.project_copy,args.source_model,args.output,

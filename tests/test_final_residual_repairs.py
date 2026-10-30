@@ -208,7 +208,7 @@ class FinalResidualRepairTests(unittest.TestCase):
         for _ in range(17):p.add_manual_specimen(plate,crop_from_geometry(80,50,160,100,0,(160,100),algorithm="manual"))
         root=self.tk_root();host=ttk.Frame(root);host.pack(fill="both",expand=True)
         model={"model_id":"fixture"}
-        with patch.object(p,"active_structure_model",return_value=model),patch("app.xray_structures_ui._current_prediction_allowed",return_value=True):
+        with patch.object(p,"active_structure_model",return_value=model),patch("app.xray_structures_ui._current_prediction_allowed",return_value=True),patch.object(XRayStructureWorkspace,"_native_prediction_model",return_value=True):
             workspace=XRayStructureWorkspace(host,p,initial_specimen_id=first);root.update()
             workspace._refresh_workflow=lambda:None
             self.assertEqual(18,p.annotation_summary()["unstarted"])

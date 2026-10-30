@@ -341,7 +341,7 @@ class RC1RepairInvariants(unittest.TestCase):
         self.assertEqual(b"parent bytes",checkpoint.read_bytes());self.assertFalse((p.models_root/child).exists())
         self.assertEqual(parent.name,XRayProject(p.root).active_structure_model()["model_id"])
 
-    def test_legacy_v007_semantic_selector_current_batch_and_parent_eligibility_survive_reopen(self):
+    def test_legacy_v007_remains_a_parent_but_not_a_prediction_mode_after_reopen(self):
         scheme=bundled_scheme("phoxinus_vertebral_counts");p,sid=self.xray(scheme)
         legacy=copy.deepcopy(scheme)
         for item in legacy["structures"]:item.pop("learning_relation",None);item.pop("reuse_from",None)
@@ -360,13 +360,13 @@ class RC1RepairInvariants(unittest.TestCase):
                 from app.ui.design import apply_styles
                 apply_styles(root,ttk.Style(root));frame=ttk.Frame(root);frame.pack()
                 view=XRayStructureWorkspace(frame,p,initial_specimen_id=sid);root.update_idletasks()
-                self.assertIn(directory.name,view.prediction_model_box.cget("values"))
-                self.assertEqual("readonly",str(view.prediction_model_box.cget("state")))
-                self.assertEqual(directory.name,view.prediction_model_choice.get())
+                self.assertNotIn(directory.name,view.prediction_model_box.cget("values"))
+                self.assertEqual("disabled",str(view.prediction_model_box.cget("state")))
+                self.assertEqual("",view.prediction_model_choice.get())
                 self.assertEqual(directory.name if iteration==0 else "ImageNet ResNet18",view.training_parent_choice.get())
                 self.assertEqual("readonly",str(view.training_parent_box.cget("state")))
                 self.assertIn(directory.name,view.training_parent_box.cget("values"))
-                for button in (view.predict_current_button,view.structure_predict_next_button,view.structure_predict_all_button):self.assertEqual("normal",str(button.cget("state")))
+                for button in (view.predict_current_button,view.structure_predict_next_button,view.structure_predict_all_button):self.assertEqual("disabled",str(button.cget("state")))
                 view.training_parent_choice.set("ImageNet ResNet18")
                 view.training_parent_box.event_generate("<<ComboboxSelected>>");root.update()
                 self.assertEqual("ImageNet ResNet18",p.get_ui_state("structure_training_parent"))
