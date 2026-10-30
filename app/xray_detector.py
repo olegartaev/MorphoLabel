@@ -333,6 +333,7 @@ def predict_plates(project,image_ids,cancel=None,progress=None,score_threshold=0
                     reason=f"{type(exc).__name__}: {exc}"
                     for image_id,_path,_scale in prepared:failures.append({"image_id":image_id,"reason":reason})
                     index+=len(chunk);continue
+                if cancel is not None and cancel.is_set():break
                 returned=list(result.get("results") or []);pending=[]
                 for offset,(image_id,_path,scale) in enumerate(prepared):
                     row=returned[offset] if offset<len(returned) else {"error":"missing prediction result"}
@@ -344,6 +345,7 @@ def predict_plates(project,image_ids,cancel=None,progress=None,score_threshold=0
                             timings["proposal_postprocess"]+=time.perf_counter()-postprocess_started
                             pending.append({"image_id":image_id,"proposals":proposals})
                         except Exception as exc:failures.append({"image_id":image_id,"reason":f"{type(exc).__name__}: {exc}"})
+                if cancel is not None and cancel.is_set():break
                 if pending:
                     try:
                         orientation_started=time.perf_counter()
@@ -359,7 +361,9 @@ def predict_plates(project,image_ids,cancel=None,progress=None,score_threshold=0
                             timings["orientation"]+=time.perf_counter()-orientation_started
                         save_started=time.perf_counter()
                         try:
-                            for item in pending:success.append(_save_prediction(project,model,item["image_id"],item["proposals"]))
+                            for item in pending:
+                                if cancel is not None and cancel.is_set():break
+                                success.append(_save_prediction(project,model,item["image_id"],item["proposals"]))
                         finally:
                             timings["persistence"]+=time.perf_counter()-save_started
                     except Exception as exc:

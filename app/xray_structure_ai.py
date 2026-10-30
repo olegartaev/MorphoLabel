@@ -564,8 +564,10 @@ def predict_structures(project, specimen_ids=None, count=None, cancel=None, prog
                     failures.append({"specimen_id": specimen_id, "reason": str(exc)})
                 index += len(chunk)
                 continue
+            if cancel is not None and cancel.is_set():break
             returned = list(result.get("results") or ())
             for offset, (specimen_id, _path) in enumerate(chunk):
+                if cancel is not None and cancel.is_set():break
                 try:
                     if offset >= len(returned):
                         raise RuntimeError("Structure model returned an incomplete prediction batch.")

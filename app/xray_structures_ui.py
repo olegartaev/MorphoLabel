@@ -1600,11 +1600,12 @@ class XRayStructureWorkspace:
             "After correcting the AI suggestions, press Apply to verify the result again.",
             parent=self.root,default="no",
         ):return
-        self._busy=True;events=queue.Queue()
+        self._busy=True;events=queue.Queue();cancel=threading.Event()
         dialog,label,bar=self._structure_ai_dialog("Predict current","Placing AI marker suggestions on this specimen…",1)
+        dialog.protocol("WM_DELETE_WINDOW",lambda:(cancel.set(),label.configure(text="Cancelling after current inference…")))
         def worker():
             try:events.put(("done",predict_structures(
-                self.project,[specimen_id],model=model,pass_no=pass_no,allow_verified=True
+                self.project,[specimen_id],model=model,pass_no=pass_no,allow_verified=True,cancel=cancel
             )))
             except Exception as exc:events.put(("error",exc))
         threading.Thread(target=worker,daemon=True,name="xray-structure-predict-current").start()
@@ -1617,6 +1618,8 @@ class XRayStructureWorkspace:
             self._busy=False
             try:dialog.destroy()
             except tk.TclError:pass
+            if cancel.is_set():
+                self._refresh_summary();self._refresh_workflow();return
             if event[0]=="error":
                 messagebox.showerror("Predict current",str(event[1]),parent=self.root);return
             result=event[1];success=list(result.get("success") or ())
@@ -1639,6 +1642,7 @@ class XRayStructureWorkspace:
         self._busy=True;events=queue.Queue();cancel=threading.Event()
         dialog,label,bar=self._structure_ai_dialog("Predict structures",f"Preparing {len(ids)} specimen(s)…",len(ids))
         ttk.Button(dialog.winfo_children()[0],text="Cancel",command=cancel.set).pack(anchor="e",pady=(8,0))
+        dialog.protocol("WM_DELETE_WINDOW",lambda:(cancel.set(),label.configure(text="Cancelling after current inference…")))
         def progress(done,total,detail):
             events.put(("progress",int(done),int(total),str(detail)))
         def worker():
@@ -1652,9 +1656,14 @@ class XRayStructureWorkspace:
                     if event[0]=="progress":
                         bar.configure(value=event[1],maximum=max(1,event[2]));label.configure(text=f"Predicting structures: {event[1]} / {event[2]}")
                     elif event[0]=="error":
-                        self._busy=False;dialog.destroy();messagebox.showerror("Predict structures",str(event[1]),parent=self.root);return
+                        self._busy=False;dialog.destroy()
+                        if not cancel.is_set():messagebox.showerror("Predict structures",str(event[1]),parent=self.root)
+                        return
                     elif event[0]=="done":
                         self._busy=False;dialog.destroy();result=event[1]
+                        if cancel.is_set():
+                            self._refresh_after_prediction(result.get("success") or ())
+                            return
                         success=[row["specimen_id"] for row in result.get("success") or ()]
                         failures=list(result.get("failures") or ())
                         self._refresh_after_prediction(result.get("success") or ())

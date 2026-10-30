@@ -1068,12 +1068,29 @@ class XRayCropWorkspace:
         if self._busy:return
         if len(self.project.training_plates())<3:
             messagebox.showinfo("Train crop model","Confirm at least 3 plates first. A first batch of 6–10 diverse plates is recommended.",parent=self.root);return
+        # A frozen installation may have deferred AI support setup. Route
+        # missing starter weights into the existing verified setup UI, rather
+        # than beginning a GPU job that inevitably fails.
+        selected_parent=self.training_parent_choice.get()
+        parent_model_id="" if selected_parent=="RTMDet pretrained" else selected_parent
+        if not parent_model_id:
+            from .runtime_paths import is_frozen
+            from .ai_starters import STARTERS,starter_valid
+            starter=next(item for item in STARTERS if item.role=="detector")
+            if is_frozen() and not starter_valid(starter):
+                setup=getattr(self.root,"_show_first_run_setup",None)
+                if messagebox.askyesno("Crop AI support",
+                    "The verified Crop AI starter is missing or damaged.\n\n"
+                    "Open AI support setup to repair it before training?",
+                    parent=self.root):
+                    if callable(setup):setup()
+                    else:messagebox.showinfo("Crop AI support",
+                        "Open Menu → Set up AI support… to repair the AI starter.",parent=self.root)
+                return
         self._busy=True;events=queue.Queue();dialog=tk.Toplevel(self.root);dialog.title("Train crop model");dialog.transient(self.root);dialog.resizable(False,False)
         frame=ttk.Frame(dialog,padding=14);frame.pack();label=ttk.Label(frame,text="Training X-ray crop model…");label.pack(anchor="w")
         bar=ttk.Progressbar(frame,mode="indeterminate");bar.pack(fill="x",pady=(8,0));bar.start();center(self.root,dialog)
         def progress(stage,detail):events.put(("stage",stage,detail))
-        selected_parent=self.training_parent_choice.get()
-        parent_model_id="" if selected_parent=="RTMDet pretrained" else selected_parent
         def worker():
             try:events.put(("done",train_detector(self.project,progress=progress,parent_model_id=parent_model_id)))
             except Exception as exc:events.put(("error",exc))
@@ -1167,13 +1184,14 @@ class XRayCropWorkspace:
         try:self.flush_pending_edits()
         except Exception as exc:
             messagebox.showerror("Predict current",f"Could not save the current crop edits:\n{exc}",parent=self.root);return
-        self._busy=True;events=queue.Queue()
+        self._busy=True;events=queue.Queue();cancel=threading.Event()
         dialog=tk.Toplevel(self.root);dialog.title("Predict current");dialog.transient(self.root);dialog.resizable(False,False)
         frame=ttk.Frame(dialog,padding=14);frame.pack(fill="both",expand=True)
         label=ttk.Label(frame,text="Applying Crop AI to the current X-ray…");label.pack(anchor="w")
         bar=ttk.Progressbar(frame,mode="indeterminate",length=340);bar.pack(fill="x",pady=(8,0));bar.start(12);center(self.root,dialog)
+        dialog.protocol("WM_DELETE_WINDOW",lambda:(cancel.set(),label.configure(text="Cancelling after current inference…")))
         def worker():
-            try:events.put(("done",predict_plates(self.project,[image_id],model=model)))
+            try:events.put(("done",predict_plates(self.project,[image_id],cancel=cancel,model=model)))
             except Exception as exc:events.put(("error",exc))
         threading.Thread(target=worker,daemon=True,name="xray-detector-predict-current").start()
         def poll():
@@ -1184,6 +1202,8 @@ class XRayCropWorkspace:
             self._busy=False
             try:bar.stop();dialog.destroy()
             except tk.TclError:pass
+            if cancel.is_set():
+                self._refresh_controls();return
             if event[0]=="error":
                 messagebox.showerror("Predict current",str(event[1]),parent=self.root);self._refresh_controls();return
             result=event[1]
@@ -1203,6 +1223,7 @@ class XRayCropWorkspace:
         self._busy=True;events=queue.Queue();cancel=threading.Event();dialog=tk.Toplevel(self.root);dialog.title("Predict Crop");dialog.transient(self.root);dialog.resizable(False,False)
         frame=ttk.Frame(dialog,padding=14);frame.pack();label=ttk.Label(frame,text=f"Preparing crop predictions for {len(ids)} plate(s)…");label.pack(anchor="w")
         bar=ttk.Progressbar(frame,mode="determinate",maximum=len(ids));bar.pack(fill="x",pady=(8,0));self._button(frame,"Cancel",cancel.set,"Stop after the current prediction.").pack(anchor="e",pady=(8,0));center(self.root,dialog)
+        dialog.protocol("WM_DELETE_WINDOW",lambda:(cancel.set(),label.configure(text="Cancelling after current inference…")))
         def worker():
             try:events.put(("done",predict_plates(self.project,ids,cancel=cancel,progress=lambda done,total,image_id:events.put(("progress",done,total,image_id)))))
             except Exception as exc:events.put(("error",exc))
@@ -1213,9 +1234,12 @@ class XRayCropWorkspace:
                     event=events.get_nowait()
                     if event[0]=="progress":bar.configure(value=event[1]);label.configure(text=f"Predicting Crop: {event[1]} / {event[2]}")
                     elif event[0]=="error":
-                        self._busy=False;dialog.destroy();messagebox.showerror("Predict Crop",str(event[1]),parent=self.root);return
+                        self._busy=False;dialog.destroy()
+                        if not cancel.is_set():messagebox.showerror("Predict Crop",str(event[1]),parent=self.root)
+                        return
                     else:
                         self._busy=False;dialog.destroy();result=event[1];self.plate_list.refresh(preserve_scroll=True);self._refresh_controls()
+                        if cancel.is_set():return
                         summary=f"Predicted: {result['success']} plate(s)."
                         if result.get("failures"):summary+=f"\nNeeds attention: {len(result['failures'])}."
                         times=result.get("timings_seconds") or {}
