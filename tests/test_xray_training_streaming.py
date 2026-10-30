@@ -17,9 +17,19 @@ class TrainingStreamingTests(unittest.TestCase):
             root=Path(dirname)
             project_root=root/"original"
             project_root.mkdir()
-            script=root/"fake_training.py"
+            # Model a frozen GUI bundle whose top-level extension has another
+            # Python ABI. It must never shadow the AI interpreter's _ctypes.
+            (root/"_ctypes.py").write_text("raise ImportError('GUI Python ABI leaked into AI worker')\n",encoding="utf-8")
+            (root/"app").mkdir()
+            (root/"app/__init__.py").write_text("",encoding="utf-8")
+            (root/"app/worker_marker.py").write_text("TOKEN=42\n",encoding="utf-8")
+            (root/"tools").mkdir()
+            script=root/"tools"/"fake_training.py"
             script.write_text(
                 "import json,sys,time,zipfile\n"
+                "import ctypes\n"
+                "from app.worker_marker import TOKEN\n"
+                "assert TOKEN==42 and ctypes.sizeof(ctypes.c_int)>0\n"
                 "from pathlib import Path\n"
                 "out=Path(sys.argv[sys.argv.index('--output')+1])\n"
                 "print(json.dumps({'stage':'PREPARED','training_specimens':7}),flush=True)\n"

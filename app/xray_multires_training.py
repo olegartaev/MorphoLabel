@@ -24,6 +24,25 @@ class HighResolutionTrainingCancelled(HighResolutionTrainingError):
     pass
 
 
+def _stage_training_worker(script: Path, destination: Path) -> Path:
+    """Give the external Python source imports, without the GUI's ABI extensions."""
+    root=script.resolve().parents[1]
+    for package in ("app","ai_runtime"):
+        source=root/package
+        paths=source.rglob("*.py") if package=="app" else source.glob("*.py")
+        for path in paths:
+            target=destination/path.relative_to(root)
+            target.parent.mkdir(parents=True,exist_ok=True)
+            shutil.copy2(path,target)
+    resources=root/"app"/"resources"
+    if resources.is_dir():
+        shutil.copytree(resources,destination/"app"/"resources",dirs_exist_ok=True)
+    target=destination/"tools"/script.name
+    target.parent.mkdir(parents=True,exist_ok=True)
+    shutil.copy2(script,target)
+    return target
+
+
 def is_universal_multires_model(project, model_id: str) -> bool:
     """True only for a compatible, hash-validated Native + Detail model."""
     from ai_runtime.universal_multires import pipeline_components
@@ -120,17 +139,22 @@ def run_high_resolution_training(
     with tempfile.TemporaryDirectory(prefix="morpholabel_highres_project_") as temporary:
         project_copy = Path(temporary) / "project_copy"
         create_read_only_source_project_copy(project, source_model_id, project_copy)
+        # A frozen GUI may use a different Python ABI than the AI component.
+        # Exposing its _internal directory through cwd/PYTHONPATH lets bundled
+        # _ctypes.pyd and other extensions shadow the AI runtime's own modules.
+        worker_script=_stage_training_worker(script,Path(temporary)/"worker_sources")
         command = [
-            str(python_executable), str(script), "--project-copy", str(project_copy),
+            str(python_executable), str(worker_script), "--project-copy", str(project_copy),
             "--source-model", str(source_model_id), "--output", str(output_zip),
             "--epochs-native", str(int(epochs_native)), "--epochs-detail", str(int(epochs_detail)),
             "--device", "cuda:0",
         ]
         environment = os.environ.copy()
-        root = str(script.resolve().parents[1])
-        environment["PYTHONPATH"] = root + (os.pathsep + environment["PYTHONPATH"] if environment.get("PYTHONPATH") else "")
+        root = str(worker_script.resolve().parents[1])
+        environment["PYTHONPATH"] = root
+        environment.pop("PYTHONHOME",None)
         process = subprocess.Popen(
-            command, cwd=root, env=environment, stdout=subprocess.PIPE,
+            command, cwd=str(Path(python_executable).resolve().parent), env=environment, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
             bufsize=1, **hidden_window_kwargs(),
         )
