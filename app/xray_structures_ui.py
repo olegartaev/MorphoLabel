@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import math
 import json
+import shutil
+import tempfile
 from pathlib import Path
 import queue
 import threading
@@ -463,11 +465,17 @@ class XRayStructureWorkspace:
         model_row=ttk.Frame(three);model_row.grid(row=0,column=0,sticky="ew");three.columnconfigure(0,weight=1)
         self.structure_model_label=ElidedLabel(model_row,text="Active: none",style="StatusChip.TLabel",anchor="w",width=24);self.structure_model_label.pack(side="left")
         add_command_separator(model_row)
-        # Training resumes the active compatible model automatically; the
-        # researcher should not need to select a neural-network architecture.
+        # One Train button; From selects existing compatible weights, not an architecture.
+        ttk.Label(model_row,text="From",style="Muted.TLabel").pack(side="left")
         self.training_parent_choice=tk.StringVar(master=three,value="ImageNet ResNet18")
+        self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,
+            values=("ImageNet ResNet18",),width=23,state="readonly")
+        self.training_parent_box.pack(side="left",padx=(4,0))
         self._training_parent_touched=False
-        self.training_summary=ttk.Label(model_row,text="",style="Muted.TLabel");self.training_summary.pack(side="right",padx=(10,0))
+        self.training_parent_box.bind("<<ComboboxSelected>>",
+            lambda _event:setattr(self,"_training_parent_touched",True))
+        self.training_summary=ttk.Label(model_row,text="",style="Muted.TLabel")
+        self.training_summary.pack(side="right",padx=(10,0))
         train_actions=ttk.Frame(three);train_actions.grid(row=1,column=0,sticky="w",pady=(3,0))
         self.structure_train_button=self._button(
             train_actions,"Train",self.train_structure_ai,
@@ -849,8 +857,13 @@ class XRayStructureWorkspace:
         compatible_active=bool(model and _scheme_matches_model(self.project,model))
         self.prediction_model_box.configure(values=prediction_values,width=model_selector_width(prediction_values,minimum=22),state="readonly" if prediction_values else "disabled")
         self.prediction_model_choice.set(active_id if compatible_active else "")
-        # One Train action: continue the active model, or initialize the first.
-        self.training_parent_choice.set(active_id if compatible_active else "ImageNet ResNet18")
+        parent_values=("ImageNet ResNet18",)+prediction_values
+        current_parent=self.training_parent_choice.get()
+        if not self._training_parent_touched or current_parent not in parent_values:
+            self.training_parent_choice.set(active_id if compatible_active else "ImageNet ResNet18")
+            self._training_parent_touched=False
+        self.training_parent_box.configure(values=parent_values,
+            width=model_selector_width(parent_values,minimum=22),state="readonly")
         state="normal" if compatible_active and self.pass_no.get()==1 else "disabled"
         self.structure_predict_next_button.configure(state=state);self.structure_predict_all_button.configure(state=state)
         self.structure_review_button.configure(state="normal" if review else "disabled")
@@ -874,23 +887,11 @@ class XRayStructureWorkspace:
             messagebox.showinfo("Train Structure AI",
                 "The active model is not compatible with continued training. Choose another model in Models.",parent=self.root)
             return
-        from datetime import datetime
-        initial=f"MorphoLabel_ModelCandidate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
-        output=filedialog.asksaveasfilename(
-            parent=self.root,title="Save model candidate",initialdir=str(self.project.root.parent),
-            initialfile=initial,defaultextension=".zip",filetypes=(("MorphoLabel Structure AI","*.zip"),("ZIP files","*.zip")),
-        )
-        if not output:return
-        output_path=Path(output)
-        if output_path.exists():
-            messagebox.showerror("Train Structure AI","This file already exists. Choose another name to avoid overwriting a saved candidate.",parent=self.root)
-            return
-        if not messagebox.askyesno(
-            "Train Structure AI",
-            "Only verified annotations will be used. Training continues from the active model and separates training and validation by source plate.\n\n"
-            "Training will create a separate, unvalidated model candidate. The active model will remain unchanged. GPU training may take some time. Continue?",
-            parent=self.root,default="no",
-        ):return
+        # Generate a verified candidate package behind the scenes. Users can
+        # separately export any saved model through Models. Keep the ZIP on
+        # import failure for recovery; otherwise remove the temporary files.
+        candidate_dir=Path(tempfile.mkdtemp(prefix="morpholabel_structure_candidate_"))
+        output_path=candidate_dir/"candidate.zip"
 
         self._busy=True;self._refresh_workflow()
         events=queue.Queue();cancelled=threading.Event()
@@ -936,12 +937,14 @@ class XRayStructureWorkspace:
                         self._busy=False;self._refresh_workflow()
                         try:bar.stop();dialog.destroy()
                         except tk.TclError:pass
+                        if not output_path.exists():shutil.rmtree(candidate_dir,ignore_errors=True)
                         messagebox.showerror("Train Structure AI",str(event[1]),parent=self.root);return
                     elif event[0]=="cancelled":
                         self._busy=False;self._refresh_workflow()
                         try:bar.stop();dialog.destroy()
                         except tk.TclError:pass
-                        messagebox.showinfo("Train Structure AI","Training cancelled. The incomplete candidate ZIP has been removed.",parent=self.root);return
+                        shutil.rmtree(candidate_dir,ignore_errors=True)
+                        messagebox.showinfo("Train Structure AI","Training cancelled.",parent=self.root);return
                     elif event[0]=="done":
                         self._busy=False
                         try:bar.stop();dialog.destroy()
@@ -952,16 +955,18 @@ class XRayStructureWorkspace:
                             if active_after!=active_before:
                                 raise RuntimeError("Import unexpectedly changed the active model; stop and inspect the project.")
                             self.training_parent_choice.set(local_id);self._training_parent_touched=True
-                            self._refresh_workflow();self._refresh_workflow()
+                            self._refresh_workflow()
+                            shutil.rmtree(candidate_dir,ignore_errors=True)
                             messagebox.showinfo("Train Structure AI",
-                                f"New model candidate imported as {local_id}.\n"
+                                f"New model candidate: {local_id}.\n"
                                 f"Active model unchanged: {active_after}.\n"
-                                "The candidate is unvalidated; independent performance has not been established. Review its predictions before use.\n\n"
-                                f"ZIP: {event[1]['path']}",parent=self.root)
+                                "The candidate is unvalidated; review its predictions before use.",parent=self.root)
                         except Exception as exc:
                             self._refresh_workflow()
                             messagebox.showerror("Model candidate import",
-                                f"The ZIP was saved, but model import failed. The active model was not changed.\n\n{exc}\n\n{event[1]['path']}",parent=self.root)
+                                f"Training finished, but the model could not be registered.\n"
+                                f"The active model is unchanged.\n\n{exc}\n\n"
+                                f"Recovery ZIP: {event[1]['path']}",parent=self.root)
                         return
             except queue.Empty:pass
             if dialog.winfo_exists():dialog.after(200,poll)
@@ -1295,7 +1300,7 @@ class XRayStructureWorkspace:
                         self._busy=False
                         try:bar.stop();dialog.destroy()
                         except tk.TclError:pass
-                        result=event[1];self._training_parent_touched=False;self.training_parent_choice.set(result["model_id"]);metrics=result.get("metrics") or {}
+                        result=event[1];self._training_parent_touched=True;self.training_parent_choice.set(result["model_id"]);metrics=result.get("metrics") or {}
                         quality=metrics.get("structure/macro_f1")
                         detail=(
                             f"Model ready: {result['model_id']}\n"
