@@ -557,7 +557,7 @@ def _auto_select_trained_structure_model(project, previous, candidate_id, *, reg
         routes = validated_routes(project.scheme, previous["model_id"], previous_routes, models)
     except ValueError:
         return {"decision": "kept", "reason": "A previous component source is no longer available."}
-    source_ids = set(routes.values()) | {previous["model_id"], candidate_id}
+    source_ids = set(routes.values()) | {candidate_id}
     extra = [models[source_id] for source_id in sorted(source_ids - {previous["model_id"], candidate_id})]
     specimen_ids, reason = common_validation_specimens(project, previous, candidate, extra_models=extra)
     if not specimen_ids:
