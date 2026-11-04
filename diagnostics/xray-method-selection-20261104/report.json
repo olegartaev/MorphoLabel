@@ -1,0 +1,209 @@
+{
+  "report": "MorphoLabel X-ray methods diagnostic",
+  "date": "2026-11-04",
+  "scope": "READ_ONLY; no code, project database, images, annotations, or model weights were changed; no training or GPU run.",
+  "source": {
+    "repository": "olegartaev/MorphoLabel",
+    "local_launcher": "START_APP.cmd -> START_APP.vbs -> RUN_CANONICAL.cmd -> tools/source_launcher.py -> tools/canonical_exec.py",
+    "local_source_version": {
+      "branch": "main",
+      "head": "53df1290ec49df061d7048d23fc1373f9d11d357",
+      "github_commit_confirmed": true,
+      "tracked_changes": false,
+      "untracked_user_data_present": true
+    },
+    "execution": "Canonical provenance resolves app and shell modules inside the local checkout; source launcher uses host Python 3.12. No MorphoLabel.exe is in the launcher chain or installed application search, so no installed EXE can be tied to a commit.",
+    "target_feature": {
+      "branch": "feature/xray-traits-foundation",
+      "head": "215d6cd5ff51ac97da0c249d57202a6702a99b10",
+      "github_confirmed": true,
+      "detached_worktree_clean": true
+    },
+    "target_usability": {
+      "branch": "fix/release-usability-20261029",
+      "head": "9a271efddf3759659b9bb4af8298094067d6c588",
+      "github_confirmed": true,
+      "detached_worktree_clean": true
+    }
+  },
+  "project_inventory": {
+    "structure_models": 8,
+    "active": "xray_structure_model_v008",
+    "verified_human_pass1_specimens": 174,
+    "v008_training_overlap": {
+      "specimens": 140,
+      "plates": 57
+    },
+    "verified_outside_v008_training": {
+      "specimens": 34,
+      "plates": 18
+    },
+    "outside_every_model_train": {
+      "specimens": 19,
+      "plates": 14
+    },
+    "outside_every_model_train_and_validation": {
+      "specimens": 4,
+      "plates": 4
+    },
+    "auto_selection_minimum": {
+      "common_verified_specimens": 12,
+      "source_plates": 3
+    },
+    "interpretation": "Only four verified specimens have no recorded train or validation membership in any saved model. The saved models' historical development results are not an independent holdout. Selection quality is not established on this project's available untouched data."
+  },
+  "models": [
+    {
+      "id": "xray_structure_model_v001",
+      "active": false,
+      "backend": "resnet18_heatmap_v1",
+      "kind": "standard",
+      "weights": true,
+      "sha256": "b1de8769c1b9cfb4fcbb672ab57884f663e686271315b4cd3d152974c3b29db5",
+      "parent": null,
+      "train_specimens": 9,
+      "val_specimens": 3,
+      "train_plates": 6,
+      "val_plates": 2,
+      "historical_macro_f1": 0.0114
+    },
+    {
+      "id": "xray_structure_model_v002",
+      "active": false,
+      "backend": "resnet18_heatmap_v1",
+      "kind": "standard",
+      "weights": true,
+      "sha256": "60c9900be33f5fe9c71ae417d0f755397edc85b7c70a1d216442eaa6e4bba698",
+      "parent": "xray_structure_model_v001",
+      "train_specimens": 25,
+      "val_specimens": 6,
+      "train_plates": 13,
+      "val_plates": 3,
+      "historical_macro_f1": 0.1375
+    },
+    {
+      "id": "xray_structure_model_v003",
+      "active": false,
+      "backend": "resnet18_heatmap_v1",
+      "kind": "standard",
+      "weights": true,
+      "sha256": "07242855be09c34193d1076acffbbf16b0278337dde147764e5be673257f5457",
+      "parent": "xray_structure_model_v002",
+      "train_specimens": 50,
+      "val_specimens": 10,
+      "train_plates": 26,
+      "val_plates": 6,
+      "historical_macro_f1": 0.2047
+    },
+    {
+      "id": "xray_structure_model_v004",
+      "active": false,
+      "backend": "resnet18_heatmap_v1",
+      "kind": "standard",
+      "weights": true,
+      "sha256": "1215d3094c637bb7f8fffb773724143366ddab83ebf75dc3d1f9d6f49915a106",
+      "parent": "xray_structure_model_v003",
+      "train_specimens": 50,
+      "val_specimens": 10,
+      "train_plates": 26,
+      "val_plates": 6,
+      "historical_macro_f1": 0.2825
+    },
+    {
+      "id": "xray_structure_model_v005",
+      "active": false,
+      "backend": "resnet18_heatmap_v1",
+      "kind": "standard",
+      "weights": true,
+      "sha256": "7b8e6103b54f1ecb44789d1552fdc675aa8f90518aab946ce18a0ef23f71e481",
+      "parent": "xray_structure_model_v004",
+      "train_specimens": 49,
+      "val_specimens": 14,
+      "train_plates": 26,
+      "val_plates": 7,
+      "historical_macro_f1": 0.7046
+    },
+    {
+      "id": "xray_structure_model_v006",
+      "active": false,
+      "backend": "resnet18_heatmap_v1",
+      "kind": "standard",
+      "weights": true,
+      "sha256": "97cab9e444e6f7f376b8fa43f0d3999012f0841fc97c7ead7acd8a15c5ba1329",
+      "parent": "xray_structure_model_v005",
+      "train_specimens": 56,
+      "val_specimens": 13,
+      "train_plates": 28,
+      "val_plates": 7,
+      "historical_macro_f1": 0.7742
+    },
+    {
+      "id": "xray_structure_model_v007",
+      "active": false,
+      "backend": "resnet18_heatmap_v1",
+      "kind": "standard",
+      "weights": true,
+      "sha256": "5854561e8032936d208ddf54e9a83f1e46040a28d758e7718efc2c597b17c6e6",
+      "parent": "xray_structure_model_v006",
+      "train_specimens": 96,
+      "val_specimens": 13,
+      "train_plates": 38,
+      "val_plates": 10,
+      "historical_macro_f1": 0.9192
+    },
+    {
+      "id": "xray_structure_model_v008",
+      "active": true,
+      "backend": "resnet18_heatmap_v1",
+      "kind": "standard",
+      "weights": true,
+      "sha256": "5b0bafcbe34c6fa2dacf57a0fbba6f201fdb5417f4cc8f8c733b3e6b75d7e5f5",
+      "parent": "xray_structure_model_v007",
+      "train_specimens": 140,
+      "val_specimens": 30,
+      "train_plates": 57,
+      "val_plates": 14,
+      "historical_macro_f1": 0.8987
+    }
+  ],
+  "methods": {
+    "feature_branch": "Automatic search/routing among compatible saved standard Structure AI models and standard Train/predict; source-level component routing and group compatibility are covered by CPU tests. Current project contains only standard models.",
+    "native_full_roi_detail": "The separate usability branch implements Native Full plus tiled ROI Detail inference and metadata selection of Detail channels. Its training workflow initializes from a standard compatible parent or an existing multires parent, trains Native and Detail branches separately, then selects Detail channels on validation plates; it is one workflow with two component trainings, not a single shared training pass. No multires Native/Detail weights are saved in the inspected project.",
+    "selection_limit": "Composite inference can retain Detail outputs for declared structure IDs. Feature-branch auto-selection does not understand inference_pipeline component outputs; the two selectors/metadata formats need integration. Selection must preserve dependent structure groups (e.g. vertebra and derived reference roles) when routing, which per-channel detail retention alone does not prove."
+  },
+  "research_comparison": {
+    "source": "Committed research report in the local experimental universal-multires branch; real GPU predictions on 142 frozen verified crops, with no prospective independent holdout.",
+    "all7_correct": "ROI Detail 33/117; Native Full 33/117; Native+ROI selective preanal detail 44/117",
+    "notes": "Hybrid repaired 12 complete cases and broke 1 versus ROI; experimental result only. Dataset includes train/dev cases, rare preanal count reliability remained limited. These values do not validate the candidate weights found in the inspected project."
+  },
+  "integration_conflicts": {
+    "critical_files": [
+      "app/xray_structure_ai.py",
+      "app/xray_structures_ui.py",
+      "ai_runtime/xray_structure_runner.py",
+      "app/xray_project.py",
+      "tests/test_xray_structure_ai.py",
+      "tests/test_release_extension_boundaries.py",
+      "packaging/morpholabel.spec"
+    ],
+    "conflicts": [
+      "Usability branch deletes tests/test_xray_auto_selection.py and tests/test_xray_component_selection.py and removes the feature branch saved-model auto-selection path; preserve/rebase these behaviors.",
+      "Train/Predict and Models UI changed on both sides. Feature auto-selects model routes; usability adds Native/Detail training/import/model controls and inference dispatch.",
+      "Export/import are divergent: feature packages routed component sources; usability packages auxiliary Native/Detail checkpoints under inference_pipeline. Preserve both package shapes, checksums, schema safeguards, and lineage.",
+      "SQLite keeps the existing structure model/membership tables but adds high-water model ID metadata and new verified training-marker queries; migration behavior must be merged and verified without rewriting user data.",
+      "Model metadata uses component_routes in feature and inference_pipeline/multires_training in usability. Their lineage and selection semantics are not interchangeable.",
+      "Packaging must include universal_multires.py and training/runtime helpers; current feature runner does not include that dispatch."
+    ],
+    "branch_relation": "The two target refs diverge; the usability ref does not contain the feature commit."
+  },
+  "tests": {
+    "feature_commit": "215d6cd5ff51ac97da0c249d57202a6702a99b10",
+    "feature_py_compile": "PASS",
+    "feature_focused": "PASS: 52 tests, 0 failed (test_xray_component_selection, test_xray_auto_selection, test_xray_structure_ai, test_release_extension_boundaries)",
+    "usability_commit": "9a271efddf3759659b9bb4af8298094067d6c588",
+    "usability_py_compile": "PASS",
+    "usability_focused": "PASS: 41 passed, 7 skipped, 0 failed (test_xray_structure_ai, test_release_extension_boundaries, test_universal_multires, test_universal_multires_package)",
+    "skips": "Optional PyTorch is not installed in the test Python, so tensor inference and package tensor tests skipped. No GPU or GUI smoke was run."
+  },
+  "conclusion": "Last source build with demonstrated feature auto-selection is feature commit 215d6cd. Native Full + ROI Detail is implemented in usability commit 9a271ef but is not installed in the inspected project and its tensor inference was not executable here. The X-ray combination is feasible in code after integrating the divergent train/predict, component-routing, model UI, package/metadata, SQLite, and packaging changes. Current human-verified data are insufficient for independent 12-specimen/3-plate automatic quality selection."
+}
