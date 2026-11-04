@@ -240,5 +240,28 @@ class ComponentRoutingTests(unittest.TestCase):
             self.assertEqual("new",project.models[1]["model_id"])
 
 
+    def test_scalar_count_cannot_masquerade_as_zero_point_markers(self):
+        import tempfile
+        from pathlib import Path
+        from app.xray_structure_ai import _predict_prepared_sources
+        class CountOnly:
+            def predict_many(self, payload, timeout):
+                return {"results":[{"structures":[{
+                    "structure_id":"preanal_pterygiophore",
+                    "count":4, "points":[],
+                }]}]}
+        with tempfile.TemporaryDirectory() as directory:
+            project=type("Project",(),{"root":Path(directory)})()
+            models={"count":{"model_id":"count","path":"count.pth","metadata_path":"count.json"}}
+            with patch("app.xray_structure_ai.backend_for_structure_model",return_value=CountOnly()):
+                outputs,failures,_batch=_predict_prepared_sources(
+                    project,models,[("fish",Path(directory)/"fish.png")],
+                    {"device":"cpu","batch_size":1},
+                )
+            self.assertEqual({},outputs["count"])
+            self.assertEqual(1,len(failures))
+            self.assertIn("Scalar-only",failures[0]["reason"])
+
+
 if __name__ == "__main__":
     unittest.main()
