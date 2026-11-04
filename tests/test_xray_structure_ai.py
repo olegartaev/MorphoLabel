@@ -243,6 +243,43 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         self.project.delete_structure_model("xray_structure_model_v002")
         self.assertEqual("xray_structure_model_v001",self.project.active_structure_model()["model_id"])
 
+    def test_combined_model_keeps_component_sources_and_reopens(self):
+        from app.xray_project import XRayProject
+        digest=structure_schema_digest(self.project.scheme)
+        specs=self._eight_verified()
+        for number, routes, parent in (
+            (1, None, None),
+            (2, None, None),
+            (3, {
+                "vertebra":"xray_structure_model_v001",
+                "first_caudal":"xray_structure_model_v001",
+                "last_predorsal":"xray_structure_model_v001",
+                "preanal_pterygiophore":"xray_structure_model_v002",
+            }, "xray_structure_model_v001"),
+        ):
+            ident=f"xray_structure_model_v{number:03d}"
+            folder=self.project.models_root/ident;folder.mkdir(parents=True)
+            (folder/"model.pth").write_bytes(b"dummy weights")
+            (folder/"model.json").write_text("{}",encoding="utf-8")
+            self.project.register_structure_model(
+                ident,str((folder/"model.pth").relative_to(self.project.root)),
+                str((folder/"model.json").relative_to(self.project.root)),
+                parent,digest,"resnet18_heatmap_v1",
+                {"component_routes":routes} if routes else {},
+                ({"specimen_id":specs[0],"split":"train"},),
+                activate=number==3,
+            )
+        reopened=XRayProject(self.project.root)
+        combined=reopened.active_structure_model()
+        self.assertEqual("xray_structure_model_v003",combined["model_id"])
+        self.assertEqual("xray_structure_model_v002",combined["metrics"]["component_routes"]["preanal_pterygiophore"])
+        with self.assertRaisesRegex(ValueError,"source of combined"):
+            reopened.delete_structure_model("xray_structure_model_v002")
+        from app.xray_structure_ai import XRayStructurePackageError, export_structure_model_package
+        with self.assertRaisesRegex(XRayStructurePackageError,"combined"):
+            export_structure_model_package(reopened,self.root/"cannot-export.zip")
+        self.assertFalse((self.root/"cannot-export.zip").exists())
+
     def test_portable_structure_package_round_trip_has_no_training_membership_or_paths(self):
         digest=structure_schema_digest(self.project.scheme);model_id="xray_structure_model_v001"
         directory=self.project.models_root/model_id;directory.mkdir(parents=True)
