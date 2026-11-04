@@ -770,10 +770,15 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
                         specimen_all_terms+=1;specimen_all_ok+=int(error<=float(tolerance))
                 else:stat["missing"]+=1
         exact_counts_per_specimen.append(specimen_ok)
+        # "All traits correct" must mean ALL declared scientific traits,
+        # not merely the visible/evaluable subset for this specimen.
+        # A continuous trait without an explicit tolerance is not
+        # pass/fail evaluable and cannot count toward complete success.
         if specimen_all_terms:
-            all_evaluable+=1
-            good=specimen_all_ok==specimen_all_terms
-            all_correct+=int(good);wrong_specimens+=int(not good)
+            wrong_specimens+=int(specimen_all_ok!=specimen_all_terms)
+            if specimen_all_terms==len(traits):
+                all_evaluable+=1
+                all_correct+=int(specimen_all_ok==specimen_all_terms)
     structure_rows=[];f1_values=[]
     for structure in structures:
         stat=structure_stats[str(structure["id"])];tp=stat["tp"];fp=stat["fp"];fn=stat["fn"]
