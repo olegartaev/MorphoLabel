@@ -654,15 +654,15 @@ def _auto_select_trained_structure_model(project, previous, candidate_id, *, reg
         summarize_structure_ai_human_comparison, baseline_routes=previous_routes,
         check=choose_better_model,
     )
-    baseline = selection["report"]["summary"]
     if not selection["accepted"]:
         return {"decision": "kept", "reason": selection["reason"],
                 "checked_specimens": len(specimen_ids)}
     selected = selection["routes"]
+    selected_summary = selection["report"]["summary"]
     result_summary = {
         "reason": selection["reason"], "checked_specimens": len(specimen_ids),
-        "evaluated_specimens": int(baseline.get("all_traits_evaluable_specimens") or 0),
-        "candidate_complete": int(baseline.get("all_traits_correct_specimens") or 0),
+        "evaluated_specimens": int(selected_summary.get("all_traits_evaluable_specimens") or 0),
+        "candidate_complete": int(selected_summary.get("all_traits_correct_specimens") or 0),
         "previous_model_id": previous["model_id"],
     }
     if set(selected.values()) == {candidate_id}:

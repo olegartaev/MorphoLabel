@@ -270,6 +270,10 @@ class ComponentRoutingTests(unittest.TestCase):
             ):
                 decision = _auto_select_trained_structure_model(project, project.models[0], "new")
             self.assertEqual("combined",decision["decision"])
+            # The Models dialog must display the selected combination's score,
+            # not the superseded baseline's score.
+            self.assertEqual(24, decision["candidate_complete"])
+            self.assertEqual(24, decision["evaluated_specimens"])
             self.assertEqual("combined-v001",project.active_id)
             combined = project.models[-1]
             self.assertEqual("new",combined["metrics"]["component_routes"]["preanal_pterygiophore"])
