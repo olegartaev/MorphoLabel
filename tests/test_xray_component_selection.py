@@ -141,5 +141,104 @@ class ComponentRoutingTests(unittest.TestCase):
         self.assertEqual({"old", "new"}, set(runner.call_args.args[1]))
 
 
+    def test_training_selection_publishes_immutable_combined_model(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from app.xray_structure_ai import _auto_select_trained_structure_model
+
+        scheme = self.scheme
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            class Project:
+                def __init__(self):
+                    self.root = root
+                    self.models_root = root/"models"
+                    self.models_root.mkdir()
+                    self.scheme = scheme
+                    self.models = []
+                    self.active_id = "old"
+                    self.membership = {}
+                    for ident in ("old", "new"):
+                        folder = self.models_root/ident
+                        folder.mkdir()
+                        (folder/"model.pth").write_bytes(b"test checkpoint")
+                        (folder/"model.json").write_text(
+                            json.dumps({"backend":"resnet18_heatmap_v1","schema_digest":"same"}),
+                            encoding="utf-8",
+                        )
+                        self.models.append({
+                            "model_id":ident,"parent_model_id":None,"schema_digest":"same",
+                            "backend":"resnet18_heatmap_v1","path":str((folder/"model.pth").relative_to(root)),
+                            "metadata_path":str((folder/"model.json").relative_to(root)),
+                        })
+                        self.membership[ident] = [
+                            {"specimen_id":"train","split":"train"},
+                            *[{"specimen_id":f"synthetic-{j}","split":"val"} for j in range(24)],
+                        ]
+                def structure_models(self):
+                    return self.models
+                def structure_model_membership(self, ident):
+                    return self.membership[ident]
+                def specimen(self, ident):
+                    return {"image_id":"train-plate" if ident=="train" else
+                            f"validation-{int(ident.split('-')[1])//8}"}
+                def annotation_run(self, ident, *args):
+                    return {"status":"verified"}
+                def effective_annotations(self, ident, *args):
+                    return ComponentRoutingTests.sample_points()
+                def structure_visibility_states(self, ident, *args):
+                    return {}
+                def specimen_crop_size(self, ident):
+                    return (900, 300)
+                def next_structure_model_id(self):
+                    return "combined-v001"
+                def register_structure_model(self, ident, path, metadata_path, parent,
+                                             digest, backend, metrics, membership,
+                                             **kwargs):
+                    self.models.append({
+                        "model_id": ident, "path": path, "metadata_path": metadata_path,
+                        "parent_model_id": parent, "schema_digest":digest,
+                        "backend": backend, "metrics":metrics,
+                    })
+                    self.membership[ident] = list(membership)
+                    if kwargs.get("activate"):
+                        self.active_id = ident
+                def activate_structure_model(self, ident):
+                    self.active_id = ident
+
+            project = Project()
+            old_points = {
+                f"synthetic-{j}":self.sample_points(ptery=3 if j < 5 else 2)
+                for j in range(24)
+            }
+            new_points = {
+                f"synthetic-{j}":self.sample_points(ptery=2, vertebra=2)
+                for j in range(24)
+            }
+            def model_report(_project, model_id, **_kwargs):
+                return {
+                    "summary":{"skipped_not_verified":0,"prediction_failures":0},
+                    "failures":[],
+                    "prediction_rows":old_points if model_id=="old" else new_points,
+                }
+            with (
+                patch("app.xray_structure_ai._scheme_matches_model",return_value=True),
+                patch("app.xray_structure_ai.compare_structure_model_to_human",
+                      side_effect=model_report),
+            ):
+                decision = _auto_select_trained_structure_model(project, project.models[0], "new")
+            self.assertEqual("combined",decision["decision"])
+            self.assertEqual("combined-v001",project.active_id)
+            combined = project.models[-1]
+            self.assertEqual("new",combined["metrics"]["component_routes"]["preanal_pterygiophore"])
+            self.assertEqual("old",combined["metrics"]["component_routes"]["vertebra"])
+            self.assertTrue((root/combined["path"]).is_file())
+            self.assertEqual("old",json.loads((root/combined["metadata_path"]).read_text())["parent_model_id"])
+            self.assertEqual(24,sum(x["split"]=="val" for x in project.membership["combined-v001"]))
+            self.assertEqual("old",project.models[0]["model_id"])
+            self.assertEqual("new",project.models[1]["model_id"])
+
+
 if __name__ == "__main__":
     unittest.main()
