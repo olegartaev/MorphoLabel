@@ -348,7 +348,7 @@ class ComponentRoutingTests(unittest.TestCase):
                 project, models["baseline"], models["unused_candidate"],
                 routes, ["validation_1"], {"decision":"selected"},
             )
-            members = {row["specimen_id"]:row["split"] for row in project.published[7]}
+            members = {row["specimen_id"]:row["split"] for row in project.published[0][7]}
             self.assertEqual({
                 "train_baseline":"train", "train_chosen":"train",
                 "validation_1":"val",
