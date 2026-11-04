@@ -275,10 +275,72 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         self.assertEqual("xray_structure_model_v002",combined["metrics"]["component_routes"]["preanal_pterygiophore"])
         with self.assertRaisesRegex(ValueError,"source of combined"):
             reopened.delete_structure_model("xray_structure_model_v002")
-        from app.xray_structure_ai import XRayStructurePackageError, export_structure_model_package
-        with self.assertRaisesRegex(XRayStructurePackageError,"combined"):
-            export_structure_model_package(reopened,self.root/"cannot-export.zip")
-        self.assertFalse((self.root/"cannot-export.zip").exists())
+        package=self.root/"combined.zip";export_structure_model_package(reopened,package)
+        with zipfile.ZipFile(package) as archive:
+            manifest=json.loads(archive.read("manifest.json"))
+            self.assertEqual("combined",manifest["model_kind"])
+            self.assertEqual({"xray_structure_model_v001","xray_structure_model_v002"},
+                             {item["model_id"] for item in manifest["components"]})
+            self.assertTrue(all(name.startswith("artifacts/components/") for name in manifest["files"]))
+        source=self.root/"portable_combined_source";source.mkdir()
+        Image.fromarray(np.full((200,400),80,np.uint8)).save(source/"one.png")
+        other_root=self.root/"portable_combined_projects";other_root.mkdir()
+        destination=XRayProject.create("portable_combined",source,other_root,bundled_scheme("phoxinus_vertebral_counts"))
+        imported=import_structure_model_package(destination,package)
+        row=next(item for item in destination.structure_models() if item["model_id"]==imported)
+        self.assertEqual("combined",row["metrics"]["model_kind"])
+        self.assertEqual(2,len(set(row["metrics"]["component_routes"].values())))
+        self.assertTrue(all((destination.root/item["path"]).is_file() for item in destination.structure_models()))
+        original_rows={
+            "xray_structure_model_v001":[{"structure_id":"vertebra","x":.2,"y":.5}],
+            "xray_structure_model_v002":[{"structure_id":"preanal_pterygiophore","x":.7,"y":.5}],
+        }
+        imported_rows={
+            source: original_rows["xray_structure_model_v002" if source==row["metrics"]["component_routes"]["preanal_pterygiophore"] else "xray_structure_model_v001"]
+            for source in set(row["metrics"]["component_routes"].values())
+        }
+        from app.xray_component_selection import combine_marker_rows
+        before=combine_marker_rows(self.project.scheme,original_rows,combined["metrics"]["component_routes"])
+        after=combine_marker_rows(destination.scheme,imported_rows,row["metrics"]["component_routes"])
+        self.assertEqual(before,after)
+        second=import_structure_model_package(destination,package)
+        self.assertNotEqual(imported,second)
+        self.assertEqual(6,len(destination.structure_models()))
+
+    def test_combined_package_rejects_corrupt_or_incompatible_components(self):
+        import tempfile
+        from app.xray_structure_ai import XRayStructurePackageError
+        digest=structure_schema_digest(self.project.scheme);specimen=self._eight_verified()[0]
+        for ident in ("source_a","source_b"):
+            folder=self.project.models_root/ident;folder.mkdir()
+            (folder/"model.pth").write_bytes(ident.encode())
+            (folder/"model.json").write_text(json.dumps({"backend":"resnet18_heatmap_v1","schema_digest":digest}),encoding="utf-8")
+            self.project.register_structure_model(ident,str((folder/"model.pth").relative_to(self.project.root)),str((folder/"model.json").relative_to(self.project.root)),None,digest,"resnet18_heatmap_v1",{},({"specimen_id":specimen,"split":"train"},),activate=False)
+        combined=self.project.models_root/"combined";combined.mkdir()
+        (combined/"model.pth").write_bytes(b"wrapper");(combined/"model.json").write_text("{}")
+        routes={"vertebra":"source_a","first_caudal":"source_a","last_predorsal":"source_a","preanal_pterygiophore":"source_b"}
+        self.project.register_structure_model("combined",str((combined/"model.pth").relative_to(self.project.root)),str((combined/"model.json").relative_to(self.project.root)),"source_a",digest,"resnet18_heatmap_v1",{"model_kind":"combined","component_routes":routes},(),activate=True)
+        package=self.root/"corrupt-combined.zip";export_structure_model_package(self.project,package)
+        with zipfile.ZipFile(package) as archive:
+            original={name:archive.read(name) for name in archive.namelist()}
+        manifest=json.loads(original["manifest.json"])
+        broken=self.root/"missing-component.zip";content=dict(original);content.pop(manifest["components"][0]["weights"])
+        with zipfile.ZipFile(broken,"w") as archive:
+            for name,data in content.items():archive.writestr(name,data)
+        with self.assertRaisesRegex(XRayStructurePackageError,"Missing package artifact"):
+            import_structure_model_package(self.project,broken)
+        corrupt=self.root/"corrupt-component.zip";content=dict(original)
+        weight=manifest["components"][0]["weights"];content[weight]=b"corrupted"
+        with zipfile.ZipFile(corrupt,"w") as archive:
+            for name,data in content.items():archive.writestr(name,data)
+        with self.assertRaisesRegex(XRayStructurePackageError,"Checksum mismatch"):
+            import_structure_model_package(self.project,corrupt)
+        incompatible=self.root/"wrong-scheme.zip";content=dict(original);manifest["component_routes"]={"unknown":"source_a"}
+        content["manifest.json"]=json.dumps(manifest).encode()
+        with zipfile.ZipFile(incompatible,"w") as archive:
+            for name,data in content.items():archive.writestr(name,data)
+        with self.assertRaisesRegex(XRayStructurePackageError,"routing"):
+            import_structure_model_package(self.project,incompatible)
 
     def test_portable_structure_package_round_trip_has_no_training_membership_or_paths(self):
         digest=structure_schema_digest(self.project.scheme);model_id="xray_structure_model_v001"

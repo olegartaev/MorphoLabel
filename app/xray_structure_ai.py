@@ -734,8 +734,8 @@ def _predict_prepared_sources(project, sources, prepared, settings, *, registry=
         if cancel is not None and cancel.is_set():
             break
         backend = backend_for_structure_model(project, source, registry=registry)
-        checkpoint = project.root / str(source["path"])
-        metadata = project.root / str(source["metadata_path"])
+        checkpoint = (project.root / str(source["path"])).resolve()
+        metadata = (project.root / str(source["metadata_path"])).resolve()
         batch_size = final_batch_size
         output = {}
         index = 0
@@ -1146,18 +1146,8 @@ def _safe_model_json(path):
     return {key: source[key] for key in allowed if key in source}
 
 
-def export_structure_model_package(project, target, model_id=None):
-    model = next(
-        (item for item in project.structure_models() if item["model_id"] == str(model_id)),
-        None,
-    ) if model_id else project.active_structure_model()
-    if not model:
-        raise XRayStructurePackageError("No X-ray structure model is selected.")
-    if (model.get("metrics") or {}).get("component_routes"):
-        raise XRayStructurePackageError(
-            "This combined model uses multiple saved AI models. Export its source models separately; "
-            "a portable combined package is not yet supported."
-        )
+def _portable_artifact(project, model):
+    """Read one model artifact and retain only portable scientific metadata."""
     checkpoint = project.root / str(model["path"])
     metadata = project.root / str(model["metadata_path"])
     if not checkpoint.is_file() or not metadata.is_file():
@@ -1165,37 +1155,79 @@ def export_structure_model_package(project, target, model_id=None):
     safe_meta = _safe_model_json(metadata)
     safe_meta["model_id"] = str(model["model_id"])
     safe_meta["schema_digest"] = str(model["schema_digest"])
-    current=structure_schema_contract(project.scheme)
-    legacy=_legacy_structure_schema_contract(project.scheme)
-    contract=current if str(model["schema_digest"])==structure_schema_digest(project.scheme) else legacy
-    if _sha256_bytes(_canonical(contract).encode("utf-8"))!=str(model["schema_digest"]):
-        contract=safe_meta.get("schema_contract")
-        if not contract or not _scheme_matches_model(project,model,safe_meta):raise XRayStructurePackageError("Cannot prove the model's scientific structure contract.")
-    safe_meta["schema_contract"]=contract
-    meta_bytes = json.dumps(safe_meta, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
-    checkpoint_bytes = checkpoint.read_bytes()
-    files = {
-        "artifacts/model.pth": checkpoint_bytes,
-        "artifacts/model.json": meta_bytes,
-    }
-    metrics = dict(model.get("metrics") or {})
-    safe_metrics = {
-        key: value for key, value in metrics.items()
-        if key not in {"training_membership", "validation_membership"} and not str(key).endswith("_path")
-    }
+    current = structure_schema_contract(project.scheme)
+    legacy = _legacy_structure_schema_contract(project.scheme)
+    contract = current if str(model["schema_digest"]) == structure_schema_digest(project.scheme) else legacy
+    if _sha256_bytes(_canonical(contract).encode("utf-8")) != str(model["schema_digest"]):
+        contract = safe_meta.get("schema_contract")
+        if not contract or not _scheme_matches_model(project, model, safe_meta):
+            raise XRayStructurePackageError("Cannot prove the model's scientific structure contract.")
+    safe_meta["schema_contract"] = contract
+    return checkpoint.read_bytes(), json.dumps(safe_meta, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8"), contract
+
+
+def _safe_metrics(model):
+    return {key: value for key, value in dict(model.get("metrics") or {}).items()
+            if key not in {"training_membership", "validation_membership"} and not str(key).endswith("_path")}
+
+
+def _backend_package_fields(backend_id):
+    spec = backend_registry().get(str(backend_id))
+    return ({"backend_version": str(spec.version), "backend_api_version": int(spec.api_version)}
+            if spec is not None and spec.task == "xray_structure" else {})
+
+
+def export_structure_model_package(project, target, model_id=None):
+    model = next(
+        (item for item in project.structure_models() if item["model_id"] == str(model_id)),
+        None,
+    ) if model_id else project.active_structure_model()
+    if not model:
+        raise XRayStructurePackageError("No X-ray structure model is selected.")
+    routes = (model.get("metrics") or {}).get("component_routes") or {}
+    files = {}
+    components = []
+    if routes:
+        by_id = {item["model_id"]: item for item in project.structure_models()}
+        try:
+            validated_routes(project.scheme, model["model_id"], routes, by_id)
+        except ValueError as exc:
+            raise XRayStructurePackageError("Combined model routing is invalid.") from exc
+        for index, source_id in enumerate(sorted(set(routes.values()))):
+            source = by_id.get(source_id)
+            if source is None:
+                raise XRayStructurePackageError("Combined model source is missing.")
+            weights, metadata, _contract = _portable_artifact(project, source)
+            prefix = f"artifacts/components/{index:03d}"
+            weight_name, meta_name = f"{prefix}/model.pth", f"{prefix}/model.json"
+            files[weight_name], files[meta_name] = weights, metadata
+            components.append({
+                "model_id": str(source_id), "backend": str(source.get("backend") or STRUCTURE_BACKEND),
+                **_backend_package_fields(source.get("backend") or STRUCTURE_BACKEND),
+                "schema_digest": str(source["schema_digest"]),
+                "source_parent_model_id": source.get("parent_model_id"),
+                "weights": weight_name, "metadata": meta_name,
+            })
+        contract = structure_schema_contract(project.scheme)
+    else:
+        weights, metadata, contract = _portable_artifact(project, model)
+        files = {"artifacts/model.pth": weights, "artifacts/model.json": metadata}
     manifest = {
         "package_format": MODEL_PACKAGE_FORMAT,
+        "model_kind": "combined" if routes else "standard",
         "model_id": str(model["model_id"]),
         "backend": str(model.get("backend") or STRUCTURE_BACKEND),
+        **_backend_package_fields(model.get("backend") or STRUCTURE_BACKEND),
         "schema_digest": str(model["schema_digest"]),
-        "schema_contract": contract,
+        "schema_contract": contract, "component_routes": dict(sorted(routes.items())),
+        "components": components,
         "trait_scheme": project.scheme,
         "trait_scheme_sha256": _sha256_bytes(_canonical(project.scheme).encode("utf-8")),
         "orientation_policy": project.orientation_policy,
         "training_statistics": {
             "training_specimen_count": int(model.get("training_specimen_count") or 0),
             "validation_specimen_count": int(model.get("validation_specimen_count") or 0),
-            "metrics": safe_metrics,
+            "metrics": _safe_metrics(model),
         },
         "files": {name: _sha256_bytes(data) for name, data in files.items()},
     }
@@ -1206,6 +1238,163 @@ def export_structure_model_package(project, target, model_id=None):
             archive.writestr(name, data)
         archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
     return target
+
+
+def _package_scheme(project, manifest):
+    imported_scheme = manifest.get("trait_scheme")
+    compatibility_scheme = project.scheme
+    if imported_scheme is not None:
+        from .xray_schema import normalize_scheme
+        try:
+            if _sha256_bytes(_canonical(imported_scheme).encode("utf-8")) != manifest.get("trait_scheme_sha256"):
+                raise ValueError("Trait scheme checksum mismatch")
+            compatibility_scheme = normalize_scheme(imported_scheme)
+        except (ValueError, TypeError, KeyError) as exc:
+            raise XRayStructurePackageError(f"Invalid embedded trait scheme: {exc}") from exc
+    return imported_scheme, compatibility_scheme, structure_schema_digest(compatibility_scheme)
+
+
+def _read_package_files(archive, expected):
+    if not isinstance(expected, dict) or not expected:
+        raise XRayStructurePackageError("Structure model package has no artifacts.")
+    payload = {}
+    for name, digest in expected.items():
+        path = Path(str(name))
+        if ".." in path.parts or not str(name).startswith("artifacts/"):
+            raise XRayStructurePackageError(f"Unsafe package path: {name}")
+        try:
+            data = archive.read(name)
+        except KeyError as exc:
+            raise XRayStructurePackageError(f"Missing package artifact: {name}") from exc
+        if _sha256_bytes(data) != str(digest):
+            raise XRayStructurePackageError(f"Checksum mismatch: {name}")
+        payload[str(name)] = data
+    return payload
+
+
+def _unique_model_id(project, original, occupied=()):
+    if not _SAFE_ID.fullmatch(str(original)):
+        raise XRayStructurePackageError("Imported structure model ID is unsafe.")
+    used = {item["model_id"] for item in project.structure_models()} | set(occupied)
+    local = str(original); counter = 2
+    while local in used or (project.models_root / local).exists():
+        local = f"imported_{original}_{counter}"; counter += 1
+    return local
+
+
+def _validate_imported_component(project, component, metadata, compatibility_scheme, current_digest, registry):
+    source_id = str(component.get("model_id") or "")
+    provider_id = str(component.get("backend") or "")
+    spec = _structure_provider_spec(provider_id, registry, XRayStructurePackageError)
+    if component.get("backend_version") is not None and str(component["backend_version"]) != str(spec.version):
+        raise XRayStructurePackageError("Combined package backend version is incompatible.")
+    if component.get("backend_api_version") is not None and int(component["backend_api_version"]) != int(spec.api_version):
+        raise XRayStructurePackageError("Combined package backend API is incompatible.")
+    digest = str(component.get("schema_digest") or "")
+    if str(metadata.get("backend") or STRUCTURE_BACKEND) != provider_id or str(metadata.get("schema_digest") or "") != digest:
+        raise XRayStructurePackageError("Combined component metadata is inconsistent.")
+    contract = metadata.get("schema_contract")
+    try:
+        proven = bool(contract and _sha256_bytes(_canonical(contract).encode("utf-8")) == digest
+                      and _normalized_structure_contract(contract) == structure_schema_contract(compatibility_scheme))
+    except (ValueError, KeyError, TypeError):
+        proven = False
+    if not proven:
+        raise XRayStructurePackageError("Combined component uses an incompatible scientific scheme.")
+    if not source_id:
+        raise XRayStructurePackageError("Combined package component ID is missing.")
+    return provider_id
+
+
+def _import_combined_structure_model_package(project, archive, manifest, registry=None):
+    imported_scheme, compatibility_scheme, current_digest = _package_scheme(project, manifest)
+    package_digest = str(manifest.get("schema_digest") or "")
+    try:
+        package_proven = bool(manifest.get("schema_contract") and
+                              _sha256_bytes(_canonical(manifest["schema_contract"]).encode("utf-8")) == package_digest and
+                              _normalized_structure_contract(manifest["schema_contract"]) == structure_schema_contract(compatibility_scheme))
+    except (ValueError, KeyError, TypeError):
+        package_proven = False
+    if not package_proven:
+        raise XRayStructurePackageError("Combined package uses an incompatible scientific scheme.")
+    outer_backend = str(manifest.get("backend") or "")
+    outer_spec = _structure_provider_spec(outer_backend, registry, XRayStructurePackageError)
+    if manifest.get("backend_version") is not None and str(manifest["backend_version"]) != str(outer_spec.version):
+        raise XRayStructurePackageError("Combined package backend version is incompatible.")
+    if manifest.get("backend_api_version") is not None and int(manifest["backend_api_version"]) != int(outer_spec.api_version):
+        raise XRayStructurePackageError("Combined package backend API is incompatible.")
+    routes = manifest.get("component_routes")
+    components = list(manifest.get("components") or ())
+    if not isinstance(routes, dict) or not components:
+        raise XRayStructurePackageError("Combined package routing or components are missing.")
+    expected = dict(manifest.get("files") or {})
+    payload = _read_package_files(archive, expected)
+    originals = [str(item.get("model_id") or "") for item in components if isinstance(item, dict)]
+    if len(originals) != len(components) or len(set(originals)) != len(originals) or not all(originals):
+        raise XRayStructurePackageError("Combined package component IDs are invalid.")
+    if set(routes.values()) != set(originals):
+        raise XRayStructurePackageError("Combined package routing does not match its components.")
+    legal = {str(item["id"]) for item in compatibility_scheme.get("structures") or ()}
+    if set(routes) != legal:
+        raise XRayStructurePackageError("Combined package routing is incomplete.")
+    parsed = {}
+    for component in components:
+        weights, meta_name = str(component.get("weights") or ""), str(component.get("metadata") or "")
+        if weights not in payload or meta_name not in payload:
+            raise XRayStructurePackageError("Combined package component artifact is missing.")
+        try:
+            metadata = json.loads(payload[meta_name].decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise XRayStructurePackageError("Combined component metadata is invalid.") from exc
+        provider = _validate_imported_component(project, component, metadata, compatibility_scheme, current_digest, registry)
+        parsed[str(component["model_id"])] = (component, metadata, provider, payload[weights])
+    original = str(manifest.get("model_id") or "combined_structure_model")
+    local_by_source = {}; occupied = set()
+    for source_id in originals:
+        local_by_source[source_id] = _unique_model_id(project, source_id, occupied); occupied.add(local_by_source[source_id])
+    local = _unique_model_id(project, original, occupied)
+    for source_id in originals:
+        component, metadata, provider, weights = parsed[source_id]
+        destination = project.models_root / local_by_source[source_id]
+        with staged_model_directory(destination) as (staging, publish):
+            (staging / "model.pth").write_bytes(weights)
+            metadata.update({"model_id": local_by_source[source_id], "imported_from_model_id": source_id,
+                             "original_schema_digest": component["schema_digest"], "schema_digest": current_digest,
+                             "schema_contract": structure_schema_contract(compatibility_scheme)})
+            (staging / "model.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+            publish()
+        project.register_structure_model(local_by_source[source_id], str((destination / "model.pth").relative_to(project.root)),
+            str((destination / "model.json").relative_to(project.root)), None, current_digest, provider,
+            {"origin": "imported_component", "original_model_id": source_id,
+             "original_parent_model_id": component.get("source_parent_model_id"), "portable_package_format": MODEL_PACKAGE_FORMAT},
+            (), activate=False)
+    local_routes = {str(key): local_by_source[str(value)] for key, value in routes.items()}
+    try:
+        validated_routes(compatibility_scheme, local, local_routes, set(local_by_source.values()) | {local})
+    except ValueError as exc:
+        raise XRayStructurePackageError("Combined package has incompatible dependent structures.") from exc
+    base_original = str((manifest.get("training_statistics") or {}).get("metrics", {}).get("base_model_id") or originals[0])
+    base_local = local_by_source.get(base_original, local_by_source[originals[0]])
+    source_row = next(item for item in project.structure_models() if item["model_id"] == base_local)
+    destination = project.models_root / local
+    with staged_model_directory(destination) as (staging, publish):
+        shutil.copy2(project.root / source_row["path"], staging / "model.pth")
+        wrapper = json.loads((project.root / source_row["metadata_path"]).read_text(encoding="utf-8"))
+        wrapper.update({"model_id": local, "parent_model_id": base_local, "model_kind": "combined_structure_sources_v1",
+                        "component_routes": dict(sorted(local_routes.items()))})
+        (staging / "model.json").write_text(json.dumps(wrapper, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+        publish()
+    stats = dict(manifest.get("training_statistics") or {})
+    metrics = dict(stats.get("metrics") or {})
+    metrics.update({"model_kind": "combined", "origin": "imported_combined", "original_model_id": original,
+                    "portable_package_format": MODEL_PACKAGE_FORMAT, "component_routes": dict(sorted(local_routes.items())),
+                    "previous_orientation_policy": project.orientation_policy})
+    project.register_structure_model(local, str((destination / "model.pth").relative_to(project.root)),
+        str((destination / "model.json").relative_to(project.root)), base_local, current_digest, source_row["backend"], metrics, (),
+        training_specimen_count=int(stats.get("training_specimen_count") or 0),
+        validation_specimen_count=int(stats.get("validation_specimen_count") or 0), activate=False,
+        trait_scheme=imported_scheme, orientation_policy=manifest.get("orientation_policy"))
+    return local
 
 
 def import_structure_model_package(project, source, *, registry=None):
@@ -1221,31 +1410,15 @@ def import_structure_model_package(project, source, *, registry=None):
             raise XRayStructurePackageError("Structure model package manifest is invalid.") from exc
         if manifest.get("package_format") != MODEL_PACKAGE_FORMAT:
             raise XRayStructurePackageError("Unsupported X-ray structure model package format.")
+        if manifest.get("model_kind") == "combined":
+            return _import_combined_structure_model_package(project, archive, manifest, registry=registry)
         provider_id = str(manifest.get("backend") or "")
         _structure_provider_spec(provider_id, registry, XRayStructurePackageError)
-        imported_scheme=manifest.get("trait_scheme")
-        compatibility_scheme=project.scheme
-        if imported_scheme is not None:
-            from .xray_schema import normalize_scheme
-            try:
-                if _sha256_bytes(_canonical(imported_scheme).encode("utf-8"))!=manifest.get("trait_scheme_sha256"):raise ValueError("Trait scheme checksum mismatch")
-                compatibility_scheme=normalize_scheme(imported_scheme)
-            except (ValueError,TypeError,KeyError) as exc:raise XRayStructurePackageError(f"Invalid embedded trait scheme: {exc}") from exc
-        current_digest = structure_schema_digest(compatibility_scheme)
+        imported_scheme, compatibility_scheme, current_digest = _package_scheme(project, manifest)
         expected = dict(manifest.get("files") or {})
         if set(expected) != {"artifacts/model.pth", "artifacts/model.json"}:
             raise XRayStructurePackageError("Structure model package has an unexpected artifact set.")
-        payload = {}
-        for name, digest in expected.items():
-            if ".." in Path(name).parts or not name.startswith("artifacts/"):
-                raise XRayStructurePackageError(f"Unsafe package path: {name}")
-            try:
-                data = archive.read(name)
-            except KeyError as exc:
-                raise XRayStructurePackageError(f"Missing package artifact: {name}") from exc
-            if _sha256_bytes(data) != str(digest):
-                raise XRayStructurePackageError(f"Checksum mismatch: {name}")
-            payload[name] = data
+        payload = _read_package_files(archive, expected)
         try:
             metadata = json.loads(payload["artifacts/model.json"].decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:

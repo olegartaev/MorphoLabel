@@ -378,6 +378,24 @@ class ComponentRoutingTests(unittest.TestCase):
             self.assertEqual(1,len(failures))
             self.assertIn("Scalar-only",failures[0]["reason"])
 
+    def test_component_runner_receives_absolute_artifact_paths(self):
+        import tempfile
+        from pathlib import Path
+        from app.xray_structure_ai import _predict_prepared_sources
+        seen=[]
+        class Provider:
+            def predict_many(self, payload, timeout):
+                seen.append((Path(payload["checkpoint"]),Path(payload["metadata"])))
+                return {"results":[{"structures":[]}]}
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            project=type("Project",(),{"root":root})()
+            model={"model_id":"source","path":"models/source/model.pth","metadata_path":"models/source/model.json"}
+            with patch("app.xray_structure_ai.backend_for_structure_model",return_value=Provider()):
+                _predict_prepared_sources(project,{"source":model},[("fish",root/"fish.png")],{"device":"cpu","batch_size":1})
+        self.assertTrue(seen[0][0].is_absolute())
+        self.assertTrue(seen[0][1].is_absolute())
+
 
 if __name__ == "__main__":
     unittest.main()
