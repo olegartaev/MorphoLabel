@@ -90,6 +90,7 @@ class ComponentRoutingTests(unittest.TestCase):
                 "human": self.sample_points(), "visibility": {}, "crop_size": (900,300),
                 "native": self.sample_points(ptery=3 if i<5 else 2),
                 "detail": self.sample_points(ptery=2, vertebra=2),
+                "standard": self.sample_points(ptery=3 if i<5 else 2),
             })
         selected, evidence=choose_family_detail_policy(self.scheme,cases)
         self.assertIn("preanal_pterygiophore",selected["detail"])
