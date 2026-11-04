@@ -88,7 +88,7 @@ def choose_routed_components(scheme, baseline_id, candidate_id, cases,
     baseline_id = str(baseline_id)
     candidate_id = str(candidate_id)
     families = structure_families(scheme)
-    routes = validated_routes(scheme, baseline_id, baseline_routes or {}, predictions)
+    routes = validated_routes(scheme, baseline_id, baseline_routes or {}, set(predictions) | {baseline_id})
     case_ids = [str(item.get("specimen_id") or "") for item in cases]
     if not cases or len(set(case_ids)) != len(case_ids) or not all(case_ids):
         raise ValueError("Cannot compare duplicate or unidentified specimens.")
