@@ -298,6 +298,64 @@ class ComponentRoutingTests(unittest.TestCase):
             self.assertEqual("new", project.models[-1]["metrics"]["component_routes"]["preanal_pterygiophore"])
 
 
+    def test_combined_provenance_excludes_unselected_candidate_training(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from app.xray_structure_ai import _publish_routed_structure_model
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            models_root = root/"models"
+            models_root.mkdir()
+            models = {}
+            for ident in ("baseline", "unused_candidate", "chosen"):
+                directory = models_root/ident
+                directory.mkdir()
+                (directory/"model.pth").write_bytes(b"sample weights")
+                (directory/"model.json").write_text(
+                    json.dumps({"backend":"resnet18_heatmap_v1","schema_digest":"digest"}),
+                    encoding="utf-8",
+                )
+                models[ident] = {
+                    "model_id": ident,
+                    "path": str((directory/"model.pth").relative_to(root)),
+                    "metadata_path": str((directory/"model.json").relative_to(root)),
+                    "schema_digest": "digest", "backend": "resnet18_heatmap_v1",
+                }
+            memberships = {
+                ident: [{"specimen_id":f"train_{ident}","split":"train"}]
+                for ident in models
+            }
+            class Project:
+                def __init__(self):
+                    self.root = root
+                    self.models_root = models_root
+                    self.published = None
+                def structure_models(self):
+                    return list(models.values())
+                def structure_model_membership(self, ident):
+                    return memberships[ident]
+                def next_structure_model_id(self):
+                    return "combined"
+                def register_structure_model(self, *args, **kwargs):
+                    self.published = (args,kwargs)
+            project = Project()
+            routes = {
+                "vertebra":"baseline", "first_caudal":"baseline",
+                "last_predorsal":"baseline", "preanal_pterygiophore":"chosen",
+            }
+            _publish_routed_structure_model(
+                project, models["baseline"], models["unused_candidate"],
+                routes, ["validation_1"], {"decision":"selected"},
+            )
+            members = {row["specimen_id"]:row["split"] for row in project.published[7]}
+            self.assertEqual({
+                "train_baseline":"train", "train_chosen":"train",
+                "validation_1":"val",
+            }, members)
+            self.assertTrue((models_root/"combined"/"model.pth").is_file())
+
+
     def test_scalar_count_cannot_masquerade_as_zero_point_markers(self):
         import tempfile
         from pathlib import Path

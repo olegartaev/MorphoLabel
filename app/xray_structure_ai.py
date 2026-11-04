@@ -516,7 +516,10 @@ def _publish_routed_structure_model(project, previous, candidate, routes, valida
     if directory.exists():
         raise XRayStructureAIError("Combined model destination already exists.")
     by_id = {item["model_id"]: item for item in project.structure_models()}
-    participants = {str(previous["model_id"]), str(candidate["model_id"]), *routes.values()}
+    # Only models contributing to the published result (plus the retained
+    # baseline) belong to its provenance. An evaluated but unselected source
+    # must not silently expand the composite's training membership.
+    participants = {str(previous["model_id"]), *routes.values()}
     members = {}
     for source_id in participants:
         for entry in project.structure_model_membership(source_id):
