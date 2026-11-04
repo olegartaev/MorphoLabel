@@ -347,6 +347,26 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertAlmostEqual(1.0,by_trait["tv"]["accuracy"])
         self.assertLess(by_trait["preap"]["accuracy"],1.0)
 
+    def test_incomplete_human_traits_do_not_count_as_fully_correct_specimen(self):
+        from app.xray_structure_ai import summarize_structure_ai_human_comparison
+        scheme=bundled_scheme("phoxinus_vertebral_counts")
+        points=[
+            {"structure_id":"vertebra","x":0.1,"y":0.5,"sort_order":0},
+            {"structure_id":"vertebra","x":0.2,"y":0.5,"sort_order":1},
+            {"structure_id":"vertebra","x":0.3,"y":0.5,"sort_order":2},
+            {"structure_id":"first_caudal","x":0.3,"y":0.5,"sort_order":0},
+            {"structure_id":"last_predorsal","x":0.2,"y":0.5,"sort_order":0},
+        ]
+        partial=summarize_structure_ai_human_comparison(scheme,[{
+            "specimen_id":"s1","human":points,"predicted":[dict(x,score=0.9) for x in points],
+            "visibility":{"preanal_pterygiophore":"partial"},
+        }])
+        summary=partial["summary"]
+        self.assertGreater(summary["exact_traits_total"],0)
+        self.assertLess(summary["exact_traits_total"],len(scheme["traits"]))
+        self.assertEqual(0,summary["all_traits_evaluable_specimens"])
+        self.assertEqual(0,summary["all_traits_correct_specimens"])
+
     def test_heatmap_target_has_exact_positive_peak_and_partial_supervision_mask(self):
         from ai_runtime.xray_structure_runner import _gaussian
         target=np.zeros((1,16,16),dtype=np.float32)
