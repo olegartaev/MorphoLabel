@@ -21,6 +21,7 @@ from .process_utils import hidden_window_kwargs
 from .runtime_paths import resource_path
 from .ai_starters import local_starter
 from .xray_crop import oriented_crop
+from .xray_auto_selection import common_validation_specimens, choose_better_model
 from .xray_schema import calculate_trait_values, compatible_reference_roles, spatial_series_order
 from .model_publication import staged_model_directory
 from .extensions.api import StructureBackend, StructureBackendContext
@@ -343,6 +344,7 @@ def prepare_structure_training_dataset(project, workspace_root, seed=42, *, back
 
 
 def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None, *, backend_id=None, registry=None):
+    active_before = project.active_structure_model()
     model_id = project.next_structure_model_id()
     if parent_model_id is None:
         parent = project.active_structure_model()
@@ -465,15 +467,56 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
                 str((target / "model.json").relative_to(project.root)),
                 (parent or {}).get("model_id"),schema_digest,provider_id,metrics,dataset["membership"],
                 training_specimen_count=dataset["training_specimens"],
-                validation_specimen_count=dataset["validation_specimens"],activate=True,
+                validation_specimen_count=dataset["validation_specimens"],activate=not bool(active_before),
             )
+    # A trained candidate must not replace a working model merely because
+    # its own validation loss improved. Compare both on untouched plates.
+    if active_before:
+        try:
+            decision = _auto_select_trained_structure_model(project, active_before, model_id, registry=registry)
+        except Exception as exc:
+            decision = {"decision": "kept", "reason": "Automatic comparison unavailable.",
+                        "diagnostic": f"{type(exc).__name__}: {exc}"[:250]}
+    else:
+        decision = {"decision": "first", "reason": "First available model; quality not yet independently confirmed."}
+    project.set_structure_model_selection(model_id, decision)
     return {
-        "trained": True, "model_id": model_id, "metrics": metrics,
+        "trained": True, "model_id": model_id, "metrics": metrics, "selection": decision,
         "training_specimens": dataset["training_specimens"],
         "validation_specimens": dataset["validation_specimens"],
         "training_plates": dataset["training_plates"],
         "validation_plates": dataset["validation_plates"],
     }
+
+
+def _auto_select_trained_structure_model(project, previous, candidate_id, *, registry=None):
+    candidate = next(item for item in project.structure_models() if item["model_id"] == candidate_id)
+    if not _scheme_matches_model(project, previous) or not _scheme_matches_model(project, candidate):
+        return {"decision": "kept", "reason": "The scientific scheme has changed."}
+    specimen_ids, reason = common_validation_specimens(project, previous, candidate)
+    if not specimen_ids:
+        return {"decision": "kept", "reason": reason}
+    old_report = compare_structure_model_to_human(
+        project, previous["model_id"], specimen_ids=specimen_ids, registry=registry
+    )
+    new_report = compare_structure_model_to_human(
+        project, candidate_id, specimen_ids=specimen_ids, registry=registry
+    )
+    promote, reason = choose_better_model(old_report, new_report)
+    old_summary = old_report["summary"]
+    new_summary = new_report["summary"]
+    decision = {
+        "decision": "selected" if promote else "kept",
+        "reason": reason,
+        "checked_specimens": len(specimen_ids),
+        "evaluated_specimens": int(new_summary.get("all_traits_evaluable_specimens") or 0),
+        "previous_complete": int(old_summary.get("all_traits_correct_specimens") or 0),
+        "candidate_complete": int(new_summary.get("all_traits_correct_specimens") or 0),
+        "previous_model_id": previous["model_id"],
+    }
+    if promote:
+        project.activate_structure_model(candidate_id)
+    return decision
 
 
 def _prediction_image(project, specimen_id, target):
@@ -786,7 +829,7 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
     }
 
 
-def compare_structure_model_to_human(project,model_id=None,split="val",progress=None, *, registry=None):
+def compare_structure_model_to_human(project,model_id=None,split="val",progress=None, *, specimen_ids=None,registry=None):
     """Run read-only model inference on its recorded membership and compare with current human truth."""
     model=next((item for item in project.structure_models() if item["model_id"]==str(model_id)),None) if model_id else project.active_structure_model()
     if not model:raise XRayStructureAIError("Select an X-ray Structure AI model first.")
@@ -796,6 +839,11 @@ def compare_structure_model_to_human(project,model_id=None,split="val",progress=
     if not membership:
         raise XRayStructureAIError("This model has no recorded validation membership to compare with human annotations.")
     ids=[str(item["specimen_id"]) for item in membership]
+    if specimen_ids is not None:
+        requested={str(item) for item in specimen_ids}
+        if not requested or not requested.issubset(set(ids)):
+            raise XRayStructureAIError("Requested specimens are not in this model's validation holdout.")
+        ids=[specimen_id for specimen_id in ids if specimen_id in requested]
     checkpoint=project.root/str(model["path"]);metadata=project.root/str(model["metadata_path"])
     if not checkpoint.is_file() or not metadata.is_file():
         raise XRayStructureAIError("The selected Structure AI model artifact is incomplete.")

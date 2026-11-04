@@ -889,6 +889,21 @@ class XRayProject:
             )
         return model_id
 
+    def set_structure_model_selection(self, model_id, selection):
+        """Persist the automatic comparison decision without changing model lineage."""
+        with _db_connection(self.db_path) as c:
+            row = c.execute(
+                "SELECT metrics_json FROM xray_structure_models WHERE model_id=?", (str(model_id),)
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown X-ray structure model: {model_id}")
+            metrics = json.loads(row[0] or "{}")
+            metrics["auto_selection"] = dict(selection)
+            c.execute(
+                "UPDATE xray_structure_models SET metrics_json=? WHERE model_id=?",
+                (_json(metrics), str(model_id)),
+            )
+
     def structure_model_membership(self,model_id):
         with _db_connection(self.db_path) as c:
             c.row_factory=sqlite3.Row

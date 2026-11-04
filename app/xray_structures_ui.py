@@ -1171,14 +1171,21 @@ class XRayStructureWorkspace:
                         self._busy=False
                         try:bar.stop();dialog.destroy()
                         except tk.TclError:pass
-                        result=event[1];self._training_parent_touched=False;self.training_parent_choice.set(result["model_id"]);metrics=result.get("metrics") or {}
+                        result=event[1];self._training_parent_touched=False;self.training_parent_choice.set((self.project.active_structure_model() or {}).get("model_id") or "ImageNet ResNet18");metrics=result.get("metrics") or {}
                         quality=metrics.get("structure/macro_f1")
                         detail=(
                             f"Model ready: {result['model_id']}\n"
                             f"Training: {result['training_specimens']} specimens on {result['training_plates']} plates\n"
                             f"Validation: {result['validation_specimens']} specimens on {result['validation_plates']} plates"
                         )
-                        if isinstance(quality,(int,float)):detail+=f"\nValidation macro F1: {quality:.3f}"
+                        selection=result.get("selection") or {}
+                        if selection.get("decision")=="selected":
+                            detail+="\nNew model selected automatically after comparison."
+                        elif selection.get("decision")=="first":
+                            detail+="\nFirst model is active; its accuracy is not independently verified."
+                        else:
+                            detail+="\nPrevious model remains active."
+                            if selection.get("reason"):detail+=f"\n{selection['reason']}"
                         self._refresh_workflow()
                         messagebox.showinfo("Structure training",detail,parent=self.root);return
             except queue.Empty:pass
@@ -1234,10 +1241,10 @@ class XRayStructureWorkspace:
             frame,text="Select a model to use or export. Import a ZIP file to bring a trained model into this project.",
             style="PageSubtitle.TLabel",
         ).grid(row=0,column=0,sticky="w",pady=(0,8))
-        columns=("model","date","source","training","quality","active")
+        columns=("model","date","training","quality","active")
         headers=(
-            ("model","Model",205),("date","Created",135),("source","Started from",180),
-            ("training","Train / validation",150),("quality","Validation",170),("active","Status",90),
+            ("model","Model",205),("date","Created",135),
+            ("training","Training images",150),("quality","Complete results",205),("active","Status",135),
         )
         model_width=dialog_width_for_columns((item[2] for item in headers),dialog.winfo_screenwidth(),chrome=105)
         dialog.geometry(f"{model_width}x420");dialog.minsize(min(model_width,900),300)
@@ -1249,14 +1256,18 @@ class XRayStructureWorkspace:
         def reload(select=None):
             for item in tree.get_children():tree.delete(item)
             for model in self.project.structure_models():
-                metrics=model.get("metrics") or {};quality=metrics.get("structure/macro_f1")
-                quality_text=f"macro F1 {quality:.3f}" if isinstance(quality,(int,float)) else "Not recorded"
-                source=str(model.get("parent_model_id") or metrics.get("initialization") or metrics.get("original_model_id") or "ImageNet")
+                metrics=model.get("metrics") or {}
+                selection=metrics.get("auto_selection") or {}
+                checked=int(selection.get("evaluated_specimens") or 0)
+                score=selection.get("candidate_complete")
+                quality_text=f"{int(score)} / {checked} fully correct" if checked and score is not None else "Not independently verified"
+                status=("Active" if model.get("active") else "Saved candidate")
+                if not _scheme_matches_model(self.project,model):status="Different trait scheme"
                 tree.insert(
                     "","end",iid=model["model_id"],values=(
-                        model["model_id"],str(model.get("created_at") or "").replace("T"," ")[:16],source,
-                        f"{int(model.get('training_specimen_count') or 0)} / {int(model.get('validation_specimen_count') or 0)}",
-                        quality_text,("Active" if model.get("active") else "Available") if _scheme_matches_model(self.project,model) else "Incompatible scheme",
+                        model["model_id"],str(model.get("created_at") or "").replace("T"," ")[:16],
+                        f"{int(model.get('training_specimen_count') or 0)} verified",
+                        quality_text,status,
                     ),
                 )
             if select and tree.exists(select):tree.selection_set(select);tree.see(select)
