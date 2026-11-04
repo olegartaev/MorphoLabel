@@ -6,11 +6,12 @@ paired human-verified specimens, not per-model training loss.
 """
 from __future__ import annotations
 
-from itertools import combinations
+from itertools import combinations, product
 
 from .xray_schema import compatible_reference_roles
 
 MAX_EXHAUSTIVE_FAMILIES = 8
+MAX_ROUTE_TRIALS = 4096
 
 
 def structure_families(scheme):
@@ -139,3 +140,45 @@ def choose_routed_components(scheme, baseline_id, candidate_id, cases,
                 "reason": "No verified improvement from combining structure sources."}
     return {"accepted": True, "routes": best["routes"], "report": best["report"],
             "reason": best["reason"]}
+
+
+def choose_saved_components(scheme, baseline_id, cases, predictions, evaluate, *, baseline_routes=None, check=None):
+    """Compare all source combinations on one shared cohort, or fail closed."""
+    families = structure_families(scheme)
+    source_ids = sorted(predictions)
+    routes = validated_routes(scheme, baseline_id, baseline_routes or {}, set(source_ids) | {baseline_id})
+    ids = [str(case.get("specimen_id") or "") for case in cases]
+    if not families or not ids or not all(ids) or len(set(ids)) != len(ids):
+        raise ValueError("Cannot compare duplicate or unidentified specimens.")
+    if any(set(rows) != set(ids) for rows in predictions.values()) or not set(routes.values()) <= set(source_ids):
+        raise ValueError("All sources must predict the same verified specimens.")
+    if len(source_ids) ** len(families) > MAX_ROUTE_TRIALS:
+        raise ValueError("Too many source combinations for exhaustive comparison.")
+
+    def score(assignment):
+        rows = []
+        for case in cases:
+            sid = str(case["specimen_id"])
+            sources = {key: predictions[key][sid] for key in set(assignment.values())}
+            rows.append({**case, "predicted": combine_marker_rows(scheme, sources, assignment)})
+        return evaluate(scheme, rows)
+
+    baseline = score(routes)
+    check = check or (lambda old, new: (False, "No model promotion gate supplied."))
+    best = None
+    for sources in product(source_ids, repeat=len(families)):
+        trial = {ident: source for family, source in zip(families, sources) for ident in family}
+        if trial == routes:
+            continue
+        report = score(trial)
+        accepted, reason = check(baseline, report)
+        if not accepted:
+            continue
+        # Fewer distinct model inferences is a deterministic cost proxy, not a timing measurement.
+        rank = (int(report["summary"]["all_traits_correct_specimens"]), -len(set(sources)))
+        if best is None or rank > best["rank"]:
+            best = {"routes": trial, "report": report, "rank": rank, "reason": reason}
+    if best is None:
+        return {"accepted": False, "routes": routes, "report": baseline,
+                "reason": "No verified improvement from saved sources."}
+    return {"accepted": True, **best}

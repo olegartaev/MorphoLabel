@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from app.xray_component_selection import (
-    choose_routed_components, combine_marker_rows, structure_families, validated_routes,
+    choose_routed_components, choose_saved_components, combine_marker_rows, structure_families, validated_routes,
 )
 from app.xray_auto_selection import choose_better_model
 from app.xray_schema import bundled_scheme
@@ -94,6 +94,47 @@ class ComponentRoutingTests(unittest.TestCase):
         self.assertFalse(selected["accepted"])
         self.assertEqual({"old"}, set(selected["routes"].values()))
 
+    def test_saved_sources_search_considers_three_models_on_same_cohort(self):
+        cases = []
+        predictions = {key: {} for key in ("old", "second", "third")}
+        for i in range(24):
+            sid = f"case-{i}"
+            cases.append({"specimen_id": sid, "human": self.sample_points(), "visibility": {}, "crop_size": (900, 300)})
+            predictions["old"][sid] = self.sample_points(ptery=3 if i < 5 else 2)
+            predictions["second"][sid] = self.sample_points(ptery=3, vertebra=2)
+            predictions["third"][sid] = self.sample_points(ptery=2, vertebra=2)
+        result = choose_saved_components(self.scheme, "old", cases, predictions,
+                                         summarize_structure_ai_human_comparison, check=choose_better_model)
+        self.assertTrue(result["accepted"])
+        self.assertEqual("third", result["routes"]["preanal_pterygiophore"])
+        self.assertEqual("old", result["routes"]["vertebra"])
+        del predictions["second"]["case-0"]
+        with self.assertRaisesRegex(ValueError, "same verified"):
+            choose_saved_components(self.scheme, "old", cases, predictions,
+                                    summarize_structure_ai_human_comparison, check=choose_better_model)
+
+    def test_train_reuses_verified_saved_selection_without_training(self):
+        from app.xray_structure_ai import train_structure_model, XRayStructureAIError
+        class Project:
+            def active_structure_model(self):
+                return {"model_id": "active", "metrics": {}, "training_specimen_count": 1,
+                        "validation_specimen_count": 1}
+            def structure_model_membership(self, ident):
+                return [{"specimen_id": "train", "split": "train"},
+                        {"specimen_id": "val", "split": "val"}]
+            def specimen(self, ident): return {"image_id": ident}
+        with patch("app.xray_structure_ai._auto_select_saved_structure_models",
+                   return_value={"decision": "selected", "checked_specimens": 12}) as select, \
+             patch("app.xray_structure_ai._structure_backend", side_effect=AssertionError("training started")):
+            result = train_structure_model(Project(), parent_model_id="active")
+        self.assertFalse(result["trained"])
+        self.assertEqual("active", result["model_id"])
+        self.assertEqual(1, select.call_count)
+        with patch("app.xray_structure_ai._auto_select_saved_structure_models", side_effect=ValueError("bad evidence")), \
+             patch("app.xray_structure_ai._structure_backend", side_effect=AssertionError("training started")):
+            with self.assertRaisesRegex(XRayStructureAIError, "training was not started"):
+                train_structure_model(Project(), parent_model_id="active")
+
     def test_routed_predict_saves_one_combined_model_id(self):
         scheme = self.scheme
         class Project:
@@ -145,7 +186,7 @@ class ComponentRoutingTests(unittest.TestCase):
         import json
         import tempfile
         from pathlib import Path
-        from app.xray_structure_ai import _auto_select_trained_structure_model
+        from app.xray_structure_ai import _auto_select_trained_structure_model, _auto_select_saved_structure_models
 
         scheme = self.scheme
         with tempfile.TemporaryDirectory() as temporary:
@@ -238,6 +279,19 @@ class ComponentRoutingTests(unittest.TestCase):
             self.assertEqual(24,sum(x["split"]=="val" for x in project.membership["combined-v001"]))
             self.assertEqual("old",project.models[0]["model_id"])
             self.assertEqual("new",project.models[1]["model_id"])
+            # The saved-model path uses the same real publication and cohort checks.
+            project.models.pop()
+            project.membership.pop("combined-v001")
+            import shutil
+            shutil.rmtree(root / "models" / "combined-v001")
+            project.active_id = "old"
+            with (
+                patch("app.xray_structure_ai._scheme_matches_model", return_value=True),
+                patch("app.xray_structure_ai.compare_structure_model_to_human", side_effect=model_report),
+            ):
+                saved = _auto_select_saved_structure_models(project, project.models[0])
+            self.assertEqual("combined", saved["decision"])
+            self.assertEqual("new", project.models[-1]["metrics"]["component_routes"]["preanal_pterygiophore"])
 
 
     def test_scalar_count_cannot_masquerade_as_zero_point_markers(self):

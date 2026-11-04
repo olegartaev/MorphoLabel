@@ -11,10 +11,11 @@ MIN_COMMON_SPECIMENS = 12
 MIN_COMMON_PLATES = 3
 
 
-def common_validation_specimens(project, previous, candidate, extra_models=()):
+def common_validation_specimens(project, previous, candidate, extra_models=(), *, schema_compatible=None):
     """Return common verified validation IDs, excluding training plates of all ancestors."""
     roots=(previous,candidate,*extra_models)
-    if not all(roots) or len({model.get('schema_digest') for model in roots}) != 1:
+    if not all(roots) or (not all(schema_compatible(model) for model in roots) if schema_compatible
+                          else len({model.get('schema_digest') for model in roots}) != 1):
         return (), "Models use different scientific schemes."
     by_id = {item["model_id"]: item for item in project.structure_models()}
     models_to_check = set()

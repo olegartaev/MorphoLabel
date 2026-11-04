@@ -22,7 +22,7 @@ from .runtime_paths import resource_path
 from .ai_starters import local_starter
 from .xray_crop import oriented_crop
 from .xray_auto_selection import common_validation_specimens, choose_better_model
-from .xray_component_selection import validated_routes, combine_marker_rows, choose_routed_components
+from .xray_component_selection import validated_routes, combine_marker_rows, choose_routed_components, choose_saved_components
 from .xray_schema import calculate_trait_values, compatible_reference_roles, spatial_series_order
 from .model_publication import staged_model_directory
 from .extensions.api import StructureBackend, StructureBackendContext
@@ -346,6 +346,23 @@ def prepare_structure_training_dataset(project, workspace_root, seed=42, *, back
 
 def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None, *, backend_id=None, registry=None):
     active_before = project.active_structure_model()
+    if active_before and backend_id is None and (parent_model_id is None or parent_model_id == active_before["model_id"]):
+        if progress:
+            progress("MODEL CHECK", "Checking saved models on shared verified images…")
+        try:
+            saved = _auto_select_saved_structure_models(project, active_before, registry=registry)
+        except Exception as exc:
+            raise XRayStructureAIError("Saved-model comparison could not be completed; training was not started.") from exc
+        if saved.get("decision") in {"selected", "combined"}:
+            chosen = project.active_structure_model()
+            membership = project.structure_model_membership(chosen["model_id"])
+            plates = {split: {project.specimen(entry["specimen_id"])["image_id"]
+                              for entry in membership if entry["split"] == split}
+                      for split in ("train", "val")}
+            return {"trained": False, "model_id": chosen["model_id"], "metrics": chosen.get("metrics") or {},
+                    "selection": saved, "training_specimens": chosen.get("training_specimen_count") or 0,
+                    "validation_specimens": chosen.get("validation_specimen_count") or 0,
+                    "training_plates": len(plates["train"]), "validation_plates": len(plates["val"])}
     model_id = project.next_structure_model_id()
     if parent_model_id is None:
         parent = project.active_structure_model()
@@ -546,6 +563,60 @@ def _publish_routed_structure_model(project, previous, candidate, routes, valida
     return model_id
 
 
+def _auto_select_saved_structure_models(project, previous, *, registry=None):
+    """Try all comparable saved standard sources on one common development cohort."""
+    models = {item["model_id"]: item for item in project.structure_models()}
+    routes = validated_routes(project.scheme, previous["model_id"],
+                              (previous.get("metrics") or {}).get("component_routes") or {}, models)
+    base_sources = set(routes.values())
+    compatible = lambda model: _scheme_matches_model(project, model)
+    candidates = []
+    for model in models.values():
+        if model["model_id"] in base_sources or model["model_id"] == previous["model_id"]:
+            continue
+        if (model.get("metrics") or {}).get("component_routes") or not _scheme_matches_model(project, model):
+            continue
+        extra = [models[ident] for ident in sorted(base_sources - {previous["model_id"], model["model_id"]})]
+        ids, _ = common_validation_specimens(project, previous, model, extra_models=extra, schema_compatible=compatible)
+        if ids:
+            candidates.append(model)
+    if not candidates:
+        return {"decision": "kept", "reason": "No saved sources have sufficient common verified validation data."}
+    all_ids = base_sources | {model["model_id"] for model in candidates}
+    roots = [models[ident] for ident in sorted(all_ids - {previous["model_id"]})]
+    ids, reason = common_validation_specimens(project, previous, roots[0], extra_models=roots[1:], schema_compatible=compatible)
+    if not ids:
+        return {"decision": "kept", "reason": reason}
+    predictions = {}
+    for ident in sorted(all_ids):
+        report = compare_structure_model_to_human(project, ident, specimen_ids=ids,
+                                                  include_predictions=True, registry=registry)
+        if report.get("failures") or report["summary"].get("prediction_failures") or report["summary"].get("skipped_not_verified"):
+            return {"decision": "kept", "reason": "A saved source could not predict the shared cohort."}
+        predictions[ident] = report["prediction_rows"]
+    cases = [{"specimen_id": sid, "human": project.effective_annotations(sid, 1, "human"),
+              "visibility": project.structure_visibility_states(sid, 1, "human"),
+              "crop_size": project.specimen_crop_size(sid)} for sid in ids]
+    selected = choose_saved_components(project.scheme, previous["model_id"], cases, predictions,
+                                       summarize_structure_ai_human_comparison,
+                                       baseline_routes=routes, check=choose_better_model)
+    if not selected["accepted"]:
+        return {"decision": "kept", "reason": selected["reason"], "checked_specimens": len(ids)}
+    summary = selected["report"]["summary"]
+    decision = {"reason": selected["reason"], "checked_specimens": len(ids),
+                "evaluated_specimens": int(summary.get("all_traits_evaluable_specimens") or 0),
+                "candidate_complete": int(summary.get("all_traits_correct_specimens") or 0),
+                "previous_model_id": previous["model_id"]}
+    used = set(selected["routes"].values())
+    if len(used) == 1:
+        ident = next(iter(used))
+        project.activate_structure_model(ident)
+        project.set_structure_model_selection(ident, {**decision, "decision": "selected"})
+        return {**decision, "decision": "selected"}
+    chosen = _publish_routed_structure_model(project, previous, candidates[0], selected["routes"], ids, decision)
+    return {**decision, "decision": "combined", "selected_model_id": chosen, "component_sources": len(used)}
+
+
 def _auto_select_trained_structure_model(project, previous, candidate_id, *, registry=None):
     """Evaluate whole-model and per-family choices using the same untouched specimens."""
     models = {item["model_id"]: item for item in project.structure_models()}
@@ -631,8 +702,12 @@ def _flatten_prediction(groups):
 def _registered_structure_sources(project, model):
     """Resolve immutable source identities for a standard or combined model."""
     by_id = {item["model_id"]: item for item in project.structure_models()}
+    registered = by_id.get(model.get("model_id"))
+    if not registered or any(model.get(key) != registered.get(key) for key in
+                             ("backend", "schema_digest", "path", "metadata_path")):
+        raise XRayStructureAIError("The selected structure model is unavailable or incompatible with its registered identity.")
     if not _scheme_matches_model(project, model):
-        raise XRayStructureAIError("The active structure model uses a different scientific scheme.")
+        raise XRayStructureAIError("The active structure model is incompatible with the scientific scheme.")
     try:
         routes = validated_routes(
             project.scheme, model["model_id"],

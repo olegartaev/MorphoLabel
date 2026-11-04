@@ -35,6 +35,10 @@ class FakeProject:
     def annotation_run(self, specimen_id, *args):
         return {"status": "verified"}
 
+    def effective_annotations(self, *args): return []
+    def structure_visibility_states(self, *args): return {}
+    def specimen_crop_size(self, *args): return (1, 1)
+
 
 def report(correct, trait_correct=None, marker_f1=0.9, marker_count=0.0, marker_p95=0.01):
     trait_correct = correct if trait_correct is None else trait_correct
@@ -60,6 +64,14 @@ class XRayAutomaticSelectionTests(unittest.TestCase):
         ids, reason = common_validation_specimens(project, project.models[0], project.models[1])
         self.assertEqual(MIN_COMMON_SPECIMENS, len(ids))
         self.assertFalse(reason)
+
+    def test_legacy_digest_requires_explicit_compatibility_proof(self):
+        project = FakeProject()
+        project.models[1]["schema_digest"] = "legacy"
+        self.assertFalse(common_validation_specimens(project, *project.models)[0])
+        ids, _ = common_validation_specimens(project, *project.models, schema_compatible=lambda model: True)
+        self.assertEqual(MIN_COMMON_SPECIMENS, len(ids))
+        self.assertFalse(common_validation_specimens(project, *project.models, schema_compatible=lambda model: False)[0])
 
     def test_training_plate_overlap_blocks_promotion(self):
         project = FakeProject(overlapping_train=True)
@@ -132,12 +144,14 @@ class XRayAutomaticSelectionTests(unittest.TestCase):
         with (
             patch("app.xray_structure_ai._scheme_matches_model", return_value=True),
             patch("app.xray_structure_ai.compare_structure_model_to_human",
-                  side_effect=[report(10), report(13)]) as compare,
+                  side_effect=lambda *a, **k: {**report(10), "prediction_rows": {}}) as compare,
+            patch("app.xray_structure_ai.choose_routed_components", return_value={"accepted": True,
+                  "routes": {"test": "new"}, "report": report(13), "reason": "improved"}),
             patch.object(project, "activate_structure_model", create=True) as activate,
         ):
             outcome = _auto_select_trained_structure_model(project, project.models[0], "new")
         self.assertEqual("selected", outcome["decision"])
-        self.assertEqual(2, compare.call_count)
+        self.assertEqual(1, compare.call_count)  # Empty synthetic scheme has no baseline families.
         self.assertEqual("new", activate.call_args.args[0])
 
     def test_failed_comparison_preserves_active_model(self):
@@ -150,7 +164,7 @@ class XRayAutomaticSelectionTests(unittest.TestCase):
         with (
             patch("app.xray_structure_ai._scheme_matches_model", return_value=True),
             patch("app.xray_structure_ai.compare_structure_model_to_human",
-                  side_effect=[report(10), incomplete]),
+                  side_effect=lambda *a, **k: incomplete if a[1] == "new" else {**report(10), "prediction_rows": {}}),
             patch.object(project, "activate_structure_model", create=True) as activate,
         ):
             outcome = _auto_select_trained_structure_model(project, project.models[0], "new")
