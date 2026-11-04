@@ -1181,6 +1181,8 @@ class XRayStructureWorkspace:
                         selection=result.get("selection") or {}
                         if selection.get("decision")=="selected":
                             detail+="\nNew model selected automatically after comparison."
+                        elif selection.get("decision")=="combined":
+                            detail+="\nBest verified structure sources were combined automatically."
                         elif selection.get("decision")=="first":
                             detail+="\nFirst model is active; its accuracy is not independently verified."
                         else:
@@ -1261,7 +1263,9 @@ class XRayStructureWorkspace:
                 checked=int(selection.get("evaluated_specimens") or 0)
                 score=selection.get("candidate_complete")
                 quality_text=f"{int(score)} / {checked} fully correct" if checked and score is not None else "Not independently verified"
+                combined=bool(metrics.get("component_routes"))
                 status=("Active" if model.get("active") else "Saved candidate")
+                if combined:status+=" · Combined"
                 if not _scheme_matches_model(self.project,model):status="Different trait scheme"
                 tree.insert(
                     "","end",iid=model["model_id"],values=(

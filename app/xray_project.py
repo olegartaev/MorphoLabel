@@ -930,6 +930,11 @@ class XRayProject:
                 "SELECT model_id FROM xray_structure_models WHERE parent_model_id=? LIMIT 1",(model_id,)
             ).fetchone()
             if child:raise ValueError(f"Model is the training parent of {child[0]} and cannot be deleted yet.")
+            for used in c.execute("SELECT model_id,metrics_json FROM xray_structure_models WHERE model_id!=?",(model_id,)):
+                try:routes=json.loads(used[1] or "{}").get("component_routes") or {}
+                except (ValueError,TypeError):routes={}
+                if model_id in set(routes.values()):
+                    raise ValueError(f"Model is a source of combined model {used[0]} and cannot be deleted yet.")
             paths=[Path(row["path"]),Path(row["metadata_path"])]
             resolved=[(self.root/path if not path.is_absolute() else path).resolve() for path in paths]
             models_root=self.models_root.resolve()

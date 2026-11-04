@@ -1072,6 +1072,11 @@ def export_structure_model_package(project, target, model_id=None):
     ) if model_id else project.active_structure_model()
     if not model:
         raise XRayStructurePackageError("No X-ray structure model is selected.")
+    if (model.get("metrics") or {}).get("component_routes"):
+        raise XRayStructurePackageError(
+            "This combined model uses multiple saved AI models. Export its source models separately; "
+            "a portable combined package is not yet supported."
+        )
     checkpoint = project.root / str(model["path"])
     metadata = project.root / str(model["metadata_path"])
     if not checkpoint.is_file() or not metadata.is_file():
