@@ -1207,6 +1207,11 @@ def import_structure_model_package(project, source, *, registry=None):
             publish()
             stats = dict(manifest.get("training_statistics") or {})
             metrics = dict(stats.get("metrics") or {})
+            # Imported single-weight packages cannot safely inherit routes
+            # referring to model IDs in an unrelated source project.
+            metrics.pop("component_routes", None)
+            metrics.pop("model_kind", None)
+            metrics.pop("auto_selection", None)
             metrics.update({
                 "origin": "imported",
                 "original_model_id": original,
