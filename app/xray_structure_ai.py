@@ -974,73 +974,80 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
     }
 
 
-def compare_structure_model_to_human(project,model_id=None,split="val",progress=None, *, specimen_ids=None,registry=None):
-    """Run read-only model inference on its recorded membership and compare with current human truth."""
-    model=next((item for item in project.structure_models() if item["model_id"]==str(model_id)),None) if model_id else project.active_structure_model()
-    if not model:raise XRayStructureAIError("Select an X-ray Structure AI model first.")
-    if not _scheme_matches_model(project,model):
-        raise XRayStructureAIError("This model uses a different X-ray structure scheme.")
-    membership=[item for item in project.structure_model_membership(model["model_id"]) if str(item.get("split") or "")==str(split)]
+def compare_structure_model_to_human(project,model_id=None,split="val",progress=None, *,
+                                     specimen_ids=None,include_predictions=False,registry=None):
+    """Read-only evaluation of the exact standard or combined model on its holdout."""
+    model = (next((item for item in project.structure_models()
+                   if item["model_id"] == str(model_id)), None)
+             if model_id else project.active_structure_model())
+    if not model:
+        raise XRayStructureAIError("Select an X-ray Structure AI model first.")
+    sources, routes = _registered_structure_sources(project, model)
+    membership = [item for item in project.structure_model_membership(model["model_id"])
+                  if str(item.get("split") or "") == str(split)]
     if not membership:
-        raise XRayStructureAIError("This model has no recorded validation membership to compare with human annotations.")
-    ids=[str(item["specimen_id"]) for item in membership]
+        raise XRayStructureAIError("This model has no recorded validation membership.")
+    ids = [str(item["specimen_id"]) for item in membership]
     if specimen_ids is not None:
-        requested={str(item) for item in specimen_ids}
+        requested = {str(item) for item in specimen_ids}
         if not requested or not requested.issubset(set(ids)):
             raise XRayStructureAIError("Requested specimens are not in this model's validation holdout.")
-        ids=[specimen_id for specimen_id in ids if specimen_id in requested]
-    checkpoint=project.root/str(model["path"]);metadata=project.root/str(model["metadata_path"])
-    if not checkpoint.is_file() or not metadata.is_file():
-        raise XRayStructureAIError("The selected Structure AI model artifact is incomplete.")
-    verified=[];skipped=[]
+        ids = [specimen_id for specimen_id in ids if specimen_id in requested]
+    verified, skipped = [], []
     for specimen_id in ids:
-        run=project.annotation_run(specimen_id,1,"human",False)
-        if not run or str(run.get("status") or "")!="verified":
-            skipped.append(specimen_id);continue
-        verified.append(specimen_id)
+        run = project.annotation_run(specimen_id, 1, "human", False)
+        if run and str(run.get("status") or "") == "verified":
+            verified.append(specimen_id)
+        else:
+            skipped.append(specimen_id)
     if not verified:
-        raise XRayStructureAIError("None of this model's recorded validation specimens currently has human-verified annotations.")
-    backend=backend_for_structure_model(project,model,registry=registry)
-    settings=structure_performance_settings()["inference"];predictions={};failures=[]
+        raise XRayStructureAIError("No human-verified validation specimens available.")
+    settings = structure_performance_settings()["inference"]
+    predictions = {}
+    failures = []
     with tempfile.TemporaryDirectory(prefix="morpholabel_xray_structure_compare_") as scratch_name:
-        scratch=Path(scratch_name);prepared=[]
-        for index,specimen_id in enumerate(verified,1):
-            try:prepared.append((specimen_id,_prediction_image(project,specimen_id,scratch/f"{index:06d}.png")))
-            except Exception as exc:failures.append({"specimen_id":specimen_id,"reason":str(exc)})
-        batch_size=max(1,int(settings.get("batch_size") or 1));index=0
-        while index<len(prepared):
-            chunk=prepared[index:index+batch_size]
-            payload={"metadata":str(metadata),"checkpoint":str(checkpoint),"images":[str(path) for _sid,path in chunk],"device":settings["device"]}
-            try:result=backend.predict_many(payload,max(900,180*len(chunk)))
+        scratch = Path(scratch_name)
+        prepared = []
+        for index, specimen_id in enumerate(verified, 1):
+            try:
+                prepared.append((specimen_id, _prediction_image(
+                    project, specimen_id, scratch / f"{index:06d}.png")))
             except Exception as exc:
-                if is_cuda_oom(exc) and batch_size>1:
-                    batch_size=max(1,batch_size//2);continue
-                for specimen_id,_path in chunk:failures.append({"specimen_id":specimen_id,"reason":str(exc)})
-                index+=len(chunk);continue
-            returned=list(result.get("results") or ())
-            for offset,(specimen_id,_path) in enumerate(chunk):
-                if offset>=len(returned):
-                    failures.append({"specimen_id":specimen_id,"reason":"Incomplete prediction batch."});continue
-                predictions[specimen_id]=_comparison_prediction_rows(returned[offset].get("structures") or ())
-                if progress:progress(index+offset+1,len(prepared),specimen_id)
-            index+=len(chunk)
-    rows=[]
-    for specimen_id in verified:
-        if specimen_id not in predictions:continue
-        rows.append({
-            "specimen_id":specimen_id,
-            "human":project.effective_annotations(specimen_id,1,"human"),
-            "predicted":predictions[specimen_id],
-            "visibility":project.structure_visibility_states(specimen_id,1,"human"),
-            "crop_size":project.specimen_crop_size(specimen_id),
-        })
-    report=summarize_structure_ai_human_comparison(project.scheme,rows)
+                failures.append({"specimen_id": specimen_id, "reason": str(exc)})
+        by_source, source_failures, _batch_size = _predict_prepared_sources(
+            project, sources, prepared, settings, registry=registry,
+        )
+        failures.extend(source_failures)
+        for index, (specimen_id, _path) in enumerate(prepared, 1):
+            if any(specimen_id not in results for results in by_source.values()):
+                continue
+            try:
+                predictions[specimen_id] = combine_marker_rows(
+                    project.scheme,
+                    {source_id: rows[specimen_id] for source_id, rows in by_source.items()},
+                    routes,
+                )
+                if progress:
+                    progress(index, len(prepared), specimen_id)
+            except (KeyError, TypeError, ValueError) as exc:
+                failures.append({"specimen_id": specimen_id, "reason": str(exc)})
+    rows = [{
+        "specimen_id": specimen_id,
+        "human": project.effective_annotations(specimen_id, 1, "human"),
+        "predicted": predictions[specimen_id],
+        "visibility": project.structure_visibility_states(specimen_id, 1, "human"),
+        "crop_size": project.specimen_crop_size(specimen_id),
+    } for specimen_id in verified if specimen_id in predictions]
+    report = summarize_structure_ai_human_comparison(project.scheme, rows)
     report["summary"].update({
-        "model_id":str(model["model_id"]),"split":str(split),"membership_specimens":len(ids),
-        "skipped_not_verified":len(skipped),"prediction_failures":len(failures),
-        "comparison_note":"Validation holdout only; current human-verified annotations are read without modifying project data.",
+        "model_id": str(model["model_id"]), "split": str(split),
+        "membership_specimens": len(ids), "skipped_not_verified": len(skipped),
+        "prediction_failures": len(failures),
+        "comparison_note": "Development validation only; no project annotations were modified.",
     })
-    report["failures"]=failures
+    report["failures"] = failures
+    if include_predictions:
+        report["prediction_rows"] = predictions
     return report
 
 
