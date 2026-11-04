@@ -22,6 +22,7 @@ from .runtime_paths import resource_path
 from .ai_starters import local_starter
 from .xray_crop import oriented_crop
 from .xray_auto_selection import common_validation_specimens, choose_better_model
+from .xray_component_selection import validated_routes, combine_marker_rows, choose_routed_components
 from .xray_schema import calculate_trait_values, compatible_reference_roles, spatial_series_order
 from .model_publication import staged_model_directory
 from .extensions.api import StructureBackend, StructureBackendContext
@@ -491,34 +492,116 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
     }
 
 
+def _publish_routed_structure_model(project, previous, candidate, routes, validation_ids, summary):
+    """Create an immutable model identity for a checked combination of existing weights."""
+    model_id = project.next_structure_model_id()
+    directory = project.models_root / model_id
+    if directory.exists():
+        raise XRayStructureAIError("Combined model destination already exists.")
+    by_id = {item["model_id"]: item for item in project.structure_models()}
+    participants = {str(previous["model_id"]), str(candidate["model_id"]), *routes.values()}
+    members = {}
+    for source_id in participants:
+        for entry in project.structure_model_membership(source_id):
+            specimen_id = str(entry["specimen_id"])
+            if entry["split"] == "train":
+                members[specimen_id] = "train"
+    for specimen_id in validation_ids:
+        if str(specimen_id) in members:
+            raise XRayStructureAIError("Combined model would overlap training and validation.")
+        members[str(specimen_id)] = "val"
+    count_train = sum(split == "train" for split in members.values())
+    if not count_train:
+        raise XRayStructureAIError("Combined model lacks reliable training provenance.")
+    checkpoint = project.root / str(previous["path"])
+    metadata = project.root / str(previous["metadata_path"])
+    with staged_model_directory(directory) as (staging, publish):
+        shutil.copy2(checkpoint, staging / "model.pth")
+        info = json.loads(metadata.read_text(encoding="utf-8"))
+        info.update({
+            "model_id": model_id, "parent_model_id": previous["model_id"],
+            "model_kind": "combined_structure_sources_v1",
+            "component_routes": dict(sorted(routes.items())),
+        })
+        (staging / "model.json").write_text(
+            json.dumps(info, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
+        )
+        publish()
+        metrics = {
+            "model_kind": "combined",
+            "component_routes": dict(sorted(routes.items())),
+            "auto_selection": dict(summary),
+            "base_model_id": previous["model_id"],
+        }
+        project.register_structure_model(
+            model_id,
+            str((directory / "model.pth").relative_to(project.root)),
+            str((directory / "model.json").relative_to(project.root)),
+            previous["model_id"], previous["schema_digest"], previous["backend"],
+            metrics,
+            ({"specimen_id": sid, "split": split} for sid, split in sorted(members.items())),
+            training_specimen_count=count_train, validation_specimen_count=len(validation_ids),
+            activate=True,
+        )
+    return model_id
+
+
 def _auto_select_trained_structure_model(project, previous, candidate_id, *, registry=None):
-    candidate = next(item for item in project.structure_models() if item["model_id"] == candidate_id)
+    """Evaluate whole-model and per-family choices using the same untouched specimens."""
+    models = {item["model_id"]: item for item in project.structure_models()}
+    candidate = models[candidate_id]
     if not _scheme_matches_model(project, previous) or not _scheme_matches_model(project, candidate):
         return {"decision": "kept", "reason": "The scientific scheme has changed."}
-    specimen_ids, reason = common_validation_specimens(project, previous, candidate)
+    previous_routes = (previous.get("metrics") or {}).get("component_routes") or {}
+    try:
+        routes = validated_routes(project.scheme, previous["model_id"], previous_routes, models)
+    except ValueError:
+        return {"decision": "kept", "reason": "A previous component source is no longer available."}
+    source_ids = set(routes.values()) | {previous["model_id"], candidate_id}
+    extra = [models[source_id] for source_id in sorted(source_ids - {previous["model_id"], candidate_id})]
+    specimen_ids, reason = common_validation_specimens(project, previous, candidate, extra_models=extra)
     if not specimen_ids:
         return {"decision": "kept", "reason": reason}
-    old_report = compare_structure_model_to_human(
-        project, previous["model_id"], specimen_ids=specimen_ids, registry=registry
+    predictions = {}
+    for source_id in sorted(source_ids):
+        report = compare_structure_model_to_human(
+            project, source_id, specimen_ids=specimen_ids,
+            include_predictions=True, registry=registry
+        )
+        summary = report["summary"]
+        if report.get("failures") or summary.get("skipped_not_verified") or summary.get("prediction_failures"):
+            return {"decision": "kept", "reason": "A source model did not predict every validation specimen."}
+        predictions[source_id] = report["prediction_rows"]
+    cases = [{
+        "specimen_id": sid,
+        "human": project.effective_annotations(sid, 1, "human"),
+        "visibility": project.structure_visibility_states(sid, 1, "human"),
+        "crop_size": project.specimen_crop_size(sid),
+    } for sid in specimen_ids]
+    selection = choose_routed_components(
+        project.scheme, previous["model_id"], candidate_id, cases, predictions,
+        summarize_structure_ai_human_comparison, baseline_routes=previous_routes,
+        check=choose_better_model,
     )
-    new_report = compare_structure_model_to_human(
-        project, candidate_id, specimen_ids=specimen_ids, registry=registry
-    )
-    promote, reason = choose_better_model(old_report, new_report)
-    old_summary = old_report["summary"]
-    new_summary = new_report["summary"]
-    decision = {
-        "decision": "selected" if promote else "kept",
-        "reason": reason,
-        "checked_specimens": len(specimen_ids),
-        "evaluated_specimens": int(new_summary.get("all_traits_evaluable_specimens") or 0),
-        "previous_complete": int(old_summary.get("all_traits_correct_specimens") or 0),
-        "candidate_complete": int(new_summary.get("all_traits_correct_specimens") or 0),
+    baseline = selection["report"]["summary"]
+    if not selection["accepted"]:
+        return {"decision": "kept", "reason": selection["reason"],
+                "checked_specimens": len(specimen_ids)}
+    selected = selection["routes"]
+    result_summary = {
+        "reason": selection["reason"], "checked_specimens": len(specimen_ids),
+        "evaluated_specimens": int(baseline.get("all_traits_evaluable_specimens") or 0),
+        "candidate_complete": int(baseline.get("all_traits_correct_specimens") or 0),
         "previous_model_id": previous["model_id"],
     }
-    if promote:
+    if set(selected.values()) == {candidate_id}:
         project.activate_structure_model(candidate_id)
-    return decision
+        return {**result_summary, "decision": "selected"}
+    selected_id = _publish_routed_structure_model(
+        project, previous, candidate, selected, specimen_ids, result_summary
+    )
+    return {**result_summary, "decision": "combined", "selected_model_id": selected_id,
+            "component_sources": len(set(selected.values()))}
 
 
 def _prediction_image(project, specimen_id, target):
