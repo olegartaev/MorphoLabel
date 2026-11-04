@@ -1141,7 +1141,7 @@ def _safe_model_json(path):
         "format_version", "backend", "training_objective", "target_encoding", "input_size", "output_stride", "structures", "preprocessing",
         "thresholds", "validation", "epochs_completed", "model_id", "schema_digest",
         "dataset_hash", "parent_model_id", "training_specimens", "validation_specimens",
-        "training_plates", "validation_plates", "schema_contract",
+        "training_plates", "validation_plates", "schema_contract", "inference_pipeline", "multires_training",
     }
     return {key: source[key] for key in allowed if key in source}
 
@@ -1164,6 +1164,36 @@ def _portable_artifact(project, model):
             raise XRayStructurePackageError("Cannot prove the model's scientific structure contract.")
     safe_meta["schema_contract"] = contract
     return checkpoint.read_bytes(), json.dumps(safe_meta, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8"), contract
+
+
+def _portable_auxiliary_artifacts(project, model, weights, metadata_bytes):
+    """Add only hash-verified auxiliary weights referenced by the model metadata."""
+    from ai_runtime.universal_multires import component_files, pipeline_components
+    metadata = json.loads(metadata_bytes.decode("utf-8"))
+    try:
+        for component in pipeline_components(metadata).values():
+            if component["checkpoint"] == "model.pth" and component["sha256"] != _sha256_bytes(weights):
+                raise ValueError("Shared model checkpoint checksum mismatch")
+        companions = component_files(metadata)
+    except (ValueError, TypeError, KeyError) as exc:
+        raise XRayStructurePackageError("Invalid multiresolution model component metadata.") from exc
+    folder = (project.root / str(model["metadata_path"])).parent
+    result = {}
+    for filename, digest in companions.items():
+        source = (folder / filename).resolve()
+        if source.parent != folder.resolve() or not source.is_file() or _sha256_file(source) != digest:
+            raise XRayStructurePackageError("Missing or altered multiresolution model component.")
+        result[filename] = source.read_bytes()
+    return result
+
+
+def _auxiliary_package_files(metadata, prefix):
+    """Determine exactly which portable companion files a model requires."""
+    from ai_runtime.universal_multires import component_files
+    try:
+        return {f"{prefix}/{filename}" for filename in component_files(metadata)}
+    except (ValueError, KeyError, TypeError) as exc:
+        raise XRayStructurePackageError("Invalid multiresolution model component metadata.") from exc
 
 
 def _safe_metrics(model):
@@ -1201,17 +1231,26 @@ def export_structure_model_package(project, target, model_id=None):
             prefix = f"artifacts/components/{index:03d}"
             weight_name, meta_name = f"{prefix}/model.pth", f"{prefix}/model.json"
             files[weight_name], files[meta_name] = weights, metadata
+            extra = _portable_auxiliary_artifacts(project, source, weights, metadata)
+            auxiliary_files = []
+            for filename, payload in sorted(extra.items()):
+                name = f"{prefix}/{filename}"
+                files[name] = payload
+                auxiliary_files.append(name)
             components.append({
                 "model_id": str(source_id), "backend": str(source.get("backend") or STRUCTURE_BACKEND),
                 **_backend_package_fields(source.get("backend") or STRUCTURE_BACKEND),
                 "schema_digest": str(source["schema_digest"]),
                 "source_parent_model_id": source.get("parent_model_id"),
                 "weights": weight_name, "metadata": meta_name,
+                "auxiliary_files": auxiliary_files,
             })
         contract = structure_schema_contract(project.scheme)
     else:
         weights, metadata, contract = _portable_artifact(project, model)
         files = {"artifacts/model.pth": weights, "artifacts/model.json": metadata}
+        files.update({"artifacts/" + filename: content
+                      for filename, content in _portable_auxiliary_artifacts(project, model, weights, metadata).items()})
     manifest = {
         "package_format": MODEL_PACKAGE_FORMAT,
         "model_kind": "combined" if routes else "standard",
@@ -1347,17 +1386,29 @@ def _import_combined_structure_model_package(project, archive, manifest, registr
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise XRayStructurePackageError("Combined component metadata is invalid.") from exc
         provider = _validate_imported_component(project, component, metadata, compatibility_scheme, current_digest, registry)
-        parsed[str(component["model_id"])] = (component, metadata, provider, payload[weights])
+        prefix = weights.rsplit("/", 1)[0]
+        required_extra = _auxiliary_package_files(metadata, prefix)
+        supplied_extra = set(component.get("auxiliary_files") or ())
+        if supplied_extra != required_extra or not required_extra <= set(payload):
+            raise XRayStructurePackageError("Combined model auxiliary weights are missing or inconsistent.")
+        parsed[str(component["model_id"])] = (component, metadata, provider, payload[weights],
+                                                {name[len(prefix) + 1:]: payload[name] for name in supplied_extra})
+    claimed = {name for item in components for name in
+               [str(item["weights"]), str(item["metadata"]), *(item.get("auxiliary_files") or ())]}
+    if set(payload) != claimed or len(claimed) != sum(2 + len(item.get("auxiliary_files") or ()) for item in components):
+        raise XRayStructurePackageError("Combined model package has unexpected or repeated artifacts.")
     original = str(manifest.get("model_id") or "combined_structure_model")
     local_by_source = {}; occupied = set()
     for source_id in originals:
         local_by_source[source_id] = _unique_model_id(project, source_id, occupied); occupied.add(local_by_source[source_id])
     local = _unique_model_id(project, original, occupied)
     for source_id in originals:
-        component, metadata, provider, weights = parsed[source_id]
+        component, metadata, provider, weights, auxiliary = parsed[source_id]
         destination = project.models_root / local_by_source[source_id]
         with staged_model_directory(destination) as (staging, publish):
             (staging / "model.pth").write_bytes(weights)
+            for filename, content in auxiliary.items():
+                (staging / filename).write_bytes(content)
             metadata.update({"model_id": local_by_source[source_id], "imported_from_model_id": source_id,
                              "original_schema_digest": component["schema_digest"], "schema_digest": current_digest,
                              "schema_contract": structure_schema_contract(compatibility_scheme)})
@@ -1416,13 +1467,22 @@ def import_structure_model_package(project, source, *, registry=None):
         _structure_provider_spec(provider_id, registry, XRayStructurePackageError)
         imported_scheme, compatibility_scheme, current_digest = _package_scheme(project, manifest)
         expected = dict(manifest.get("files") or {})
-        if set(expected) != {"artifacts/model.pth", "artifacts/model.json"}:
-            raise XRayStructurePackageError("Structure model package has an unexpected artifact set.")
         payload = _read_package_files(archive, expected)
         try:
             metadata = json.loads(payload["artifacts/model.json"].decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise XRayStructurePackageError("Imported structure model metadata is invalid.") from exc
+        required = {"artifacts/model.pth", "artifacts/model.json"} | _auxiliary_package_files(metadata, "artifacts")
+        if set(expected) != required or set(payload) != required:
+            raise XRayStructurePackageError("Structure model package contains unexpected or missing artifacts.")
+        from ai_runtime.universal_multires import pipeline_components
+        try:
+            for companion in pipeline_components(metadata).values():
+                if (companion["checkpoint"] == "model.pth"
+                        and companion["sha256"] != _sha256_bytes(payload["artifacts/model.pth"])):
+                    raise ValueError("Shared checkpoint checksum mismatch")
+        except (ValueError, KeyError, TypeError) as exc:
+            raise XRayStructurePackageError("Invalid multiresolution model checkpoints.") from exc
         package_digest=str(manifest.get("schema_digest") or "")
         if str(metadata.get("schema_digest") or "") != package_digest:
             raise XRayStructurePackageError("Manifest and model metadata schema digests disagree; cannot prove scheme compatibility.")
@@ -1448,6 +1508,8 @@ def import_structure_model_package(project, source, *, registry=None):
         destination = project.models_root / local
         with staged_model_directory(destination) as (staging,publish):
             (staging / "model.pth").write_bytes(payload["artifacts/model.pth"])
+            for filename in sorted(required - {"artifacts/model.pth", "artifacts/model.json"}):
+                (staging / filename[len("artifacts/"):]).write_bytes(payload[filename])
             metadata["model_id"] = local
             metadata["imported_from_model_id"] = original
             metadata["original_schema_digest"]=package_digest
