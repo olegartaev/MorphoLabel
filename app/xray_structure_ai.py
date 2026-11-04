@@ -476,7 +476,7 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
             decision = _auto_select_trained_structure_model(project, active_before, model_id, registry=registry)
         except Exception as exc:
             decision = {"decision": "kept", "reason": "Automatic comparison unavailable.",
-                        "diagnostic": f"{type(exc).__name__}: {exc}"[:250]}
+                        "error_type": type(exc).__name__}
     else:
         decision = {"decision": "first", "reason": "First available model; quality not yet independently confirmed."}
     project.set_structure_model_selection(model_id, decision)
