@@ -578,7 +578,11 @@ def predict_many(payload):
         if payload.get("specimen_preprocessing","standard")!="standard":
             raise ValueError("Multiresolution model requires standard preprocessing")
         from hashlib import sha256
+        needed = ({"native"} if pipeline.get("mode") == "tiled_native"
+                  and not pipeline.get("retain_detail_structures") else set(specs))
         for label,spec in specs.items():
+            if label not in needed:
+                continue
             if spec["checkpoint"]=="model.pth" and not spec.get("state_prefix"):
                 with Path(payload["checkpoint"]).open("rb") as fd:
                     h=sha256()

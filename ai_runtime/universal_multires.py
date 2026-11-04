@@ -178,6 +178,18 @@ def predict_one(source_path,primary_model,metadata,metadata_path,device,runner,*
     canvas,geo=runner._letterbox(source,tuple(metadata["input_size"]))
     with torch.no_grad():
         base=primary_model(runner._tensor(canvas)[None].to(device)).float()
+    kept=set(pipeline.get("retain_detail_structures",()))
+    # An all-Native policy needs no Detail tiles at inference time. During
+    # training calibration components_out is provided and both are measured.
+    if pipeline["mode"]=="tiled_native" and not kept and components_out is None:
+        native_spec=components["native"]
+        native=(component_models["native"] if component_models is not None else
+                primary_model if native_spec["checkpoint"]=="model.pth" and not native_spec.get("state_prefix") else
+                _load_component(native_spec,Path(metadata_path).parent,runner,len(metadata["structures"]),device))
+        native_canvas,ng=runner._letterbox(source,tuple(native_spec["input_size"]))
+        with torch.no_grad():
+            native_logits=native(runner._tensor(native_canvas)[None].to(device)).float()
+        return runner._decode_logits(native_logits,ng,metadata)
     detail_spec=components["detail"]
     detail=(component_models["detail"] if component_models is not None else
             primary_model if detail_spec["checkpoint"]=="model.pth" and not detail_spec.get("state_prefix") else

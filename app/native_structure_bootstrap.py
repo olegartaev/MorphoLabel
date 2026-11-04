@@ -38,16 +38,87 @@ def initialize_parent(project, source, scratch, *, seed, device, initial_epochs=
     return manifest,meta,data
 
 
-def select_detail_channels(metadata, source_data, native_bytes, detail_bytes, manifest, scratch, device):
-    """Choose per-channel Native/ROI outputs on validation plates, never test data.
+def choose_family_detail_policy(scheme, cases):
+    """Calibrate a single model's Native/Detail routes on its development validation data.
 
-Ties retain Native Full. The deterministic tiling never uses truth coordinates.
-This is calibration, not independent validation or automatic model activation.
-"""
+    Evaluate the *final scientific traits* and retain dependent marker families
+    together. Nothing here is independent test evidence or model promotion.
+    Both component predictions are reused; no GPU inference occurs in this loop.
+    """
+    from itertools import product
+    from .xray_component_selection import structure_families, combine_marker_rows
+    from .xray_structure_ai import summarize_structure_ai_human_comparison
+
+    families = structure_families(scheme)
+    specimens = len(cases)
+    plates = len({str(row["image_id"]) for row in cases})
+    if specimens < 12 or plates < 3 or not families:
+        return [], {"status": "insufficient_development_validation",
+                    "specimens": specimens, "plates": plates}
+    def evaluate(modes):
+        assigned = {sid: mode for family, mode in zip(families, modes) for sid in family}
+        rows = []
+        for case in cases:
+            sources = {"native": case["native"], "detail": case["detail"]}
+            rows.append({
+                "specimen_id": case["specimen_id"], "human": case["human"],
+                "visibility": case["visibility"], "crop_size": case["crop_size"],
+                "predicted": combine_marker_rows(scheme, sources, assigned),
+            })
+        return summarize_structure_ai_human_comparison(scheme, rows)
+
+    def rank(report):
+        s = report["summary"]
+        trait_total = sum(int(row.get("correct") or 0) for row in report["traits"])
+        return (int(s["all_traits_correct_specimens"]), trait_total, float(s.get("macro_f1") or 0))
+
+    native = ("native",) * len(families)
+    baseline = evaluate(native)
+    best_modes, best_report = native, baseline
+    original = {row["specimen_id"]: row for row in baseline["specimen_outcomes"]}
+    original_traits = {row["trait_id"]: row for row in baseline["traits"]}
+    # Exact search is bounded. Large custom schemes use one-family improvements.
+    choices = (product(("native", "detail"), repeat=len(families))
+               if len(families) <= 8 else
+               (tuple("detail" if j == i else "native" for j in range(len(families)))
+                for i in range(len(families))))
+    for modes in choices:
+        if modes == native:
+            continue
+        report = evaluate(modes)
+        # A once-fully-correct specimen must not become wrong. A method
+        # cannot be chosen merely because it scores many isolated points.
+        outcome = {row["specimen_id"]: row for row in report["specimen_outcomes"]}
+        if any(row["evaluable"] and row["correct"] and
+               not outcome[row_id]["correct"] for row_id, row in original.items()):
+            continue
+        by_trait = {row["trait_id"]: row for row in report["traits"]}
+        if any(int(by_trait[tid].get("correct") or 0) < int(stat.get("correct") or 0)
+               for tid, stat in original_traits.items()):
+            continue
+        if rank(report) > rank(best_report):
+            best_modes, best_report = modes, report
+    chosen = [sid for family, mode in zip(families, best_modes)
+              if mode == "detail" for sid in family]
+    evidence = {
+        "status": "development_calibration_not_independent",
+        "specimens": specimens, "plates": plates,
+        "baseline_all_correct": baseline["summary"]["all_traits_correct_specimens"],
+        "selected_all_correct": best_report["summary"]["all_traits_correct_specimens"],
+        "baseline_trait_correct": sum(int(x.get("correct") or 0) for x in baseline["traits"]),
+        "selected_trait_correct": sum(int(x.get("correct") or 0) for x in best_report["traits"]),
+        "family_routes": {" / ".join(family): mode for family, mode in zip(families, best_modes)},
+    }
+    return chosen, evidence
+
+
+def select_detail_channels(metadata, source_data, native_bytes, detail_bytes, manifest, scratch, device, *, scheme=None):
+    """Run both trained methods once per validation image, then choose by family."""
     import torch
+    from PIL import Image
     from ai_runtime import xray_structure_runner as runner
     from ai_runtime.universal_multires import predict_one, _load_component
-    from .xray_structure_ai import _comparison_match
+    from .xray_structure_ai import _comparison_match, _comparison_prediction_rows
     meta=deepcopy(metadata);pipeline=meta["inference_pipeline"]
     folder=Path(scratch)/"selection";folder.mkdir()
     (folder/"model.pth").write_bytes(source_data["artifacts/model.pth"])
@@ -59,9 +130,19 @@ This is calibration, not independent validation or automatic model activation.
     primary.load_state_dict(torch.load(folder/"model.pth",weights_only=True,map_location="cpu"));primary=primary.to(device).eval()
     models={key:_load_component(pipeline[key],folder,runner,len(meta["structures"]),device) for key in ("native","detail")}
     counts={str(s["id"]):{mode:[0,0,0] for mode in ("native","detail")} for s in meta["structures"]}
+    cases=[]
     for row in manifest["val"]:
         outputs={}
         predict_one(row["path"],primary,meta,folder/"model.json",device,runner,component_models=models,components_out=outputs)
+        with Image.open(row["path"]) as image:
+            crop_size=image.size
+        cases.append({
+            "specimen_id": str(row["specimen_id"]), "image_id": str(row["image_id"]),
+            "human": row["points"], "visibility": row.get("visibility") or {},
+            "crop_size": crop_size,
+            "native": _comparison_prediction_rows(outputs["native"]),
+            "detail": _comparison_prediction_rows(outputs["detail"]),
+        })
         for sid,by_mode in counts.items():
             if row.get("visibility",{}).get(sid,"complete") in {"partial","not_visible"}:continue
             truth=[p for p in row["points"] if p["structure_id"]==sid]
@@ -69,10 +150,14 @@ This is calibration, not independent validation or automatic model activation.
                 predicted=next(g["points"] for g in outputs[mode] if g["structure_id"]==sid)
                 tp,fp,fn,_=_comparison_match(predicted,truth)
                 by_mode[mode]=[a+b for a,b in zip(total,(tp,fp,fn))]
-    selected=choose_detail_channels(counts)
     del primary,models
     if device.startswith("cuda"):torch.cuda.empty_cache()
-    return selected,counts
+    if scheme is None:
+        # Backwards-compatible diagnostic path, not used by the application.
+        selected=choose_detail_channels(counts)
+        return selected, counts
+    selected,science=choose_family_detail_policy(scheme,cases)
+    return selected, {**counts, "_scientific_selection":science}
 
 
 def choose_detail_channels(counts):

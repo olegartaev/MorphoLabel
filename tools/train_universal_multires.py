@@ -211,11 +211,14 @@ def run(project_copy,source_model,output,*,epochs_native=18,epochs_detail=18,
             "device":device,"mixed_precision":device.startswith("cuda"),"batch_size":1,"workers":0,
             "scientific_scheme_reused":True,
         }
-        if bootstrap:
-            from app.native_structure_bootstrap import select_detail_channels
-            selected,calibration=select_detail_channels(original_meta,data,buffer.getvalue(),detail_new,manifest,scratch,device)
-            original_meta["inference_pipeline"]["retain_detail_structures"]=selected
-            provenance["channel_selection_validation"]=calibration
+        # Re-evaluate the methods after every retraining, not only at bootstrap.
+        # Reuse the two trained components: no per-trait retraining or extra GPU models.
+        from app.native_structure_bootstrap import select_detail_channels
+        selected,calibration=select_detail_channels(
+            original_meta,data,buffer.getvalue(),detail_new,manifest,scratch,device,
+            scheme=project.scheme)
+        original_meta["inference_pipeline"]["retain_detail_structures"]=selected
+        provenance["channel_selection_validation"]=calibration
         result=new_package(original_manifest,original_meta,data,
                            detail_new,buffer.getvalue(),output,
                            model_id="multires_retrained_"+sha256(
