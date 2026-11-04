@@ -102,6 +102,22 @@ class ComponentRoutingTests(unittest.TestCase):
         insufficient,_=choose_family_detail_policy(self.scheme,cases[:8])
         self.assertEqual({"detail":[],"standard":[]},insufficient)
 
+    def test_standard_method_can_win_without_retraining_another_network(self):
+        from app.native_structure_bootstrap import choose_family_detail_policy
+        cases=[]
+        for i in range(24):
+            native=self.sample_points(ptery=3 if i<6 else 2)
+            detail=self.sample_points(ptery=3 if i<6 else 2,vertebra=2)
+            cases.append({
+                "specimen_id":f"case-{i}","image_id":f"plate-{i//4}",
+                "human":self.sample_points(),"visibility":{},"crop_size":(900,300),
+                "native":native,"detail":detail,"standard":self.sample_points(),
+            })
+        selected,evidence=choose_family_detail_policy(self.scheme,cases)
+        self.assertIn("preanal_pterygiophore",selected["standard"])
+        self.assertNotIn("vertebra",selected["detail"])
+        self.assertEqual(24,evidence["selected_all_correct"])
+
     def test_no_evidence_keeps_previous_routes(self):
         cases = [{"specimen_id": "synthetic-0", "human": self.sample_points(),
                   "visibility": {}, "crop_size": (900, 300)}]

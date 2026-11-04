@@ -1512,7 +1512,9 @@ class XRayStructureWorkspace:
                     pipeline=metadata.get("inference_pipeline") or {}
                     if pipeline.get("mode")=="tiled_native":
                         kept=set(pipeline.get("retain_detail_structures") or ())
-                        method="ROI Detail" if family[0] in kept else "Native Full"
+                        standard=set(pipeline.get("retain_standard_structures") or ())
+                        method=("Standard" if family[0] in standard else
+                                "ROI Detail" if family[0] in kept else "Native Full")
                     elif pipeline.get("mode")=="tiled":
                         method="ROI Detail"
                     else:
