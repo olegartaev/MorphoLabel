@@ -688,7 +688,7 @@ def _predict_prepared_sources(project, sources, prepared, settings, *, registry=
                     continue
                 try:
                     groups = returned[offset].get("structures") or ()
-                    if any("count" in group and "points" not in group for group in groups):
+                    if any("count" in group for group in groups):
                         raise ValueError("Scalar-only outputs cannot be used as point annotations.")
                     output[specimen_id] = _comparison_prediction_rows(groups)
                 except (ValueError, TypeError, KeyError) as exc:
