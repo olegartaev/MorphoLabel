@@ -126,7 +126,7 @@ class HighResolutionTrainingUITests(unittest.TestCase):
         workspace.project=self.project
         workspace.training_parent_choice=SimpleNamespace(get=lambda:"hybrid")
         with patch("app.xray_multires_training.is_universal_multires_model",return_value=True), \
-             patch.object(workspace,"train_highres_structure_ai") as highres:
+             patch.object(workspace,"_train_multi_resolution_structure_ai") as highres:
             workspace.train_structure_ai()
         highres.assert_called_once_with()
 
