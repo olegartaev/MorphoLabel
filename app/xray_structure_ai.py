@@ -1448,7 +1448,7 @@ def _import_combined_structure_model_package(project, archive, manifest, registr
     return local
 
 
-def import_structure_model_package(project, source, *, registry=None):
+def import_structure_model_package(project, source, *, registry=None, parent_model_id=None):
     source = Path(source)
     try:
         archive = zipfile.ZipFile(source)
@@ -1496,6 +1496,11 @@ def import_structure_model_package(project, source, *, registry=None):
             raise XRayStructurePackageError("This structure model was trained for a different X-ray structure scheme; embedded information cannot prove equivalence.")
         if str(metadata.get("backend") or STRUCTURE_BACKEND) != provider_id:
             raise XRayStructurePackageError("Imported model metadata backend does not match the package provider.")
+        if parent_model_id:
+            parent = next((item for item in project.structure_models()
+                           if item["model_id"] == str(parent_model_id)), None)
+            if parent is None or not _scheme_matches_model(project, parent):
+                raise XRayStructurePackageError("The continued-training parent is missing or incompatible.")
         original = str(manifest.get("model_id") or "imported_structure_model")
         if not _SAFE_ID.fullmatch(original):
             raise XRayStructurePackageError("Imported structure model ID is unsafe.")
@@ -1538,7 +1543,7 @@ def import_structure_model_package(project, source, *, registry=None):
                 local,
                 str((destination / "model.pth").relative_to(project.root)),
                 str((destination / "model.json").relative_to(project.root)),
-                None,
+                str(parent_model_id) if parent_model_id else None,
                 current_digest,
                 provider_id,
                 metrics,

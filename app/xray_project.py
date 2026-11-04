@@ -912,6 +912,24 @@ class XRayProject:
                 (str(model_id),),
             )]
 
+    def record_structure_training_membership(self,model_id,rows):
+        """Store local worker training history without embedding specimen IDs in model ZIPs."""
+        rows=list(rows)
+        if any(row.get("split") not in {"train","val"} for row in rows):
+            raise ValueError("Unknown structure training split")
+        ids=[str(row["specimen_id"]) for row in rows]
+        if len(set(ids)) != len(ids):
+            raise ValueError("A structure training specimen is assigned more than once")
+        with _db_connection(self.db_path) as c:
+            if not c.execute("SELECT 1 FROM xray_structure_models WHERE model_id=?",(str(model_id),)).fetchone():
+                raise KeyError(model_id)
+            if any(not c.execute("SELECT 1 FROM specimens WHERE specimen_id=?",(sid,)).fetchone() for sid in ids):
+                raise ValueError("Structure training specimen is outside this project")
+            c.executemany(
+                "INSERT OR IGNORE INTO xray_structure_training_membership(model_id,specimen_id,split) VALUES(?,?,?)",
+                [(str(model_id),sid,str(row["split"])) for sid,row in zip(ids,rows)]
+            )
+
     def activate_structure_model(self,model_id):
         model_id=str(model_id)
         with _db_connection(self.db_path) as c:

@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import math
+import json
+import shutil
+import tempfile
 from pathlib import Path
 import queue
 import threading
@@ -1139,6 +1142,20 @@ class XRayStructureWorkspace:
         return dialog,label,bar
 
     def train_structure_ai(self):
+        """Normal Train builds one Native+Detail model, without user method settings.
+
+        External backends retain the established standard training contract.
+        """
+        if self._busy:
+            return
+        from .xray_structure_ai import STRUCTURE_BACKEND
+        selected=str(self.training_parent_choice.get() or "")
+        parent=next((m for m in self.project.structure_models() if m["model_id"]==selected),None)
+        if parent is not None and str(parent.get("backend") or STRUCTURE_BACKEND)!=STRUCTURE_BACKEND:
+            return self._train_standard_structure_ai()
+        return self._train_multi_resolution_structure_ai()
+
+    def _train_standard_structure_ai(self):
         if self._busy:return
         p1=self.project.annotation_summary(1)
         if p1["verified"]<8:
@@ -1194,6 +1211,107 @@ class XRayStructureWorkspace:
             except queue.Empty:pass
             if dialog.winfo_exists():dialog.after(120,poll)
         dialog.after(120,poll)
+
+    def _train_multi_resolution_structure_ai(self):
+        if self._busy:return
+        source_model_id=str(self.training_parent_choice.get() or "")
+        from app.xray_multires_training import (
+            HighResolutionTrainingCancelled, is_universal_multires_model,
+            run_high_resolution_training, training_progress_record,
+        )
+        if source_model_id=="ImageNet ResNet18":source_model_id=""
+        if self.project.annotation_summary(1)["verified"]<8:
+            messagebox.showinfo("Train Structure AI","Verify at least 8 specimens from at least 3 source X-rays first.",parent=self.root)
+            return
+        # Generate a verified candidate package behind the scenes. Users can
+        # separately export any saved model through Models. Keep the ZIP on
+        # import failure for recovery; otherwise remove the temporary files.
+        candidate_dir=Path(tempfile.mkdtemp(prefix="morpholabel_structure_candidate_"))
+        output_path=candidate_dir/"candidate.zip"
+
+        self._busy=True;self._refresh_workflow()
+        events=queue.Queue();cancelled=threading.Event()
+        dialog,label,bar=self._structure_ai_dialog(
+            "Train Structure AI","Preparing a safe project copy and verified training data...",None,
+        )
+        cancel_button=ttk.Button(bar.master,text="Cancel",command=lambda:(cancelled.set(),label.configure(text="Cancelling..."),cancel_button.configure(state="disabled")))
+        cancel_button.pack(anchor="e",pady=(8,0))
+        dialog.protocol("WM_DELETE_WINDOW",lambda:cancel_button.invoke())
+        active_before=(self.project.active_structure_model() or {}).get("model_id")
+
+        def progress(line):events.put(("line",str(line)))
+        def worker():
+            try:
+                from app.ai_delivery import ensure_ai_runtime
+                runtime,_=ensure_ai_runtime(progress=lambda stage,detail:events.put(("setup",str(stage),str(detail))))
+                result=run_high_resolution_training(
+                    self.project,source_model_id,output_path,python_executable=runtime,
+                    progress=progress,cancelled=cancelled,
+                )
+                events.put(("done",result))
+            except HighResolutionTrainingCancelled as exc:events.put(("cancelled",str(exc)))
+            except Exception as exc:events.put(("error",exc))
+        threading.Thread(target=worker,daemon=True,name="xray-highres-training").start()
+
+        def poll():
+            try:
+                while True:
+                    event=events.get_nowait()
+                    if event[0]=="setup":
+                        label.configure(text=f"{event[1]}\n{event[2]}")
+                    elif event[0]=="line":
+                        try:
+                            info=training_progress_record(event[1])
+                            if isinstance(info,dict) and info.get("stage")=="PREPARED":
+                                label.configure(text=(f"Verified specimens: {info['training_specimens']} train / "
+                                    f"{info['validation_specimens']} validation; source plates: "
+                                    f"{info['train_plates']} / {info['val_plates']}.\n"
+                                    "Training the active model..."))
+                        except (ValueError,KeyError,TypeError):
+                            if event[1]:label.configure(text=event[1][:700])
+                    elif event[0]=="error":
+                        self._busy=False;self._refresh_workflow()
+                        try:bar.stop();dialog.destroy()
+                        except tk.TclError:pass
+                        if not output_path.exists():shutil.rmtree(candidate_dir,ignore_errors=True)
+                        messagebox.showerror("Train Structure AI",str(event[1]),parent=self.root);return
+                    elif event[0]=="cancelled":
+                        self._busy=False;self._refresh_workflow()
+                        try:bar.stop();dialog.destroy()
+                        except tk.TclError:pass
+                        shutil.rmtree(candidate_dir,ignore_errors=True)
+                        messagebox.showinfo("Train Structure AI","Training cancelled.",parent=self.root);return
+                    elif event[0]=="done":
+                        self._busy=False
+                        try:bar.stop();dialog.destroy()
+                        except tk.TclError:pass
+                        try:
+                            local_id=import_structure_model_package(
+                                self.project,event[1]["path"],parent_model_id=source_model_id or None)
+                            active_after=(self.project.active_structure_model() or {}).get("model_id")
+                            if active_after!=active_before:
+                                raise RuntimeError("Import unexpectedly changed the active model; stop and inspect the project.")
+                            self.training_parent_choice.set(local_id);self._training_parent_touched=True
+                            if event[1].get("membership"):
+                                self.project.record_structure_training_membership(local_id,event[1]["membership"])
+                            self.project.set_ui_state("structure_training_parent",local_id)
+                            self._refresh_workflow();self._refresh_summary()
+                            shutil.rmtree(candidate_dir,ignore_errors=True)
+                            messagebox.showinfo("Train Structure AI",
+                                f"New model candidate: {local_id}.\n"
+                                f"Active model unchanged: {active_after}.\n"
+                                "Native/Detail methods were automatically selected on development validation. "
+                                "This is not independent proof of accuracy; select this model in Models to use it.",parent=self.root)
+                        except Exception as exc:
+                            self._refresh_workflow()
+                            messagebox.showerror("Model candidate import",
+                                f"Training finished, but the model could not be registered.\n"
+                                f"The active model is unchanged.\n\n{exc}\n\n"
+                                f"Recovery ZIP: {event[1]['path']}",parent=self.root)
+                        return
+            except queue.Empty:pass
+            if dialog.winfo_exists():dialog.after(200,poll)
+        dialog.after(200,poll)
 
     def export_active_structure_ai(self):
         model=self.project.active_structure_model()
