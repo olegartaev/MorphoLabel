@@ -78,11 +78,11 @@ def choose_family_detail_policy(scheme, cases):
     original = {row["specimen_id"]: row for row in baseline["specimen_outcomes"]}
     original_traits = {row["trait_id"]: row for row in baseline["traits"]}
     # Exact search is bounded. Large custom schemes use one-family improvements.
-    methods = ("native", "detail", "standard")
+    methods = ("native", "standard", "detail")
     choices = (product(methods, repeat=len(families))
                if len(families) <= 6 else
                (tuple(mode if j == i else "native" for j in range(len(families)))
-                for i in range(len(families)) for mode in ("detail", "standard")))
+                for i in range(len(families)) for mode in ("standard", "detail")))
     for modes in choices:
         if modes == native:
             continue
