@@ -243,10 +243,10 @@ class FollowupTkTests(unittest.TestCase):
         import threading
         entered=threading.Event();release=threading.Event();ident=[]
         original=self.xray.scan_source
-        def slow_scan():
-            ident.append(threading.get_ident());entered.set();release.wait(5);return original()
+        def slow_scan(**kwargs):
+            ident.append(threading.get_ident());entered.set();release.wait(5);return original(**kwargs)
         try:
-            with patch.object(self.xray,"scan_source",side_effect=slow_scan):
+            with patch.object(self.xray,"scan_source",side_effect=slow_scan), patch("app.modules.xray_counts.messagebox.showinfo") as notice:
                 runtime._rescan_source()
                 self.assertTrue(entered.wait(1));shell.update()
                 self.assertNotEqual(threading.get_ident(),ident[0])
@@ -255,6 +255,8 @@ class FollowupTkTests(unittest.TestCase):
                 deadline=time.monotonic()+6
                 while any(w.winfo_class()=="TProgressbar" for w in self.widgets(shell)) and time.monotonic()<deadline:shell.update();time.sleep(.01)
                 self.assertFalse(any(w.winfo_class()=="TProgressbar" for w in self.widgets(shell)))
+                notice.assert_called_once()
+                self.assertIn("Already indexed: 4",notice.call_args.args[1])
         finally:release.set()
 
     def test_project_import_refreshes_visible_model_and_traits_immediately(self):

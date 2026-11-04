@@ -12,7 +12,9 @@ permissions:
 jobs:
   core:
     runs-on: windows-latest
-    timeout-minutes: 20
+    # Windows-hosted disk performance varies; the unchanged SQLite/Tk suite
+    # can exceed 20 minutes even when all assertions are passing.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

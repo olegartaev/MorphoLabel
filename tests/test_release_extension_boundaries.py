@@ -99,8 +99,6 @@ class ReleaseExtensionBoundaryTests(unittest.TestCase):
              patch("app.xray_structure_ai.structure_performance_settings", return_value=settings):
             parent = train_structure_model(p, seed=17, epochs=1, registry=registry, backend_id="alternate_structure")
             child = train_structure_model(p, seed=17, epochs=1, registry=registry)
-            self.assertEqual(parent["model_id"], p.active_structure_model()["model_id"])
-            p.activate_structure_model(child["model_id"])
             self.assertEqual(parent["model_id"], p.active_structure_model()["parent_model_id"])
             self.assertEqual("alternate_structure", child["metrics"]["backend"])
             self.assertEqual(structure_schema_digest(p.scheme), child["metrics"]["schema_digest"])
@@ -109,6 +107,9 @@ class ReleaseExtensionBoundaryTests(unittest.TestCase):
             before_compare = persisted_rows(p)
             report = compare_structure_model_to_human(p, registry=registry)
             self.assertEqual(1.0, report["summary"]["exact_trait_accuracy"])
+            self.assertEqual(len(self.specimens),report["summary"]["specimens_compared"])
+            comparison_batches=(len(self.specimens)+settings["inference"]["batch_size"]-1)//settings["inference"]["batch_size"]
+            self.assertEqual(["train","train"]+["predict_many"]*comparison_batches,operations)
             self.assertEqual(before_compare, persisted_rows(p), "Comparison must be read-only")
             sid = self.specimens[0]
             prediction = predict_structures(p, [sid], allow_verified=True, registry=registry)
@@ -160,7 +161,7 @@ class ReleaseExtensionBoundaryTests(unittest.TestCase):
             self.assertEqual([], predict_structures(reopened, [sid], allow_verified=True, registry=registry)["failures"])
         self.assertIsNotNone(registry.get(STRUCTURE_BACKEND))
         self.assertIsNotNone(registry.get("alternate_structure"))
-        self.assertEqual(["train", "train", "predict_many", "predict_many", "predict_many"], operations)
+        self.assertEqual(["train","train"]+["predict_many"]*(comparison_batches+2),operations)
         with closing(sqlite3.connect(p.db_path)) as db:
             self.assertEqual(schema, db.execute("SELECT name,sql FROM sqlite_master WHERE type='table' ORDER BY name").fetchall())
 
@@ -325,8 +326,6 @@ class ReleaseExtensionBoundaryTests(unittest.TestCase):
              patch("app.xray_structure_ai._run", side_effect=fake_runner):
             parent = train_structure_model(p, seed=17, epochs=1)
             child = train_structure_model(p, seed=17, epochs=1)
-            self.assertEqual(parent["model_id"], p.active_structure_model()["model_id"])
-            p.activate_structure_model(child["model_id"])
             self.assertEqual(parent["model_id"], p.active_structure_model()["parent_model_id"])
             sid = self.specimens[0]
             prediction = predict_structures(p, [sid], allow_verified=True)

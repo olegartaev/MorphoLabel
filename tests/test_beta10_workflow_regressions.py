@@ -56,17 +56,16 @@ class Beta10WorkflowRegressionTests(unittest.TestCase):
         self.assertEqual(["val"],config.test_dataloader["dataset"]["pipeline"])
         self.assertNotIn("rtmpose_augmentations",sys.modules)
 
-    def test_setup_qualified_hardware_wins_over_stale_warm_profile(self):
+    def test_qualified_hardware_is_reused_in_unchanged_environment(self):
         good={
             "cpu_model":"CPU","physical_cores":8,"logical_cores":16,"ram_bytes":32*1024**3,
             "gpu_model":"GPU","gpu_vram_mib":12288,"gpu_driver":"1","cuda_available":True,
             "cuda_runtime":"12.1","acceleration":"CUDA","gpu_free_mib":8000,
         }
-        stale={**good,"cuda_available":False,"cuda_runtime":None,"acceleration":"CPU"}
         with tempfile.TemporaryDirectory() as td,patch.dict(os.environ,{"LOCALAPPDATA":td},clear=False):
             root=Path(td)/"MorphoLabel";root.mkdir()
             (root/"first_run_setup.json").write_text(json.dumps({"status":"PASS","hardware":good}),encoding="utf-8")
-            (root/"hardware_profile.json").write_text(json.dumps({"hardware":stale}),encoding="utf-8")
+            (root/"hardware_profile.json").write_text(json.dumps({"hardware":good,"environment_signature":ai_hardware._environment_signature()}),encoding="utf-8")
             ai_hardware._HARDWARE_PROFILE=None
             try:
                 with patch("app.ai_hardware.detect_hardware",side_effect=AssertionError("routine detection must not run")):

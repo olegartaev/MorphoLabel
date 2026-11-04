@@ -4,6 +4,7 @@ from tkinter import ttk
 from tkinter import font as tkfont
 import tkinter as tk
 from .icons import ICON_NAMES, WORKFLOW_ICON_SIZE
+from .scrollbars import autohide_scroll_command
 
 
 def columns_for_width(width: int, card_count: int, card_widths=None) -> int:
@@ -43,7 +44,7 @@ class WorkflowDock(ttk.Frame):
         viewport=tk.Canvas(card,highlightthickness=0,background=ttk.Style(self).lookup('WorkflowDock.TFrame','background') or '#f0f0f0')
         viewport.grid(row=0,column=0,sticky='ew')
         scroll=ttk.Scrollbar(card,orient='vertical',command=viewport.yview);scroll.grid(row=0,column=1,sticky='ns')
-        viewport.configure(yscrollcommand=scroll.set)
+        viewport.configure(yscrollcommand=autohide_scroll_command(scroll))
         content=ttk.Frame(viewport,padding=(8,6),style='WorkflowDock.TFrame')
         window=viewport.create_window((0,0),window=content,anchor='nw')
         def layout(_event=None):

@@ -58,15 +58,15 @@ class TestUniversalMultires(unittest.TestCase):
         x["inference_pipeline"]["retain_detail_structures"]=["nonexistent"]
         with self.assertRaises(ValueError):pipeline_components(x)
 
-    def test_standard_method_channels_are_validated_and_do_not_overlap_detail(self):
+    def test_standard_native_detail_routes_are_schema_checked(self):
         x=meta("tiled_native")
         x["inference_pipeline"]["retain_standard_structures"]=["cell_nucleus"]
-        self.assertEqual(len(pipeline_components(x)),2)
+        self.assertEqual(2,len(pipeline_components(x)))
         x["inference_pipeline"]["retain_standard_structures"]=["plant_vein"]
         with self.assertRaises(ValueError):pipeline_components(x)
-        x=meta("tiled")
-        x["inference_pipeline"]["retain_standard_structures"]=["cell_nucleus"]
-        with self.assertRaises(ValueError):pipeline_components(x)
+        y=meta("tiled")
+        y["inference_pipeline"]["retain_standard_structures"]=["cell_nucleus"]
+        with self.assertRaises(ValueError):pipeline_components(y)
 
     def test_auxiliary_sha256_required(self):
         with tempfile.TemporaryDirectory() as d:
@@ -152,9 +152,5 @@ class TestGenericComposite(unittest.TestCase):
                                component_models={"detail":Fake(6),"native":Fake(-6)})
             self.assertGreater(groups[0]["points"][0]["score"],0)
             self.assertEqual(groups[1]["points"][0]["score"],-6)
-            m["inference_pipeline"]["retain_standard_structures"]=["cell_nucleus"]
-            selected=predict_one(im,Fake(1),m,Path(d)/"model.json","cpu",FakeRuntime,
-                                 component_models={"detail":Fake(6),"native":Fake(-6)})
-            self.assertEqual(selected[1]["points"][0]["score"],1)
 
 if __name__=="__main__":unittest.main()

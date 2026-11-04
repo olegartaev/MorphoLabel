@@ -73,6 +73,41 @@ class ProductionShell(tk.Tk):
         # Ordinary launches must not silently re-probe or overwrite it.
         if initial_module is not None:
             self.open_module(initial_module)
+        # A short check of the official public release endpoint runs off Tk's
+        # thread only after an already configured application has opened.
+        if not first_run_setup_required():
+            self._release_update_start_job=self.after(1600,self._check_release_updates)
+        else:
+            self._release_update_start_job=None
+        self._release_update_poll_job=None
+
+    def _check_release_updates(self):
+        """Offer official release notes; never install or download automatically."""
+        self._release_update_start_job=None
+        if getattr(self,"_morpholabel_destroying",False):return
+        from app.release_update_check import check_for_release
+        results=queue.Queue(maxsize=1)
+        def worker():
+            try:
+                latest=check_for_release(APP_VERSION)
+            except Exception:
+                latest=None  # No network/404/rate limit must not interrupt work.
+            results.put_nowait(latest)
+        threading.Thread(target=worker,daemon=True,name="morpholabel-release-check").start()
+        def poll(attempt=0):
+            self._release_update_poll_job=None
+            if getattr(self,"_morpholabel_destroying",False):return
+            try:latest=results.get_nowait()
+            except queue.Empty:
+                if attempt<25:self._release_update_poll_job=self.after(250,lambda:poll(attempt+1))
+                return
+            if latest and messagebox.askyesno(
+                "MorphoLabel update available",
+                f"Version {latest['version']} is available.\n\nWhat's new:\n"
+                f"{latest['changes']}\n\nOpen official release page?",
+                parent=self,default="no"):
+                webbrowser.open(latest["url"])
+        self._release_update_poll_job=self.after(250,poll)
 
     def report_callback_exception(self, exc_type, exc_value, tb):
         """Persist an unexpected Tk callback failure instead of losing it in a frozen GUI."""
@@ -98,6 +133,16 @@ class ProductionShell(tk.Tk):
             return
         self._morpholabel_destroying = True
         try:
+            # Cancel Tk callbacks scheduled by the optional release check. A
+            # callback racing with teardown would otherwise target a Tcl
+            # command that no longer exists (common when the app is closed
+            # before a slow/offline network request completes).
+            for name in ("_release_update_start_job","_release_update_poll_job"):
+                job=getattr(self,name,None)
+                if job:
+                    try:self.after_cancel(job)
+                    except tk.TclError:pass
+                    setattr(self,name,None)
             runtime = getattr(self, "_active_module_runtime", None)
             module_id = getattr(self, "module_key", None) or "unknown"
             if runtime is not None:
@@ -612,7 +657,7 @@ class ProductionShell(tk.Tk):
         ttk.Label(content,text="Open-source software for scalable and reproducible extraction of morphological data from biological images.",wraplength=500,justify="left").pack(anchor="w")
         ttk.Label(content,text="MorphoLabel combines annotation, human review and quality control into a structured workflow for large image datasets.",wraplength=500,justify="left",style="Muted.TLabel").pack(anchor="w",pady=(5,0))
         ttk.Separator(frame,orient="horizontal").pack(fill="x",pady=(14,10))
-        ttk.Label(frame,text="Project creator and lead developer",style="SectionTitle.TLabel").pack(anchor="w")
+        ttk.Label(frame,text="Project",style="Muted.TLabel").pack(anchor="w")
         ttk.Label(frame,text=APP_CREATOR).pack(anchor="w",pady=(3,0))
         ttk.Label(frame,text="Developed with the assistance of OpenAI Codex.",style="Muted.TLabel").pack(anchor="w",pady=(2,10))
         ttk.Label(frame,text="Modules",style="SectionTitle.TLabel").pack(anchor="w")

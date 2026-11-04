@@ -17,6 +17,7 @@ import math
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from .ai_runtime_resolver import AI_RUNTIME_INFO_TIMEOUT, resolve_ai_runtime
 from .io import atomic_json_write
@@ -165,6 +166,9 @@ def _recommended(profile, mode):
         return {"device": "cpu", "batch_size": 1, "workers": 0, "mixed_precision": False, "pin_memory": False, "persistent_workers": False, "profile": profile}
     physical=max(1,int(mode.physical_cores or mode.logical_cores or 1))
     logical=max(1,int(mode.logical_cores or physical))
+    # Loader processes retain independent image buffers and Python runtimes.
+    # Reserve 2 GiB for the application, then budget 2 GiB per loader.
+    memory_workers=None if mode.ram_bytes is None else max(0,(mode.ram_bytes-2*1024**3)//(2*1024**3))
     if use_cuda:
         vram = mode.gpu_vram_mib or 0
         batch = 16 if vram >= 20_000 else 8 if vram >= 10_000 else 4 if vram >= 6_000 else 2
@@ -173,11 +177,15 @@ def _recommended(profile, mode):
         # This is only the first safe guess. Workload tuning measures the real
         # optimum and may use more or fewer workers on this exact machine.
         workers=min(max(1,physical//2),8 if profile==AUTO else physical)
+        if memory_workers is not None:
+            workers=min(workers,memory_workers)
+            if mode.ram_bytes<=2*1024**3:batch=1
         return {"device": "cuda:0", "batch_size": batch, "workers": workers, "mixed_precision": True, "pin_memory": True, "persistent_workers": bool(workers), "profile": profile}
     # CPU inference/training already uses PyTorch intra-op threads. Too many
     # loader processes oversubscribe the same cores, so keep only a small I/O
     # overlap pool instead of blindly matching logical CPU count.
     workers=min(4,max(0,physical//4))
+    if memory_workers is not None:workers=min(workers,memory_workers)
     return {"device": "cpu", "batch_size": 1, "workers": workers, "mixed_precision": False, "pin_memory": False, "persistent_workers": bool(workers), "profile": profile}
 
 
@@ -216,6 +224,8 @@ def machine_profile_path():
 def _hardware_profile_from_mapping(value):
     if not isinstance(value, dict):
         return None
+    if not isinstance(value.get("cuda_available"), bool):
+        return None
     try:
         return HardwareProfile(
             cpu_model=str(value.get("cpu_model") or "Unknown"),
@@ -230,7 +240,7 @@ def _hardware_profile_from_mapping(value):
             acceleration=str(value.get("acceleration") or ("CUDA" if value.get("cuda_available") else "CPU")),
             gpu_free_mib=None if value.get("gpu_free_mib") is None else int(value.get("gpu_free_mib")),
         )
-    except (TypeError,ValueError):
+    except (TypeError,ValueError,OverflowError):
         return None
 
 
@@ -243,22 +253,37 @@ def _read_state_json(path):
 
 
 def persisted_hardware_profile():
-    """Return the setup-qualified machine profile without probing hardware again."""
-    # A successful first-run qualification is stronger than the legacy warm-cache
-    # file: older builds could overwrite hardware_profile.json after a transient
-    # runtime probe reported CUDA unavailable.
-    setup=_read_state_json(app_state_dir()/"first_run_setup.json")
-    if setup.get("status")=="PASS":
-        profile=_hardware_profile_from_mapping(setup.get("hardware"))
-        if profile is not None:return profile
+    """Reuse discovery only when the current environment matches its signature."""
     saved=_read_state_json(machine_profile_path())
+    # An old setup qualification must not survive a hardware/runtime change.
+    # This check avoids importing torch or launching an AI worker on warm starts.
+    if saved.get("environment_signature") != _environment_signature():
+        return None
     return _hardware_profile_from_mapping(saved.get("hardware"))
+
+
+@lru_cache(maxsize=1)
+def _environment_signature():
+    runtime, runner = resolve_ai_runtime()
+    def identity(path):
+        try:
+            stat=path.stat()
+            return [str(path.resolve()),stat.st_size,stat.st_mtime_ns]
+        except OSError:
+            return [str(path),None,None]
+    gpu=_nvidia_gpu(_run) or {}
+    return {"cpu":platform.processor(),"threads":os.cpu_count(),"ram":_ram_bytes(),
+            "gpu":{key:gpu.get(key) for key in ("model","vram_mib","driver")},
+            "runtime":identity(runtime),"runner":identity(runner),
+            "torch":identity(runtime.parent/"Lib/site-packages/torch/version.py"),
+            "component":identity(runtime.parent/"component.json")}
 
 
 def persist_machine_profile(hardware=None):
     """Persist first-launch hardware discovery for diagnostics, never as scientific state."""
     hardware=hardware or get_hardware_profile()
     payload={
+        "environment_signature":_environment_signature(),
         "hardware":hardware.as_dict(),
         "training_default":get_training_config(hardware=hardware),
         "inference_default":get_inference_config(hardware=hardware),
@@ -275,9 +300,13 @@ def get_hardware_profile(*, refresh=False):
     """Use setup-qualified hardware by default; probe only when explicitly requested or absent."""
     global _HARDWARE_PROFILE
     if refresh:
+        _environment_signature.cache_clear()
         _HARDWARE_PROFILE=detect_hardware()
     elif _HARDWARE_PROFILE is None:
-        _HARDWARE_PROFILE=persisted_hardware_profile() or detect_hardware()
+        _HARDWARE_PROFILE=persisted_hardware_profile()
+        if _HARDWARE_PROFILE is None:
+            _HARDWARE_PROFILE=detect_hardware()
+            persist_machine_profile(_HARDWARE_PROFILE)
     return _HARDWARE_PROFILE
 
 

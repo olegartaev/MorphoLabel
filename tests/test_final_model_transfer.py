@@ -212,9 +212,20 @@ class FinalModelTransferTests(unittest.TestCase):
             self.assertEqual(b"orientation-weights",Path(payload["checkpoint"]).read_bytes())
             return {"results":[{"head_right_probability":.9,"bottom_down_probability":.1} for p in payload["images"]]}
         def run(project):
-            with patch("app.xray_detector.ensure_ai_runtime",return_value=("test-runtime",{})),patch("app.xray_detector._run",side_effect=detector),patch("app.xray_orientation._run",side_effect=orient):
+            def start_stream(runtime,payload):
+                self.assertEqual(b"detector-weights",Path(payload["checkpoint"]).read_bytes())
+                return object(),0.0,0.0
+            def predict_stream(_process,images,_timeout):
+                result=detector("test-runtime","predict_many",{"checkpoint":directory/"model.pth","images":images},_timeout)
+                return result
+            with patch("app.xray_detector.ensure_ai_runtime",return_value=("test-runtime",{})),\
+                 patch("app.xray_detector._start_prediction_stream",side_effect=start_stream) as started,\
+                 patch("app.xray_detector._predict_stream_batch",side_effect=predict_stream),\
+                 patch("app.xray_detector._close_prediction_stream") as closed,\
+                 patch("app.xray_orientation._run",side_effect=orient):
                 result=predict_plates(project,[r["image_id"] for r in project.source_images()])
-                self.assertEqual(6,result["success"]);self.assertFalse(result["failures"])
+                self.assertEqual(6,result["success"],result["failures"]);self.assertFalse(result["failures"])
+                started.assert_called_once();closed.assert_called_once()
                 return [[dict(s["crop"]) for s in project.specimens(r["image_id"])] for r in result["results"]]
         before=run(self.xray)
         package=self.root/"xray_crop.zip";transfer.export_crop_model_package(self.xray,package)

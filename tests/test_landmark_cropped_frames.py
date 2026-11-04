@@ -3,6 +3,8 @@ import shutil
 import os
 import tempfile
 import unittest
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 from pathlib import Path
 
@@ -57,6 +59,49 @@ class LandmarkCroppedFramesTests(unittest.TestCase):
         self.assertEqual(before, hashlib.sha256(restored.read_bytes()).hexdigest())
         self.assertEqual(points_before, self.project.load_landmarks(image_id))
         self.assertIn(image_id, v2_human_final_eligible_image_ids(self.project))
+
+    def test_concurrent_missing_raw_frame_is_rebuilt_once_and_preserves_annotations(self):
+        image_id = self.ids[0]
+        self._crop_and_check(image_id)
+        points = self.project.load_landmarks(image_id)
+        crop = self.project.crop_record(image_id)
+        developed = self.project.cache_root / 'developed' / f'{image_id}.png'
+        standard = self.project.cache_root / 'standardized' / f'{image_id}.png'
+        expected = hashlib.sha256(standard.read_bytes()).hexdigest()
+        developed.unlink(); standard.unlink()
+        start = threading.Barrier(3)
+        entered = threading.Event()
+        duplicate = threading.Event()
+        release = threading.Event()
+
+        def develop(source, **kwargs):
+            if entered.is_set():
+                duplicate.set()
+            entered.set()
+            if not release.wait(5):
+                raise TimeoutError('test did not release RAW development')
+            with Image.open(source) as image:
+                image.save(developed)
+
+        def restore():
+            start.wait(timeout=5)
+            return restore_standardized_frame(self.project, image_id)
+
+        with patch('app.landmark_frames.develop_full', side_effect=develop) as decoder:
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                futures = [pool.submit(restore) for _ in range(3)]
+                try:
+                    self.assertTrue(entered.wait(5))
+                    self.assertFalse(duplicate.wait(0.15), 'same RAW decoded concurrently')
+                finally:
+                    release.set()
+                results = [future.result(timeout=10) for future in futures]
+            self.assertEqual(1, decoder.call_count)
+        self.assertEqual(1, sum(rebuilt for _, rebuilt in results))
+        self.assertTrue(all(path == standard for path, _ in results))
+        self.assertEqual(expected, hashlib.sha256(standard.read_bytes()).hexdigest())
+        self.assertEqual(points, self.project.load_landmarks(image_id))
+        self.assertEqual(crop, self.project.crop_record(image_id))
 
     def test_legacy_standardized_without_developed_does_not_redecode_raw(self):
         image_id = self.ids[0]

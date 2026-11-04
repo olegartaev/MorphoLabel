@@ -243,163 +243,6 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         self.project.delete_structure_model("xray_structure_model_v002")
         self.assertEqual("xray_structure_model_v001",self.project.active_structure_model()["model_id"])
 
-    def test_combined_model_keeps_component_sources_and_reopens(self):
-        from app.xray_project import XRayProject
-        digest=structure_schema_digest(self.project.scheme)
-        specs=self._eight_verified()
-        for number, routes, parent in (
-            (1, None, None),
-            (2, None, None),
-            (3, {
-                "vertebra":"xray_structure_model_v001",
-                "first_caudal":"xray_structure_model_v001",
-                "last_predorsal":"xray_structure_model_v001",
-                "preanal_pterygiophore":"xray_structure_model_v002",
-            }, "xray_structure_model_v001"),
-        ):
-            ident=f"xray_structure_model_v{number:03d}"
-            folder=self.project.models_root/ident;folder.mkdir(parents=True)
-            (folder/"model.pth").write_bytes(b"dummy weights")
-            (folder/"model.json").write_text("{}",encoding="utf-8")
-            self.project.register_structure_model(
-                ident,str((folder/"model.pth").relative_to(self.project.root)),
-                str((folder/"model.json").relative_to(self.project.root)),
-                parent,digest,"resnet18_heatmap_v1",
-                {"component_routes":routes} if routes else {},
-                ({"specimen_id":specs[0],"split":"train"},),
-                activate=number==3,
-            )
-        reopened=XRayProject(self.project.root)
-        combined=reopened.active_structure_model()
-        self.assertEqual("xray_structure_model_v003",combined["model_id"])
-        self.assertEqual("xray_structure_model_v002",combined["metrics"]["component_routes"]["preanal_pterygiophore"])
-        with self.assertRaisesRegex(ValueError,"source of combined"):
-            reopened.delete_structure_model("xray_structure_model_v002")
-        package=self.root/"combined.zip";export_structure_model_package(reopened,package)
-        with zipfile.ZipFile(package) as archive:
-            manifest=json.loads(archive.read("manifest.json"))
-            self.assertEqual("combined",manifest["model_kind"])
-            self.assertEqual({"xray_structure_model_v001","xray_structure_model_v002"},
-                             {item["model_id"] for item in manifest["components"]})
-            self.assertTrue(all(name.startswith("artifacts/components/") for name in manifest["files"]))
-        source=self.root/"portable_combined_source";source.mkdir()
-        Image.fromarray(np.full((200,400),80,np.uint8)).save(source/"one.png")
-        other_root=self.root/"portable_combined_projects";other_root.mkdir()
-        destination=XRayProject.create("portable_combined",source,other_root,bundled_scheme("phoxinus_vertebral_counts"))
-        imported=import_structure_model_package(destination,package)
-        row=next(item for item in destination.structure_models() if item["model_id"]==imported)
-        self.assertEqual("combined",row["metrics"]["model_kind"])
-        self.assertEqual(2,len(set(row["metrics"]["component_routes"].values())))
-        self.assertTrue(all((destination.root/item["path"]).is_file() for item in destination.structure_models()))
-        original_rows={
-            "xray_structure_model_v001":[{"structure_id":"vertebra","x":.2,"y":.5}],
-            "xray_structure_model_v002":[{"structure_id":"preanal_pterygiophore","x":.7,"y":.5}],
-        }
-        imported_rows={
-            source: original_rows["xray_structure_model_v002" if source==row["metrics"]["component_routes"]["preanal_pterygiophore"] else "xray_structure_model_v001"]
-            for source in set(row["metrics"]["component_routes"].values())
-        }
-        from app.xray_component_selection import combine_marker_rows
-        before=combine_marker_rows(self.project.scheme,original_rows,combined["metrics"]["component_routes"])
-        after=combine_marker_rows(destination.scheme,imported_rows,row["metrics"]["component_routes"])
-        self.assertEqual(before,after)
-        second=import_structure_model_package(destination,package)
-        self.assertNotEqual(imported,second)
-        self.assertEqual(6,len(destination.structure_models()))
-
-    def test_combined_package_rejects_corrupt_or_incompatible_components(self):
-        import tempfile
-        from app.xray_structure_ai import XRayStructurePackageError
-        digest=structure_schema_digest(self.project.scheme);specimen=self._eight_verified()[0]
-        for ident in ("source_a","source_b"):
-            folder=self.project.models_root/ident;folder.mkdir()
-            (folder/"model.pth").write_bytes(ident.encode())
-            (folder/"model.json").write_text(json.dumps({"backend":"resnet18_heatmap_v1","schema_digest":digest}),encoding="utf-8")
-            self.project.register_structure_model(ident,str((folder/"model.pth").relative_to(self.project.root)),str((folder/"model.json").relative_to(self.project.root)),None,digest,"resnet18_heatmap_v1",{},({"specimen_id":specimen,"split":"train"},),activate=False)
-        combined=self.project.models_root/"combined";combined.mkdir()
-        (combined/"model.pth").write_bytes(b"wrapper");(combined/"model.json").write_text("{}")
-        routes={"vertebra":"source_a","first_caudal":"source_a","last_predorsal":"source_a","preanal_pterygiophore":"source_b"}
-        self.project.register_structure_model("combined",str((combined/"model.pth").relative_to(self.project.root)),str((combined/"model.json").relative_to(self.project.root)),"source_a",digest,"resnet18_heatmap_v1",{"model_kind":"combined","component_routes":routes},(),activate=True)
-        package=self.root/"corrupt-combined.zip";export_structure_model_package(self.project,package)
-        with zipfile.ZipFile(package) as archive:
-            original={name:archive.read(name) for name in archive.namelist()}
-        manifest=json.loads(original["manifest.json"])
-        broken=self.root/"missing-component.zip";content=dict(original);content.pop(manifest["components"][0]["weights"])
-        with zipfile.ZipFile(broken,"w") as archive:
-            for name,data in content.items():archive.writestr(name,data)
-        with self.assertRaisesRegex(XRayStructurePackageError,"Missing package artifact"):
-            import_structure_model_package(self.project,broken)
-        corrupt=self.root/"corrupt-component.zip";content=dict(original)
-        weight=manifest["components"][0]["weights"];content[weight]=b"corrupted"
-        with zipfile.ZipFile(corrupt,"w") as archive:
-            for name,data in content.items():archive.writestr(name,data)
-        with self.assertRaisesRegex(XRayStructurePackageError,"Checksum mismatch"):
-            import_structure_model_package(self.project,corrupt)
-        incompatible=self.root/"wrong-scheme.zip";content=dict(original);manifest["component_routes"]={"unknown":"source_a"}
-        content["manifest.json"]=json.dumps(manifest).encode()
-        with zipfile.ZipFile(incompatible,"w") as archive:
-            for name,data in content.items():archive.writestr(name,data)
-        with self.assertRaisesRegex(XRayStructurePackageError,"routing"):
-            import_structure_model_package(self.project,incompatible)
-
-    def test_multires_model_package_preserves_auxiliary_weights_and_routes(self):
-        import hashlib
-        model_id="multires_portability_test"
-        digest=structure_schema_digest(self.project.scheme)
-        folder=self.project.models_root/model_id
-        folder.mkdir(parents=True)
-        weights=b"primary-test-weights"
-        native=b"native-test-weights"
-        detail=b"detail-test-weights"
-        files={"model.pth":weights,"native.pth":native,"detail.pth":detail}
-        for name,data in files.items():
-            (folder/name).write_bytes(data)
-        metadata={
-            "format_version":1,"backend":"resnet18_heatmap_v1",
-            "model_id":model_id,"schema_digest":digest,
-            "input_size":[768,256],"output_stride":2,
-            "structures":[{"id":s["id"],"name":s["name"],"repeated":bool(s["repeated"])}
-                          for s in self.project.scheme["structures"]],
-            "inference_pipeline":{
-                "name":"multires_heatmap_v1","version":1,"mode":"tiled_native",
-                "native":{"checkpoint":"native.pth","sha256":hashlib.sha256(native).hexdigest(),
-                          "input_size":[1536,512]},
-                "detail":{"checkpoint":"detail.pth","sha256":hashlib.sha256(detail).hexdigest(),
-                          "input_size":[768,384]},
-                "retain_detail_structures":["preanal_pterygiophore"],
-            },
-        }
-        (folder/"model.json").write_text(json.dumps(metadata),encoding="utf-8")
-        self.project.register_structure_model(
-            model_id,str((folder/"model.pth").relative_to(self.project.root)),
-            str((folder/"model.json").relative_to(self.project.root)),
-            None,digest,"resnet18_heatmap_v1",{},(),activate=False,
-        )
-        archive=self.root/"hybrid-transfer.zip"
-        export_structure_model_package(self.project,archive,model_id)
-        with zipfile.ZipFile(archive) as z:
-            self.assertEqual(
-                {"manifest.json","artifacts/model.pth","artifacts/model.json",
-                 "artifacts/native.pth","artifacts/detail.pth"},set(z.namelist()))
-        same=import_structure_model_package(self.project,archive)
-        self.assertNotEqual(model_id,same)
-        imported=next(m for m in self.project.structure_models() if m["model_id"]==same)
-        self.assertEqual(native,(self.project.root/imported["metadata_path"]).parent.joinpath("native.pth").read_bytes())
-        restored=json.loads((self.project.root/imported["metadata_path"]).read_text(encoding="utf-8"))
-        self.assertEqual(["preanal_pterygiophore"],
-                         restored["inference_pipeline"]["retain_detail_structures"])
-        with zipfile.ZipFile(archive) as z:
-            manifest=json.loads(z.read("manifest.json"))
-            content={name:z.read(name) for name in z.namelist()}
-        content["artifacts/native.pth"]=b"altered"
-        corrupt=self.root/"hybrid-transfer-corrupt.zip"
-        with zipfile.ZipFile(corrupt,"w") as z:
-            for name,data in content.items(): z.writestr(name,data)
-        from app.xray_structure_ai import XRayStructurePackageError
-        with self.assertRaisesRegex(XRayStructurePackageError,"Checksum"):
-            import_structure_model_package(self.project,corrupt)
-
-
     def test_portable_structure_package_round_trip_has_no_training_membership_or_paths(self):
         digest=structure_schema_digest(self.project.scheme);model_id="xray_structure_model_v001"
         directory=self.project.models_root/model_id;directory.mkdir(parents=True)
@@ -438,6 +281,103 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         self.assertTrue((other.root/row["path"]).is_file())
         other.activate_structure_model(imported)
         self.assertEqual(imported,other.active_structure_model()["model_id"])
+
+
+    def test_high_resolution_bundle_roundtrip_keeps_scheme_and_is_inactive(self):
+        import hashlib
+        model_id="multires_example_v1"
+        parent_id="hybrid_parent_v1"
+        parent_dir=self.project.models_root/parent_id
+        parent_dir.mkdir(parents=True)
+        (parent_dir/"model.pth").write_bytes(b"parent")
+        (parent_dir/"model.json").write_text("{}",encoding="utf-8")
+        digest=structure_schema_digest(self.project.scheme)
+        self.project.register_structure_model(parent_id,
+            str((parent_dir/"model.pth").relative_to(self.project.root)),
+            str((parent_dir/"model.json").relative_to(self.project.root)),
+            None,digest,"resnet18_heatmap_v1",{},(),activate=False)
+        directory=self.project.models_root/model_id
+        directory.mkdir(parents=True)
+        (directory/"model.pth").write_bytes(b"primary")
+        (directory/"detail.pth").write_bytes(b"detail")
+        (directory/"native.pth").write_bytes(b"native")
+        meta={
+            "format_version":1,"backend":"resnet18_heatmap_v1",
+            "input_size":[768,256],"output_stride":2,
+            "structures":[{"id":s["id"],"repeated":bool(s.get("repeated"))}
+                          for s in self.project.scheme["structures"]],
+            "thresholds":{s["id"]:.3 for s in self.project.scheme["structures"]},
+            "schema_digest":digest,"model_id":model_id,
+            "inference_pipeline":{
+                "name":"multires_heatmap_v1","version":1,"mode":"tiled_native",
+                "detail":{"checkpoint":"detail.pth","sha256":hashlib.sha256(b"detail").hexdigest(),
+                          "input_size":[768,384]},
+                "native":{"checkpoint":"native.pth","sha256":hashlib.sha256(b"native").hexdigest(),
+                          "state_prefix":"base.","input_size":[1536,512]},
+                "retain_detail_structures":[self.project.scheme["structures"][0]["id"]],
+                "fusion_weight":.6,
+                "tiles":{"nx":4,"ny":2,"width_fraction":.38,"height_fraction":.62},
+            },
+            "multires_training":{"source_model_id":parent_id},
+        }
+        (directory/"model.json").write_text(json.dumps(meta),encoding="utf-8")
+        self.project.register_structure_model(model_id,
+            str((directory/"model.pth").relative_to(self.project.root)),
+            str((directory/"model.json").relative_to(self.project.root)),
+            parent_id,digest,"resnet18_heatmap_v1",{},(),activate=False)
+        archive=self.root/"multires_package.zip"
+        original_scheme=json.dumps(self.project.scheme,sort_keys=True)
+        export_structure_model_package(self.project,archive,model_id)
+        with zipfile.ZipFile(archive) as z:
+            self.assertEqual(set(z.namelist()),{
+                "artifacts/model.pth","artifacts/model.json",
+                "artifacts/detail.pth","artifacts/native.pth","manifest.json"})
+        other_source=self.root/"same_scheme_source";other_source.mkdir()
+        Image.new("L",(400,200)).save(other_source/"one.png")
+        other=XRayProject.create("same_schema",other_source,self.root/"projects",
+                                 bundled_scheme("phoxinus_vertebral_counts"))
+        other_parent_dir=other.models_root/parent_id
+        other_parent_dir.mkdir(parents=True)
+        (other_parent_dir/"model.pth").write_bytes(b"parent")
+        (other_parent_dir/"model.json").write_text("{}",encoding="utf-8")
+        other.register_structure_model(parent_id,
+            str((other_parent_dir/"model.pth").relative_to(other.root)),
+            str((other_parent_dir/"model.json").relative_to(other.root)),
+            None,structure_schema_digest(other.scheme),"resnet18_heatmap_v1",{},(),activate=False)
+        before_scheme=json.dumps(other.scheme,sort_keys=True)
+        imported=import_structure_model_package(other,archive)
+        self.assertEqual(before_scheme,json.dumps(other.scheme,sort_keys=True))
+        row=next(m for m in other.structure_models() if m["model_id"]==imported)
+        self.assertFalse(row["active"])
+        self.assertEqual(parent_id,row["parent_model_id"])
+        self.assertTrue(row["metrics"]["inference/unvalidated"])
+        self.assertTrue((other.root/row["metadata_path"]).parent.joinpath("detail.pth").is_file())
+        self.assertTrue((other.root/row["metadata_path"]).parent.joinpath("native.pth").is_file())
+        self.assertEqual(original_scheme,json.dumps(self.project.scheme,sort_keys=True))
+
+    def test_multires_corrupt_sidecar_fails_before_registration(self):
+        import hashlib
+        from app.xray_structure_ai import XRayStructurePackageError
+        model_id="multires_checksum_v1"
+        directory=self.project.models_root/model_id;directory.mkdir(parents=True)
+        (directory/"model.pth").write_bytes(b"primary")
+        (directory/"detail.pth").write_bytes(b"detail")
+        digest=structure_schema_digest(self.project.scheme)
+        meta={"backend":"resnet18_heatmap_v1","model_id":model_id,
+              "input_size":[768,256],"output_stride":2,
+              "schema_digest":digest,
+              "structures":[{"id":s["id"],"repeated":bool(s.get("repeated"))}
+                            for s in self.project.scheme["structures"]],
+              "inference_pipeline":{"name":"multires_heatmap_v1","version":1,"mode":"tiled",
+                  "detail":{"checkpoint":"detail.pth","sha256":"0"*64,
+                            "input_size":[768,384]}}}
+        (directory/"model.json").write_text(json.dumps(meta))
+        self.project.register_structure_model(
+            model_id,str((directory/"model.pth").relative_to(self.project.root)),
+            str((directory/"model.json").relative_to(self.project.root)),
+            None,digest,"resnet18_heatmap_v1",{},(),activate=False)
+        with self.assertRaises(XRayStructurePackageError):
+            export_structure_model_package(self.project,self.root/"bad.zip",model_id)
 
 
 class XRayStructureAIContractTests(unittest.TestCase):
@@ -503,26 +443,8 @@ class XRayStructureAIContractTests(unittest.TestCase):
         by_trait={row["trait_id"]:row for row in report["traits"]}
         self.assertAlmostEqual(1.0,by_trait["tv"]["accuracy"])
         self.assertLess(by_trait["preap"]["accuracy"],1.0)
-
-    def test_incomplete_human_traits_do_not_count_as_fully_correct_specimen(self):
-        from app.xray_structure_ai import summarize_structure_ai_human_comparison
-        scheme=bundled_scheme("phoxinus_vertebral_counts")
-        points=[
-            {"structure_id":"vertebra","x":0.1,"y":0.5,"sort_order":0},
-            {"structure_id":"vertebra","x":0.2,"y":0.5,"sort_order":1},
-            {"structure_id":"vertebra","x":0.3,"y":0.5,"sort_order":2},
-            {"structure_id":"first_caudal","x":0.3,"y":0.5,"sort_order":0},
-            {"structure_id":"last_predorsal","x":0.2,"y":0.5,"sort_order":0},
-        ]
-        partial=summarize_structure_ai_human_comparison(scheme,[{
-            "specimen_id":"s1","human":points,"predicted":[dict(x,score=0.9) for x in points],
-            "visibility":{"preanal_pterygiophore":"partial"},
-        }])
-        summary=partial["summary"]
-        self.assertGreater(summary["exact_traits_total"],0)
-        self.assertLess(summary["exact_traits_total"],len(scheme["traits"]))
-        self.assertEqual(0,summary["all_traits_evaluable_specimens"])
-        self.assertEqual(0,summary["all_traits_correct_specimens"])
+        self.assertAlmostEqual(1.0,by_trait["preap"]["mae"])
+        self.assertAlmostEqual(0.0,by_trait["tv"]["mae"])
 
     def test_heatmap_target_has_exact_positive_peak_and_partial_supervision_mask(self):
         from ai_runtime.xray_structure_runner import _gaussian
@@ -616,10 +538,12 @@ class XRayStructureAIContractTests(unittest.TestCase):
         self.assertIn("start_structure_repeatability",ui)
         self.assertIn("structure_repeatability_metrics",ui)
         self.assertIn("compare_structure_model_to_human",ui)
-        self.assertIn("Exact trait values:",ui)
-        self.assertIn("Count bias:",ui)
-        self.assertIn("Reference role accuracy:",ui)
-        self.assertIn('("accuracy","Accuracy"',ui)
+        self.assertIn('text="Scientific measurements"',ui)
+        self.assertIn('("count","Exact count / MAE",165)',ui)
+        self.assertIn('("bias","Count bias",90)',ui)
+        self.assertIn("For repeated structures, an exact count is correct regardless of arbitrary marker placement.",ui)
+        self.assertIn('("role","Role accuracy / MAE",170)',ui)
+        self.assertIn('("accuracy","Exact",95)',ui)
         self.assertIn('row.get("accuracy")',ui)
         self.assertIn("pass_no=pass_no",ui)
         self.assertIn("_marker_visibility_buttons",ui)

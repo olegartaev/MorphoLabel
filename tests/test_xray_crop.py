@@ -177,7 +177,7 @@ class XRayCropViewportContractTests(unittest.TestCase):
         source=(Path(__file__).resolve().parents[1]/"app/xray_crop_ui.py").read_text(encoding="utf-8")
         self.assertIn('"Predict current",self.predict_current_plate',source)
         self.assertIn("def predict_current_plate(self):",source)
-        self.assertIn("predict_plates(self.project,[image_id],model=model)",source)
+        self.assertIn("predict_plates(self.project,[image_id],cancel=cancel,model=model)",source)
         self.assertIn('if image.get("crop_reviewed"):',source)
         self.assertIn("Human-reviewed plates are protected",source)
 

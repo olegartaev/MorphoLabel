@@ -15,8 +15,7 @@ class NativeOnlyWorkflowTests(unittest.TestCase):
         for parent in ('ImageNet ResNet18','old_model','native_model'):
             workspace=object.__new__(XRayStructureWorkspace);workspace._busy=False
             workspace.training_parent_choice=SimpleNamespace(get=lambda:parent)
-            workspace.project=SimpleNamespace(structure_models=lambda:[])
-            with patch.object(workspace,'_train_multi_resolution_structure_ai') as train:
+            with patch.object(workspace,'train_highres_structure_ai') as train:
                 workspace.train_structure_ai()
             train.assert_called_once_with()
 

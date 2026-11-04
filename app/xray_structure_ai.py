@@ -21,8 +21,6 @@ from .process_utils import hidden_window_kwargs
 from .runtime_paths import resource_path
 from .ai_starters import local_starter
 from .xray_crop import oriented_crop
-from .xray_auto_selection import common_validation_specimens, choose_better_model
-from .xray_component_selection import validated_routes, combine_marker_rows, choose_routed_components, choose_saved_components
 from .xray_schema import calculate_trait_values, compatible_reference_roles, spatial_series_order
 from .model_publication import staged_model_directory
 from .extensions.api import StructureBackend, StructureBackendContext
@@ -345,24 +343,6 @@ def prepare_structure_training_dataset(project, workspace_root, seed=42, *, back
 
 
 def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None, *, backend_id=None, registry=None, device_override=None):
-    active_before = project.active_structure_model()
-    if active_before and backend_id is None and (parent_model_id is None or parent_model_id == active_before["model_id"]):
-        if progress:
-            progress("MODEL CHECK", "Checking saved models on shared verified images…")
-        try:
-            saved = _auto_select_saved_structure_models(project, active_before, registry=registry)
-        except Exception as exc:
-            raise XRayStructureAIError("Saved-model comparison could not be completed; training was not started.") from exc
-        if saved.get("decision") in {"selected", "combined"}:
-            chosen = project.active_structure_model()
-            membership = project.structure_model_membership(chosen["model_id"])
-            plates = {split: {project.specimen(entry["specimen_id"])["image_id"]
-                              for entry in membership if entry["split"] == split}
-                      for split in ("train", "val")}
-            return {"trained": False, "model_id": chosen["model_id"], "metrics": chosen.get("metrics") or {},
-                    "selection": saved, "training_specimens": chosen.get("training_specimen_count") or 0,
-                    "validation_specimens": chosen.get("validation_specimen_count") or 0,
-                    "training_plates": len(plates["train"]), "validation_plates": len(plates["val"])}
     model_id = project.next_structure_model_id()
     if parent_model_id is None:
         parent = project.active_structure_model()
@@ -383,11 +363,9 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
     performance = structure_performance_settings()
     settings = dict(performance["training"])
     if device_override is not None:
-        if device_override not in {"cpu", "cuda:0"}:
-            raise ValueError("Unsupported structure training device")
-        settings.update(device=device_override, batch_size=1, workers=0,
-                        persistent_workers=False, mixed_precision=device_override.startswith("cuda"),
-                        pin_memory=device_override.startswith("cuda"))
+        if device_override not in {"cpu","cuda:0"}:raise ValueError("Unsupported training device")
+        settings.update(device=device_override,batch_size=1,workers=0,persistent_workers=False,
+                        mixed_precision=device_override.startswith("cuda"),pin_memory=device_override.startswith("cuda"))
     target = project.models_root / model_id
     if target.exists():
         raise XRayStructureAIError(f"Model folder already exists: {target}")
@@ -491,197 +469,15 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
                 str((target / "model.json").relative_to(project.root)),
                 (parent or {}).get("model_id"),schema_digest,provider_id,metrics,dataset["membership"],
                 training_specimen_count=dataset["training_specimens"],
-                validation_specimen_count=dataset["validation_specimens"],activate=not bool(active_before),
+                validation_specimen_count=dataset["validation_specimens"],activate=True,
             )
-    # A trained candidate must not replace a working model merely because
-    # its own validation loss improved. Compare both on untouched plates.
-    if active_before:
-        if progress:
-            progress("MODEL CHECK", "Comparing the new and previous models on shared validation images…")
-        try:
-            decision = _auto_select_trained_structure_model(project, active_before, model_id, registry=registry)
-        except Exception as exc:
-            decision = {"decision": "kept", "reason": "Automatic comparison unavailable.",
-                        "error_type": type(exc).__name__}
-    else:
-        decision = {"decision": "first", "reason": "First available model; quality not yet independently confirmed."}
-    project.set_structure_model_selection(model_id, decision)
     return {
-        "trained": True, "model_id": model_id, "metrics": metrics, "selection": decision,
+        "trained": True, "model_id": model_id, "metrics": metrics,
         "training_specimens": dataset["training_specimens"],
         "validation_specimens": dataset["validation_specimens"],
         "training_plates": dataset["training_plates"],
         "validation_plates": dataset["validation_plates"],
     }
-
-
-def _publish_routed_structure_model(project, previous, candidate, routes, validation_ids, summary):
-    """Create an immutable model identity for a checked combination of existing weights."""
-    model_id = project.next_structure_model_id()
-    directory = project.models_root / model_id
-    if directory.exists():
-        raise XRayStructureAIError("Combined model destination already exists.")
-    by_id = {item["model_id"]: item for item in project.structure_models()}
-    # Only models contributing to the published result (plus the retained
-    # baseline) belong to its provenance. An evaluated but unselected source
-    # must not silently expand the composite's training membership.
-    participants = {str(previous["model_id"]), *routes.values()}
-    members = {}
-    for source_id in participants:
-        for entry in project.structure_model_membership(source_id):
-            specimen_id = str(entry["specimen_id"])
-            if entry["split"] == "train":
-                members[specimen_id] = "train"
-    for specimen_id in validation_ids:
-        if str(specimen_id) in members:
-            raise XRayStructureAIError("Combined model would overlap training and validation.")
-        members[str(specimen_id)] = "val"
-    count_train = sum(split == "train" for split in members.values())
-    if not count_train:
-        raise XRayStructureAIError("Combined model lacks reliable training provenance.")
-    checkpoint = project.root / str(previous["path"])
-    metadata = project.root / str(previous["metadata_path"])
-    with staged_model_directory(directory) as (staging, publish):
-        shutil.copy2(checkpoint, staging / "model.pth")
-        info = json.loads(metadata.read_text(encoding="utf-8"))
-        info.update({
-            "model_id": model_id, "parent_model_id": previous["model_id"],
-            "model_kind": "combined_structure_sources_v1",
-            "component_routes": dict(sorted(routes.items())),
-        })
-        (staging / "model.json").write_text(
-            json.dumps(info, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
-        )
-        publish()
-        metrics = {
-            "model_kind": "combined",
-            "component_routes": dict(sorted(routes.items())),
-            "auto_selection": dict(summary),
-            "base_model_id": previous["model_id"],
-        }
-        project.register_structure_model(
-            model_id,
-            str((directory / "model.pth").relative_to(project.root)),
-            str((directory / "model.json").relative_to(project.root)),
-            previous["model_id"], previous["schema_digest"], previous["backend"],
-            metrics,
-            ({"specimen_id": sid, "split": split} for sid, split in sorted(members.items())),
-            training_specimen_count=count_train, validation_specimen_count=len(validation_ids),
-            activate=True,
-        )
-    return model_id
-
-
-def _auto_select_saved_structure_models(project, previous, *, registry=None):
-    """Try all comparable saved standard sources on one common development cohort."""
-    models = {item["model_id"]: item for item in project.structure_models()}
-    routes = validated_routes(project.scheme, previous["model_id"],
-                              (previous.get("metrics") or {}).get("component_routes") or {}, models)
-    base_sources = set(routes.values())
-    compatible = lambda model: _scheme_matches_model(project, model)
-    candidates = []
-    for model in models.values():
-        if model["model_id"] in base_sources or model["model_id"] == previous["model_id"]:
-            continue
-        if (model.get("metrics") or {}).get("component_routes") or not _scheme_matches_model(project, model):
-            continue
-        extra = [models[ident] for ident in sorted(base_sources - {previous["model_id"], model["model_id"]})]
-        ids, _ = common_validation_specimens(project, previous, model, extra_models=extra, schema_compatible=compatible)
-        if ids:
-            candidates.append(model)
-    if not candidates:
-        return {"decision": "kept", "reason": "No saved sources have sufficient common verified validation data."}
-    all_ids = base_sources | {model["model_id"] for model in candidates}
-    roots = [models[ident] for ident in sorted(all_ids - {previous["model_id"]})]
-    ids, reason = common_validation_specimens(project, previous, roots[0], extra_models=roots[1:], schema_compatible=compatible)
-    if not ids:
-        return {"decision": "kept", "reason": reason}
-    predictions = {}
-    for ident in sorted(all_ids):
-        report = compare_structure_model_to_human(project, ident, specimen_ids=ids,
-                                                  include_predictions=True, registry=registry)
-        if report.get("failures") or report["summary"].get("prediction_failures") or report["summary"].get("skipped_not_verified"):
-            return {"decision": "kept", "reason": "A saved source could not predict the shared cohort."}
-        predictions[ident] = report["prediction_rows"]
-    cases = [{"specimen_id": sid, "human": project.effective_annotations(sid, 1, "human"),
-              "visibility": project.structure_visibility_states(sid, 1, "human"),
-              "crop_size": project.specimen_crop_size(sid)} for sid in ids]
-    selected = choose_saved_components(project.scheme, previous["model_id"], cases, predictions,
-                                       summarize_structure_ai_human_comparison,
-                                       baseline_routes=routes, check=choose_better_model)
-    if not selected["accepted"]:
-        return {"decision": "kept", "reason": selected["reason"], "checked_specimens": len(ids)}
-    summary = selected["report"]["summary"]
-    decision = {"reason": selected["reason"], "checked_specimens": len(ids),
-                "evaluated_specimens": int(summary.get("all_traits_evaluable_specimens") or 0),
-                "candidate_complete": int(summary.get("all_traits_correct_specimens") or 0),
-                "previous_model_id": previous["model_id"]}
-    used = set(selected["routes"].values())
-    if len(used) == 1:
-        ident = next(iter(used))
-        project.activate_structure_model(ident)
-        project.set_structure_model_selection(ident, {**decision, "decision": "selected"})
-        return {**decision, "decision": "selected"}
-    chosen = _publish_routed_structure_model(project, previous, candidates[0], selected["routes"], ids, decision)
-    return {**decision, "decision": "combined", "selected_model_id": chosen, "component_sources": len(used)}
-
-
-def _auto_select_trained_structure_model(project, previous, candidate_id, *, registry=None):
-    """Evaluate whole-model and per-family choices using the same untouched specimens."""
-    models = {item["model_id"]: item for item in project.structure_models()}
-    candidate = models[candidate_id]
-    if not _scheme_matches_model(project, previous) or not _scheme_matches_model(project, candidate):
-        return {"decision": "kept", "reason": "The scientific scheme has changed."}
-    previous_routes = (previous.get("metrics") or {}).get("component_routes") or {}
-    try:
-        routes = validated_routes(project.scheme, previous["model_id"], previous_routes, models)
-    except ValueError:
-        return {"decision": "kept", "reason": "A previous component source is no longer available."}
-    source_ids = set(routes.values()) | {candidate_id}
-    extra = [models[source_id] for source_id in sorted(source_ids - {previous["model_id"], candidate_id})]
-    specimen_ids, reason = common_validation_specimens(project, previous, candidate, extra_models=extra)
-    if not specimen_ids:
-        return {"decision": "kept", "reason": reason}
-    predictions = {}
-    for source_id in sorted(source_ids):
-        report = compare_structure_model_to_human(
-            project, source_id, specimen_ids=specimen_ids,
-            include_predictions=True, registry=registry
-        )
-        summary = report["summary"]
-        if report.get("failures") or summary.get("skipped_not_verified") or summary.get("prediction_failures"):
-            return {"decision": "kept", "reason": "A source model did not predict every validation specimen."}
-        predictions[source_id] = report["prediction_rows"]
-    cases = [{
-        "specimen_id": sid,
-        "human": project.effective_annotations(sid, 1, "human"),
-        "visibility": project.structure_visibility_states(sid, 1, "human"),
-        "crop_size": project.specimen_crop_size(sid),
-    } for sid in specimen_ids]
-    selection = choose_routed_components(
-        project.scheme, previous["model_id"], candidate_id, cases, predictions,
-        summarize_structure_ai_human_comparison, baseline_routes=previous_routes,
-        check=choose_better_model,
-    )
-    if not selection["accepted"]:
-        return {"decision": "kept", "reason": selection["reason"],
-                "checked_specimens": len(specimen_ids)}
-    selected = selection["routes"]
-    selected_summary = selection["report"]["summary"]
-    result_summary = {
-        "reason": selection["reason"], "checked_specimens": len(specimen_ids),
-        "evaluated_specimens": int(selected_summary.get("all_traits_evaluable_specimens") or 0),
-        "candidate_complete": int(selected_summary.get("all_traits_correct_specimens") or 0),
-        "previous_model_id": previous["model_id"],
-    }
-    if set(selected.values()) == {candidate_id}:
-        project.activate_structure_model(candidate_id)
-        return {**result_summary, "decision": "selected"}
-    selected_id = _publish_routed_structure_model(
-        project, previous, candidate, selected, specimen_ids, result_summary
-    )
-    return {**result_summary, "decision": "combined", "selected_model_id": selected_id,
-            "component_sources": len(set(selected.values()))}
 
 
 def _prediction_image(project, specimen_id, target):
@@ -708,42 +504,48 @@ def _flatten_prediction(groups):
     return rows
 
 
-def _registered_structure_sources(project, model):
-    """Resolve immutable source identities for a standard or combined model."""
-    by_id = {item["model_id"]: item for item in project.structure_models()}
-    registered = by_id.get(model.get("model_id"))
-    if not registered or any(model.get(key) != registered.get(key) for key in
-                             ("backend", "schema_digest", "path", "metadata_path")):
-        raise XRayStructureAIError("The selected structure model is unavailable or incompatible with its registered identity.")
-    if not _scheme_matches_model(project, model):
-        raise XRayStructureAIError("The active structure model is incompatible with the scientific scheme.")
-    try:
-        routes = validated_routes(
-            project.scheme, model["model_id"],
-            (model.get("metrics") or {}).get("component_routes") or {},
-            by_id,
+def predict_structures(project, specimen_ids=None, count=None, cancel=None, progress=None, model=None, pass_no=1, allow_verified=False, *, registry=None):
+    model = model or project.active_structure_model()
+    if not model:
+        raise XRayStructureAIError("Train or import an X-ray structure model before prediction.")
+    current_digest = structure_schema_digest(project.scheme)
+    if not _scheme_matches_model(project,model):
+        raise XRayStructureAIError("The active structure model is incompatible with the current X-ray structure scheme.")
+    _structure_provider_spec(model.get("backend") or STRUCTURE_BACKEND, registry)
+    pass_no = int(pass_no)
+    candidates = list(project.structure_prediction_candidate_ids(pass_no))
+    if specimen_ids is not None:
+        if allow_verified:
+            allowed={str(row["specimen_id"]) for row in project.structure_specimens(pass_no)}
+        else:
+            allowed=set(candidates)
+        ids=[str(value) for value in specimen_ids if str(value) in allowed]
+    else:
+        ids = project.select_structure_prediction_ids(
+            len(candidates) if count is None else max(1, int(count)),pass_no=pass_no
         )
-    except ValueError as exc:
-        raise XRayStructureAIError(str(exc)) from exc
-    sources = {ident: by_id[ident] for ident in sorted(set(routes.values()))}
-    if any(not _scheme_matches_model(project, source) for source in sources.values()):
-        raise XRayStructureAIError("A combined structure source uses an incompatible scientific scheme.")
-    return sources, routes
-
-
-def _predict_prepared_sources(project, sources, prepared, settings, *, registry=None, cancel=None):
-    """One image preparation, one batched inference per distinct source model."""
-    by_source = {}
+    if not ids:
+        return {"success": [], "failures": [], "model_id": model["model_id"]}
+    backend = backend_for_structure_model(project, model, registry=registry)
+    settings = structure_performance_settings()["inference"]
+    checkpoint = project.root / str(model["path"])
+    metadata = project.root / str(model["metadata_path"])
+    if not checkpoint.is_file() or not metadata.is_file():
+        raise XRayStructureAIError("The active structure model artifact is incomplete.")
+    success = []
     failures = []
-    final_batch_size = max(1, int(settings.get("batch_size") or 1))
-    for source_id, source in sources.items():
-        if cancel is not None and cancel.is_set():
-            break
-        backend = backend_for_structure_model(project, source, registry=registry)
-        checkpoint = (project.root / str(source["path"])).resolve()
-        metadata = (project.root / str(source["metadata_path"])).resolve()
-        batch_size = final_batch_size
-        output = {}
+    with tempfile.TemporaryDirectory(prefix="morpholabel_xray_structure_predict_") as scratch_name:
+        scratch = Path(scratch_name)
+        prepared = []
+        for index, specimen_id in enumerate(ids, 1):
+            if cancel is not None and cancel.is_set():
+                break
+            try:
+                path = _prediction_image(project, specimen_id, scratch / f"{index:06d}.png")
+                prepared.append((specimen_id, path))
+            except Exception as exc:
+                failures.append({"specimen_id": specimen_id, "reason": str(exc)})
+        batch_size = max(1, int(settings.get("batch_size") or 1))
         index = 0
         while index < len(prepared):
             if cancel is not None and cancel.is_set():
@@ -759,88 +561,31 @@ def _predict_prepared_sources(project, sources, prepared, settings, *, registry=
             except Exception as exc:
                 if is_cuda_oom(exc) and batch_size > 1:
                     batch_size = max(1, batch_size // 2)
+                    if progress:
+                        progress(index, len(prepared), f"GPU memory limit; retrying with batch {batch_size}")
                     continue
                 for specimen_id, _path in chunk:
-                    failures.append({"specimen_id": specimen_id, "model_id": source_id, "reason": str(exc)})
+                    failures.append({"specimen_id": specimen_id, "reason": str(exc)})
                 index += len(chunk)
                 continue
+            if cancel is not None and cancel.is_set():break
             returned = list(result.get("results") or ())
             for offset, (specimen_id, _path) in enumerate(chunk):
-                if offset >= len(returned):
-                    failures.append({"specimen_id": specimen_id, "model_id": source_id,
-                                     "reason": "Incomplete prediction batch."})
-                    continue
+                if cancel is not None and cancel.is_set():break
                 try:
-                    groups = returned[offset].get("structures") or ()
-                    if any("count" in group for group in groups):
-                        raise ValueError("Scalar-only outputs cannot be used as point annotations.")
-                    output[specimen_id] = _comparison_prediction_rows(groups)
-                except (ValueError, TypeError, KeyError) as exc:
-                    failures.append({"specimen_id": specimen_id, "model_id": source_id, "reason": str(exc)})
+                    if offset >= len(returned):
+                        raise RuntimeError("Structure model returned an incomplete prediction batch.")
+                    points = _flatten_prediction(returned[offset].get("structures") or ())
+                    saved = project.seed_structure_predictions(
+                        specimen_id, points, model["model_id"], pass_no=pass_no,
+                        allow_verified=bool(allow_verified),
+                    )
+                    success.append({"specimen_id": specimen_id, "saved": saved})
+                except Exception as exc:
+                    failures.append({"specimen_id": specimen_id, "reason": str(exc)})
+                if progress:
+                    progress(index + offset + 1, len(prepared), specimen_id)
             index += len(chunk)
-        by_source[source_id] = output
-        final_batch_size = min(final_batch_size, batch_size)
-    return by_source, failures, final_batch_size
-
-
-def predict_structures(project, specimen_ids=None, count=None, cancel=None, progress=None,
-                       model=None, pass_no=1, allow_verified=False, *, registry=None):
-    """Predict via the active model's verified structure routing; save one draft per fish."""
-    model = model or project.active_structure_model()
-    if not model:
-        raise XRayStructureAIError("Train or import an X-ray structure model before prediction.")
-    sources, routes = _registered_structure_sources(project, model)
-    pass_no = int(pass_no)
-    candidates = list(project.structure_prediction_candidate_ids(pass_no))
-    if specimen_ids is not None:
-        allowed = ({str(row["specimen_id"]) for row in project.structure_specimens(pass_no)}
-                   if allow_verified else set(candidates))
-        ids = [str(value) for value in specimen_ids if str(value) in allowed]
-    else:
-        ids = project.select_structure_prediction_ids(
-            len(candidates) if count is None else max(1, int(count)), pass_no=pass_no
-        )
-    if not ids:
-        return {"success": [], "failures": [], "model_id": model["model_id"]}
-    settings = structure_performance_settings()["inference"]
-    success, failures = [], []
-    with tempfile.TemporaryDirectory(prefix="morpholabel_xray_structure_predict_") as scratch_name:
-        scratch = Path(scratch_name)
-        prepared = []
-        for index, specimen_id in enumerate(ids, 1):
-            if cancel is not None and cancel.is_set():
-                break
-            try:
-                prepared.append((specimen_id, _prediction_image(
-                    project, specimen_id, scratch / f"{index:06d}.png")))
-            except Exception as exc:
-                failures.append({"specimen_id": specimen_id, "reason": str(exc)})
-        by_source, source_failures, batch_size = _predict_prepared_sources(
-            project, sources, prepared, settings, registry=registry, cancel=cancel,
-        )
-        failures.extend(source_failures)
-        for index, (specimen_id, _path) in enumerate(prepared, 1):
-            if cancel is not None and cancel.is_set():
-                break
-            if any(specimen_id not in predictions for predictions in by_source.values()):
-                if not any(row["specimen_id"] == specimen_id for row in failures):
-                    failures.append({"specimen_id": specimen_id, "reason": "Component prediction missing."})
-                continue
-            try:
-                points = combine_marker_rows(
-                    project.scheme,
-                    {source_id: results[specimen_id] for source_id, results in by_source.items()},
-                    routes,
-                )
-                saved = project.seed_structure_predictions(
-                    specimen_id, points, model["model_id"], pass_no=pass_no,
-                    allow_verified=bool(allow_verified),
-                )
-                success.append({"specimen_id": specimen_id, "saved": saved})
-            except Exception as exc:
-                failures.append({"specimen_id": specimen_id, "reason": str(exc)})
-            if progress:
-                progress(index, len(prepared), specimen_id)
     return {
         "success": success, "failures": failures, "model_id": model["model_id"],
         "inference_batch_size": batch_size,
@@ -936,7 +681,7 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
     }
     exact_total=exact_ok=0;all_correct=all_evaluable=wrong_specimens=0;exact_counts_per_specimen=[]
     repeated_diffs=[];all_localization=[];role_total=role_exact=0;role_abs=[]
-    compared=0; specimen_outcomes=[]
+    compared=0
     for specimen in specimens or ():
         human=list(specimen.get("human") or ());predicted=list(specimen.get("predicted") or ())
         visibility=dict(specimen.get("visibility") or {});human_group=_comparison_group(human);pred_group=_comparison_group(predicted)
@@ -977,6 +722,15 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
                 good=_comparison_equal(truth,prediction)
                 stat["exact"]+=int(good);exact_total+=1;exact_ok+=int(good);specimen_total+=1;specimen_ok+=int(good)
                 specimen_all_terms+=1;specimen_all_ok+=int(good)
+                if prediction is None:
+                    stat["missing"]+=1
+                # Exact accuracy includes all human-evaluable cases, including
+                # missed AI predictions. Count difference is reported only
+                # where both values are numeric; otherwise it stays undefined.
+                if (method in {"count","count_to","count_between","position","derived"}
+                        and isinstance(truth,(int,float)) and not isinstance(truth,bool)
+                        and isinstance(prediction,(int,float)) and not isinstance(prediction,bool)):
+                    stat["errors"].append(abs(float(prediction)-float(truth)))
             elif method in _CONTINUOUS_TRAIT_METHODS:
                 if isinstance(prediction,(int,float)) and isinstance(truth,(int,float)):
                     error=abs(float(prediction)-float(truth));stat["errors"].append(error)
@@ -984,26 +738,12 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
                     if isinstance(tolerance,(int,float)):
                         stat["within_n"]+=1;stat["within"]+=int(error<=float(tolerance))
                         specimen_all_terms+=1;specimen_all_ok+=int(error<=float(tolerance))
-                else:
-                    stat["missing"]+=1
-                    tolerance=(trait.get("rule") or {}).get("tolerance",trait.get("tolerance"))
-                    if isinstance(tolerance,(int,float)):
-                        stat["within_n"]+=1;specimen_all_terms+=1
+                else:stat["missing"]+=1
         exact_counts_per_specimen.append(specimen_ok)
-        # "All traits correct" must mean ALL declared scientific traits,
-        # not merely the visible/evaluable subset for this specimen.
-        # A continuous trait without an explicit tolerance is not
-        # pass/fail evaluable and cannot count toward complete success.
         if specimen_all_terms:
-            wrong_specimens+=int(specimen_all_ok!=specimen_all_terms)
-            if specimen_all_terms==len(traits):
-                all_evaluable+=1
-                all_correct+=int(specimen_all_ok==specimen_all_terms)
-        specimen_outcomes.append({
-            "specimen_id": str(specimen.get("specimen_id") or ""),
-            "evaluable": bool(traits) and specimen_all_terms==len(traits),
-            "correct": bool(traits) and specimen_all_terms==len(traits) and specimen_all_ok==specimen_all_terms,
-        })
+            all_evaluable+=1
+            good=specimen_all_ok==specimen_all_terms
+            all_correct+=int(good);wrong_specimens+=int(not good)
     structure_rows=[];f1_values=[]
     for structure in structures:
         stat=structure_stats[str(structure["id"])];tp=stat["tp"];fp=stat["fp"];fn=stat["fn"]
@@ -1057,84 +797,100 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
             "localization_p95_diag":(float(np.percentile(all_localization,95)) if all_localization else None),
             "macro_f1":(sum(f1_values)/len(f1_values) if f1_values else None),
         },
-        "traits":trait_rows,"structures":structure_rows,"specimen_outcomes":specimen_outcomes,
+        "traits":trait_rows,"structures":structure_rows,
     }
 
 
-def compare_structure_model_to_human(project,model_id=None,split="val",progress=None, *,
-                                     specimen_ids=None,include_predictions=False,registry=None):
-    """Read-only evaluation of the exact standard or combined model on its holdout."""
-    model = (next((item for item in project.structure_models()
-                   if item["model_id"] == str(model_id)), None)
-             if model_id else project.active_structure_model())
-    if not model:
-        raise XRayStructureAIError("Select an X-ray Structure AI model first.")
-    sources, routes = _registered_structure_sources(project, model)
-    membership = [item for item in project.structure_model_membership(model["model_id"])
-                  if str(item.get("split") or "") == str(split)]
-    if not membership:
-        raise XRayStructureAIError("This model has no recorded validation membership.")
-    ids = [str(item["specimen_id"]) for item in membership]
-    if specimen_ids is not None:
-        requested = {str(item) for item in specimen_ids}
-        if not requested or not requested.issubset(set(ids)):
-            raise XRayStructureAIError("Requested specimens are not in this model's validation holdout.")
-        ids = [specimen_id for specimen_id in ids if specimen_id in requested]
-    verified, skipped = [], []
+def compare_structure_model_to_human(project,model_id=None,split="all",progress=None, *, registry=None):
+    """Compare against currently verified specimens without changing project data.
+
+    "all" is a retrospective practical check (may include training specimens).
+    "val" retains the recorded validation-membership scope for controlled checks.
+    Neither scope alone establishes independent prospective validation.
+    """
+    model=next((item for item in project.structure_models() if item["model_id"]==str(model_id)),None) if model_id else project.active_structure_model()
+    if not model:raise XRayStructureAIError("Select an X-ray Structure AI model first.")
+    if not _scheme_matches_model(project,model):
+        raise XRayStructureAIError("This model uses a different X-ray structure scheme.")
+    full_membership=list(project.structure_model_membership(model["model_id"]))
+    if split=="all":
+        # User-facing evaluation is intended to answer "how often are the
+        # measurements right on my VERIFIED collection?", not to silently
+        # restrict comparison to an old model's validation subset.
+        ids=[str(item["specimen_id"]) for item in project.structure_specimens(1)
+             if str(item.get("annotation_status") or "")=="verified"]
+    elif split in {"train","val"}:
+        ids=[str(item["specimen_id"]) for item in full_membership
+             if str(item.get("split") or "")==str(split)]
+        if not ids:
+            raise XRayStructureAIError("No registered specimens for the selected training/validation split.")
+    else:
+        raise ValueError("Comparison split must be 'all', 'train' or 'val'.")
+    if not ids:
+        raise XRayStructureAIError("No eligible human-verified specimens are available for this scheme.")
+    checkpoint=project.root/str(model["path"]);metadata=project.root/str(model["metadata_path"])
+    if not checkpoint.is_file() or not metadata.is_file():
+        raise XRayStructureAIError("The selected Structure AI model artifact is incomplete.")
+    verified=[];skipped=[]
     for specimen_id in ids:
-        run = project.annotation_run(specimen_id, 1, "human", False)
-        if run and str(run.get("status") or "") == "verified":
-            verified.append(specimen_id)
-        else:
-            skipped.append(specimen_id)
+        run=project.annotation_run(specimen_id,1,"human",False)
+        if not run or str(run.get("status") or "")!="verified":
+            skipped.append(specimen_id);continue
+        verified.append(specimen_id)
     if not verified:
-        raise XRayStructureAIError("No human-verified validation specimens available.")
-    settings = structure_performance_settings()["inference"]
-    predictions = {}
-    failures = []
+        raise XRayStructureAIError("No human-verified specimens remain eligible for comparison.")
+    backend=backend_for_structure_model(project,model,registry=registry)
+    settings=structure_performance_settings()["inference"];predictions={};failures=[]
     with tempfile.TemporaryDirectory(prefix="morpholabel_xray_structure_compare_") as scratch_name:
-        scratch = Path(scratch_name)
-        prepared = []
-        for index, specimen_id in enumerate(verified, 1):
-            try:
-                prepared.append((specimen_id, _prediction_image(
-                    project, specimen_id, scratch / f"{index:06d}.png")))
+        scratch=Path(scratch_name);prepared=[]
+        for index,specimen_id in enumerate(verified,1):
+            try:prepared.append((specimen_id,_prediction_image(project,specimen_id,scratch/f"{index:06d}.png")))
+            except Exception as exc:failures.append({"specimen_id":specimen_id,"reason":str(exc)})
+        batch_size=max(1,int(settings.get("batch_size") or 1));index=0
+        while index<len(prepared):
+            chunk=prepared[index:index+batch_size]
+            payload={"metadata":str(metadata),"checkpoint":str(checkpoint),"images":[str(path) for _sid,path in chunk],"device":settings["device"]}
+            try:result=backend.predict_many(payload,max(900,180*len(chunk)))
             except Exception as exc:
-                failures.append({"specimen_id": specimen_id, "reason": str(exc)})
-        by_source, source_failures, _batch_size = _predict_prepared_sources(
-            project, sources, prepared, settings, registry=registry,
+                if is_cuda_oom(exc) and batch_size>1:
+                    batch_size=max(1,batch_size//2);continue
+                for specimen_id,_path in chunk:failures.append({"specimen_id":specimen_id,"reason":str(exc)})
+                index+=len(chunk);continue
+            returned=list(result.get("results") or ())
+            for offset,(specimen_id,_path) in enumerate(chunk):
+                if offset>=len(returned):
+                    failures.append({"specimen_id":specimen_id,"reason":"Incomplete prediction batch."});continue
+                predictions[specimen_id]=_comparison_prediction_rows(returned[offset].get("structures") or ())
+                if progress:progress(index+offset+1,len(prepared),specimen_id)
+            index+=len(chunk)
+    rows=[]
+    for specimen_id in verified:
+        if specimen_id not in predictions:continue
+        rows.append({
+            "specimen_id":specimen_id,
+            "human":project.effective_annotations(specimen_id,1,"human"),
+            "predicted":predictions[specimen_id],
+            "visibility":project.structure_visibility_states(specimen_id,1,"human"),
+            "crop_size":project.specimen_crop_size(specimen_id),
+        })
+    if not rows:
+        detail=(failures[0]["reason"] if failures else "No eligible predictions returned.")
+        raise XRayStructureAIError(
+            f"Comparison failed for all {len(verified)} verified specimens. "
+            f"First error: {detail}"
         )
-        failures.extend(source_failures)
-        for index, (specimen_id, _path) in enumerate(prepared, 1):
-            if any(specimen_id not in results for results in by_source.values()):
-                continue
-            try:
-                predictions[specimen_id] = combine_marker_rows(
-                    project.scheme,
-                    {source_id: rows[specimen_id] for source_id, rows in by_source.items()},
-                    routes,
-                )
-                if progress:
-                    progress(index, len(prepared), specimen_id)
-            except (KeyError, TypeError, ValueError) as exc:
-                failures.append({"specimen_id": specimen_id, "reason": str(exc)})
-    rows = [{
-        "specimen_id": specimen_id,
-        "human": project.effective_annotations(specimen_id, 1, "human"),
-        "predicted": predictions[specimen_id],
-        "visibility": project.structure_visibility_states(specimen_id, 1, "human"),
-        "crop_size": project.specimen_crop_size(specimen_id),
-    } for specimen_id in verified if specimen_id in predictions]
-    report = summarize_structure_ai_human_comparison(project.scheme, rows)
+    report=summarize_structure_ai_human_comparison(project.scheme,rows)
+    registered={str(item["specimen_id"]):str(item.get("split") or "") for item in full_membership}
+    train_used=sum(registered.get(specimen_id)=="train" for specimen_id in predictions)
+    val_used=sum(registered.get(specimen_id)=="val" for specimen_id in predictions)
     report["summary"].update({
-        "model_id": str(model["model_id"]), "split": str(split),
-        "membership_specimens": len(ids), "skipped_not_verified": len(skipped),
-        "prediction_failures": len(failures),
-        "comparison_note": "Development validation only; no project annotations were modified.",
+        "model_id":str(model["model_id"]),"split":str(split),"membership_specimens":len(ids),
+        "skipped_not_verified":len(skipped),"prediction_failures":len(failures),
+        "comparison_note":"Retrospective verified-specimen comparison; training/validation overlap is possible and independence is NOT established.",
+        "registered_training_compared":train_used,"registered_validation_compared":val_used,
+        "other_verified_compared":len(rows)-train_used-val_used,
     })
-    report["failures"] = failures
-    if include_predictions:
-        report["prediction_rows"] = predictions
+    report["failures"]=failures
     return report
 
 
@@ -1152,67 +908,6 @@ def _safe_model_json(path):
     return {key: source[key] for key in allowed if key in source}
 
 
-def _portable_artifact(project, model):
-    """Read one model artifact and retain only portable scientific metadata."""
-    checkpoint = project.root / str(model["path"])
-    metadata = project.root / str(model["metadata_path"])
-    if not checkpoint.is_file() or not metadata.is_file():
-        raise XRayStructurePackageError("Structure model artifact is incomplete.")
-    safe_meta = _safe_model_json(metadata)
-    safe_meta["model_id"] = str(model["model_id"])
-    safe_meta["schema_digest"] = str(model["schema_digest"])
-    current = structure_schema_contract(project.scheme)
-    legacy = _legacy_structure_schema_contract(project.scheme)
-    contract = current if str(model["schema_digest"]) == structure_schema_digest(project.scheme) else legacy
-    if _sha256_bytes(_canonical(contract).encode("utf-8")) != str(model["schema_digest"]):
-        contract = safe_meta.get("schema_contract")
-        if not contract or not _scheme_matches_model(project, model, safe_meta):
-            raise XRayStructurePackageError("Cannot prove the model's scientific structure contract.")
-    safe_meta["schema_contract"] = contract
-    return checkpoint.read_bytes(), json.dumps(safe_meta, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8"), contract
-
-
-def _portable_auxiliary_artifacts(project, model, weights, metadata_bytes):
-    """Add only hash-verified auxiliary weights referenced by the model metadata."""
-    from ai_runtime.universal_multires import component_files, pipeline_components
-    metadata = json.loads(metadata_bytes.decode("utf-8"))
-    try:
-        for component in pipeline_components(metadata).values():
-            if component["checkpoint"] == "model.pth" and component["sha256"] != _sha256_bytes(weights):
-                raise ValueError("Shared model checkpoint checksum mismatch")
-        companions = component_files(metadata)
-    except (ValueError, TypeError, KeyError) as exc:
-        raise XRayStructurePackageError("Invalid multiresolution model component metadata.") from exc
-    folder = (project.root / str(model["metadata_path"])).parent
-    result = {}
-    for filename, digest in companions.items():
-        source = (folder / filename).resolve()
-        if source.parent != folder.resolve() or not source.is_file() or _sha256_file(source) != digest:
-            raise XRayStructurePackageError("Missing or altered multiresolution model component.")
-        result[filename] = source.read_bytes()
-    return result
-
-
-def _auxiliary_package_files(metadata, prefix):
-    """Determine exactly which portable companion files a model requires."""
-    from ai_runtime.universal_multires import component_files
-    try:
-        return {f"{prefix}/{filename}" for filename in component_files(metadata)}
-    except (ValueError, KeyError, TypeError) as exc:
-        raise XRayStructurePackageError("Invalid multiresolution model component metadata.") from exc
-
-
-def _safe_metrics(model):
-    return {key: value for key, value in dict(model.get("metrics") or {}).items()
-            if key not in {"training_membership", "validation_membership"} and not str(key).endswith("_path")}
-
-
-def _backend_package_fields(backend_id):
-    spec = backend_registry().get(str(backend_id))
-    return ({"backend_version": str(spec.version), "backend_api_version": int(spec.api_version)}
-            if spec is not None and spec.task == "xray_structure" else {})
-
-
 def export_structure_model_package(project, target, model_id=None):
     model = next(
         (item for item in project.structure_models() if item["model_id"] == str(model_id)),
@@ -1220,59 +915,58 @@ def export_structure_model_package(project, target, model_id=None):
     ) if model_id else project.active_structure_model()
     if not model:
         raise XRayStructurePackageError("No X-ray structure model is selected.")
-    routes = (model.get("metrics") or {}).get("component_routes") or {}
-    files = {}
-    components = []
-    if routes:
-        by_id = {item["model_id"]: item for item in project.structure_models()}
+    checkpoint = project.root / str(model["path"])
+    metadata = project.root / str(model["metadata_path"])
+    if not checkpoint.is_file() or not metadata.is_file():
+        raise XRayStructurePackageError("Structure model artifact is incomplete.")
+    safe_meta = _safe_model_json(metadata)
+    safe_meta["model_id"] = str(model["model_id"])
+    safe_meta["schema_digest"] = str(model["schema_digest"])
+    current=structure_schema_contract(project.scheme)
+    legacy=_legacy_structure_schema_contract(project.scheme)
+    contract=current if str(model["schema_digest"])==structure_schema_digest(project.scheme) else legacy
+    if _sha256_bytes(_canonical(contract).encode("utf-8"))!=str(model["schema_digest"]):
+        contract=safe_meta.get("schema_contract")
+        if not contract or not _scheme_matches_model(project,model,safe_meta):raise XRayStructurePackageError("Cannot prove the model's scientific structure contract.")
+    safe_meta["schema_contract"]=contract
+    meta_bytes = json.dumps(safe_meta, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+    checkpoint_bytes = checkpoint.read_bytes()
+    files = {
+        "artifacts/model.pth": checkpoint_bytes,
+        "artifacts/model.json": meta_bytes,
+    }
+    if safe_meta.get("inference_pipeline") is not None:
+        from ai_runtime.universal_multires import pipeline_components,component_files
         try:
-            validated_routes(project.scheme, model["model_id"], routes, by_id)
-        except ValueError as exc:
-            raise XRayStructurePackageError("Combined model routing is invalid.") from exc
-        for index, source_id in enumerate(sorted(set(routes.values()))):
-            source = by_id.get(source_id)
-            if source is None:
-                raise XRayStructurePackageError("Combined model source is missing.")
-            weights, metadata, _contract = _portable_artifact(project, source)
-            prefix = f"artifacts/components/{index:03d}"
-            weight_name, meta_name = f"{prefix}/model.pth", f"{prefix}/model.json"
-            files[weight_name], files[meta_name] = weights, metadata
-            extra = _portable_auxiliary_artifacts(project, source, weights, metadata)
-            auxiliary_files = []
-            for filename, payload in sorted(extra.items()):
-                name = f"{prefix}/{filename}"
-                files[name] = payload
-                auxiliary_files.append(name)
-            components.append({
-                "model_id": str(source_id), "backend": str(source.get("backend") or STRUCTURE_BACKEND),
-                **_backend_package_fields(source.get("backend") or STRUCTURE_BACKEND),
-                "schema_digest": str(source["schema_digest"]),
-                "source_parent_model_id": source.get("parent_model_id"),
-                "weights": weight_name, "metadata": meta_name,
-                "auxiliary_files": auxiliary_files,
-            })
-        contract = structure_schema_contract(project.scheme)
-    else:
-        weights, metadata, contract = _portable_artifact(project, model)
-        files = {"artifacts/model.pth": weights, "artifacts/model.json": metadata}
-        files.update({"artifacts/" + filename: content
-                      for filename, content in _portable_auxiliary_artifacts(project, model, weights, metadata).items()})
+            for component in pipeline_components(safe_meta).values():
+                if component["checkpoint"]=="model.pth" and component["sha256"]!=_sha256_bytes(checkpoint_bytes):
+                    raise ValueError("Shared checkpoint checksum mismatch")
+            auxiliary=component_files(safe_meta)
+        except (KeyError,TypeError,ValueError) as exc:
+            raise XRayStructurePackageError("Invalid multiresolution metadata.") from exc
+        for name,expected_sha in auxiliary.items():
+            item=metadata.parent/name
+            if not item.is_file() or _sha256_file(item)!=expected_sha:
+                raise XRayStructurePackageError("Missing or modified auxiliary model component.")
+            files["artifacts/"+name]=item.read_bytes()
+    metrics = dict(model.get("metrics") or {})
+    safe_metrics = {
+        key: value for key, value in metrics.items()
+        if key not in {"training_membership", "validation_membership"} and not str(key).endswith("_path")
+    }
     manifest = {
         "package_format": MODEL_PACKAGE_FORMAT,
-        "model_kind": "combined" if routes else "standard",
         "model_id": str(model["model_id"]),
         "backend": str(model.get("backend") or STRUCTURE_BACKEND),
-        **_backend_package_fields(model.get("backend") or STRUCTURE_BACKEND),
         "schema_digest": str(model["schema_digest"]),
-        "schema_contract": contract, "component_routes": dict(sorted(routes.items())),
-        "components": components,
+        "schema_contract": contract,
         "trait_scheme": project.scheme,
         "trait_scheme_sha256": _sha256_bytes(_canonical(project.scheme).encode("utf-8")),
         "orientation_policy": project.orientation_policy,
         "training_statistics": {
             "training_specimen_count": int(model.get("training_specimen_count") or 0),
             "validation_specimen_count": int(model.get("validation_specimen_count") or 0),
-            "metrics": _safe_metrics(model),
+            "metrics": safe_metrics,
         },
         "files": {name: _sha256_bytes(data) for name, data in files.items()},
     }
@@ -1285,176 +979,7 @@ def export_structure_model_package(project, target, model_id=None):
     return target
 
 
-def _package_scheme(project, manifest):
-    imported_scheme = manifest.get("trait_scheme")
-    compatibility_scheme = project.scheme
-    if imported_scheme is not None:
-        from .xray_schema import normalize_scheme
-        try:
-            if _sha256_bytes(_canonical(imported_scheme).encode("utf-8")) != manifest.get("trait_scheme_sha256"):
-                raise ValueError("Trait scheme checksum mismatch")
-            compatibility_scheme = normalize_scheme(imported_scheme)
-        except (ValueError, TypeError, KeyError) as exc:
-            raise XRayStructurePackageError(f"Invalid embedded trait scheme: {exc}") from exc
-    return imported_scheme, compatibility_scheme, structure_schema_digest(compatibility_scheme)
-
-
-def _read_package_files(archive, expected):
-    if not isinstance(expected, dict) or not expected:
-        raise XRayStructurePackageError("Structure model package has no artifacts.")
-    payload = {}
-    for name, digest in expected.items():
-        path = Path(str(name))
-        if ".." in path.parts or not str(name).startswith("artifacts/"):
-            raise XRayStructurePackageError(f"Unsafe package path: {name}")
-        try:
-            data = archive.read(name)
-        except KeyError as exc:
-            raise XRayStructurePackageError(f"Missing package artifact: {name}") from exc
-        if _sha256_bytes(data) != str(digest):
-            raise XRayStructurePackageError(f"Checksum mismatch: {name}")
-        payload[str(name)] = data
-    return payload
-
-
-def _unique_model_id(project, original, occupied=()):
-    if not _SAFE_ID.fullmatch(str(original)):
-        raise XRayStructurePackageError("Imported structure model ID is unsafe.")
-    used = {item["model_id"] for item in project.structure_models()} | set(occupied)
-    local = str(original); counter = 2
-    while local in used or (project.models_root / local).exists():
-        local = f"imported_{original}_{counter}"; counter += 1
-    return local
-
-
-def _validate_imported_component(project, component, metadata, compatibility_scheme, current_digest, registry):
-    source_id = str(component.get("model_id") or "")
-    provider_id = str(component.get("backend") or "")
-    spec = _structure_provider_spec(provider_id, registry, XRayStructurePackageError)
-    if component.get("backend_version") is not None and str(component["backend_version"]) != str(spec.version):
-        raise XRayStructurePackageError("Combined package backend version is incompatible.")
-    if component.get("backend_api_version") is not None and int(component["backend_api_version"]) != int(spec.api_version):
-        raise XRayStructurePackageError("Combined package backend API is incompatible.")
-    digest = str(component.get("schema_digest") or "")
-    if str(metadata.get("backend") or STRUCTURE_BACKEND) != provider_id or str(metadata.get("schema_digest") or "") != digest:
-        raise XRayStructurePackageError("Combined component metadata is inconsistent.")
-    contract = metadata.get("schema_contract")
-    try:
-        proven = bool(contract and _sha256_bytes(_canonical(contract).encode("utf-8")) == digest
-                      and _normalized_structure_contract(contract) == structure_schema_contract(compatibility_scheme))
-    except (ValueError, KeyError, TypeError):
-        proven = False
-    if not proven:
-        raise XRayStructurePackageError("Combined component uses an incompatible scientific scheme.")
-    if not source_id:
-        raise XRayStructurePackageError("Combined package component ID is missing.")
-    return provider_id
-
-
-def _import_combined_structure_model_package(project, archive, manifest, registry=None):
-    imported_scheme, compatibility_scheme, current_digest = _package_scheme(project, manifest)
-    package_digest = str(manifest.get("schema_digest") or "")
-    try:
-        package_proven = bool(manifest.get("schema_contract") and
-                              _sha256_bytes(_canonical(manifest["schema_contract"]).encode("utf-8")) == package_digest and
-                              _normalized_structure_contract(manifest["schema_contract"]) == structure_schema_contract(compatibility_scheme))
-    except (ValueError, KeyError, TypeError):
-        package_proven = False
-    if not package_proven:
-        raise XRayStructurePackageError("Combined package uses an incompatible scientific scheme.")
-    outer_backend = str(manifest.get("backend") or "")
-    outer_spec = _structure_provider_spec(outer_backend, registry, XRayStructurePackageError)
-    if manifest.get("backend_version") is not None and str(manifest["backend_version"]) != str(outer_spec.version):
-        raise XRayStructurePackageError("Combined package backend version is incompatible.")
-    if manifest.get("backend_api_version") is not None and int(manifest["backend_api_version"]) != int(outer_spec.api_version):
-        raise XRayStructurePackageError("Combined package backend API is incompatible.")
-    routes = manifest.get("component_routes")
-    components = list(manifest.get("components") or ())
-    if not isinstance(routes, dict) or not components:
-        raise XRayStructurePackageError("Combined package routing or components are missing.")
-    expected = dict(manifest.get("files") or {})
-    payload = _read_package_files(archive, expected)
-    originals = [str(item.get("model_id") or "") for item in components if isinstance(item, dict)]
-    if len(originals) != len(components) or len(set(originals)) != len(originals) or not all(originals):
-        raise XRayStructurePackageError("Combined package component IDs are invalid.")
-    if set(routes.values()) != set(originals):
-        raise XRayStructurePackageError("Combined package routing does not match its components.")
-    legal = {str(item["id"]) for item in compatibility_scheme.get("structures") or ()}
-    if set(routes) != legal:
-        raise XRayStructurePackageError("Combined package routing is incomplete.")
-    parsed = {}
-    for component in components:
-        weights, meta_name = str(component.get("weights") or ""), str(component.get("metadata") or "")
-        if weights not in payload or meta_name not in payload:
-            raise XRayStructurePackageError("Combined package component artifact is missing.")
-        try:
-            metadata = json.loads(payload[meta_name].decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise XRayStructurePackageError("Combined component metadata is invalid.") from exc
-        provider = _validate_imported_component(project, component, metadata, compatibility_scheme, current_digest, registry)
-        prefix = weights.rsplit("/", 1)[0]
-        required_extra = _auxiliary_package_files(metadata, prefix)
-        supplied_extra = set(component.get("auxiliary_files") or ())
-        if supplied_extra != required_extra or not required_extra <= set(payload):
-            raise XRayStructurePackageError("Combined model auxiliary weights are missing or inconsistent.")
-        parsed[str(component["model_id"])] = (component, metadata, provider, payload[weights],
-                                                {name[len(prefix) + 1:]: payload[name] for name in supplied_extra})
-    claimed = {name for item in components for name in
-               [str(item["weights"]), str(item["metadata"]), *(item.get("auxiliary_files") or ())]}
-    if set(payload) != claimed or len(claimed) != sum(2 + len(item.get("auxiliary_files") or ()) for item in components):
-        raise XRayStructurePackageError("Combined model package has unexpected or repeated artifacts.")
-    original = str(manifest.get("model_id") or "combined_structure_model")
-    local_by_source = {}; occupied = set()
-    for source_id in originals:
-        local_by_source[source_id] = _unique_model_id(project, source_id, occupied); occupied.add(local_by_source[source_id])
-    local = _unique_model_id(project, original, occupied)
-    for source_id in originals:
-        component, metadata, provider, weights, auxiliary = parsed[source_id]
-        destination = project.models_root / local_by_source[source_id]
-        with staged_model_directory(destination) as (staging, publish):
-            (staging / "model.pth").write_bytes(weights)
-            for filename, content in auxiliary.items():
-                (staging / filename).write_bytes(content)
-            metadata.update({"model_id": local_by_source[source_id], "imported_from_model_id": source_id,
-                             "original_schema_digest": component["schema_digest"], "schema_digest": current_digest,
-                             "schema_contract": structure_schema_contract(compatibility_scheme)})
-            (staging / "model.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-            publish()
-        project.register_structure_model(local_by_source[source_id], str((destination / "model.pth").relative_to(project.root)),
-            str((destination / "model.json").relative_to(project.root)), None, current_digest, provider,
-            {"origin": "imported_component", "original_model_id": source_id,
-             "original_parent_model_id": component.get("source_parent_model_id"), "portable_package_format": MODEL_PACKAGE_FORMAT},
-            (), activate=False)
-    local_routes = {str(key): local_by_source[str(value)] for key, value in routes.items()}
-    try:
-        validated_routes(compatibility_scheme, local, local_routes, set(local_by_source.values()) | {local})
-    except ValueError as exc:
-        raise XRayStructurePackageError("Combined package has incompatible dependent structures.") from exc
-    base_original = str((manifest.get("training_statistics") or {}).get("metrics", {}).get("base_model_id") or originals[0])
-    base_local = local_by_source.get(base_original, local_by_source[originals[0]])
-    source_row = next(item for item in project.structure_models() if item["model_id"] == base_local)
-    destination = project.models_root / local
-    with staged_model_directory(destination) as (staging, publish):
-        shutil.copy2(project.root / source_row["path"], staging / "model.pth")
-        wrapper = json.loads((project.root / source_row["metadata_path"]).read_text(encoding="utf-8"))
-        wrapper.update({"model_id": local, "parent_model_id": base_local, "model_kind": "combined_structure_sources_v1",
-                        "component_routes": dict(sorted(local_routes.items()))})
-        (staging / "model.json").write_text(json.dumps(wrapper, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-        publish()
-    stats = dict(manifest.get("training_statistics") or {})
-    metrics = dict(stats.get("metrics") or {})
-    metrics.update({"model_kind": "combined", "origin": "imported_combined", "original_model_id": original,
-                    "portable_package_format": MODEL_PACKAGE_FORMAT, "component_routes": dict(sorted(local_routes.items())),
-                    "previous_orientation_policy": project.orientation_policy})
-    project.register_structure_model(local, str((destination / "model.pth").relative_to(project.root)),
-        str((destination / "model.json").relative_to(project.root)), base_local, current_digest, source_row["backend"], metrics, (),
-        training_specimen_count=int(stats.get("training_specimen_count") or 0),
-        validation_specimen_count=int(stats.get("validation_specimen_count") or 0), activate=False,
-        trait_scheme=imported_scheme, orientation_policy=manifest.get("orientation_policy"))
-    return local
-
-
-def import_structure_model_package(project, source, *, registry=None, parent_model_id=None):
+def import_structure_model_package(project, source, *, registry=None):
     source = Path(source)
     try:
         archive = zipfile.ZipFile(source)
@@ -1467,28 +992,46 @@ def import_structure_model_package(project, source, *, registry=None, parent_mod
             raise XRayStructurePackageError("Structure model package manifest is invalid.") from exc
         if manifest.get("package_format") != MODEL_PACKAGE_FORMAT:
             raise XRayStructurePackageError("Unsupported X-ray structure model package format.")
-        if manifest.get("model_kind") == "combined":
-            return _import_combined_structure_model_package(project, archive, manifest, registry=registry)
         provider_id = str(manifest.get("backend") or "")
         _structure_provider_spec(provider_id, registry, XRayStructurePackageError)
-        imported_scheme, compatibility_scheme, current_digest = _package_scheme(project, manifest)
+        imported_scheme=manifest.get("trait_scheme")
+        compatibility_scheme=project.scheme
+        if imported_scheme is not None:
+            from .xray_schema import normalize_scheme
+            try:
+                if _sha256_bytes(_canonical(imported_scheme).encode("utf-8"))!=manifest.get("trait_scheme_sha256"):raise ValueError("Trait scheme checksum mismatch")
+                compatibility_scheme=normalize_scheme(imported_scheme)
+            except (ValueError,TypeError,KeyError) as exc:raise XRayStructurePackageError(f"Invalid embedded trait scheme: {exc}") from exc
+        current_digest = structure_schema_digest(compatibility_scheme)
         expected = dict(manifest.get("files") or {})
-        payload = _read_package_files(archive, expected)
+        core={"artifacts/model.pth","artifacts/model.json"}
+        if not core.issubset(expected):
+            raise XRayStructurePackageError("Missing structure model core artifacts.")
+        from ai_runtime.universal_multires import component_files
+        try:
+            candidate=json.loads(archive.read("artifacts/model.json").decode("utf-8"))
+            auxiliary=component_files(candidate)
+        except (KeyError,UnicodeDecodeError,ValueError,TypeError) as exc:
+            raise XRayStructurePackageError("Invalid multiresolution model metadata.") from exc
+        required=core|{"artifacts/"+k for k in auxiliary}
+        members=[name for name in archive.namelist() if not name.endswith("/")]
+        if set(expected)!=required or set(members)!=required|{"manifest.json"} or len(members)!=len(set(members)):
+            raise XRayStructurePackageError("Unexpected, missing or duplicated model package files.")
+        payload = {}
+        for name, digest in expected.items():
+            if ".." in Path(name).parts or not name.startswith("artifacts/"):
+                raise XRayStructurePackageError(f"Unsafe package path: {name}")
+            try:
+                data = archive.read(name)
+            except KeyError as exc:
+                raise XRayStructurePackageError(f"Missing package artifact: {name}") from exc
+            if _sha256_bytes(data) != str(digest):
+                raise XRayStructurePackageError(f"Checksum mismatch: {name}")
+            payload[name] = data
         try:
             metadata = json.loads(payload["artifacts/model.json"].decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise XRayStructurePackageError("Imported structure model metadata is invalid.") from exc
-        required = {"artifacts/model.pth", "artifacts/model.json"} | _auxiliary_package_files(metadata, "artifacts")
-        if set(expected) != required or set(payload) != required:
-            raise XRayStructurePackageError("Structure model package contains unexpected or missing artifacts.")
-        from ai_runtime.universal_multires import pipeline_components
-        try:
-            for companion in pipeline_components(metadata).values():
-                if (companion["checkpoint"] == "model.pth"
-                        and companion["sha256"] != _sha256_bytes(payload["artifacts/model.pth"])):
-                    raise ValueError("Shared checkpoint checksum mismatch")
-        except (ValueError, KeyError, TypeError) as exc:
-            raise XRayStructurePackageError("Invalid multiresolution model checkpoints.") from exc
         package_digest=str(manifest.get("schema_digest") or "")
         if str(metadata.get("schema_digest") or "") != package_digest:
             raise XRayStructurePackageError("Manifest and model metadata schema digests disagree; cannot prove scheme compatibility.")
@@ -1502,11 +1045,19 @@ def import_structure_model_package(project, source, *, registry=None, parent_mod
             raise XRayStructurePackageError("This structure model was trained for a different X-ray structure scheme; embedded information cannot prove equivalence.")
         if str(metadata.get("backend") or STRUCTURE_BACKEND) != provider_id:
             raise XRayStructurePackageError("Imported model metadata backend does not match the package provider.")
-        if parent_model_id:
-            parent = next((item for item in project.structure_models()
-                           if item["model_id"] == str(parent_model_id)), None)
-            if parent is None or not _scheme_matches_model(project, parent):
-                raise XRayStructurePackageError("The continued-training parent is missing or incompatible.")
+        multires_candidate=metadata.get("inference_pipeline") is not None
+        if multires_candidate:
+            model_channels=[str(item["id"]) for item in metadata.get("structures") or ()]
+            expected_channels=[str(item["id"]) for item in compatibility_scheme["structures"]]
+            if model_channels!=expected_channels:
+                raise XRayStructurePackageError("Multiresolution model channels do not match the exact scientific structure order.")
+            # A high-resolution model is an optional interpreter of existing
+            # annotations, never permission to rewrite a project's scientific
+            # trait scheme or its orientation settings during import.
+            if structure_schema_digest(project.scheme)!=structure_schema_digest(compatibility_scheme):
+                raise XRayStructurePackageError("Multires model needs an existing compatible structure scheme; import cannot replace it.")
+            if manifest.get("orientation_policy") != project.orientation_policy:
+                raise XRayStructurePackageError("Multires model orientation policy is incompatible with this project.")
         original = str(manifest.get("model_id") or "imported_structure_model")
         if not _SAFE_ID.fullmatch(original):
             raise XRayStructurePackageError("Imported structure model ID is unsafe.")
@@ -1519,8 +1070,8 @@ def import_structure_model_package(project, source, *, registry=None, parent_mod
         destination = project.models_root / local
         with staged_model_directory(destination) as (staging,publish):
             (staging / "model.pth").write_bytes(payload["artifacts/model.pth"])
-            for filename in sorted(required - {"artifacts/model.pth", "artifacts/model.json"}):
-                (staging / filename[len("artifacts/"):]).write_bytes(payload[filename])
+            for name in auxiliary:
+                (staging/name).write_bytes(payload["artifacts/"+name])
             metadata["model_id"] = local
             metadata["imported_from_model_id"] = original
             metadata["original_schema_digest"]=package_digest
@@ -1534,22 +1085,29 @@ def import_structure_model_package(project, source, *, registry=None, parent_mod
             publish()
             stats = dict(manifest.get("training_statistics") or {})
             metrics = dict(stats.get("metrics") or {})
-            # Imported single-weight packages cannot safely inherit routes
-            # referring to model IDs in an unrelated source project.
-            metrics.pop("component_routes", None)
-            metrics.pop("model_kind", None)
-            metrics.pop("auto_selection", None)
             metrics.update({
                 "origin": "imported",
                 "original_model_id": original,
                 "portable_package_format": MODEL_PACKAGE_FORMAT,
                 "previous_orientation_policy": project.orientation_policy,
             })
+            if metadata.get("inference_pipeline") is not None:
+                # Parent validation scores do not measure composite accuracy.
+                metrics.pop("structure/macro_f1",None)
+                metrics["inference/mode"]=metadata["inference_pipeline"]["mode"]
+                metrics["inference/unvalidated"]=True
+            multires_training=metadata.get("multires_training") or {}
+            training_source_id=str(multires_training.get("source_model_id") or "")
+            if training_source_id:
+                # Preserve provenance even when the source model is not part of
+                # the destination project. Link it in SQLite when it is present.
+                metrics["training/source_model_id"]=training_source_id
+            parent_model_id=training_source_id if training_source_id in existing else None
             project.register_structure_model(
                 local,
                 str((destination / "model.pth").relative_to(project.root)),
                 str((destination / "model.json").relative_to(project.root)),
-                str(parent_model_id) if parent_model_id else None,
+                parent_model_id,
                 current_digest,
                 provider_id,
                 metrics,
@@ -1557,7 +1115,7 @@ def import_structure_model_package(project, source, *, registry=None, parent_mod
                 training_specimen_count=int(stats.get("training_specimen_count") or 0),
                 validation_specimen_count=int(stats.get("validation_specimen_count") or 0),
                 activate=False,
-                trait_scheme=imported_scheme,
-                orientation_policy=manifest.get("orientation_policy"),
+                trait_scheme=None if multires_candidate else imported_scheme,
+                orientation_policy=None if multires_candidate else manifest.get("orientation_policy"),
             )
     return local

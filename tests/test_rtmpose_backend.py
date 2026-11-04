@@ -1,4 +1,4 @@
-import json, os, shutil, sys, tempfile, unittest
+import json, os, shutil, subprocess, sys, tempfile, unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -26,8 +26,12 @@ class RTMPoseBackendTests(unittest.TestCase):
   x=ResizeTransform(1000,200,512,256)
   for point in ((0,0),(1000,200),(500,100)):self.assertAlmostEqual(x.inverse(*x.forward(*point))[0],point[0]);self.assertAlmostEqual(x.inverse(*x.forward(*point))[1],point[1])
  def test_08_main_import_does_not_import_ml(self):
-  import app.rtmpose_backend
-  self.assertFalse(any(name=='torch' or name.startswith('mmpose') for name in sys.modules))
+  repo=Path(__file__).resolve().parents[1]
+  result=subprocess.run(
+   [sys.executable,'-c',"import app.rtmpose_backend,sys; assert not any(name=='torch' or name.startswith('mmpose') for name in sys.modules)"],
+   cwd=repo,text=True,capture_output=True,check=False,
+  )
+  self.assertEqual(0,result.returncode,result.stderr)
  def test_09_missing_runtime_is_controlled(self):
   b=RTMPoseBackend(RTMPoseModelSpec('m','h',self.t/'c',self.t/'k'),runtime_python=self.t/'missing.exe')
   with self.assertRaises(RTMPoseRuntimeError):b._invoke('predict',{})
