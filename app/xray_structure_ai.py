@@ -472,6 +472,8 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
     # A trained candidate must not replace a working model merely because
     # its own validation loss improved. Compare both on untouched plates.
     if active_before:
+        if progress:
+            progress("MODEL CHECK", "Comparing the new and previous models on shared validation images…")
         try:
             decision = _auto_select_trained_structure_model(project, active_before, model_id, registry=registry)
         except Exception as exc:
