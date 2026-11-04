@@ -92,5 +92,54 @@ class XRayAutomaticSelectionTests(unittest.TestCase):
         self.assertFalse(choose_better_model(old, new)[0])
 
 
+    def test_auto_activation_only_after_paired_success(self):
+        from unittest.mock import patch
+        from app.xray_structure_ai import _auto_select_trained_structure_model
+        project = FakeProject()
+        project.scheme = {}
+        with (
+            patch("app.xray_structure_ai._scheme_matches_model", return_value=True),
+            patch("app.xray_structure_ai.compare_structure_model_to_human",
+                  side_effect=[report(10), report(13)]) as compare,
+            patch.object(project, "activate_structure_model", create=True) as activate,
+        ):
+            outcome = _auto_select_trained_structure_model(project, project.models[0], "new")
+        self.assertEqual("selected", outcome["decision"])
+        self.assertEqual(2, compare.call_count)
+        self.assertEqual("new", activate.call_args.args[0])
+
+    def test_failed_comparison_preserves_active_model(self):
+        from unittest.mock import patch
+        from app.xray_structure_ai import _auto_select_trained_structure_model
+        project = FakeProject()
+        project.scheme = {}
+        incomplete = report(13)
+        incomplete["failures"] = [{"specimen_id": "spec-1", "reason": "error"}]
+        with (
+            patch("app.xray_structure_ai._scheme_matches_model", return_value=True),
+            patch("app.xray_structure_ai.compare_structure_model_to_human",
+                  side_effect=[report(10), incomplete]),
+            patch.object(project, "activate_structure_model", create=True) as activate,
+        ):
+            outcome = _auto_select_trained_structure_model(project, project.models[0], "new")
+        self.assertEqual("kept", outcome["decision"])
+        activate.assert_not_called()
+
+    def test_no_eligible_holdout_skips_inference(self):
+        from unittest.mock import patch
+        from app.xray_structure_ai import _auto_select_trained_structure_model
+        project = FakeProject(overlapping_train=True)
+        project.scheme = {}
+        with (
+            patch("app.xray_structure_ai._scheme_matches_model", return_value=True),
+            patch("app.xray_structure_ai.compare_structure_model_to_human") as compare,
+            patch.object(project, "activate_structure_model", create=True) as activate,
+        ):
+            outcome = _auto_select_trained_structure_model(project, project.models[0], "new")
+        self.assertEqual("kept", outcome["decision"])
+        compare.assert_not_called()
+        activate.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
