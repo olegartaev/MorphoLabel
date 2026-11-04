@@ -21,6 +21,7 @@ from app.ui.photo_list_panel import DEFAULT_SHOW_EXCLUDED, filtered_photo_indice
 from app.ui.tooltips import Tooltip
 from app.ui.tk_lifecycle import trace_for_widget, unbind_callback
 from .xray_crop import oriented_crop
+from .xray_component_selection import structure_families
 from .xray_specimen_identity import specimen_display_id
 from .xray_icons import VISIBILITY_ICON_SIZE, tk_visibility_icon, tk_xray_icon
 from .xray_structure_ai import (
@@ -1361,10 +1362,37 @@ class XRayStructureWorkspace:
         export_button=ttk.Button(transfer,text="Export selected…",command=export_model,state="disabled")
         export_button.pack(side="left",padx=(5,0))
         selection_buttons.append(export_button)
-        tree.bind("<<TreeviewSelect>>",lambda _e:[button.configure(state="normal" if selected() else "disabled") for button in selection_buttons])
+        detail_var=tk.StringVar(master=dialog,value="")
+        def show_model_sources():
+            model=next((item for item in self.project.structure_models() if item["model_id"]==selected()),None)
+            if model is None:
+                detail_var.set("")
+                return
+            routes=(model.get("metrics") or {}).get("component_routes") or {}
+            if not routes:
+                detail_var.set("Standard model · one method for all marker types")
+                return
+            names={item["id"]:item.get("name") or item["id"] for item in self.project.scheme.get("structures",())}
+            parts=[]
+            for family in structure_families(self.project.scheme):
+                source=str(routes.get(family[0]) or model["model_id"])
+                brief=source.split("_")[-1]
+                label=names.get(family[0],family[0])
+                if len(family)>1:label+=" + references"
+                parts.append(f"{label}: {brief}")
+            detail_var.set("Combined sources · "+"  |  ".join(parts))
+        def on_selection(_event=None):
+            for button in selection_buttons:
+                button.configure(state="normal" if selected() else "disabled")
+            show_model_sources()
+        tree.bind("<<TreeviewSelect>>",on_selection)
         tree.bind("<Double-1>",lambda _e:activate())
-        ttk.Label(frame,text="Model files contain trained AI and its settings. Images and annotations stay in the project.",style="Muted.TLabel").grid(row=3,column=0,sticky="w",pady=(10,0))
+        ttk.Label(frame,textvariable=detail_var,style="Muted.TLabel",
+                  wraplength=max(400,model_width-60)).grid(row=3,column=0,columnspan=2,sticky="w",pady=(8,0))
+        ttk.Label(frame,text="Model files contain trained AI and its settings. Images and annotations stay in the project.",
+                  style="Muted.TLabel").grid(row=4,column=0,sticky="w",pady=(4,0))
         reload((self.project.active_structure_model() or {}).get("model_id"))
+        show_model_sources()
 
     def _show_structure_model_comparison(self,report,parent=None):
         summary=dict(report.get("summary") or {});traits=list(report.get("traits") or ());structures=list(report.get("structures") or ())
