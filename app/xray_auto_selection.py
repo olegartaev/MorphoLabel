@@ -11,13 +11,14 @@ MIN_COMMON_SPECIMENS = 12
 MIN_COMMON_PLATES = 3
 
 
-def common_validation_specimens(project, previous, candidate):
+def common_validation_specimens(project, previous, candidate, extra_models=()):
     """Return common verified validation IDs, excluding training plates of all ancestors."""
-    if not previous or not candidate or previous.get("schema_digest") != candidate.get("schema_digest"):
+    roots=(previous,candidate,*extra_models)
+    if not all(roots) or len({model.get('schema_digest') for model in roots}) != 1:
         return (), "Models use different scientific schemes."
     by_id = {item["model_id"]: item for item in project.structure_models()}
     models_to_check = set()
-    for root in (previous, candidate):
+    for root in roots:
         seen = set()
         model = root
         while model:
@@ -43,11 +44,13 @@ def common_validation_specimens(project, previous, candidate):
                     training_plates.add(project.specimen(entry["specimen_id"])["image_id"])
                 except (KeyError, ValueError):
                     return (), "Training specimen metadata is missing."
-    old_val = {str(x["specimen_id"]) for x in memberships[previous["model_id"]] if x["split"] == "val"}
-    new_val = {str(x["specimen_id"]) for x in memberships[candidate["model_id"]] if x["split"] == "val"}
+    common_val = None
+    for root in roots:
+        values = {str(x['specimen_id']) for x in memberships[root['model_id']] if x['split'] == 'val'}
+        common_val = values if common_val is None else common_val & values
     safe = []
     plate_ids = set()
-    for specimen_id in sorted(old_val & new_val):
+    for specimen_id in sorted(common_val or ()):
         try:
             plate = project.specimen(specimen_id)["image_id"]
             run = project.annotation_run(specimen_id, 1, "human", False)
