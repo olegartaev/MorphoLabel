@@ -628,48 +628,38 @@ def _flatten_prediction(groups):
     return rows
 
 
-def predict_structures(project, specimen_ids=None, count=None, cancel=None, progress=None, model=None, pass_no=1, allow_verified=False, *, registry=None):
-    model = model or project.active_structure_model()
-    if not model:
-        raise XRayStructureAIError("Train or import an X-ray structure model before prediction.")
-    current_digest = structure_schema_digest(project.scheme)
-    if not _scheme_matches_model(project,model):
-        raise XRayStructureAIError("The active structure model is incompatible with the current X-ray structure scheme.")
-    _structure_provider_spec(model.get("backend") or STRUCTURE_BACKEND, registry)
-    pass_no = int(pass_no)
-    candidates = list(project.structure_prediction_candidate_ids(pass_no))
-    if specimen_ids is not None:
-        if allow_verified:
-            allowed={str(row["specimen_id"]) for row in project.structure_specimens(pass_no)}
-        else:
-            allowed=set(candidates)
-        ids=[str(value) for value in specimen_ids if str(value) in allowed]
-    else:
-        ids = project.select_structure_prediction_ids(
-            len(candidates) if count is None else max(1, int(count)),pass_no=pass_no
+def _registered_structure_sources(project, model):
+    """Resolve immutable source identities for a standard or combined model."""
+    by_id = {item["model_id"]: item for item in project.structure_models()}
+    if not _scheme_matches_model(project, model):
+        raise XRayStructureAIError("The active structure model uses a different scientific scheme.")
+    try:
+        routes = validated_routes(
+            project.scheme, model["model_id"],
+            (model.get("metrics") or {}).get("component_routes") or {},
+            by_id,
         )
-    if not ids:
-        return {"success": [], "failures": [], "model_id": model["model_id"]}
-    backend = backend_for_structure_model(project, model, registry=registry)
-    settings = structure_performance_settings()["inference"]
-    checkpoint = project.root / str(model["path"])
-    metadata = project.root / str(model["metadata_path"])
-    if not checkpoint.is_file() or not metadata.is_file():
-        raise XRayStructureAIError("The active structure model artifact is incomplete.")
-    success = []
+    except ValueError as exc:
+        raise XRayStructureAIError(str(exc)) from exc
+    sources = {ident: by_id[ident] for ident in sorted(set(routes.values()))}
+    if any(not _scheme_matches_model(project, source) for source in sources.values()):
+        raise XRayStructureAIError("A combined structure source uses an incompatible scientific scheme.")
+    return sources, routes
+
+
+def _predict_prepared_sources(project, sources, prepared, settings, *, registry=None, cancel=None):
+    """One image preparation, one batched inference per distinct source model."""
+    by_source = {}
     failures = []
-    with tempfile.TemporaryDirectory(prefix="morpholabel_xray_structure_predict_") as scratch_name:
-        scratch = Path(scratch_name)
-        prepared = []
-        for index, specimen_id in enumerate(ids, 1):
-            if cancel is not None and cancel.is_set():
-                break
-            try:
-                path = _prediction_image(project, specimen_id, scratch / f"{index:06d}.png")
-                prepared.append((specimen_id, path))
-            except Exception as exc:
-                failures.append({"specimen_id": specimen_id, "reason": str(exc)})
-        batch_size = max(1, int(settings.get("batch_size") or 1))
+    final_batch_size = max(1, int(settings.get("batch_size") or 1))
+    for source_id, source in sources.items():
+        if cancel is not None and cancel.is_set():
+            break
+        backend = backend_for_structure_model(project, source, registry=registry)
+        checkpoint = project.root / str(source["path"])
+        metadata = project.root / str(source["metadata_path"])
+        batch_size = final_batch_size
+        output = {}
         index = 0
         while index < len(prepared):
             if cancel is not None and cancel.is_set():
@@ -685,29 +675,85 @@ def predict_structures(project, specimen_ids=None, count=None, cancel=None, prog
             except Exception as exc:
                 if is_cuda_oom(exc) and batch_size > 1:
                     batch_size = max(1, batch_size // 2)
-                    if progress:
-                        progress(index, len(prepared), f"GPU memory limit; retrying with batch {batch_size}")
                     continue
                 for specimen_id, _path in chunk:
-                    failures.append({"specimen_id": specimen_id, "reason": str(exc)})
+                    failures.append({"specimen_id": specimen_id, "model_id": source_id, "reason": str(exc)})
                 index += len(chunk)
                 continue
             returned = list(result.get("results") or ())
             for offset, (specimen_id, _path) in enumerate(chunk):
+                if offset >= len(returned):
+                    failures.append({"specimen_id": specimen_id, "model_id": source_id,
+                                     "reason": "Incomplete prediction batch."})
+                    continue
                 try:
-                    if offset >= len(returned):
-                        raise RuntimeError("Structure model returned an incomplete prediction batch.")
-                    points = _flatten_prediction(returned[offset].get("structures") or ())
-                    saved = project.seed_structure_predictions(
-                        specimen_id, points, model["model_id"], pass_no=pass_no,
-                        allow_verified=bool(allow_verified),
-                    )
-                    success.append({"specimen_id": specimen_id, "saved": saved})
-                except Exception as exc:
-                    failures.append({"specimen_id": specimen_id, "reason": str(exc)})
-                if progress:
-                    progress(index + offset + 1, len(prepared), specimen_id)
+                    output[specimen_id] = _comparison_prediction_rows(returned[offset].get("structures") or ())
+                except (ValueError, TypeError, KeyError) as exc:
+                    failures.append({"specimen_id": specimen_id, "model_id": source_id, "reason": str(exc)})
             index += len(chunk)
+        by_source[source_id] = output
+        final_batch_size = min(final_batch_size, batch_size)
+    return by_source, failures, final_batch_size
+
+
+def predict_structures(project, specimen_ids=None, count=None, cancel=None, progress=None,
+                       model=None, pass_no=1, allow_verified=False, *, registry=None):
+    """Predict via the active model's verified structure routing; save one draft per fish."""
+    model = model or project.active_structure_model()
+    if not model:
+        raise XRayStructureAIError("Train or import an X-ray structure model before prediction.")
+    sources, routes = _registered_structure_sources(project, model)
+    pass_no = int(pass_no)
+    candidates = list(project.structure_prediction_candidate_ids(pass_no))
+    if specimen_ids is not None:
+        allowed = ({str(row["specimen_id"]) for row in project.structure_specimens(pass_no)}
+                   if allow_verified else set(candidates))
+        ids = [str(value) for value in specimen_ids if str(value) in allowed]
+    else:
+        ids = project.select_structure_prediction_ids(
+            len(candidates) if count is None else max(1, int(count)), pass_no=pass_no
+        )
+    if not ids:
+        return {"success": [], "failures": [], "model_id": model["model_id"]}
+    settings = structure_performance_settings()["inference"]
+    success, failures = [], []
+    with tempfile.TemporaryDirectory(prefix="morpholabel_xray_structure_predict_") as scratch_name:
+        scratch = Path(scratch_name)
+        prepared = []
+        for index, specimen_id in enumerate(ids, 1):
+            if cancel is not None and cancel.is_set():
+                break
+            try:
+                prepared.append((specimen_id, _prediction_image(
+                    project, specimen_id, scratch / f"{index:06d}.png")))
+            except Exception as exc:
+                failures.append({"specimen_id": specimen_id, "reason": str(exc)})
+        by_source, source_failures, batch_size = _predict_prepared_sources(
+            project, sources, prepared, settings, registry=registry, cancel=cancel,
+        )
+        failures.extend(source_failures)
+        for index, (specimen_id, _path) in enumerate(prepared, 1):
+            if cancel is not None and cancel.is_set():
+                break
+            if any(specimen_id not in predictions for predictions in by_source.values()):
+                if not any(row["specimen_id"] == specimen_id for row in failures):
+                    failures.append({"specimen_id": specimen_id, "reason": "Component prediction missing."})
+                continue
+            try:
+                points = combine_marker_rows(
+                    project.scheme,
+                    {source_id: results[specimen_id] for source_id, results in by_source.items()},
+                    routes,
+                )
+                saved = project.seed_structure_predictions(
+                    specimen_id, points, model["model_id"], pass_no=pass_no,
+                    allow_verified=bool(allow_verified),
+                )
+                success.append({"specimen_id": specimen_id, "saved": saved})
+            except Exception as exc:
+                failures.append({"specimen_id": specimen_id, "reason": str(exc)})
+            if progress:
+                progress(index, len(prepared), specimen_id)
     return {
         "success": success, "failures": failures, "model_id": model["model_id"],
         "inference_batch_size": batch_size,
