@@ -342,6 +342,64 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(XRayStructurePackageError,"routing"):
             import_structure_model_package(self.project,incompatible)
 
+    def test_multires_model_package_preserves_auxiliary_weights_and_routes(self):
+        import hashlib
+        model_id="multires_portability_test"
+        digest=structure_schema_digest(self.project.scheme)
+        folder=self.project.models_root/model_id
+        folder.mkdir(parents=True)
+        weights=b"primary-test-weights"
+        native=b"native-test-weights"
+        detail=b"detail-test-weights"
+        files={"model.pth":weights,"native.pth":native,"detail.pth":detail}
+        for name,data in files.items():
+            (folder/name).write_bytes(data)
+        metadata={
+            "format_version":1,"backend":"resnet18_heatmap_v1",
+            "model_id":model_id,"schema_digest":digest,
+            "input_size":[768,256],"output_stride":2,
+            "structures":[{"id":s["id"],"name":s["name"],"repeated":bool(s["repeated"])}
+                          for s in self.project.scheme["structures"]],
+            "inference_pipeline":{
+                "name":"multires_heatmap_v1","version":1,"mode":"tiled_native",
+                "native":{"checkpoint":"native.pth","sha256":hashlib.sha256(native).hexdigest(),
+                          "input_size":[1536,512]},
+                "detail":{"checkpoint":"detail.pth","sha256":hashlib.sha256(detail).hexdigest(),
+                          "input_size":[768,384]},
+                "retain_detail_structures":["preanal_pterygiophore"],
+            },
+        }
+        (folder/"model.json").write_text(json.dumps(metadata),encoding="utf-8")
+        self.project.register_structure_model(
+            model_id,str((folder/"model.pth").relative_to(self.project.root)),
+            str((folder/"model.json").relative_to(self.project.root)),
+            None,digest,"resnet18_heatmap_v1",{},(),activate=False,
+        )
+        archive=self.root/"hybrid-transfer.zip"
+        export_structure_model_package(self.project,archive,model_id)
+        with zipfile.ZipFile(archive) as z:
+            self.assertEqual(
+                {"manifest.json","artifacts/model.pth","artifacts/model.json",
+                 "artifacts/native.pth","artifacts/detail.pth"},set(z.namelist()))
+        same=import_structure_model_package(self.project,archive)
+        self.assertNotEqual(model_id,same)
+        imported=next(m for m in self.project.structure_models() if m["model_id"]==same)
+        self.assertEqual(native,(self.project.root/imported["metadata_path"]).parent.joinpath("native.pth").read_bytes())
+        restored=json.loads((self.project.root/imported["metadata_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(["preanal_pterygiophore"],
+                         restored["inference_pipeline"]["retain_detail_structures"])
+        with zipfile.ZipFile(archive) as z:
+            manifest=json.loads(z.read("manifest.json"))
+            content={name:z.read(name) for name in z.namelist()}
+        content["artifacts/native.pth"]=b"altered"
+        corrupt=self.root/"hybrid-transfer-corrupt.zip"
+        with zipfile.ZipFile(corrupt,"w") as z:
+            for name,data in content.items(): z.writestr(name,data)
+        from app.xray_structure_ai import XRayStructurePackageError
+        with self.assertRaisesRegex(XRayStructurePackageError,"Checksum"):
+            import_structure_model_package(self.project,corrupt)
+
+
     def test_portable_structure_package_round_trip_has_no_training_membership_or_paths(self):
         digest=structure_schema_digest(self.project.scheme);model_id="xray_structure_model_v001"
         directory=self.project.models_root/model_id;directory.mkdir(parents=True)

@@ -81,6 +81,26 @@ class ComponentRoutingTests(unittest.TestCase):
             self.assertEqual("old", selection["routes"][name])
         self.assertEqual(24, selection["report"]["summary"]["all_traits_correct_specimens"])
 
+    def test_scientific_native_detail_calibration_keeps_linked_markers_together(self):
+        from app.native_structure_bootstrap import choose_family_detail_policy
+        cases=[]
+        for i in range(24):
+            cases.append({
+                "specimen_id": f"example-{i}", "image_id": f"plate-{i//4}",
+                "human": self.sample_points(), "visibility": {}, "crop_size": (900,300),
+                "native": self.sample_points(ptery=3 if i<5 else 2),
+                "detail": self.sample_points(ptery=2, vertebra=2),
+            })
+        selected, evidence=choose_family_detail_policy(self.scheme,cases)
+        self.assertIn("preanal_pterygiophore",selected)
+        self.assertNotIn("vertebra",selected)
+        self.assertNotIn("first_caudal",selected)
+        self.assertNotIn("last_predorsal",selected)
+        self.assertEqual("development_calibration_not_independent",evidence["status"])
+        self.assertEqual(24,evidence["selected_all_correct"])
+        insufficient,_=choose_family_detail_policy(self.scheme,cases[:8])
+        self.assertEqual([],insufficient)
+
     def test_no_evidence_keeps_previous_routes(self):
         cases = [{"specimen_id": "synthetic-0", "human": self.sample_points(),
                   "visibility": {}, "crop_size": (900, 300)}]
