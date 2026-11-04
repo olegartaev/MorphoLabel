@@ -175,9 +175,6 @@ def predict_one(source_path,primary_model,metadata,metadata_path,device,runner,*
         verify_component_files(metadata,Path(metadata_path).parent)
     pipeline=metadata["inference_pipeline"]
     with Image.open(source_path) as im:source=im.convert("RGB")
-    canvas,geo=runner._letterbox(source,tuple(metadata["input_size"]))
-    with torch.no_grad():
-        base=primary_model(runner._tensor(canvas)[None].to(device)).float()
     kept=set(pipeline.get("retain_detail_structures",()))
     # An all-Native policy needs no Detail tiles at inference time. During
     # training calibration components_out is provided and both are measured.
@@ -190,6 +187,9 @@ def predict_one(source_path,primary_model,metadata,metadata_path,device,runner,*
         with torch.no_grad():
             native_logits=native(runner._tensor(native_canvas)[None].to(device)).float()
         return runner._decode_logits(native_logits,ng,metadata)
+    canvas,geo=runner._letterbox(source,tuple(metadata["input_size"]))
+    with torch.no_grad():
+        base=primary_model(runner._tensor(canvas)[None].to(device)).float()
     detail_spec=components["detail"]
     detail=(component_models["detail"] if component_models is not None else
             primary_model if detail_spec["checkpoint"]=="model.pth" and not detail_spec.get("state_prefix") else

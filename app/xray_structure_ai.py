@@ -344,7 +344,7 @@ def prepare_structure_training_dataset(project, workspace_root, seed=42, *, back
     }
 
 
-def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None, *, backend_id=None, registry=None):
+def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None, *, backend_id=None, registry=None, device_override=None):
     active_before = project.active_structure_model()
     if active_before and backend_id is None and (parent_model_id is None or parent_model_id == active_before["model_id"]):
         if progress:
@@ -381,7 +381,13 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
         raise XRayStructureAIError("The parent model is incompatible with the selected structure provider.")
     backend = _structure_backend(spec, progress)
     performance = structure_performance_settings()
-    settings = performance["training"]
+    settings = dict(performance["training"])
+    if device_override is not None:
+        if device_override not in {"cpu", "cuda:0"}:
+            raise ValueError("Unsupported structure training device")
+        settings.update(device=device_override, batch_size=1, workers=0,
+                        persistent_workers=False, mixed_precision=device_override.startswith("cuda"),
+                        pin_memory=device_override.startswith("cuda"))
     target = project.models_root / model_id
     if target.exists():
         raise XRayStructureAIError(f"Model folder already exists: {target}")

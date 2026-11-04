@@ -1223,6 +1223,19 @@ class XRayStructureWorkspace:
         if self.project.annotation_summary(1)["verified"]<8:
             messagebox.showinfo("Train Structure AI","Verify at least 8 specimens from at least 3 source X-rays first.",parent=self.root)
             return
+        # A current hybrid already trained on every verified specimen does not
+        # need another expensive identical two-branch run.
+        if source_model_id and is_universal_multires_model(self.project,source_model_id):
+            used={str(row["specimen_id"]) for row in self.project.structure_model_membership(source_model_id)}
+            eligible={str(row["specimen_id"]) for row in self.project.structure_specimens(1)
+                      if str(row.get("annotation_status") or "")=="verified"}
+            if used and eligible and not (eligible-used):
+                messagebox.showinfo(
+                    "Train Structure AI",
+                    "No new verified specimens since this model was trained. "
+                    "You can already use it in Predict; training it again would repeat the same work.",
+                    parent=self.root)
+                return
         # Generate a verified candidate package behind the scenes. Users can
         # separately export any saved model through Models. Keep the ZIP on
         # import failure for recovery; otherwise remove the temporary files.
@@ -1266,7 +1279,7 @@ class XRayStructureWorkspace:
                                 label.configure(text=(f"Verified specimens: {info['training_specimens']} train / "
                                     f"{info['validation_specimens']} validation; source plates: "
                                     f"{info['train_plates']} / {info['val_plates']}.\n"
-                                    "Training the active model..."))
+                                    "Training a new model candidate; the active model is unchanged..."))
                         except (ValueError,KeyError,TypeError):
                             if event[1]:label.configure(text=event[1][:700])
                     elif event[0]=="error":
@@ -1486,19 +1499,34 @@ class XRayStructureWorkspace:
             if model is None:
                 detail_var.set("")
                 return
+            all_models={item["model_id"]:item for item in self.project.structure_models()}
             routes=(model.get("metrics") or {}).get("component_routes") or {}
-            if not routes:
-                detail_var.set("Standard model · one method for all marker types")
-                return
             names={item["id"]:item.get("name") or item["id"] for item in self.project.scheme.get("structures",())}
             parts=[]
             for family in structure_families(self.project.scheme):
-                source=str(routes.get(family[0]) or model["model_id"])
-                brief=source.split("_")[-1]
+                source_id=str(routes.get(family[0]) or model["model_id"])
+                source=all_models.get(source_id,model)
+                description=source_id.split("_")[-1]
+                try:
+                    metadata=json.loads((self.project.root/str(source["metadata_path"])).read_text(encoding="utf-8"))
+                    pipeline=metadata.get("inference_pipeline") or {}
+                    if pipeline.get("mode")=="tiled_native":
+                        kept=set(pipeline.get("retain_detail_structures") or ())
+                        method="ROI Detail" if family[0] in kept else "Native Full"
+                    elif pipeline.get("mode")=="tiled":
+                        method="ROI Detail"
+                    else:
+                        method="Standard"
+                except (OSError, ValueError, KeyError, TypeError):
+                    method="Unknown"
                 label=names.get(family[0],family[0])
-                if len(family)>1:label+=" + references"
-                parts.append(f"{label}: {brief}")
-            detail_var.set("Combined sources · "+"  |  ".join(parts))
+                if len(family)>1:label+=" + linked markers"
+                if routes:
+                    parts.append(f"{label}: {description} / {method}")
+                else:
+                    parts.append(f"{label}: {method}")
+            detail_var.set("  |  ".join(parts))
+
         def on_selection(_event=None):
             for button in selection_buttons:
                 button.configure(state="normal" if selected() else "disabled")
