@@ -65,7 +65,29 @@ def choose_family_detail_policy(scheme, cases):
                 "visibility": case["visibility"], "crop_size": case["crop_size"],
                 "predicted": combine_marker_rows(scheme, sources, assigned),
             })
-        return summarize_structure_ai_human_comparison(scheme, rows)
+        report = summarize_structure_ai_human_comparison(scheme, rows)
+        # The stable release comparison returns aggregate metrics but no
+        # specimen_outcomes. Build the paired outcomes here, without changing
+        # the working comparison code or treating partly observed fish as
+        # completely correct.
+        outcomes = []
+        declared = len(scheme.get("traits") or ())
+        for specimen in rows:
+            single = summarize_structure_ai_human_comparison(scheme, [specimen])
+            traits = single["traits"]
+            evaluable = bool(declared) and len(traits) == declared and all(
+                int(trait.get("evaluated") or 0) == 1 and
+                trait.get("correct") is not None for trait in traits
+            )
+            correct = evaluable and all(int(trait["correct"]) == 1 for trait in traits)
+            outcomes.append({"specimen_id": str(specimen["specimen_id"]),
+                             "evaluable": evaluable, "correct": correct})
+        report["specimen_outcomes"] = outcomes
+        report["summary"]["all_traits_evaluable_specimens"] = sum(
+            row["evaluable"] for row in outcomes)
+        report["summary"]["all_traits_correct_specimens"] = sum(
+            row["correct"] for row in outcomes)
+        return report
 
     def rank(report):
         s = report["summary"]

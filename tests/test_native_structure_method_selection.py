@@ -46,6 +46,18 @@ class NativeDetailStandardCalibrationTests(unittest.TestCase):
         self.assertFalse(set(chosen["standard"]) & set(chosen["detail"]))
         self.assertEqual(24,evidence["selected_all_correct"])
 
+    def test_incomplete_human_traits_are_not_counted_as_fully_correct(self):
+        cases=self.make_cases()
+        # The pterygiophore count was not fully observed by the expert.
+        # Other correctly predicted traits must not turn this into an
+        # apparently fully correct seven-trait specimen.
+        for case in cases:
+            case["visibility"]={"preanal_pterygiophore":"partial"}
+        chosen,evidence=choose_family_detail_policy(self.scheme,cases)
+        self.assertEqual(0,evidence["baseline_all_correct"])
+        self.assertEqual(0,evidence["selected_all_correct"])
+        self.assertFalse(set(chosen["detail"]) & set(chosen["standard"]))
+
     def test_insufficient_examples_keeps_native_instead_of_unproven_selection(self):
         chosen,evidence=choose_family_detail_policy(self.scheme,self.make_cases()[:8])
         self.assertEqual({"standard":[],"detail":[]},chosen)
