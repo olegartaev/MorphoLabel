@@ -217,7 +217,8 @@ def run(project_copy,source_model,output,*,epochs_native=18,epochs_detail=18,
         selected,calibration=select_detail_channels(
             original_meta,data,buffer.getvalue(),detail_new,manifest,scratch,device,
             scheme=project.scheme)
-        original_meta["inference_pipeline"]["retain_detail_structures"]=selected
+        original_meta["inference_pipeline"]["retain_detail_structures"]=selected["detail"]
+        original_meta["inference_pipeline"]["retain_standard_structures"]=selected["standard"]
         provenance["channel_selection_validation"]=calibration
         result=new_package(original_manifest,original_meta,data,
                            detail_new,buffer.getvalue(),output,

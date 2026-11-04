@@ -92,14 +92,15 @@ class ComponentRoutingTests(unittest.TestCase):
                 "detail": self.sample_points(ptery=2, vertebra=2),
             })
         selected, evidence=choose_family_detail_policy(self.scheme,cases)
-        self.assertIn("preanal_pterygiophore",selected)
-        self.assertNotIn("vertebra",selected)
-        self.assertNotIn("first_caudal",selected)
-        self.assertNotIn("last_predorsal",selected)
+        self.assertIn("preanal_pterygiophore",selected["detail"])
+        self.assertNotIn("vertebra",selected["detail"])
+        self.assertNotIn("first_caudal",selected["detail"])
+        self.assertNotIn("last_predorsal",selected["detail"])
+        self.assertFalse(set(selected["detail"]) & set(selected["standard"]))
         self.assertEqual("development_calibration_not_independent",evidence["status"])
         self.assertEqual(24,evidence["selected_all_correct"])
         insufficient,_=choose_family_detail_policy(self.scheme,cases[:8])
-        self.assertEqual([],insufficient)
+        self.assertEqual({"detail":[],"standard":[]},insufficient)
 
     def test_no_evidence_keeps_previous_routes(self):
         cases = [{"specimen_id": "synthetic-0", "human": self.sample_points(),

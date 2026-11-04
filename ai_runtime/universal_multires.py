@@ -83,9 +83,14 @@ def pipeline_components(metadata):
     if type(w) not in (int,float) or not isfinite(w) or not 0<=w<=2:
         raise ValueError("Invalid detail fusion weight")
     keep=p.get("retain_detail_structures",[])
+    standard=p.get("retain_standard_structures",[])
     if not isinstance(keep,list) or len(keep)!=len(set(keep)) or set(keep)-set(ids):
         raise ValueError("Invalid structure retention policy")
-    if keep and p["mode"]!="tiled_native":
+    if not isinstance(standard,list) or len(standard)!=len(set(standard)) or set(standard)-set(ids):
+        raise ValueError("Invalid standard structure retention policy")
+    if set(keep)&set(standard):
+        raise ValueError("The same structure cannot use two inference methods")
+    if (keep or standard) and p["mode"]!="tiled_native":
         raise ValueError("Retention requires native component")
     paths={}
     for c in components.values():
@@ -176,9 +181,10 @@ def predict_one(source_path,primary_model,metadata,metadata_path,device,runner,*
     pipeline=metadata["inference_pipeline"]
     with Image.open(source_path) as im:source=im.convert("RGB")
     kept=set(pipeline.get("retain_detail_structures",()))
+    kept_standard=set(pipeline.get("retain_standard_structures",()))
     # An all-Native policy needs no Detail tiles at inference time. During
     # training calibration components_out is provided and both are measured.
-    if pipeline["mode"]=="tiled_native" and not kept and components_out is None:
+    if pipeline["mode"]=="tiled_native" and not kept and not kept_standard and components_out is None:
         native_spec=components["native"]
         native=(component_models["native"] if component_models is not None else
                 primary_model if native_spec["checkpoint"]=="model.pth" and not native_spec.get("state_prefix") else
@@ -190,6 +196,19 @@ def predict_one(source_path,primary_model,metadata,metadata_path,device,runner,*
     canvas,geo=runner._letterbox(source,tuple(metadata["input_size"]))
     with torch.no_grad():
         base=primary_model(runner._tensor(canvas)[None].to(device)).float()
+    standard=(runner._decode_logits(base,geo,metadata)
+              if kept_standard or components_out is not None else None)
+    if pipeline["mode"]=="tiled_native" and not kept and components_out is None:
+        native_spec=components["native"]
+        native=(component_models["native"] if component_models is not None else
+                _load_component(native_spec,Path(metadata_path).parent,runner,len(metadata["structures"]),device))
+        native_canvas,ng=runner._letterbox(source,tuple(native_spec["input_size"]))
+        with torch.no_grad():
+            native_logits=native(runner._tensor(native_canvas)[None].to(device)).float()
+        primary=runner._decode_logits(native_logits,ng,metadata)
+        by_standard={item["structure_id"]:item for item in standard}
+        return [by_standard[row["structure_id"]] if row["structure_id"] in kept_standard
+                else row for row in primary]
     detail_spec=components["detail"]
     detail=(component_models["detail"] if component_models is not None else
             primary_model if detail_spec["checkpoint"]=="model.pth" and not detail_spec.get("state_prefix") else
@@ -220,6 +239,9 @@ def predict_one(source_path,primary_model,metadata,metadata_path,device,runner,*
     finally:
         if component_models is None and native is not primary_model:del native
     kept=set(pipeline.get("retain_detail_structures",()))
-    if components_out is not None:components_out.update(native=primary,detail=refined)
+    if components_out is not None:components_out.update(native=primary,detail=refined,standard=standard)
     by_id={g["structure_id"]:g for g in refined}
-    return [by_id[g["structure_id"]] if g["structure_id"] in kept else g for g in primary]
+    by_standard={g["structure_id"]:g for g in (standard or ())}
+    return [by_standard[g["structure_id"]] if g["structure_id"] in kept_standard
+            else by_id[g["structure_id"]] if g["structure_id"] in kept else g
+            for g in primary]

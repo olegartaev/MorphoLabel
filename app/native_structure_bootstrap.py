@@ -39,11 +39,11 @@ def initialize_parent(project, source, scratch, *, seed, device, initial_epochs=
 
 
 def choose_family_detail_policy(scheme, cases):
-    """Calibrate a single model's Native/Detail routes on its development validation data.
+    """Calibrate Standard/Native/Detail routes on development validation data.
 
     Evaluate the *final scientific traits* and retain dependent marker families
     together. Nothing here is independent test evidence or model promotion.
-    Both component predictions are reused; no GPU inference occurs in this loop.
+    All predictions are reused; no GPU inference occurs in this search.
     """
     from itertools import product
     from .xray_component_selection import structure_families, combine_marker_rows
@@ -53,13 +53,13 @@ def choose_family_detail_policy(scheme, cases):
     specimens = len(cases)
     plates = len({str(row["image_id"]) for row in cases})
     if specimens < 12 or plates < 3 or not families:
-        return [], {"status": "insufficient_development_validation",
+        return {"detail": [], "standard": []}, {"status": "insufficient_development_validation",
                     "specimens": specimens, "plates": plates}
     def evaluate(modes):
         assigned = {sid: mode for family, mode in zip(families, modes) for sid in family}
         rows = []
         for case in cases:
-            sources = {"native": case["native"], "detail": case["detail"]}
+            sources = {method: case[method] for method in ("standard", "native", "detail")}
             rows.append({
                 "specimen_id": case["specimen_id"], "human": case["human"],
                 "visibility": case["visibility"], "crop_size": case["crop_size"],
@@ -78,10 +78,11 @@ def choose_family_detail_policy(scheme, cases):
     original = {row["specimen_id"]: row for row in baseline["specimen_outcomes"]}
     original_traits = {row["trait_id"]: row for row in baseline["traits"]}
     # Exact search is bounded. Large custom schemes use one-family improvements.
-    choices = (product(("native", "detail"), repeat=len(families))
-               if len(families) <= 8 else
-               (tuple("detail" if j == i else "native" for j in range(len(families)))
-                for i in range(len(families))))
+    methods = ("native", "detail", "standard")
+    choices = (product(methods, repeat=len(families))
+               if len(families) <= 6 else
+               (tuple(mode if j == i else "native" for j in range(len(families)))
+                for i in range(len(families)) for mode in ("detail", "standard")))
     for modes in choices:
         if modes == native:
             continue
@@ -98,11 +99,13 @@ def choose_family_detail_policy(scheme, cases):
             continue
         if rank(report) > rank(best_report):
             best_modes, best_report = modes, report
-    chosen = [sid for family, mode in zip(families, best_modes)
-              if mode == "detail" for sid in family]
+    chosen = {method: [sid for family, mode in zip(families, best_modes)
+                       if mode == method for sid in family]
+              for method in ("detail", "standard")}
     evidence = {
         "status": "development_calibration_not_independent",
         "specimens": specimens, "plates": plates,
+        "search": "exhaustive" if len(families) <= 6 else "single_family",
         "baseline_all_correct": baseline["summary"]["all_traits_correct_specimens"],
         "selected_all_correct": best_report["summary"]["all_traits_correct_specimens"],
         "baseline_trait_correct": sum(int(x.get("correct") or 0) for x in baseline["traits"]),
@@ -129,7 +132,7 @@ def select_detail_channels(metadata, source_data, native_bytes, detail_bytes, ma
     primary=runner._model(len(meta["structures"]),pretrained=False)
     primary.load_state_dict(torch.load(folder/"model.pth",weights_only=True,map_location="cpu"));primary=primary.to(device).eval()
     models={key:_load_component(pipeline[key],folder,runner,len(meta["structures"]),device) for key in ("native","detail")}
-    counts={str(s["id"]):{mode:[0,0,0] for mode in ("native","detail")} for s in meta["structures"]}
+    counts={str(s["id"]):{mode:[0,0,0] for mode in ("native","detail","standard")} for s in meta["structures"]}
     cases=[]
     for row in manifest["val"]:
         outputs={}
@@ -142,6 +145,7 @@ def select_detail_channels(metadata, source_data, native_bytes, detail_bytes, ma
             "crop_size": crop_size,
             "native": _comparison_prediction_rows(outputs["native"]),
             "detail": _comparison_prediction_rows(outputs["detail"]),
+            "standard": _comparison_prediction_rows(outputs["standard"]),
         })
         for sid,by_mode in counts.items():
             if row.get("visibility",{}).get(sid,"complete") in {"partial","not_visible"}:continue
