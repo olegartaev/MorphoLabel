@@ -99,6 +99,8 @@ class ReleaseExtensionBoundaryTests(unittest.TestCase):
              patch("app.xray_structure_ai.structure_performance_settings", return_value=settings):
             parent = train_structure_model(p, seed=17, epochs=1, registry=registry, backend_id="alternate_structure")
             child = train_structure_model(p, seed=17, epochs=1, registry=registry)
+            self.assertEqual(parent["model_id"], p.active_structure_model()["model_id"])
+            p.activate_structure_model(child["model_id"])
             self.assertEqual(parent["model_id"], p.active_structure_model()["parent_model_id"])
             self.assertEqual("alternate_structure", child["metrics"]["backend"])
             self.assertEqual(structure_schema_digest(p.scheme), child["metrics"]["schema_digest"])
@@ -323,6 +325,8 @@ class ReleaseExtensionBoundaryTests(unittest.TestCase):
              patch("app.xray_structure_ai._run", side_effect=fake_runner):
             parent = train_structure_model(p, seed=17, epochs=1)
             child = train_structure_model(p, seed=17, epochs=1)
+            self.assertEqual(parent["model_id"], p.active_structure_model()["model_id"])
+            p.activate_structure_model(child["model_id"])
             self.assertEqual(parent["model_id"], p.active_structure_model()["parent_model_id"])
             sid = self.specimens[0]
             prediction = predict_structures(p, [sid], allow_verified=True)

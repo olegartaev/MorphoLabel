@@ -34,7 +34,7 @@ def common_validation_specimens(project, previous, candidate):
     training_plates = set()
     for model_id in models_to_check:
         entries = project.structure_model_membership(model_id)
-        if not entries:
+        if not entries or not any(entry.get("split") == "train" for entry in entries):
             return (), "Training history is not sufficient for fair comparison."
         memberships[model_id] = entries
         for entry in entries:
@@ -81,6 +81,31 @@ def choose_better_model(previous_report, candidate_report):
     new_correct = after.get("all_traits_correct_specimens")
     if not isinstance(old_correct, int) or not isinstance(new_correct, int):
         return False, "Complete trait scores are missing."
+    def outcomes(report):
+        rows = report.get("specimen_outcomes")
+        if not isinstance(rows, list):
+            return None
+        result = {}
+        for row in rows:
+            ident = row.get("specimen_id")
+            if not ident or ident in result or type(row.get("evaluable")) is not bool or type(row.get("correct")) is not bool:
+                return None
+            if row["correct"] and not row["evaluable"]:
+                return None
+            result[ident] = row
+        return result
+    old_outcomes = outcomes(previous_report)
+    new_outcomes = outcomes(candidate_report)
+    if old_outcomes is None or new_outcomes is None or set(old_outcomes) != set(new_outcomes):
+        return False, "Paired specimen evidence is missing or inconsistent."
+    old_evaluable = {key for key, row in old_outcomes.items() if row["evaluable"]}
+    new_evaluable = {key for key, row in new_outcomes.items() if row["evaluable"]}
+    if (old_evaluable != new_evaluable or len(old_evaluable) != n
+            or sum(row["correct"] for row in old_outcomes.values()) != old_correct
+            or sum(row["correct"] for row in new_outcomes.values()) != new_correct):
+        return False, "Complete specimen evaluation groups do not match."
+    if any(old_outcomes[key]["correct"] and not new_outcomes[key]["correct"] for key in old_evaluable):
+        return False, "A previously completely correct specimen became incorrect."
     improvement = new_correct - old_correct
     if improvement < max(2, math.ceil(n * .05)):
         return False, "No sufficiently clear improvement across complete specimens."

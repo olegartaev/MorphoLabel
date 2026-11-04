@@ -720,7 +720,7 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
     }
     exact_total=exact_ok=0;all_correct=all_evaluable=wrong_specimens=0;exact_counts_per_specimen=[]
     repeated_diffs=[];all_localization=[];role_total=role_exact=0;role_abs=[]
-    compared=0
+    compared=0; specimen_outcomes=[]
     for specimen in specimens or ():
         human=list(specimen.get("human") or ());predicted=list(specimen.get("predicted") or ())
         visibility=dict(specimen.get("visibility") or {});human_group=_comparison_group(human);pred_group=_comparison_group(predicted)
@@ -768,7 +768,11 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
                     if isinstance(tolerance,(int,float)):
                         stat["within_n"]+=1;stat["within"]+=int(error<=float(tolerance))
                         specimen_all_terms+=1;specimen_all_ok+=int(error<=float(tolerance))
-                else:stat["missing"]+=1
+                else:
+                    stat["missing"]+=1
+                    tolerance=(trait.get("rule") or {}).get("tolerance",trait.get("tolerance"))
+                    if isinstance(tolerance,(int,float)):
+                        stat["within_n"]+=1;specimen_all_terms+=1
         exact_counts_per_specimen.append(specimen_ok)
         # "All traits correct" must mean ALL declared scientific traits,
         # not merely the visible/evaluable subset for this specimen.
@@ -779,6 +783,11 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
             if specimen_all_terms==len(traits):
                 all_evaluable+=1
                 all_correct+=int(specimen_all_ok==specimen_all_terms)
+        specimen_outcomes.append({
+            "specimen_id": str(specimen.get("specimen_id") or ""),
+            "evaluable": bool(traits) and specimen_all_terms==len(traits),
+            "correct": bool(traits) and specimen_all_terms==len(traits) and specimen_all_ok==specimen_all_terms,
+        })
     structure_rows=[];f1_values=[]
     for structure in structures:
         stat=structure_stats[str(structure["id"])];tp=stat["tp"];fp=stat["fp"];fn=stat["fn"]
@@ -832,7 +841,7 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
             "localization_p95_diag":(float(np.percentile(all_localization,95)) if all_localization else None),
             "macro_f1":(sum(f1_values)/len(f1_values) if f1_values else None),
         },
-        "traits":trait_rows,"structures":structure_rows,
+        "traits":trait_rows,"structures":structure_rows,"specimen_outcomes":specimen_outcomes,
     }
 
 

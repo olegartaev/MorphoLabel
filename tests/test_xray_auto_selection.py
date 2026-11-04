@@ -44,6 +44,7 @@ def report(correct, trait_correct=None, marker_f1=0.9, marker_count=0.0, marker_
             "all_traits_correct_specimens": correct,
         },
         "traits": [{"trait_id": "a", "evaluated": 30, "correct": trait_correct}],
+        "specimen_outcomes": [{"specimen_id": f"spec-{i}", "evaluable": True, "correct": i < correct} for i in range(30)],
         "structures": [{
             "structure_id": "vertebra", "n": 30, "f1": marker_f1,
             "count_mae": marker_count, "localization_p95_diag": marker_p95,
@@ -70,6 +71,37 @@ class XRayAutomaticSelectionTests(unittest.TestCase):
         project = FakeProject(ancestry=True)
         ids, _ = common_validation_specimens(project, project.models[0], project.models[1])
         self.assertFalse(ids)
+
+    def test_missing_training_membership_blocks_promotion(self):
+        project = FakeProject()
+        original = project.structure_model_membership
+        project.structure_model_membership = lambda model_id: [x for x in original(model_id) if x["split"] != "train"]
+        ids, reason = common_validation_specimens(project, project.models[0], project.models[1])
+        self.assertFalse(ids)
+        self.assertIn("history", reason)
+
+    def test_paired_evidence_rejects_hidden_regression_and_changed_cohort(self):
+        old, new = report(10), report(13)
+        new["specimen_outcomes"][0]["correct"] = False
+        new["specimen_outcomes"][13]["correct"] = True
+        self.assertFalse(choose_better_model(old, new)[0])
+        new = report(13)
+        new["specimen_outcomes"][0]["specimen_id"] = "different"
+        self.assertFalse(choose_better_model(old, new)[0])
+        new = report(13)
+        del new["specimen_outcomes"]
+        self.assertFalse(choose_better_model(old, new)[0])
+
+    def test_missing_continuous_prediction_is_incorrect_not_unevaluable(self):
+        from unittest.mock import patch
+        from app.xray_structure_ai import summarize_structure_ai_human_comparison
+        scheme = {"structures": [], "traits": [{"id": "length", "method": "distance", "tolerance": .1}]}
+        with patch("app.xray_structure_ai.calculate_trait_values", side_effect=[{"length": 1.0}, {"length": None}]):
+            result = summarize_structure_ai_human_comparison(scheme, [{"specimen_id": "one"}])
+        self.assertEqual(1, result["summary"]["all_traits_evaluable_specimens"])
+        self.assertEqual(0, result["summary"]["all_traits_correct_specimens"])
+        self.assertEqual(1, result["traits"][0]["evaluated"])
+        self.assertEqual({"specimen_id": "one", "evaluable": True, "correct": False}, result["specimen_outcomes"][0])
 
     def test_only_complete_improvement_without_regressions_is_promoted(self):
         self.assertTrue(choose_better_model(report(10), report(13))[0])
