@@ -687,7 +687,10 @@ def _predict_prepared_sources(project, sources, prepared, settings, *, registry=
                                      "reason": "Incomplete prediction batch."})
                     continue
                 try:
-                    output[specimen_id] = _comparison_prediction_rows(returned[offset].get("structures") or ())
+                    groups = returned[offset].get("structures") or ()
+                    if any("count" in group and "points" not in group for group in groups):
+                        raise ValueError("Scalar-only outputs cannot be used as point annotations.")
+                    output[specimen_id] = _comparison_prediction_rows(groups)
                 except (ValueError, TypeError, KeyError) as exc:
                     failures.append({"specimen_id": specimen_id, "model_id": source_id, "reason": str(exc)})
             index += len(chunk)
