@@ -43,6 +43,54 @@ from .xray_result_qc import (
 )
 
 
+def _structure_model_labels(project, models):
+    """Build display-only identifiers and describe the methods actually saved."""
+    descriptions = {}
+    from app.xray_model_display import structure_display_numbers
+    numbers = structure_display_numbers(project,models)
+    for model in models:
+        ident = str(model["model_id"])
+        try:
+            metadata = json.loads((project.root / str(model["metadata_path"])).read_text(encoding="utf-8"))
+            structures = list(metadata.get("structures") or ())
+            ids = [str(item["id"]) for item in structures]
+            pipeline = metadata.get("inference_pipeline")
+            if pipeline is None:
+                routes = {ident: "Standard" for ident in ids}
+            elif pipeline.get("mode") == "tiled_native":
+                from ai_runtime.universal_multires import pipeline_components
+                pipeline_components(metadata)
+                detail = set(pipeline.get("retain_detail_structures", ()))
+                standard = set(pipeline.get("retain_standard_structures", ()))
+                routes = {ident: "ROI Detail" if ident in detail else "Standard" if ident in standard else "Native Full" for ident in ids}
+            elif pipeline.get("mode") == "tiled":
+                from ai_runtime.universal_multires import pipeline_components
+                pipeline_components(metadata)
+                routes = {ident: "ROI Detail" for ident in ids}
+            else:
+                routes = {}
+            if not routes: raise ValueError("No known structure methods")
+            methods = set(routes.values())
+            method = next(iter(methods)) if len(methods) == 1 else "Mixed: " + " + ".join(label for label in ("Standard", "Native", "ROI") if {"Native": "Native Full", "ROI": "ROI Detail"}.get(label, label) in methods)
+            descriptions[ident] = (method, routes)
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            descriptions[ident] = ("Method unavailable", {})
+    labels = {ident: f"X-ray {number:03d} · {descriptions[ident][0]}" for ident, number in numbers.items()}
+    return labels, descriptions
+
+
+def _structure_method_details(scheme, routes):
+    if not routes:
+        return "Methods unavailable for this model."
+    from app.xray_component_selection import structure_families
+    names = {str(item["id"]): str(item.get("name") or item["id"]) for item in scheme.get("structures", ())}
+    groups = []
+    for family in structure_families(scheme):
+        methods = {routes.get(ident, "Unknown") for ident in family}
+        groups.append(" / ".join(names.get(ident, ident) for ident in family) + ": " + " + ".join(sorted(methods)))
+    return "Methods — " + "  |  ".join(groups)
+
+
 def _display_ready(image):
     arr=np.asarray(image)
     if arr.ndim==3:
@@ -474,6 +522,7 @@ class XRayStructureWorkspace:
         # One Train button; From selects existing compatible weights, not an architecture.
         ttk.Label(model_row,text="From",style="Muted.TLabel").pack(side="left")
         saved_parent=self.project.get_ui_state("structure_training_parent","")
+        self._structure_label_to_id={}
         self.training_parent_choice=tk.StringVar(master=three,value=saved_parent or "ImageNet ResNet18")
         self.training_parent_box=ttk.Combobox(model_row,textvariable=self.training_parent_choice,
             values=("ImageNet ResNet18",),width=23,state="readonly")
@@ -481,7 +530,7 @@ class XRayStructureWorkspace:
         self._training_parent_touched=bool(saved_parent)
         self.training_parent_box.bind("<<ComboboxSelected>>",
             lambda _event:(setattr(self,"_training_parent_touched",True),
-                          self.project.set_ui_state("structure_training_parent",self.training_parent_choice.get()),
+                          self.project.set_ui_state("structure_training_parent",self._structure_label_to_id.get(self.training_parent_choice.get(), self.training_parent_choice.get())),
                           self._refresh_summary()))
         self.training_summary=ttk.Label(model_row,text="",style="Muted.TLabel")
         self.training_summary.pack(side="right",padx=(10,0))
@@ -552,6 +601,11 @@ class XRayStructureWorkspace:
 
     def _refresh_prediction_info(self):
         self.prediction_text=structure_prediction_text(self.project,self.selected_specimen_id,self.pass_no.get())
+        parts=self.prediction_text.split(" · ",2)
+        if len(parts)>=2:
+            labels,_=_structure_model_labels(self.project,self.project.structure_models())
+            parts[1]=labels.get(parts[1],parts[1])
+            self.prediction_text=" · ".join(parts)
         self.prediction_label.configure(text=self.prediction_text)
         if self.crop_image is not None:self._draw_overlays()
 
@@ -807,7 +861,7 @@ class XRayStructureWorkspace:
         summary=self.project.annotation_summary(self.pass_no.get())
         labels={"verified":"Verified","draft":"Draft","unstarted":"Not started"}
         for key,label in self.summary_labels.items():label.configure(text=f"{labels[key]}: {summary[key]}")
-        parent_id=self.training_parent_choice.get()
+        parent_id=self._structure_label_to_id.get(self.training_parent_choice.get(), self.training_parent_choice.get())
         usage=self.project.structure_training_usage(None if parent_id=="ImageNet ResNet18" else parent_id)
         self.training_usage_label.configure(text=(
             f"Used: {usage['used']} · New: {usage['new']}" if usage["known"] else "Used: — · New: —"
@@ -867,18 +921,23 @@ class XRayStructureWorkspace:
         active_id=(model or {}).get("model_id") or "none"
         structure_models=tuple(self.project.structure_models())
         from app.xray_multires_training import is_universal_multires_model
-        compatible_values=tuple(item["model_id"] for item in structure_models if _scheme_matches_model(self.project,item))
-        prediction_values=tuple(mid for mid in compatible_values if is_universal_multires_model(self.project,mid))
+        old_label_to_id=getattr(self,"_structure_label_to_id",{})
+        current_parent=old_label_to_id.get(self.training_parent_choice.get(),self.training_parent_choice.get())
+        labels,_descriptions=_structure_model_labels(self.project,structure_models)
+        self._structure_label_to_id={label:ident for ident,label in labels.items()}
+        compatible_ids=tuple(item["model_id"] for item in structure_models if _scheme_matches_model(self.project,item))
+        prediction_ids=tuple(mid for mid in compatible_ids if is_universal_multires_model(self.project,mid))
+        prediction_values=tuple(labels[mid] for mid in prediction_ids)
         compatible_active=bool(model and _scheme_matches_model(self.project,model))
-        native_active=compatible_active and active_id in prediction_values
-        self.structure_model_label.configure(text=f"Active: {active_id}" if native_active else "Native Full + ROI Detail: train or import a model")
+        native_active=compatible_active and active_id in prediction_ids
+        self.structure_model_label.configure(text=f"Active: {labels[active_id]}" if native_active else "Native Full + ROI Detail: train or import a model")
         self.prediction_model_box.configure(values=prediction_values,width=model_selector_width(prediction_values,minimum=22),state="readonly" if prediction_values else "disabled")
-        self.prediction_model_choice.set(active_id if native_active else "")
-        parent_values=("ImageNet ResNet18",)+compatible_values
-        current_parent=self.training_parent_choice.get()
-        if not self._training_parent_touched or current_parent not in parent_values:
-            self.training_parent_choice.set(active_id if compatible_active else "ImageNet ResNet18")
+        self.prediction_model_choice.set(labels[active_id] if native_active else "")
+        parent_values=("ImageNet ResNet18",)+tuple(labels[mid] for mid in compatible_ids)
+        if not self._training_parent_touched or current_parent not in compatible_ids:
+            current_parent=active_id if compatible_active else "ImageNet ResNet18"
             self._training_parent_touched=False
+        self.training_parent_choice.set(labels.get(current_parent,current_parent))
         self.training_parent_box.configure(values=parent_values,
             width=model_selector_width(parent_values,minimum=22),state="readonly")
         state="normal" if native_active and self.pass_no.get()==1 else "disabled"
@@ -895,7 +954,7 @@ class XRayStructureWorkspace:
 
     def train_highres_structure_ai(self):
         if self._busy:return
-        source_model_id=str(self.training_parent_choice.get() or "")
+        source_model_id=str(self._structure_label_to_id.get(self.training_parent_choice.get(),self.training_parent_choice.get()) or "")
         from app.xray_multires_training import (
             HighResolutionTrainingCancelled, is_universal_multires_model,
             run_high_resolution_training, training_progress_record,
@@ -977,9 +1036,10 @@ class XRayStructureWorkspace:
                             self.project.set_ui_state("structure_training_parent",local_id)
                             self._refresh_workflow();self._refresh_summary()
                             shutil.rmtree(candidate_dir,ignore_errors=True)
+                            labels,_=_structure_model_labels(self.project,self.project.structure_models())
                             messagebox.showinfo("Train Structure AI",
-                                f"New model candidate: {local_id}.\n"
-                                f"Active model unchanged: {active_after}.\n"
+                                f"New model candidate: {labels.get(local_id,local_id)}.\n"
+                                f"Active model unchanged: {labels.get(active_after,active_after) or 'none'}.\n"
                                 "The candidate is unvalidated; review its predictions before use.",parent=self.root)
                         except Exception as exc:
                             self._refresh_workflow()
@@ -1002,7 +1062,7 @@ class XRayStructureWorkspace:
             "This checkpoint can initialize training. Train a Native Full + ROI Detail candidate before using it for predictions.",parent=self.root)
 
     def _activate_prediction_model(self,_event=None):
-        model_id=str(self.prediction_model_choice.get() or "")
+        model_id=str(self._structure_label_to_id.get(self.prediction_model_choice.get(),self.prediction_model_choice.get()) or "")
         if not model_id:return
         if not self._native_prediction_model(model_id):
             self._explain_native_required();return
@@ -1334,7 +1394,7 @@ class XRayStructureWorkspace:
         self._refresh_imported_scheme()
         messagebox.showinfo(
             "Import trained AI",
-            f"Imported {model_id}. Native Full + ROI Detail models can be used for predictions; other checkpoints initialize Native + Detail training.",
+            f"Imported {_structure_model_labels(self.project,self.project.structure_models())[0].get(model_id,model_id)}. Native Full + ROI Detail models can be used for predictions; other checkpoints initialize Native + Detail training.",
             parent=self.root,
         )
 
@@ -1359,14 +1419,16 @@ class XRayStructureWorkspace:
         scroll=ttk.Scrollbar(frame,orient="vertical",command=tree.yview);tree.configure(yscrollcommand=scroll.set);scroll.grid(row=1,column=1,sticky="ns")
         def reload(select=None):
             for item in tree.get_children():tree.delete(item)
-            for model in self.project.structure_models():
+            models=self.project.structure_models()
+            labels,descriptions=_structure_model_labels(self.project,models)
+            for model in models:
                 metrics=model.get("metrics") or {};quality=metrics.get("structure/macro_f1")
                 quality_text=("Unvalidated candidate" if metrics.get("inference/unvalidated") else
                               f"macro F1 {quality:.3f}" if isinstance(quality,(int,float)) else "Not recorded")
                 source=str(model.get("parent_model_id") or metrics.get("training/source_model_id") or metrics.get("initialization") or metrics.get("original_model_id") or "ImageNet")
                 tree.insert(
                     "","end",iid=model["model_id"],values=(
-                        model["model_id"],str(model.get("created_at") or "").replace("T"," ")[:16],source,
+                        labels[model["model_id"]],str(model.get("created_at") or "").replace("T"," ")[:16],labels.get(source,source),
                         f"{int(model.get('training_specimen_count') or 0)} / {int(model.get('validation_specimen_count') or 0)}",
                         quality_text,(("Active" if model.get("active") else "Available") if self._native_prediction_model(model["model_id"]) else "Initialization only") if _scheme_matches_model(self.project,model) else "Incompatible scheme",
                     ),
@@ -1409,7 +1471,7 @@ class XRayStructureWorkspace:
             try:model_id=import_structure_model_package(self.project,source)
             except Exception as exc:messagebox.showerror("Import Structure AI",str(exc),parent=dialog);return
             reload(model_id);self._refresh_imported_scheme()
-            messagebox.showinfo("Import Structure AI",f"Imported {model_id} and applied its trait scheme. Select it and choose Make active before prediction or continued training.",parent=dialog)
+            messagebox.showinfo("Import Structure AI",f"Imported {_structure_model_labels(self.project,self.project.structure_models())[0].get(model_id,model_id)}. Select it and choose Make active before prediction or continued training.",parent=dialog)
         def compare_human():
             model_id=selected()
             if not model_id:
@@ -1467,9 +1529,16 @@ class XRayStructureWorkspace:
         export_button=ttk.Button(transfer,text="Export selected…",command=export_model,state="disabled")
         export_button.pack(side="left",padx=(5,0))
         selection_buttons.append(export_button)
-        tree.bind("<<TreeviewSelect>>",lambda _e:[button.configure(state="normal" if selected() else "disabled") for button in selection_buttons])
+        details=ttk.Label(frame,text="Select a model to see methods for its structure groups.",style="Muted.TLabel",wraplength=max(500,model_width-50))
+        details.grid(row=3,column=0,sticky="w",pady=(10,0))
+        def selection_changed(_event):
+            ident=selected()
+            for button in selection_buttons:button.configure(state="normal" if ident else "disabled")
+            models=self.project.structure_models()
+            _labels,descriptions=_structure_model_labels(self.project,models)
+            details.configure(text=_structure_method_details(self.project.scheme,descriptions.get(ident,(None,{}))[1]) if ident else "Select a model to see methods for its structure groups.")
+        tree.bind("<<TreeviewSelect>>",selection_changed)
         tree.bind("<Double-1>",lambda _e:activate())
-        ttk.Label(frame,text="Model files contain trained AI and its settings. Images and annotations stay in the project.",style="Muted.TLabel").grid(row=3,column=0,sticky="w",pady=(10,0))
         reload((self.project.active_structure_model() or {}).get("model_id"))
 
     def _show_structure_model_comparison(self,report,parent=None):

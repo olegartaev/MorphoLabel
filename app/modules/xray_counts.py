@@ -443,7 +443,11 @@ class XRayCountsRuntime:
         ttk.Label(frame,text="Model ZIP files contain inference settings and weights. Source X-rays stay in the project.",wraplength=520,style="Muted.TLabel").pack(anchor="w",pady=(4,8))
         for kind,label,model in (("crop","X-ray Crop model",self.project.active_crop_model()),("structure","X-ray Structure model",self.project.active_structure_model())):
             card=ttk.LabelFrame(frame,text=label,padding=12);card.pack(fill="x",pady=5)
-            ttk.Label(card,text=f"Current model: {(model or {}).get('model_id','None')}").pack(anchor="w",pady=(0,6))
+            display_id=(model or {}).get('model_id','None')
+            if kind=="structure" and model:
+                from app.xray_structures_ui import _structure_model_labels
+                display_id=_structure_model_labels(self.project,self.project.structure_models())[0].get(display_id,display_id)
+            ttk.Label(card,text=f"Current model: {display_id}").pack(anchor="w",pady=(0,6))
             def transfer(action,k=kind):
                 getattr(self,f"_menu_{action}_{k}_ai")()
                 if dialog.winfo_exists():dialog.destroy();self.show_model_transfer()
@@ -493,7 +497,9 @@ class XRayCountsRuntime:
         except Exception as exc:
             messagebox.showerror("Import Structure AI",str(exc),parent=root);return
         self._rerender()
-        messagebox.showinfo("Import Structure AI",f"Imported {model_id}. Native Full + ROI Detail models can be used for predictions; other checkpoints initialize Native + Detail training.",parent=root)
+        from app.xray_structures_ui import _structure_model_labels
+        display_id=_structure_model_labels(self.project,self.project.structure_models())[0].get(model_id,model_id)
+        messagebox.showinfo("Import Structure AI",f"Imported {display_id}. Native Full + ROI Detail models can be used for predictions; other checkpoints initialize Native + Detail training.",parent=root)
 
     def _menu_export_structure_ai(self):
         if self.project is None:return
@@ -700,7 +706,12 @@ class XRayCountsRuntime:
         from app.ui.model_transfer import model_transfer_card
         for kind,title,active in (("crop","X-ray Crop model",self.project.active_crop_model()),("structure","X-ray Structure model",self.project.active_structure_model())):
             models=self.project.crop_models() if kind=="crop" else self.project.structure_models()
-            card=model_transfer_card(settings,title,active,getattr(self,f"_menu_import_{kind}_ai"),getattr(self,f"_menu_export_{kind}_ai"),models=models)
+            display_active=active
+            if kind=="structure" and active:
+                from app.xray_structures_ui import _structure_model_labels
+                labels,_=_structure_model_labels(self.project,models)
+                display_active={**active,"model_id":labels.get(active["model_id"],active["model_id"])}
+            card=model_transfer_card(settings,title,display_active,getattr(self,f"_menu_import_{kind}_ai"),getattr(self,f"_menu_export_{kind}_ai"),models=models)
             card.pack(fill="x",pady=(0,8))
         bind_settings_navigation(settings,canvas)
         catalog.columnconfigure(0,weight=1);catalog.rowconfigure(0,weight=1)

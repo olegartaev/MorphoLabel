@@ -1072,6 +1072,11 @@ def import_structure_model_package(project, source, *, registry=None):
             (staging / "model.pth").write_bytes(payload["artifacts/model.pth"])
             for name in auxiliary:
                 (staging/name).write_bytes(payload["artifacts/"+name])
+            # Display numbers are local to a project; never reuse a number from
+            # an imported package and never rename or rewrite existing models.
+            from .xray_model_display import structure_display_numbers
+            display_numbers=structure_display_numbers(project,project.structure_models())
+            metadata["display_number"]=max(display_numbers.values(),default=0)+1
             metadata["model_id"] = local
             metadata["imported_from_model_id"] = original
             metadata["original_schema_digest"]=package_digest
