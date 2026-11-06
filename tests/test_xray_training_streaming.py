@@ -59,6 +59,7 @@ class TrainingStreamingTests(unittest.TestCase):
                 return destination
             with patch("app.xray_multires_training.is_universal_multires_model",return_value=True), \
                  patch("app.xray_multires_training.resource_path",return_value=script), \
+                 patch("app.xray_multires_training._prepare_training_images",return_value=root/"images.json"), \
                  patch("app.xray_multires_training.create_read_only_source_project_copy",side_effect=create_copy):
                 result=run_high_resolution_training(
                     project,"parent",output,python_executable=Path(sys.executable),
