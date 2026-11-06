@@ -48,3 +48,11 @@ class NativeOnlyWorkflowTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'Set up AI support'):
                 initialize_parent(None,None,Path('.'),seed=42,device='cpu')
             train.assert_not_called()
+
+    def test_first_training_uses_the_same_prepared_images(self):
+        images={"specimen":Path("prepared.png")}
+        with patch('app.ai_starters.local_starter',return_value=Path('starter.pth')), \
+             patch('app.xray_structure_ai.train_structure_model',side_effect=RuntimeError('captured')) as train:
+            with self.assertRaisesRegex(RuntimeError,'captured'):
+                initialize_parent(None,None,Path('.'),seed=42,device='cpu',prepared_images=images)
+        self.assertIs(train.call_args.kwargs['prepared_images'],images)

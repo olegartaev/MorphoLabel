@@ -245,7 +245,7 @@ def _split_by_plate(rows, seed):
     return split
 
 
-def prepare_structure_training_dataset(project, workspace_root, seed=42, *, backend_id=STRUCTURE_BACKEND):
+def prepare_structure_training_dataset(project, workspace_root, seed=42, *, backend_id=STRUCTURE_BACKEND, prepared_images=None):
     truth = _verified_truth(project)
     if len(truth) < MIN_STRUCTURE_TRAINING_SPECIMENS:
         raise ValueError(
@@ -253,6 +253,8 @@ def prepare_structure_training_dataset(project, workspace_root, seed=42, *, back
             "A larger diverse set is recommended for a useful model."
         )
     split = _split_by_plate(truth, seed)
+    if prepared_images is not None and set(prepared_images) != {row["specimen_id"] for row in truth}:
+        raise ValueError("Prepared images do not match the verified training specimens.")
     root = Path(workspace_root) / "structure_dataset"
     images = root / "images"; images.mkdir(parents=True, exist_ok=True)
     groups = {"train": [], "val": []}
@@ -276,14 +278,12 @@ def prepare_structure_training_dataset(project, workspace_root, seed=42, *, back
     if not structures:
         raise ValueError("The active X-ray trait scheme has no structures to learn.")
     for index, row in enumerate(truth, 1):
-        specimen = project.specimen(row["specimen_id"])
-        with Image.open(project.source_image_path(row["image_id"])) as source:
-            source.load()
-            crop = oriented_crop(source.copy(), specimen["crop"], project.orientation_policy)
-        prepared = _display_ready(crop)
         filename = f"{index:06d}.png"
         target = images / filename
-        prepared.save(target, format="PNG")
+        if prepared_images is not None:
+            shutil.copyfile(prepared_images[row["specimen_id"]], target)
+        else:
+            _prediction_image(project, row["specimen_id"], target)
         group = split[row["specimen_id"]]
         points = [
             point for point in row["points"]
@@ -303,6 +303,7 @@ def prepare_structure_training_dataset(project, workspace_root, seed=42, *, back
         membership.append({"specimen_id": row["specimen_id"], "image_id": row["image_id"], "split": group})
         digest_rows.append({
             "specimen_id": row["specimen_id"], "image_id": row["image_id"], "split": group,
+            "prepared_image_sha256": _sha256_file(target),
             "visibility": visibility,
             "points": [
                 {
@@ -342,7 +343,7 @@ def prepare_structure_training_dataset(project, workspace_root, seed=42, *, back
     }
 
 
-def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None, *, backend_id=None, registry=None, device_override=None):
+def train_structure_model(project, seed=42, epochs=60, progress=None, parent_model_id=None, *, backend_id=None, registry=None, device_override=None, prepared_images=None):
     model_id = project.next_structure_model_id()
     if parent_model_id is None:
         parent = project.active_structure_model()
@@ -371,7 +372,7 @@ def train_structure_model(project, seed=42, epochs=60, progress=None, parent_mod
         raise XRayStructureAIError(f"Model folder already exists: {target}")
     with tempfile.TemporaryDirectory(prefix=f"morpholabel_xray_structure_{model_id}_") as scratch_name:
         scratch = Path(scratch_name)
-        dataset = prepare_structure_training_dataset(project, scratch, seed=seed, backend_id=provider_id)
+        dataset = prepare_structure_training_dataset(project, scratch, seed=seed, backend_id=provider_id, prepared_images=prepared_images)
         if progress:
             progress(
                 "STRUCTURE TRAINING",
@@ -620,17 +621,45 @@ def _comparison_prediction_rows(groups):
 
 
 def _comparison_match(predicted,truth,tolerance=_STRUCTURE_MATCH_TOLERANCE):
-    remaining=[dict(point) for point in truth or ()];distances=[];matched=0
-    for point in sorted(predicted or (),key=lambda item:float(item.get("score",0.0)),reverse=True):
-        if not remaining:break
-        index=min(
-            range(len(remaining)),
-            key=lambda i:(float(point["x"])-float(remaining[i]["x"]))**2+(float(point["y"])-float(remaining[i]["y"]))**2,
-        )
-        distance=math.hypot(float(point["x"])-float(remaining[index]["x"]),float(point["y"])-float(remaining[index]["y"]))
-        if distance<=float(tolerance):
-            matched+=1;distances.append(distance/math.sqrt(2.0));remaining.pop(index)
-    return matched,len(predicted or ())-matched,len(remaining),distances
+    # Maximize the number of valid one-to-one matches, then minimize their
+    # total distance. A confidence-ordered greedy match can consume another
+    # point's only valid reference and invent a false positive/negative pair.
+    predicted=list(predicted or ());truth=list(truth or ())
+    n=len(predicted);m=len(truth)
+    if not n or not m:return 0,n,m,[]
+    tolerance=float(tolerance)
+    distances=[[math.hypot(float(p["x"])-float(t["x"]),float(p["y"])-float(t["y"]))
+                for t in truth] for p in predicted]
+    penalty=n+1.0
+    scale=max(tolerance,1e-12)
+    costs=[[d/scale if d<=tolerance else penalty*2 for d in row]+[penalty]*n
+           for row in distances]
+    # Rectangular Hungarian assignment; dummy columns represent unmatched
+    # predictions. One extra match always outweighs all distance differences.
+    columns=m+n;u=[0.0]*(n+1);v=[0.0]*(columns+1)
+    owner=[0]*(columns+1);previous=[0]*(columns+1)
+    for i in range(1,n+1):
+        owner[0]=i;j0=0;best=[float("inf")]*(columns+1);used=[False]*(columns+1)
+        while True:
+            used[j0]=True;i0=owner[j0];delta=float("inf");j1=0
+            for j in range(1,columns+1):
+                if not used[j]:
+                    value=costs[i0-1][j-1]-u[i0]-v[j]
+                    if value<best[j]:best[j]=value;previous[j]=j0
+                    if best[j]<delta:delta=best[j];j1=j
+            for j in range(columns+1):
+                if used[j]:u[owner[j]]+=delta;v[j]-=delta
+                else:best[j]-=delta
+            j0=j1
+            if owner[j0]==0:break
+        while True:
+            j1=previous[j0];owner[j0]=owner[j1];j0=j1
+            if j0==0:break
+    matched_distances=[distances[owner[j]-1][j-1]/math.sqrt(2.0)
+                       for j in range(1,m+1)
+                       if owner[j] and distances[owner[j]-1][j-1]<=tolerance]
+    matched=len(matched_distances)
+    return matched,n-matched,m-matched,matched_distances
 
 
 def _comparison_role_ordinal(structure,grouped,base_ids=None,human=False):
@@ -732,15 +761,20 @@ def summarize_structure_ai_human_comparison(scheme,specimens,match_tolerance=_ST
                         and isinstance(prediction,(int,float)) and not isinstance(prediction,bool)):
                     stat["errors"].append(abs(float(prediction)-float(truth)))
             elif method in _CONTINUOUS_TRAIT_METHODS:
+                tolerance=(trait.get("rule") or {}).get("tolerance",trait.get("tolerance"))
+                has_tolerance=isinstance(tolerance,(int,float))
+                if has_tolerance:
+                    # A missing prediction is still wrong when the human
+                    # reference and a scoring tolerance are available.
+                    stat["within_n"]+=1;specimen_all_terms+=1
                 if isinstance(prediction,(int,float)) and isinstance(truth,(int,float)):
                     error=abs(float(prediction)-float(truth));stat["errors"].append(error)
-                    tolerance=(trait.get("rule") or {}).get("tolerance",trait.get("tolerance"))
-                    if isinstance(tolerance,(int,float)):
-                        stat["within_n"]+=1;stat["within"]+=int(error<=float(tolerance))
-                        specimen_all_terms+=1;specimen_all_ok+=int(error<=float(tolerance))
+                    if has_tolerance:
+                        stat["within"]+=int(error<=float(tolerance))
+                        specimen_all_ok+=int(error<=float(tolerance))
                 else:stat["missing"]+=1
         exact_counts_per_specimen.append(specimen_ok)
-        if specimen_all_terms:
+        if traits and specimen_all_terms==len(traits):
             all_evaluable+=1
             good=specimen_all_ok==specimen_all_terms
             all_correct+=int(good);wrong_specimens+=int(not good)

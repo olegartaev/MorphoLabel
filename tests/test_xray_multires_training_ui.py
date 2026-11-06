@@ -105,17 +105,22 @@ class HighResolutionTrainingUITests(unittest.TestCase):
             "import argparse,json,zipfile\n"
             "p=argparse.ArgumentParser();p.add_argument('--output');a,_=p.parse_known_args()\n"
             "print(json.dumps({'stage':'PREPARED','training_specimens':1,'validation_specimens':1,'train_plates':1,'val_plates':1}),flush=True)\n"
-            "with zipfile.ZipFile(a.output,'w') as z:z.writestr('manifest.json',json.dumps({'model_id':'test_candidate'}))\n",
+            "with zipfile.ZipFile(a.output,'w') as z:z.writestr('manifest.json',json.dumps({'model_id':'test_candidate'}))\n"
+            "print(json.dumps({'membership':[{'specimen_id':'s1','split':'val'}],"
+            "'training':{'channel_selection_validation':{'_scientific_selection':{'recommend_new_parent':False}}}}),flush=True)\n",
             encoding="utf-8",
         )
         output=Path(self.temp.name)/"candidate.zip"
         progress=[]
-        with patch("app.xray_multires_training.resource_path",return_value=runner):
+        with patch("app.xray_multires_training.resource_path",return_value=runner), \
+             patch("app.xray_multires_training._prepare_training_images",return_value=Path(self.temp.name)/"images.json"):
             result=run_high_resolution_training(
                 self.project,"hybrid",output,python_executable=Path(sys.executable),
                 progress=progress.append,cancelled=threading.Event(),
             )
         self.assertEqual(result["model_id"],"test_candidate")
+        self.assertFalse(result["selection"]["recommend_new_parent"])
+        self.assertEqual(result["membership"],[{"specimen_id":"s1","split":"val"}])
         self.assertEqual(Path(result["path"]).resolve(),output.resolve())
         self.assertTrue(any("PREPARED" in line for line in progress))
         self.assertEqual(hashlib.sha256(self.project.db_path.read_bytes()).hexdigest(),self.before_db)

@@ -934,7 +934,7 @@ class XRayStructureWorkspace:
         self.prediction_model_box.configure(values=prediction_values,width=model_selector_width(prediction_values,minimum=22),state="readonly" if prediction_values else "disabled")
         self.prediction_model_choice.set(labels[active_id] if native_active else "")
         parent_values=("ImageNet ResNet18",)+tuple(labels[mid] for mid in compatible_ids)
-        if not self._training_parent_touched or current_parent not in compatible_ids:
+        if not self._training_parent_touched or (current_parent != "ImageNet ResNet18" and current_parent not in compatible_ids):
             current_parent=active_id if compatible_active else "ImageNet ResNet18"
             self._training_parent_touched=False
         self.training_parent_choice.set(labels.get(current_parent,current_parent))
@@ -1030,16 +1030,20 @@ class XRayStructureWorkspace:
                             active_after=(self.project.active_structure_model() or {}).get("model_id")
                             if active_after!=active_before:
                                 raise RuntimeError("Import unexpectedly changed the active model; stop and inspect the project.")
-                            self.training_parent_choice.set(local_id);self._training_parent_touched=True
+                            recommend_new=(not source_model_id or
+                                event[1].get("selection",{}).get("recommend_new_parent") is True)
+                            next_parent=local_id if recommend_new else source_model_id
+                            self.training_parent_choice.set(next_parent);self._training_parent_touched=True
                             if event[1].get("membership"):
                                 self.project.record_structure_training_membership(local_id,event[1]["membership"])
-                            self.project.set_ui_state("structure_training_parent",local_id)
+                            self.project.set_ui_state("structure_training_parent",next_parent)
                             self._refresh_workflow();self._refresh_summary()
                             shutil.rmtree(candidate_dir,ignore_errors=True)
                             labels,_=_structure_model_labels(self.project,self.project.structure_models())
                             messagebox.showinfo("Train Structure AI",
                                 f"New model candidate: {labels.get(local_id,local_id)}.\n"
                                 f"Active model unchanged: {labels.get(active_after,active_after) or 'none'}.\n"
+                                f"Next training source: {labels.get(next_parent,next_parent)}.\n"
                                 "The candidate is unvalidated; review its predictions before use.",parent=self.root)
                         except Exception as exc:
                             self._refresh_workflow()

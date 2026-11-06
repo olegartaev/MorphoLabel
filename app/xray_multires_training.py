@@ -121,6 +121,24 @@ def create_read_only_source_project_copy(project, source_model_id: str, destinat
         raise
 
 
+def _prepare_training_images(project_copy: Path, destination: Path, cancelled: threading.Event) -> Path:
+    """Use the GUI's prediction preprocessing on the immutable project snapshot."""
+    from .xray_project import XRayProject
+    from .xray_structure_ai import _prediction_image, _verified_truth
+    project=XRayProject(project_copy)
+    destination.mkdir(parents=True)
+    images={}
+    for index,row in enumerate(_verified_truth(project)):
+        if cancelled.is_set():
+            raise HighResolutionTrainingCancelled("High-resolution training was cancelled.")
+        name=f"{index:06d}.png"
+        _prediction_image(project,row["specimen_id"],destination/name)
+        images[row["specimen_id"]]=name
+    manifest=destination/"manifest.json"
+    manifest.write_text(json.dumps(images,ensure_ascii=False),encoding="utf-8")
+    return manifest
+
+
 def run_high_resolution_training(
     project,
     source_model_id: str,
@@ -148,6 +166,8 @@ def run_high_resolution_training(
     with tempfile.TemporaryDirectory(prefix="morpholabel_highres_project_") as temporary:
         project_copy = Path(temporary) / "project_copy"
         create_read_only_source_project_copy(project, source_model_id, project_copy)
+        progress(json.dumps({"stage":"PREPARING_IMAGES","detail":"Preparing prediction-matched training images"}))
+        image_manifest=_prepare_training_images(project_copy,Path(temporary)/"prepared_images",cancelled)
         # A frozen GUI may use a different Python ABI than the AI component.
         # Exposing its _internal directory through cwd/PYTHONPATH lets bundled
         # _ctypes.pyd and other extensions shadow the AI runtime's own modules.
@@ -155,6 +175,7 @@ def run_high_resolution_training(
         command = [
             str(python_executable), str(worker_script), "--project-copy", str(project_copy),
             "--source-model", str(source_model_id), "--output", str(output_zip),
+            "--prepared-images-manifest",str(image_manifest),
             "--epochs-native", str(int(epochs_native)), "--epochs-detail", str(int(epochs_detail)),
             "--device", "auto",
         ]
@@ -220,6 +241,7 @@ def run_high_resolution_training(
                 raise HighResolutionTrainingError("The candidate ZIP failed its CRC check.")
             manifest = json.loads(archive.read("manifest.json"))
         membership=[]
+        selection={}
         output="\n".join(log_lines)
         decoder=json.JSONDecoder()
         for index,char in enumerate(output):
@@ -227,7 +249,10 @@ def run_high_resolution_training(
             try:record,_=decoder.raw_decode(output[index:])
             except ValueError:continue
             if isinstance(record,dict) and isinstance(record.get("membership"),list):
-                membership=record["membership"];break
+                membership=record["membership"]
+                selection=((record.get("training") or {}).get("channel_selection_validation") or {}).get("_scientific_selection") or {}
+                break
         return {"path": output_zip, "model_id": str(manifest.get("model_id") or ""), "membership":membership,
+                "selection":selection,
                 "sha256": __import__("hashlib").sha256(output_zip.read_bytes()).hexdigest(),
                 "log": log_lines}

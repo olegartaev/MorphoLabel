@@ -46,6 +46,30 @@ class NativeDetailStandardCalibrationTests(unittest.TestCase):
         self.assertFalse(set(chosen["standard"]) & set(chosen["detail"]))
         self.assertEqual(24,evidence["selected_all_correct"])
 
+    def test_selection_can_improve_overall_despite_a_paired_loss(self):
+        cases=self.make_cases()
+        cases[5]["detail"]=self.points(ptery=3,vertebra=2)
+        chosen,evidence=choose_family_detail_policy(self.scheme,cases)
+        self.assertIn("preanal_pterygiophore",chosen["detail"])
+        self.assertEqual(19,evidence["baseline_all_correct"])
+        self.assertEqual(23,evidence["selected_all_correct"])
+
+    def test_parent_comparison_requires_strict_improvement(self):
+        cases=self.make_cases()
+        for case in cases:
+            case["parent"]=self.points()
+        _,evidence=choose_family_detail_policy(self.scheme,cases)
+        self.assertEqual(24,evidence["parent_all_correct"])
+        self.assertEqual(24,evidence["selected_all_correct"])
+        self.assertFalse(evidence["recommend_new_parent"])
+        for case in cases:
+            case["parent"]=case["native"]
+        cases[5]["parent"]=self.points(ptery=3)
+        _,evidence=choose_family_detail_policy(self.scheme,cases)
+        self.assertEqual(6,evidence["paired_corrected"])
+        self.assertEqual(0,evidence["paired_broken"])
+        self.assertTrue(evidence["recommend_new_parent"])
+
     def test_incomplete_human_traits_are_not_counted_as_fully_correct(self):
         cases=self.make_cases()
         # The pterygiophore count was not fully observed by the expert.

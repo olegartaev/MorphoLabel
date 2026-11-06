@@ -67,6 +67,26 @@ class MissingTraitCalculationTests(unittest.TestCase):
         self.assertEqual(0,traits["a"]["accuracy"])
         self.assertEqual(1,traits["b"]["accuracy"])
 
+    def test_ai_comparison_requires_every_declared_trait_for_full_specimen(self):
+        scheme=blank_scheme("Two counts")
+        scheme["structures"]=[{"id":sid,"name":sid,"repeated":True} for sid in ("a","b")]
+        scheme["traits"]=[{"id":sid,"name":sid,"method":"count","structures":[sid],"rule":{}} for sid in ("a","b")]
+        a={"structure_id":"a","x":.2,"y":.5}
+        report=summarize_structure_ai_human_comparison(scheme,[{"human":[a],"predicted":[a],"visibility":{"b":"partial"}}])
+        self.assertEqual(0,report["summary"]["all_traits_evaluable_specimens"])
+        self.assertEqual(0,report["summary"]["all_traits_correct_specimens"])
+
+    def test_missing_continuous_prediction_counts_as_incorrect(self):
+        scheme=blank_scheme("Distance")
+        scheme["structures"]=[{"id":sid,"name":sid,"repeated":False} for sid in ("a","b")]
+        scheme["traits"]=[{"id":"length","name":"Length","method":"distance","structures":["a","b"],"rule":{"tolerance":.05}}]
+        human=[{"structure_id":"a","x":.2,"y":.5},{"structure_id":"b","x":.4,"y":.5}]
+        report=summarize_structure_ai_human_comparison(scheme,[{"human":human,"predicted":human[:1],"visibility":{}}])
+        self.assertEqual(1,report["traits"][0]["evaluated"])
+        self.assertEqual(0,report["traits"][0]["correct"])
+        self.assertEqual(1,report["summary"]["all_traits_evaluable_specimens"])
+        self.assertEqual(0,report["summary"]["all_traits_correct_specimens"])
+
 
 class MissingTraitExportTests(unittest.TestCase):
     def setUp(self):

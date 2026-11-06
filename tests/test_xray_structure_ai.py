@@ -1,6 +1,7 @@
 import json
 import shutil
 import tempfile
+import threading
 import unittest
 import zipfile
 from pathlib import Path
@@ -112,6 +113,22 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(expected,actual)
         self.assertFalse(any(abs(float(point["x"])-0.71)<1e-8 or abs(float(point["x"])-0.84)<1e-8 for point in row["points"]))
+
+    def test_training_uses_exact_prediction_images_and_hashes_them(self):
+        from app.xray_multires_training import _prepare_training_images
+        specimens=self._eight_verified()
+        source=_prepare_training_images(self.project.root,self.root/"prepared",threading.Event())
+        names=json.loads(source.read_text(encoding="utf-8"))
+        images={sid:source.parent/name for sid,name in names.items()}
+        dataset=prepare_structure_training_dataset(self.project,self.root/"shared",seed=7,prepared_images=images)
+        manifest=json.loads(dataset["manifest"].read_text(encoding="utf-8"))
+        for row in manifest["train"]+manifest["val"]:
+            self.assertEqual(Path(row["path"]).read_bytes(),images[row["specimen_id"]].read_bytes())
+        Image.new("RGB",(32,32),"white").save(images[specimens[0]])
+        changed=prepare_structure_training_dataset(self.project,self.root/"changed_images",seed=7,prepared_images=images)
+        self.assertNotEqual(dataset["dataset_hash"],changed["dataset_hash"])
+        with self.assertRaises(ValueError):
+            prepare_structure_training_dataset(self.project,self.root/"missing_images",seed=7,prepared_images={})
 
     def test_training_manifest_preserves_visibility_and_dataset_hash_tracks_it(self):
         specimens=self._eight_verified()
@@ -381,6 +398,24 @@ class XRayStructureAIWorkflowTests(unittest.TestCase):
 
 
 class XRayStructureAIContractTests(unittest.TestCase):
+    def test_comparison_maximizes_matches_before_minimizing_distance(self):
+        from app.xray_structure_ai import _comparison_match
+        truth=[{"x":.40,"y":.5},{"x":.42,"y":.5}]
+        # The first prediction is closer to the first reference, but the
+        # second prediction can only match that reference within tolerance.
+        predicted=[{"x":.409,"y":.5,"score":.9},{"x":.390,"y":.5,"score":.1}]
+        tp,fp,fn,distances=_comparison_match(predicted,truth,.015)
+        self.assertEqual((2,0,0),(tp,fp,fn))
+        self.assertEqual(2,len(distances))
+        self.assertEqual((0,0,2,[]),_comparison_match([],truth,.015))
+        self.assertEqual((0,2,0,[]),_comparison_match(predicted,[],.015))
+
+        # When both assignments match, use the smaller total distance.
+        both=[{"x":.409,"y":.5},{"x":.401,"y":.5}]
+        tp,fp,fn,distances=_comparison_match(both,truth,.02)
+        self.assertEqual((2,0,0),(tp,fp,fn))
+        self.assertAlmostEqual(.012 / (2 ** .5),sum(distances))
+
     def test_human_comparison_scores_reference_roles_for_legacy_scheme_without_relation_field(self):
         from app.xray_schema import bundled_scheme
         from app.xray_structure_ai import summarize_structure_ai_human_comparison

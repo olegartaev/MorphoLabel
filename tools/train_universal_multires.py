@@ -101,7 +101,7 @@ def new_package(source_manifest,source_meta,source_data,
 
 
 def run(project_copy,source_model,output,*,epochs_native=18,epochs_detail=18,
-        seed=42,device="auto",lr=2e-5):
+        seed=42,device="auto",lr=2e-5,prepared_images_manifest=None):
     import torch
     from app.xray_project import XRayProject
     from app.xray_structure_ai import (
@@ -129,11 +129,21 @@ def run(project_copy,source_model,output,*,epochs_native=18,epochs_detail=18,
     with tempfile.TemporaryDirectory(prefix="morpholabel_multires_training_") as tmp:
         scratch=Path(tmp)
         original_zip=scratch/"source.zip"
+        prepared_images=None
+        if prepared_images_manifest is not None:
+            image_manifest=Path(prepared_images_manifest).resolve()
+            names=json.loads(image_manifest.read_text(encoding="utf-8"))
+            if not isinstance(names,dict) or any(not isinstance(k,str) or not isinstance(v,str) or
+                    Path(v).name!=v or not v.lower().endswith(".png") for k,v in names.items()) or len(set(names.values()))!=len(names):
+                raise ValueError("Invalid prepared image manifest")
+            prepared_images={key:(image_manifest.parent/name).resolve() for key,name in names.items()}
+            if any(path.parent!=image_manifest.parent or not path.is_file() for path in prepared_images.values()):
+                raise ValueError("Prepared image is missing or outside its manifest directory")
         from app.xray_multires_training import is_universal_multires_model
         bootstrap=not source or not is_universal_multires_model(project,source_model)
         if bootstrap:
             from app.native_structure_bootstrap import initialize_parent
-            original_manifest,original_meta,data=initialize_parent(project,source,scratch,seed=seed,device=device)
+            original_manifest,original_meta,data=initialize_parent(project,source,scratch,seed=seed,device=device,prepared_images=prepared_images)
         else:
             export_structure_model_package(project,original_zip,source_model)
             original_manifest,original_meta,data=inspect_source_package(original_zip)
@@ -142,7 +152,7 @@ def run(project_copy,source_model,output,*,epochs_native=18,epochs_detail=18,
         meta_ids=[str(x["id"]) for x in original_meta["structures"]]
         if meta_ids!=[str(x["id"]) for x in project.scheme["structures"]]:
             raise ValueError("Structure channel order incompatible with scientific scheme")
-        prepared=prepare_structure_training_dataset(project,scratch,seed=seed)
+        prepared=prepare_structure_training_dataset(project,scratch,seed=seed,prepared_images=prepared_images)
         manifest=json.loads(Path(prepared["manifest"]).read_text(encoding="utf-8"))
         tiles=build_tile_manifest(manifest,scratch/"tile_data")
         full_manifest=deepcopy(manifest)
@@ -216,7 +226,8 @@ def run(project_copy,source_model,output,*,epochs_native=18,epochs_detail=18,
         from app.native_structure_bootstrap import select_detail_channels
         selected,calibration=select_detail_channels(
             original_meta,data,buffer.getvalue(),detail_new,manifest,scratch,device,
-            scheme=project.scheme)
+            scheme=project.scheme,
+            parent_mode=("standard" if bootstrap else "multires") if source_model else None)
         original_meta["inference_pipeline"]["retain_detail_structures"]=selected["detail"]
         original_meta["inference_pipeline"]["retain_standard_structures"]=selected["standard"]
         provenance["channel_selection_validation"]=calibration
@@ -238,10 +249,11 @@ def main():
     a.add_argument("--epochs-detail",type=int,default=18)
     a.add_argument("--device",default="auto")
     a.add_argument("--seed",type=int,default=42)
+    a.add_argument("--prepared-images-manifest",type=Path)
     args=a.parse_args()
     result=run(args.project_copy,args.source_model,args.output,
                epochs_native=args.epochs_native,epochs_detail=args.epochs_detail,
-               device=args.device,seed=args.seed)
+               device=args.device,seed=args.seed,prepared_images_manifest=args.prepared_images_manifest)
     print(json.dumps(result,ensure_ascii=False),flush=True)
 
 if __name__=="__main__":main()

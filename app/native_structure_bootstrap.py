@@ -10,13 +10,13 @@ import json
 import zipfile
 
 
-def initialize_parent(project, source, scratch, *, seed, device, initial_epochs=60):
+def initialize_parent(project, source, scratch, *, seed, device, initial_epochs=60, prepared_images=None):
     from .xray_structure_ai import train_structure_model, export_structure_model_package, STRUCTURE_BACKEND
     if source is None:
         from .ai_starters import local_starter, SETUP_HELP
         if not local_starter("structure"):raise RuntimeError(SETUP_HELP)
         print(json.dumps({"stage":"INITIALIZING","detail":"Initializing Native + Detail image features"}),flush=True)
-        result=train_structure_model(project,seed=seed,epochs=initial_epochs,parent_model_id="",device_override=device)
+        result=train_structure_model(project,seed=seed,epochs=initial_epochs,parent_model_id="",device_override=device,prepared_images=prepared_images)
         source=next(m for m in project.structure_models() if m["model_id"]==result["model_id"])
     if source.get("backend")!=STRUCTURE_BACKEND:
         raise ValueError("Native Full + ROI Detail needs a compatible ResNet18 point checkpoint.")
@@ -56,14 +56,16 @@ def choose_family_detail_policy(scheme, cases):
         return {"detail": [], "standard": []}, {"status": "insufficient_development_validation",
                     "specimens": specimens, "plates": plates}
     def evaluate(modes):
-        assigned = {sid: mode for family, mode in zip(families, modes) for sid in family}
+        assigned = ({sid: mode for family, mode in zip(families, modes) for sid in family}
+                    if modes is not None else None)
         rows = []
         for case in cases:
             sources = {method: case[method] for method in ("standard", "native", "detail")}
             rows.append({
                 "specimen_id": case["specimen_id"], "human": case["human"],
                 "visibility": case["visibility"], "crop_size": case["crop_size"],
-                "predicted": combine_marker_rows(scheme, sources, assigned),
+                "predicted": (combine_marker_rows(scheme, sources, assigned)
+                              if assigned is not None else case["parent"]),
             })
         report = summarize_structure_ai_human_comparison(scheme, rows)
         # The stable release comparison returns aggregate metrics but no
@@ -97,7 +99,6 @@ def choose_family_detail_policy(scheme, cases):
     native = ("native",) * len(families)
     baseline = evaluate(native)
     best_modes, best_report = native, baseline
-    original = {row["specimen_id"]: row for row in baseline["specimen_outcomes"]}
     original_traits = {row["trait_id"]: row for row in baseline["traits"]}
     # Exact search is bounded. Large custom schemes use one-family improvements.
     methods = ("native", "standard", "detail")
@@ -109,12 +110,8 @@ def choose_family_detail_policy(scheme, cases):
         if modes == native:
             continue
         report = evaluate(modes)
-        # A once-fully-correct specimen must not become wrong. A method
-        # cannot be chosen merely because it scores many isolated points.
-        outcome = {row["specimen_id"]: row for row in report["specimen_outcomes"]}
-        if any(row["evaluable"] and row["correct"] and
-               not outcome[row_id]["correct"] for row_id, row in original.items()):
-            continue
+        # Guard every trait in aggregate, but allow paired changes: requiring
+        # zero lost specimens can reject a much better combination altogether.
         by_trait = {row["trait_id"]: row for row in report["traits"]}
         if any(int(by_trait[tid].get("correct") or 0) < int(stat.get("correct") or 0)
                for tid, stat in original_traits.items()):
@@ -134,10 +131,42 @@ def choose_family_detail_policy(scheme, cases):
         "selected_trait_correct": sum(int(x.get("correct") or 0) for x in best_report["traits"]),
         "family_routes": {" / ".join(family): mode for family, mode in zip(families, best_modes)},
     }
+    if all("parent" in case for case in cases):
+        from math import comb
+        parent = evaluate(None)
+        parent_traits = {row["trait_id"]: row for row in parent["traits"]}
+        selected_traits = {row["trait_id"]: row for row in best_report["traits"]}
+        before = {row["specimen_id"]: row for row in parent["specimen_outcomes"]}
+        after = {row["specimen_id"]: row for row in best_report["specimen_outcomes"]}
+        evidence.update({
+            "parent_all_correct": parent["summary"]["all_traits_correct_specimens"],
+            "parent_all_evaluable": parent["summary"]["all_traits_evaluable_specimens"],
+            "parent_trait_correct": sum(int(x.get("correct") or 0) for x in parent["traits"]),
+            "paired_corrected": sum(not before[k]["correct"] and after[k]["correct"]
+                                    for k in before if before[k]["evaluable"] and after[k]["evaluable"]),
+            "paired_broken": sum(before[k]["correct"] and not after[k]["correct"]
+                                 for k in before if before[k]["evaluable"] and after[k]["evaluable"]),
+            "trait_correct_vs_parent": {tid: {"parent": int(stat.get("correct") or 0),
+                                                   "candidate": int(selected_traits[tid].get("correct") or 0)}
+                                        for tid, stat in parent_traits.items()},
+        })
+        discordant = evidence["paired_corrected"] + evidence["paired_broken"]
+        tail = min(evidence["paired_corrected"], evidence["paired_broken"])
+        # Exact paired sign test is a conservative screening guard, not proof
+        # of generalization after method selection on the same validation set.
+        evidence["paired_sign_p"] = (min(1.0, 2 * sum(comb(discordant, i)
+                                     for i in range(tail + 1)) / 2**discordant)
+                                     if discordant else 1.0)
+        evidence["recommend_new_parent"] = (
+            evidence["parent_all_evaluable"] >= 12 and
+            best_report["summary"]["all_traits_correct_specimens"] > evidence["parent_all_correct"] and
+            evidence["paired_sign_p"] <= .05 and
+            all(int(selected_traits[tid].get("correct") or 0) >= int(stat.get("correct") or 0)
+                for tid, stat in parent_traits.items()))
     return chosen, evidence
 
 
-def select_detail_channels(metadata, source_data, native_bytes, detail_bytes, manifest, scratch, device, *, scheme=None):
+def select_detail_channels(metadata, source_data, native_bytes, detail_bytes, manifest, scratch, device, *, scheme=None, parent_mode=None):
     """Run both trained methods once per validation image, then choose by family."""
     import torch
     from PIL import Image
@@ -154,6 +183,15 @@ def select_detail_channels(metadata, source_data, native_bytes, detail_bytes, ma
     primary=runner._model(len(meta["structures"]),pretrained=False)
     primary.load_state_dict(torch.load(folder/"model.pth",weights_only=True,map_location="cpu"));primary=primary.to(device).eval()
     models={key:_load_component(pipeline[key],folder,runner,len(meta["structures"]),device) for key in ("native","detail")}
+    parent_models = None
+    if parent_mode == "multires":
+        parent_folder = Path(scratch)/"selection_parent"; parent_folder.mkdir()
+        parent_pipeline = metadata["inference_pipeline"]
+        for key in ("native", "detail"):
+            name = parent_pipeline[key]["checkpoint"]
+            (parent_folder/name).write_bytes(source_data["artifacts/"+name])
+        parent_models = {key:_load_component(parent_pipeline[key],parent_folder,runner,len(meta["structures"]),device)
+                         for key in ("native","detail")}
     counts={str(s["id"]):{mode:[0,0,0] for mode in ("native","detail","standard")} for s in meta["structures"]}
     cases=[]
     for row in manifest["val"]:
@@ -161,14 +199,21 @@ def select_detail_channels(metadata, source_data, native_bytes, detail_bytes, ma
         predict_one(row["path"],primary,meta,folder/"model.json",device,runner,component_models=models,components_out=outputs)
         with Image.open(row["path"]) as image:
             crop_size=image.size
-        cases.append({
+        case = {
             "specimen_id": str(row["specimen_id"]), "image_id": str(row["image_id"]),
             "human": row["points"], "visibility": row.get("visibility") or {},
             "crop_size": crop_size,
             "native": _comparison_prediction_rows(outputs["native"]),
             "detail": _comparison_prediction_rows(outputs["detail"]),
             "standard": _comparison_prediction_rows(outputs["standard"]),
-        })
+        }
+        if parent_mode == "standard":
+            case["parent"] = case["standard"]
+        elif parent_mode == "multires":
+            parent_output = predict_one(row["path"],primary,metadata,parent_folder/"model.json",device,runner,
+                                        component_models=parent_models)
+            case["parent"] = _comparison_prediction_rows(parent_output)
+        cases.append(case)
         for sid,by_mode in counts.items():
             if row.get("visibility",{}).get(sid,"complete") in {"partial","not_visible"}:continue
             truth=[p for p in row["points"] if p["structure_id"]==sid]
@@ -176,7 +221,7 @@ def select_detail_channels(metadata, source_data, native_bytes, detail_bytes, ma
                 predicted=next(g["points"] for g in outputs[mode] if g["structure_id"]==sid)
                 tp,fp,fn,_=_comparison_match(predicted,truth)
                 by_mode[mode]=[a+b for a,b in zip(total,(tp,fp,fn))]
-    del primary,models
+    del primary,models,parent_models
     if device.startswith("cuda"):torch.cuda.empty_cache()
     if scheme is None:
         # Backwards-compatible diagnostic path, not used by the application.
