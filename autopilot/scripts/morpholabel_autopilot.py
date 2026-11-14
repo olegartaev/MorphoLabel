@@ -456,6 +456,8 @@ class MorphoLabelAutopilot:
                     continue
                 continue
             result = self.scan_codex_rollout(rollout, marker)
+            if result.get("interleaved"):
+                raise AutopilotError("Codex session had another user message before this task completed")
             if result.get("user_seen"):
                 seen_user = True
             if seen_user and result.get("task_complete"):
@@ -466,26 +468,37 @@ class MorphoLabelAutopilot:
 
     @staticmethod
     def scan_codex_rollout(path: Path, marker: str) -> Dict[str, Any]:
-        user_seen = False
+        marker_seen = False
+        awaiting_completion = False
+        interrupted = False
         complete: Optional[Dict[str, Any]] = None
         last_rate_limit: Optional[Dict[str, Any]] = None
         with path.open("r", encoding="utf-8", errors="replace") as handle:
             for line in handle:
-                if marker not in line and '"type":"task_complete"' not in line and '"type":"token_count"' not in line:
+                if not any(token in line for token in (
+                    marker, '"type":"task_complete"', '"type":"token_count"',
+                    '"role":"user"', '"role": "user"'
+                )):
                     continue
                 try:
                     obj = json.loads(line)
                 except json.JSONDecodeError:
                     continue
+                payload = obj.get("payload") or {}
                 if obj.get("type") == "response_item":
-                    payload = obj.get("payload") or {}
                     if payload.get("type") == "message" and payload.get("role") == "user":
                         content = json.dumps(payload.get("content") or [], ensure_ascii=False)
                         if marker in content:
-                            user_seen = True
-                if obj.get("type") == "event_msg":
-                    payload = obj.get("payload") or {}
-                    if payload.get("type") == "task_complete":
+                            marker_seen = True
+                            awaiting_completion = True
+                            last_rate_limit = None
+                        elif awaiting_completion:
+                            # Another user message arrived before our completion.
+                            # Attribution of later completions would be unsafe.
+                            interrupted = True
+                            awaiting_completion = False
+                elif obj.get("type") == "event_msg":
+                    if payload.get("type") == "task_complete" and awaiting_completion:
                         complete = {
                             "task_complete": True,
                             "turn_id": payload.get("turn_id"),
@@ -493,10 +506,12 @@ class MorphoLabelAutopilot:
                             "last_agent_message": payload.get("last_agent_message"),
                             "timestamp": obj.get("timestamp"),
                         }
-                    if payload.get("type") == "token_count":
-                        last_rate_limit = (payload.get("rate_limits") or {})
+                        break
+                    if payload.get("type") == "token_count" and awaiting_completion:
+                        last_rate_limit = payload.get("rate_limits") or {}
         return {
-            "user_seen": user_seen,
+            "user_seen": marker_seen,
+            "interleaved": interrupted,
             "task_complete": bool(complete),
             "completion": complete,
             "rate_limits": last_rate_limit,
@@ -518,17 +533,28 @@ class MorphoLabelAutopilot:
 
     def send_result_and_request_next(self, cycle_id: str, result: Dict[str, Any]) -> Optional[str]:
         completion = result.get("completion") or {}
-        text = completion.get("last_agent_message") or ""
+        message = completion.get("last_agent_message") or ""
         next_begin = f"AUTOPILOT_TASK_BEGIN_NEXT_{cycle_id}"
         next_end = f"AUTOPILOT_TASK_END_NEXT_{cycle_id}"
+        no_task_token = f"NO_TASK_{cycle_id}"
+        fence = chr(96) * 3
         prompt = (
             f"AUTOPILOT_RESULT_{cycle_id}\n\n"
             "Codex завершил задание. Результат ниже.\n\n"
-            "```\n" + text[:12000] + "\n```\n\n"
-            f"Подтверди получение. Затем, если есть следующее задание для Codex, верни его строго между {next_begin} и {next_end}. "
-            f"Если задания нет, верни ровно NO_TASK_{cycle_id}. Не запускай Codex сам и не меняй файлы.\n"
+            + fence + "\n" + message[:12000] + "\n" + fence + "\n\n"
+            "Оцени фактическое выполнение и научную/техническую пригодность результата. "
+            "Не считай BLOCKED, FAILED или непроверенные тесты успешным выполнением. "
+            f"Подтверди получение. Если есть реальное следующее локальное задание, "
+            f"напиши его между маркерами {next_begin} и {next_end} с полями "
+            "TASK:, GOAL:, ACCEPTANCE:, CONSTRAINTS: и фактическими значениями. "
+            f"Иначе ответь ровно NO_TASK_{cycle_id}. "
+            "Не подставляй пояснения вместо задания. "
+            "Не запускай Codex сам и не меняй файлы.\n"
         )
-        before = self.chatgpt_read()["text"].count(next_begin)
+        baseline = self.chatgpt_read()["text"]
+        before_begin = baseline.count(next_begin)
+        before_end = baseline.count(next_end)
+        before_no_task = baseline.count(no_task_token)
         self.chatgpt_send(prompt)
         deadline = time.monotonic() + int(self.config["limits"]["chatgpt_wait_timeout_s"])
         while time.monotonic() < deadline:
@@ -539,10 +565,19 @@ class MorphoLabelAutopilot:
                     raise AutopilotError("Stopped while paused")
                 continue
             body = self.chatgpt_read()["text"]
-            if body.count(next_begin) >= before + 2 or f"NO_TASK_{cycle_id}" in body:
+            if self.has_new_complete_task(body, next_begin, next_end, before_begin, before_end):
                 blocks = re.findall(re.escape(next_begin) + r"(.*?)" + re.escape(next_end), body, flags=re.S)
-                if blocks:
-                    return blocks[-1].strip() or None
+                task = blocks[-1].strip() if blocks else ""
+                error = task_completeness_error(task)
+                if error:
+                    self.state["status"] = "blocked_incomplete_chatgpt_task"
+                    self.state["last_rejected_task"] = {
+                        "hash": sha256_text(task), "reason": error, "phase": "next_task"
+                    }
+                    self.save_state()
+                    raise AutopilotError(f"Incomplete next ChatGPT task (not queued): {error}")
+                return task
+            if self.has_new_no_task(body, no_task_token, before_no_task):
                 return None
             time.sleep(int(self.config["limits"]["poll_control_s"]))
         raise AutopilotError("Timeout waiting for ChatGPT next task")
