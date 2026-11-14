@@ -58,10 +58,20 @@ def task_completeness_error(block: str) -> Optional[str]:
         r"^(?:<[^>]+>|\[[^\]]+\]|\.\.\.|задание|уточнить|нет|n/?a|todo|tbd)$",
         re.I,
     )
+    # Earlier request examples passed length-only checks; refuse those as tasks.
+    sample_prefixes = {
+        "TASK": ("конкретные действия, ожидаемые файлы",),
+        "GOAL": ("цель этого этапа и зачем он нужен",),
+        "ACCEPTANCE": ("проверяемые критерии завершения",),
+        "CONSTRAINTS": ("запись только в d:\\simm_github_clean; d:\\phoxinus_x-ray только для чтения",),
+    }
     for field in TASK_FIELDS:
         value = fields[field]
+        normalized = " ".join(value.casefold().split())
         if placeholder.fullmatch(value.strip()) or len(re.sub(r"\W", "", value)) < 8:
             return f"field {field} is a placeholder or too short"
+        if any(normalized.startswith(prefix) for prefix in sample_prefixes[field]):
+            return f"field {field} repeats an instruction template rather than a task"
     if len(fields["TASK"]) < 20:
         return "TASK must describe a concrete action, not just a label"
     if len(fields["GOAL"]) < 15:
@@ -295,10 +305,11 @@ class MorphoLabelAutopilot:
             prompt = self.task_request_prompt(cycle_id, begin, end, attempt, previous_rejection)
             baseline = self.chatgpt_read()["text"]
             before = baseline.count(begin)
+            before_end = baseline.count(end)
             no_task_token = f"NO_TASK_{cycle_id}"
             no_task_before = baseline.count(no_task_token)
             self.chatgpt_send(prompt)
-            response = self.wait_for_task_response(cycle_id, begin, before, no_task_before)
+            response = self.wait_for_task_response(cycle_id, begin, before, before_end, no_task_before)
             if response is None:
                 return None
             task, error = response
@@ -325,27 +336,47 @@ class MorphoLabelAutopilot:
     def task_request_prompt(cycle_id: str, begin: str, end: str, attempt: int,
                             rejection_reason: Optional[str] = None) -> str:
         correction = (
-            f"\nПредыдущий ответ отклонён: {rejection_reason}. Исправь его полностью; не повторяй placeholder/ограничения вместо задания.\n"
+            f"\nПредыдущий ответ отклонён: {rejection_reason}. Исправь его полностью; не повторяй шаблон.\n"
             if rejection_reason else ""
         )
         return (
             f"{cycle_id} (попытка {attempt}/{MAX_TASK_REQUESTS})\n\n"
-            "Сформируй конкретное, самодостаточное следующее задание для Codex, исходя из текущего плана MorphoLabel и состояния этого чата. "
-            "Не выдавай только ограничения доступа, общий совет, название или шаблон.\n"
-            "Ответ внутри маркеров обязан содержать все четыре непустых поля именно в таком формате:\n"
-            f"{begin}\n"
-            "TASK: конкретные действия, ожидаемые файлы/результат и необходимый объём работы.\n"
-            "GOAL: цель этого этапа и зачем он нужен.\n"
-            "ACCEPTANCE: проверяемые критерии завершения и требуемые проверки.\n"
-            "CONSTRAINTS: запись только в D:\\SIMM_GITHUB_CLEAN; D:\\Phoxinus_X-Ray только для чтения; не менять исходные рентгенограммы; никакого расширения доступа.\n"
-            f"{end}\n\n"
-            f"Если реального следующего задания нет — верни ровно NO_TASK_{cycle_id}.\n"
+            "Из действующего научного плана этого чата выбери ОДНО реальное следующее задание "
+            "для существующего Codex '2 работа'. Самостоятельно укажи конкретные действия и файлы, "
+            "ожидаемый результат, измеримые критерии завершения и границы доступа. "
+            "Не повторяй описание полей, не выдавай шаблон или одни ограничения. "
+            "Если после чтения контекста невозможно определить конкретное полезное действие, "
+            "не придумывай его.\n"
+            f"Ответ начни с точного маркера {begin} отдельной строкой; "
+            f"заверши точным маркером {end} отдельной строкой. "
+            "Между маркерами напиши четыре содержательных поля с префиксами "
+            "TASK:, GOAL:, ACCEPTANCE:, CONSTRAINTS:. "
+            "TASK должен описывать реальную работу и ожидаемые файлы/результат; "
+            "GOAL — конкретную цель; ACCEPTANCE — проверяемые тесты; "
+            "CONSTRAINTS — разрешённые пути и запреты. "
+            "Не копируй эти пояснения как значения полей.\n"
+            "Разрешённая запись — только D:\\SIMM_GITHUB_CLEAN; "
+            "D:\\Phoxinus_X-Ray — исключительно чтение; опубликованную версию не менять.\n"
+            f"Если действительного задания нет — ответь ровно NO_TASK_{cycle_id}.\n"
             f"{correction}Не запускай Codex сам и не меняй файлы/GitHub."
         )
 
+    @staticmethod
+    def has_new_complete_task(body: str, begin: str, end: str,
+                              before_begin: int, before_end: int) -> bool:
+        """Count markers in both prompt and a complete assistant answer."""
+        return body.count(begin) >= before_begin + 2 and body.count(end) >= before_end + 2
+
+    @staticmethod
+    def has_new_no_task(body: str, token: str, before_count: int) -> bool:
+        """Do not mistake the coordinator prompt for a ChatGPT reply."""
+        return body.count(token) >= before_count + 2
+
     def wait_for_task_response(self, cycle_id: str, begin: str, previous_count: int,
-                               no_task_previous_count: int):
+                               previous_end_count: int, no_task_previous_count: int):
         deadline = time.monotonic() + int(self.config["limits"]["chatgpt_wait_timeout_s"])
+        end = f"AUTOPILOT_TASK_END_{cycle_id}"
+        no_task = f"NO_TASK_{cycle_id}"
         while time.monotonic() < deadline:
             if self.stop_requested():
                 raise AutopilotError("Stopped while waiting for ChatGPT task")
@@ -354,9 +385,9 @@ class MorphoLabelAutopilot:
                     raise AutopilotError("Stopped while paused")
                 continue
             text = self.chatgpt_read()["text"]
-            if text.count(begin) >= previous_count + 2:
+            if self.has_new_complete_task(text, begin, end, previous_count, previous_end_count):
                 return self.extract_task_with_validation(text, cycle_id)
-            if text.count(f"NO_TASK_{cycle_id}") >= no_task_previous_count + 2:
+            if self.has_new_no_task(text, no_task, no_task_previous_count):
                 return None
             time.sleep(int(self.config["limits"]["poll_control_s"]))
         raise AutopilotError("Timeout waiting for ChatGPT task")
