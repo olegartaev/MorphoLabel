@@ -78,3 +78,9 @@ START_CODEX.txt
 ai_runtime/*
 !ai_runtime/
 !ai_runtime/rtmpose_runner.py
+
+# MorphoLabel autopilot runtime/control artifacts
+autopilot/runtime/
+autopilot/control/
+autopilot/logs/
+

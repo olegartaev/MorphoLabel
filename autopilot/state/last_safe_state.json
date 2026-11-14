@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "status": "not_started",
+  "cycle": 0,
+  "updated_at": null,
+  "codex_thread_id": "01a1da96-a6d4-7322-bf3c-f294840f0565",
+  "active_chatgpt_url": "https://chatgpt.com/g/g-p-6af8709e3e588191b101e29ed6c2c04d-uluchshenie-morpholabel",
+  "processed_markers": [],
+  "pending": {},
+  "limits": {
+    "last_rate_limit": null,
+    "paused_until": null
+  },
+  "notes": []
+}

@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "repo_root": "D:/SIMM_GITHUB_CLEAN",
+  "readonly_roots": [
+    "D:/Phoxinus_X-Ray"
+  ],
+  "runtime_dir": "autopilot/runtime",
+  "control_dir": "autopilot/control",
+  "state_file": "autopilot/runtime/autopilot_state.json",
+  "safe_state_export": "autopilot/state/last_safe_state.json",
+  "logs_dir": "autopilot/logs",
+  "browse_exe": "C:/Users/artae/.local/bin/browse.exe",
+  "browse_session": "morpholabel-autopilot",
+  "chatgpt": {
+    "title_contains": "MorphoLabel",
+    "url_contains": "chatgpt.com/g/g-p-",
+    "project_url": "https://chatgpt.com/g/g-p-6af8709e3e588191b101e29ed6c2c04d-uluchshenie-morpholabel",
+    "project_base_url": "https://chatgpt.com/g/g-p-6af8709e3e588191b101e29ed6c2c04d-uluchshenie-morpholabel"
+  },
+  "codex": {
+    "exe": "C:/Users/artae/AppData/Local/OpenAI/Codex/bin/9e1da79431da526b/codex.exe",
+    "thread_id": "01a1da96-a6d4-7322-bf3c-f294840f0565",
+    "sessions_root": "C:/Users/artae/.codex/sessions",
+    "queue_db": "C:/Users/artae/.codex/queue_1.sqlite"
+  },
+  "limits": {
+    "max_cycles": 3,
+    "chatgpt_wait_timeout_s": 180,
+    "codex_wait_timeout_s": 7200,
+    "poll_codex_s": 15,
+    "poll_control_s": 2,
+    "idle_sleep_s": 300,
+    "max_retries": 2
+  },
+  "rotation": {
+    "enabled": false,
+    "project_base_url": "https://chatgpt.com/g/g-p-6af8709e3e588191b101e29ed6c2c04d-uluchshenie-morpholabel",
+    "next_chat_name": "3 MorphoLabel",
+    "require_user_confirmation": true
+  },
+  "github": {
+    "enabled": true,
+    "auto_commit": false,
+    "commit_paths": [
+      "autopilot/config/autopilot.config.json",
+      "autopilot/state/last_safe_state.json",
+      "autopilot/results"
+    ]
+  }
+}
