@@ -29,6 +29,54 @@ from typing import Any, Dict, Optional
 
 UTC = dt.timezone.utc
 
+TASK_FIELDS = ("TASK", "GOAL", "ACCEPTANCE", "CONSTRAINTS")
+MAX_TASK_REQUESTS = 3
+
+
+def parse_task_fields(block: str) -> Dict[str, str]:
+    """Parse a structured ChatGPT task and require substantive, non-placeholder fields."""
+    if not isinstance(block, str):
+        return {}
+    values: Dict[str, str] = {}
+    current: Optional[str] = None
+    for raw_line in block.splitlines():
+        match = re.match(r"^\s*(TASK|GOAL|ACCEPTANCE|CONSTRAINTS)\s*:\s*(.*)$", raw_line, re.I)
+        if match:
+            current = match.group(1).upper()
+            values[current] = match.group(2).strip()
+        elif current:
+            values[current] = (values[current] + "\n" + raw_line.strip()).strip()
+    return {key: value.strip() for key, value in values.items() if value.strip()}
+
+
+def task_completeness_error(block: str) -> Optional[str]:
+    fields = parse_task_fields(block)
+    missing = [field for field in TASK_FIELDS if not fields.get(field)]
+    if missing:
+        return "missing required fields: " + ", ".join(missing)
+    placeholder = re.compile(
+        r"^(?:<[^>]+>|\[[^\]]+\]|\.\.\.|задание|уточнить|нет|n/?a|todo|tbd)$",
+        re.I,
+    )
+    for field in TASK_FIELDS:
+        value = fields[field]
+        if placeholder.fullmatch(value.strip()) or len(re.sub(r"\W", "", value)) < 8:
+            return f"field {field} is a placeholder or too short"
+    if len(fields["TASK"]) < 20:
+        return "TASK must describe a concrete action, not just a label"
+    if len(fields["GOAL"]) < 15:
+        return "GOAL must explain the intended outcome"
+    if len(fields["ACCEPTANCE"]) < 15:
+        return "ACCEPTANCE must define observable completion checks"
+    if len(fields["CONSTRAINTS"]) < 15:
+        return "CONSTRAINTS must state scope and safety boundaries"
+    return None
+
+
+def task_was_attempted(task_hash: str, state: Dict[str, Any]) -> bool:
+    """Reject tasks already queued or completed, including uncertain queue outcomes."""
+    return task_hash in state.get("attempted_task_hashes", []) or task_hash in state.get("processed_markers", [])
+
 
 def now_iso() -> str:
     return dt.datetime.now(UTC).isoformat()
@@ -100,6 +148,8 @@ class MorphoLabelAutopilot:
             "codex_thread_id": self.config["codex"]["thread_id"],
             "active_chatgpt_url": self.config["chatgpt"].get("project_url"),
             "processed_markers": [],
+            "rejected_task_hashes": [],
+            "attempted_task_hashes": [],
             "pending": {},
             "limits": {"last_rate_limit": None, "paused_until": None},
             "last_error": None,
@@ -240,16 +290,61 @@ class MorphoLabelAutopilot:
     def request_task(self, cycle_id: str) -> Optional[str]:
         begin = f"AUTOPILOT_TASK_BEGIN_{cycle_id}"
         end = f"AUTOPILOT_TASK_END_{cycle_id}"
-        prompt = (
-            f"{cycle_id}\n\n"
-            "Если есть следующее задание для Codex, верни его строго между маркерами:\n"
-            f"{begin}\n<задание>\n{end}\n\n"
-            f"Если задания нет, верни ровно NO_TASK_{cycle_id}.\n"
-            "Не запускай Codex сам, не меняй файлы, GitHub или исходные данные. "
-            "Задание должно быть самодостаточным и безопасным.\n"
+        previous_rejection: Optional[str] = None
+        for attempt in range(1, MAX_TASK_REQUESTS + 1):
+            prompt = self.task_request_prompt(cycle_id, begin, end, attempt, previous_rejection)
+            baseline = self.chatgpt_read()["text"]
+            before = baseline.count(begin)
+            no_task_token = f"NO_TASK_{cycle_id}"
+            no_task_before = baseline.count(no_task_token)
+            self.chatgpt_send(prompt)
+            response = self.wait_for_task_response(cycle_id, begin, before, no_task_before)
+            if response is None:
+                return None
+            task, error = response
+            if error is None:
+                return task
+            digest = sha256_text(task)
+            rejected = self.state.setdefault("rejected_task_hashes", [])
+            if digest not in rejected:
+                rejected.append(digest)
+            del rejected[:-100]
+            self.state["status"] = "requesting_complete_task"
+            self.state["last_rejected_task"] = {"hash": digest, "reason": error, "attempt": attempt}
+            self.save_state()
+            previous_rejection = error
+            self.log(f"Rejected incomplete ChatGPT task {digest[:12]}: {error}")
+        self.state["status"] = "blocked_incomplete_chatgpt_task"
+        self.state["pending"] = {}
+        self.save_state()
+        raise AutopilotError(
+            f"ChatGPT did not provide a complete task after {MAX_TASK_REQUESTS} bounded requests; nothing queued to Codex"
         )
-        before = self.chatgpt_read()["text"].count(begin)
-        self.chatgpt_send(prompt)
+
+    @staticmethod
+    def task_request_prompt(cycle_id: str, begin: str, end: str, attempt: int,
+                            rejection_reason: Optional[str] = None) -> str:
+        correction = (
+            f"\nПредыдущий ответ отклонён: {rejection_reason}. Исправь его полностью; не повторяй placeholder/ограничения вместо задания.\n"
+            if rejection_reason else ""
+        )
+        return (
+            f"{cycle_id} (попытка {attempt}/{MAX_TASK_REQUESTS})\n\n"
+            "Сформируй конкретное, самодостаточное следующее задание для Codex, исходя из текущего плана MorphoLabel и состояния этого чата. "
+            "Не выдавай только ограничения доступа, общий совет, название или шаблон.\n"
+            "Ответ внутри маркеров обязан содержать все четыре непустых поля именно в таком формате:\n"
+            f"{begin}\n"
+            "TASK: конкретные действия, ожидаемые файлы/результат и необходимый объём работы.\n"
+            "GOAL: цель этого этапа и зачем он нужен.\n"
+            "ACCEPTANCE: проверяемые критерии завершения и требуемые проверки.\n"
+            "CONSTRAINTS: запись только в D:\\SIMM_GITHUB_CLEAN; D:\\Phoxinus_X-Ray только для чтения; не менять исходные рентгенограммы; никакого расширения доступа.\n"
+            f"{end}\n\n"
+            f"Если реального следующего задания нет — верни ровно NO_TASK_{cycle_id}.\n"
+            f"{correction}Не запускай Codex сам и не меняй файлы/GitHub."
+        )
+
+    def wait_for_task_response(self, cycle_id: str, begin: str, previous_count: int,
+                               no_task_previous_count: int):
         deadline = time.monotonic() + int(self.config["limits"]["chatgpt_wait_timeout_s"])
         while time.monotonic() < deadline:
             if self.stop_requested():
@@ -259,10 +354,19 @@ class MorphoLabelAutopilot:
                     raise AutopilotError("Stopped while paused")
                 continue
             text = self.chatgpt_read()["text"]
-            if text.count(begin) >= before + 2 or f"NO_TASK_{cycle_id}" in text:
-                return self.extract_task(text, cycle_id)
+            if text.count(begin) >= previous_count + 2:
+                return self.extract_task_with_validation(text, cycle_id)
+            if text.count(f"NO_TASK_{cycle_id}") >= no_task_previous_count + 2:
+                return None
             time.sleep(int(self.config["limits"]["poll_control_s"]))
         raise AutopilotError("Timeout waiting for ChatGPT task")
+
+    @classmethod
+    def extract_task_with_validation(cls, text: str, cycle_id: str):
+        task = cls.extract_task(text, cycle_id)
+        if task is None:
+            return None, "empty task block"
+        return task, task_completeness_error(task)
 
     @staticmethod
     def extract_task(text: str, cycle_id: str) -> Optional[str]:
@@ -271,7 +375,9 @@ class MorphoLabelAutopilot:
         blocks = re.findall(re.escape(begin) + r"(.*?)" + re.escape(end), text, flags=re.S)
         if blocks:
             task = blocks[-1].strip()
-            return task or None
+            # A wrapper/empty block is not a task; malformed nonempty content is
+            # returned to validation so ChatGPT can be asked to complete it.
+            return task
         if f"NO_TASK_{cycle_id}" in text:
             return None
         return None
@@ -419,7 +525,8 @@ class MorphoLabelAutopilot:
     def run_once(self) -> str:
         limits = self.config["limits"]
         max_cycles = int(limits["max_cycles"])
-        while int(self.state.get("cycle", 0)) < max_cycles:
+        cycles_this_run = 0
+        while cycles_this_run < max_cycles:
             if self.stop_requested():
                 self.state["status"] = "stopped"
                 self.save_state()
@@ -444,6 +551,7 @@ class MorphoLabelAutopilot:
 
             self.ensure_chatgpt_session()
             cycle = int(self.state.get("cycle", 0)) + 1
+            cycles_this_run += 1
             cycle_id = f"MLAP_{dt.datetime.now():%Y%m%d_%H%M%S}_{cycle:02d}"
             self.state["status"] = "requesting_task"
             self.state["cycle"] = cycle
@@ -452,19 +560,29 @@ class MorphoLabelAutopilot:
             if not task:
                 self.state["status"] = "idle_no_task"
                 self.save_state()
+                if cycles_this_run >= max_cycles:
+                    return "idle_no_task"
                 if self.wait_with_control(int(limits["idle_sleep_s"])) == "stop":
                     continue
                 continue
             task_hash = sha256_text(task)
-            if task_hash in self.state.get("processed_markers", []):
-                self.state["status"] = "duplicate_task_skipped"
+            if task_was_attempted(task_hash, self.state):
+                self.state["status"] = "duplicate_or_previously_attempted_task_skipped"
                 self.save_state()
                 continue
             marker = f"MLAP_CODEX_{cycle_id}_{task_hash[:12]}"
+            self.state.setdefault("attempted_task_hashes", []).append(task_hash)
+            del self.state["attempted_task_hashes"][:-100]
             self.state["status"] = "queued_to_codex"
             self.state["pending"] = {"cycle_id": cycle_id, "task_hash": task_hash, "marker": marker, "queued_at": now_iso()}
             self.save_state()
-            self.codex_queue(task, marker)
+            try:
+                self.codex_queue(task, marker)
+            except Exception:
+                self.state["status"] = "queue_failed_task_not_retried"
+                self.state["pending"] = {}
+                self.save_state()
+                raise
             self.state["status"] = "waiting_codex"
             self.save_state()
             result = self.codex_wait(marker)
@@ -527,7 +645,8 @@ def main() -> int:
         app.log(f"finished: {result}")
         return 0
     except Exception as exc:  # keep state readable for the operator
-        app.state["status"] = "error"
+        if app.state.get("status") != "blocked_incomplete_chatgpt_task":
+            app.state["status"] = "error"
         app.state["last_error"] = f"{type(exc).__name__}: {exc}"
         app.save_state()
         app.log(f"ERROR {type(exc).__name__}: {exc}")

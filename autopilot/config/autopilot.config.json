@@ -24,7 +24,7 @@
     "queue_db": "C:/Users/artae/.codex/queue_1.sqlite"
   },
   "limits": {
-    "max_cycles": 3,
+    "max_cycles": 1,
     "chatgpt_wait_timeout_s": 180,
     "codex_wait_timeout_s": 7200,
     "poll_codex_s": 15,

@@ -14,7 +14,7 @@
 - Видимо в текущем окне: `AUTOPILOT_START_FOREGROUND.cmd`
 - Статус: `AUTOPILOT_STATUS.cmd`
 
-Скрипт выполняет не более `limits.max_cycles` циклов из `autopilot/config/autopilot.config.json` и завершается. Для длительной работы увеличьте `max_cycles` осознанно.
+Скрипт выполняет не более `limits.max_cycles` циклов **за один запуск** из `autopilot/config/autopilot.config.json` и завершается. Сейчас установлено `max_cycles = 1` для ограниченного первого реального цикла.
 
 ## Как остановить или приостановить
 
@@ -27,11 +27,13 @@
 ## Что делает координатор
 
 1. Находит вкладку ChatGPT по названию/URL через `browse status --json` и делает `browse session adopt` в отдельную сессию `morpholabel-autopilot`.
-2. Просит у ChatGPT задание строго между маркерами `AUTOPILOT_TASK_BEGIN_<cycle>` и `AUTOPILOT_TASK_END_<cycle>`.
+2. Просит у ChatGPT полноценное задание строго между маркерами `AUTOPILOT_TASK_BEGIN_<cycle>` и `AUTOPILOT_TASK_END_<cycle>`. Обязательные поля: `TASK`, `GOAL`, `ACCEPTANCE`, `CONSTRAINTS`.
 3. Передаёт задание в Codex только через `codex queue --thread <ID> --message <текст>`.
 4. Ждёт завершения read-only чтением rollout-файла Codex; не опрашивает языковую модель для мониторинга.
 5. Возвращает результат в ChatGPT и просит следующее задание.
 6. Хранит только хэши/ID/статусы в `autopilot/runtime/autopilot_state.json`; безопасная копия без текстов заданий — `autopilot/state/last_safe_state.json`.
+7. Если ChatGPT выдал placeholder, только ограничения или неполные поля, автопилот просит исправить задание не более трёх раз. После этого ставит `blocked_incomplete_chatgpt_task` и **не передаёт** текст в Codex.
+8. Перед `codex queue` хэш задания атомарно записывается в `attempted_task_hashes`; тот же текст не ставится в очередь повторно даже при неопределённом исходе отправки.
 
 ## Ограничения безопасности
 
